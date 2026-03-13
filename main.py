@@ -14,6 +14,7 @@ import sys
 import time
 from datetime import UTC, date, datetime
 
+from broker.connector import BrokerConnector
 from broker.mock_connector import MockConnector
 from config import settings
 from config.symbols import SYMBOLS
@@ -49,12 +50,20 @@ def main() -> None:
     global _shutdown
 
     # ── 1. Core infrastructure ──────────────────────────────────────────
-    broker = MockConnector()
-    broker.connect()
+    broker: BrokerConnector
+    if settings.BROKER_ACCOUNT and settings.BROKER_PASSWORD and settings.BROKER_SERVER:
+        from broker.mt5_connector import MT5Connector
+        broker = MT5Connector()
+        if not broker.connect():
+            logger.critical("MT5 connection failed — aborting")
+            sys.exit(1)
+    else:
+        broker = MockConnector()
+        broker.connect()
 
     db = Database()
     state = StatePersistence(db, broker)
-    news_filter = NewsFilter()
+    news_filter = NewsFilter(db=db)
 
     # ── 2. Logging agent first (sets up Python logging) ─────────────────
     log_agent = LoggingAgent(db)
@@ -206,7 +215,7 @@ def _process_commands(
 
 def _update_heartbeat(
     db: Database,
-    broker: MockConnector,
+    broker: BrokerConnector,
     trade_manager: TradeManagerAgent,
     learning: LearningAgent,
 ) -> None:
@@ -234,11 +243,21 @@ def _run_iteration(
     """Single iteration of the trading loop."""
 
     # ── Monitor existing trades first ────────────────────────────────────
+    open_before = {t.id for t in trade_manager.get_open_trades()}
     trade_manager.monitor()
+    open_after = {t.id for t in trade_manager.get_open_trades()}
+
+    # ── Log newly closed trades to CSV + learning ────────────────────────
+    just_closed_ids = open_before - open_after
+    for trade_id in just_closed_ids:
+        closed_trade = learning._db.get_trade(trade_id)
+        if closed_trade:
+            learning.review_trade(closed_trade)
+            log_agent.log_trade_to_csv(closed_trade)
+            log_agent.log_trade(closed_trade.id, "CLOSED",
+                                f"{closed_trade.close_reason} PnL={closed_trade.pnl:.2f}")
 
     # ── Review any just-closed trades ────────────────────────────────────
-    closed = [t for t in trade_manager._open_trades if not t.is_open()]
-    # (trade_manager already removed them, so check DB)
     today_str = date.today().isoformat()
     all_closed_today = learning._db.get_trades_closed_today()
     # We only score trades that haven't been scored yet (score check in DB)
@@ -269,6 +288,9 @@ def _run_iteration(
 
         # Step 4: Risk check
         if not risk_agent.validate(signal_obj):
+            log_agent.log_risk_rejection(
+                signal_obj.symbol, signal_obj.direction,
+                signal_obj.strategy, "Failed risk validation")
             continue
 
         # Step 5: Execute
@@ -277,6 +299,7 @@ def _run_iteration(
             trade_manager.add_trade(trade)
             log_agent.log_trade(trade.id, "OPENED",
                                 f"{trade.direction} {trade.symbol} {trade.lot_size} lots")
+            log_agent.log_trade_to_csv(trade)
 
             # Score will happen when trade closes (in trade_manager.monitor)
 

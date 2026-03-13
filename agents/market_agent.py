@@ -29,7 +29,7 @@ class MarketAgent:
 
     def _validator(self, symbol: str) -> DataValidator:
         if symbol not in self._validators:
-            self._validators[symbol] = DataValidator()
+            self._validators[symbol] = DataValidator(db=self._db)
         return self._validators[symbol]
 
     def get_data(self, symbol: str) -> MarketData:
@@ -56,8 +56,12 @@ class MarketAgent:
 
         candles = self._get_candles(symbol)
 
-        self._emit("info", f"{symbol} feed healthy — bid={bid:.5f} ask={ask:.5f} spread={spread:.5f}",
-                   {"bid": bid, "ask": ask, "spread": spread})
+        self._emit("info",
+                   f"{symbol} feed healthy — bid={bid:.5f} ask={ask:.5f} spread={spread:.5f} "
+                   f"vol={volume:.0f} candles={len(candles)}",
+                   {"bid": bid, "ask": ask, "spread": spread,
+                    "volume": volume, "candles": len(candles),
+                    "last_close": candles[-1].close if candles else None})
 
         return MarketData(
             symbol=symbol,
@@ -79,6 +83,14 @@ class MarketAgent:
             )
             validator = self._validator(symbol)
             validator.validate_candles(candles)
+            if candles:
+                hi = max(c.high for c in candles[-14:])
+                lo = min(c.low for c in candles[-14:])
+                self._emit("info",
+                           f"{symbol} {settings.DEFAULT_TIMEFRAME} candles OK — "
+                           f"count={len(candles)} 14-bar range={hi:.5f}/{lo:.5f}",
+                           {"count": len(candles), "high_14": hi, "low_14": lo,
+                            "open": candles[-1].open, "close": candles[-1].close})
             return candles
         except DataValidationError:
             raise

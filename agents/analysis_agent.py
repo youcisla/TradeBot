@@ -31,9 +31,15 @@ class AnalysisAgent:
             ctx = self._analyze_inner(data)
             self._emit("info",
                        f"Crunching {data.symbol} — regime={ctx.regime} trend={ctx.trend_direction} "
-                       f"RSI={ctx.rsi:.1f} ATR={ctx.atr:.5f}",
+                       f"RSI={ctx.rsi:.1f} ATR={ctx.atr:.5f} "
+                       f"SMA_fast={ctx.sma_fast:.5f} SMA_slow={ctx.sma_slow:.5f} "
+                       f"session={ctx.session} news_blackout={ctx.near_news_event}",
                        {"regime": ctx.regime, "trend": ctx.trend_direction,
-                        "rsi": ctx.rsi, "atr": ctx.atr})
+                        "rsi": ctx.rsi, "atr": ctx.atr,
+                        "sma_fast": ctx.sma_fast, "sma_slow": ctx.sma_slow,
+                        "session": ctx.session, "day": ctx.day_of_week,
+                        "near_news": ctx.near_news_event,
+                        "price": ctx.current_price, "spread": ctx.spread})
             return ctx
         except Exception:
             logger.exception("AnalysisAgent.analyze failed")

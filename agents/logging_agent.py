@@ -5,11 +5,13 @@ Answers: *What happened?*
 Responsibilities:
 - Python logging setup (file + console, rotating)
 - Record structured events to DB events table
+- CSV trade journal for offline analysis
 - Build and send daily summary via Telegram
 """
 
 from __future__ import annotations
 
+import csv
 import logging
 import logging.handlers
 import os
@@ -18,9 +20,20 @@ from pathlib import Path
 
 from config import settings
 from database.db import Database
+from models.trade import Trade
 from utils import telegram_bot
 
 logger = logging.getLogger(__name__)
+
+_TRADE_CSV_HEADERS = [
+    "id", "symbol", "strategy", "direction", "entry_price", "lot_size",
+    "stop_loss", "take_profit_1", "take_profit_2", "take_profit_3",
+    "tp1_hit", "tp2_hit", "tp3_hit", "status", "open_time", "close_time",
+    "pnl", "close_reason", "broker_ticket", "spread_at_entry",
+    "snap_rsi_aligned", "snap_trend_aligned", "snap_volume_sufficient",
+    "snap_near_news_event", "snap_market_condition", "snap_session",
+    "snap_day_of_week",
+]
 
 
 class LoggingAgent:
@@ -30,7 +43,9 @@ class LoggingAgent:
         self._db = db
         self._log_dir = Path(log_dir)
         self._log_dir.mkdir(exist_ok=True)
+        self._trade_csv = self._log_dir / "trade_journal.csv"
         self._configure_logging()
+        self._ensure_csv_header()
 
     # ── public API ───────────────────────────────────────────────────────
 
@@ -64,6 +79,39 @@ class LoggingAgent:
             )
         telegram_bot.send_message(msg)
         self.record("DAILY_SUMMARY", msg)
+
+    def log_trade_to_csv(self, trade: Trade) -> None:
+        """Append a trade row to the CSV journal for offline analysis."""
+        with open(self._trade_csv, "a", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f)
+            writer.writerow([
+                trade.id, trade.symbol, trade.strategy, trade.direction,
+                trade.entry_price, trade.lot_size, trade.stop_loss,
+                trade.take_profit_1, trade.take_profit_2, trade.take_profit_3,
+                trade.tp1_hit, trade.tp2_hit, trade.tp3_hit,
+                trade.status, trade.open_time.isoformat(),
+                trade.close_time.isoformat() if trade.close_time else "",
+                trade.pnl, trade.close_reason, trade.broker_ticket,
+                trade.spread_at_entry, trade.snap_rsi_aligned,
+                trade.snap_trend_aligned, trade.snap_volume_sufficient,
+                trade.snap_near_news_event, trade.snap_market_condition,
+                trade.snap_session, trade.snap_day_of_week,
+            ])
+
+    def log_risk_rejection(self, symbol: str, direction: str,
+                           strategy: str, reason: str) -> None:
+        """Record a risk rejection to DB + log for analysis."""
+        self.record("RISK_REJECT",
+                     f"{symbol} {direction} {strategy} — {reason}",
+                     level="WARNING")
+
+    # ── internal ─────────────────────────────────────────────────────────
+
+    def _ensure_csv_header(self) -> None:
+        if not self._trade_csv.exists() or self._trade_csv.stat().st_size == 0:
+            with open(self._trade_csv, "w", newline="", encoding="utf-8") as f:
+                writer = csv.writer(f)
+                writer.writerow(_TRADE_CSV_HEADERS)
 
     # ── setup ────────────────────────────────────────────────────────────
 

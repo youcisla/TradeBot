@@ -8,9 +8,13 @@ from __future__ import annotations
 
 import logging
 from datetime import timedelta
+from typing import TYPE_CHECKING
 
 from config import settings
 from models.market_data import Candle
+
+if TYPE_CHECKING:
+    from database.db import Database
 
 logger = logging.getLogger(__name__)
 
@@ -22,8 +26,9 @@ class DataValidationError(Exception):
 class DataValidator:
     """Stateful validator that tracks recent prices to detect stuck feeds."""
 
-    def __init__(self) -> None:
+    def __init__(self, db: Database | None = None) -> None:
         self._recent_prices: list[float] = []
+        self._db = db
 
     def validate_tick(self, bid: float, ask: float, spread: float) -> None:
         """Validate a single tick.  Raises DataValidationError on failure."""
@@ -42,6 +47,9 @@ class DataValidator:
             if last > 0:
                 change_pct = abs(bid - last) / last * 100
                 if change_pct > settings.SPIKE_PERCENT_THRESHOLD:
+                    self._emit("warn",
+                               f"Price spike detected: {last:.5f} → {bid:.5f} ({change_pct:.2f}%)",
+                               {"last": last, "bid": bid, "change_pct": change_pct})
                     raise DataValidationError(
                         f"Price spike: {last} → {bid} ({change_pct:.2f}%)"
                     )
@@ -53,6 +61,9 @@ class DataValidator:
 
         if (len(self._recent_prices) >= settings.STUCK_QUOTE_THRESHOLD
                 and len(set(self._recent_prices)) == 1):
+            self._emit("warn",
+                       f"Stuck quote: price unchanged for {settings.STUCK_QUOTE_THRESHOLD} ticks ({bid})",
+                       {"bid": bid, "ticks": settings.STUCK_QUOTE_THRESHOLD})
             raise DataValidationError(
                 f"Stuck quote: price unchanged for {settings.STUCK_QUOTE_THRESHOLD} ticks ({bid})"
             )
@@ -76,3 +87,11 @@ class DataValidator:
                     gap.total_seconds() / 60,
                     expected_gap.total_seconds() / 60,
                 )
+                self._emit("warn",
+                           f"Candle gap: {gap.total_seconds()/60:.0f}min between "
+                           f"{candles[i-1].timestamp} and {candles[i].timestamp}",
+                           {"gap_min": gap.total_seconds() / 60})
+
+    def _emit(self, level: str, msg: str, data: dict | None = None) -> None:
+        if self._db:
+            self._db.log_agent_event("market", level, msg, data)
