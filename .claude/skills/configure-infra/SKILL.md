@@ -1,7 +1,7 @@
 ---
 name: configure-infra
 description: Set up the trading bot infrastructure. Covers free and paid stacks, market data APIs, broker connection options, database, VPS, and alerting. Use when configuring services, API keys, or deployment environment.
-argument-hint: [free|paid]
+argument-hint: "free|paid"
 ---
 
 # Configure Infrastructure: $ARGUMENTS

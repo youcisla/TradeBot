@@ -1,0 +1,80 @@
+"""All configurable parameters for the trading bot.
+
+Values are loaded from `.env` where appropriate.  DEMO_MODE is hardcoded
+True for Phase 1 — it is NOT read from the environment.
+"""
+
+from __future__ import annotations
+
+import os
+from pathlib import Path
+
+from dotenv import load_dotenv
+
+# ── Load .env ────────────────────────────────────────────────────────────
+_env_path = Path(__file__).resolve().parent.parent / ".env"
+load_dotenv(_env_path)
+
+# ── Mode ─────────────────────────────────────────────────────────────────
+DEMO_MODE: bool = True  # Hardcoded for Phase 1 — never change via .env
+
+# ── Broker ───────────────────────────────────────────────────────────────
+BROKER_ACCOUNT: str = os.getenv("BROKER_ACCOUNT", "")
+BROKER_PASSWORD: str = os.getenv("BROKER_PASSWORD", "")
+BROKER_SERVER: str = os.getenv("BROKER_SERVER", "")
+
+# ── Market Data ──────────────────────────────────────────────────────────
+ALPHA_VANTAGE_KEY: str = os.getenv("ALPHA_VANTAGE_KEY", "")
+TWELVE_DATA_KEY: str = os.getenv("TWELVE_DATA_KEY", "")
+
+# ── Economic Calendar / News Filter ─────────────────────────────────────
+NEWS_CALENDAR_SOURCE: str = os.getenv("NEWS_CALENDAR_SOURCE", "static")
+FINNHUB_API_KEY: str = os.getenv("FINNHUB_API_KEY", "")
+NEWS_BLACKOUT_MINUTES: int = int(os.getenv("NEWS_BLACKOUT_MINUTES", "15"))
+
+# ── Telegram ─────────────────────────────────────────────────────────────
+TELEGRAM_BOT_TOKEN: str = os.getenv("TELEGRAM_BOT_TOKEN", "")
+TELEGRAM_CHAT_ID: str = os.getenv("TELEGRAM_CHAT_ID", "")
+
+# ── Risk ─────────────────────────────────────────────────────────────────
+MAX_RISK_PER_TRADE: float = float(os.getenv("MAX_RISK_PER_TRADE", "0.02"))
+MAX_OPEN_TRADES: int = int(os.getenv("MAX_OPEN_TRADES", "3"))
+MAX_DAILY_LOSS: float = float(os.getenv("MAX_DAILY_LOSS", "0.05"))
+MAX_SPREAD_PIPS: float = float(os.getenv("MAX_SPREAD_PIPS", "3.0"))
+DRAWDOWN_COOLDOWN_HOURS: int = int(os.getenv("DRAWDOWN_COOLDOWN_HOURS", "24"))
+MIN_LOT_SIZE: float = float(os.getenv("MIN_LOT_SIZE", "0.01"))
+
+# ── Trade Execution ──────────────────────────────────────────────────────
+TP1_CLOSE_PERCENT: float = float(os.getenv("TP1_CLOSE_PERCENT", "0.40"))
+TP2_CLOSE_PERCENT: float = float(os.getenv("TP2_CLOSE_PERCENT", "0.30"))
+TP3_CLOSE_PERCENT: float = float(os.getenv("TP3_CLOSE_PERCENT", "0.30"))
+TRAILING_STOP_DISTANCE_PIPS: float = float(os.getenv("TRAILING_STOP_DISTANCE_PIPS", "20"))
+COMMISSION_PER_LOT: float = float(os.getenv("COMMISSION_PER_LOT", "7.0"))
+BREAKEVEN_SPREAD_OFFSET: bool = os.getenv("BREAKEVEN_SPREAD_OFFSET", "true").lower() == "true"
+
+# ── Bot Loop ─────────────────────────────────────────────────────────────
+LOOP_INTERVAL_SECONDS: int = int(os.getenv("LOOP_INTERVAL_SECONDS", "60"))
+RECONCILE_EVERY_N_LOOPS: int = int(os.getenv("RECONCILE_EVERY_N_LOOPS", "10"))
+
+# ── Logging ──────────────────────────────────────────────────────────────
+LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
+DAILY_SUMMARY_HOUR: int = int(os.getenv("DAILY_SUMMARY_HOUR", "17"))
+
+# ── Learning System ──────────────────────────────────────────────────────
+DEFAULT_CONFIDENCE: float = 0.5
+INITIAL_CONFIDENCE: float = 0.5
+CONFIDENCE_ALLOW: float = 0.3
+CONFIDENCE_REDUCED: float = 0.5
+CONFIDENCE_FULL: float = 0.7
+CONFIDENCE_DISABLE_THRESHOLD: float = 0.2
+
+# ── Data Validation ──────────────────────────────────────────────────────
+STUCK_QUOTE_THRESHOLD: int = int(os.getenv("STUCK_QUOTE_THRESHOLD", "10"))
+SPIKE_PERCENT_THRESHOLD: float = float(os.getenv("SPIKE_PERCENT_THRESHOLD", "2.0"))
+
+# ── Symbols (default for V1) ────────────────────────────────────────────
+DEFAULT_SYMBOL: str = os.getenv("DEFAULT_SYMBOL", "EURUSD")
+DEFAULT_TIMEFRAME: str = os.getenv("DEFAULT_TIMEFRAME", "H1")
+
+# ── Database ─────────────────────────────────────────────────────────────
+DB_PATH: str = os.getenv("DB_PATH", str(Path(__file__).resolve().parent.parent / "data" / "trading_bot.db"))
