@@ -135,11 +135,13 @@ class ExecutionAgent:
         )
 
         # ── Persist immediately ──────────────────────────────────────────
-        self._state.save_trade(trade)        self._emit("info",
+        self._state.save_trade(trade)
+        self._emit("info",
                    f"Trade opened! {trade.direction} {trade.symbol} {trade.lot_size:.2f} lots "
                    f"@ {trade.entry_price:.5f}  SL={trade.stop_loss:.5f}  ticket={trade.broker_ticket}",
                    {"trade_id": trade.id, "ticket": trade.broker_ticket,
-                    "lots": trade.lot_size, "entry": trade.entry_price})        logger.info(
+                    "lots": trade.lot_size, "entry": trade.entry_price})
+        logger.info(
             "TRADE OPENED: %s  %s %s  %.2f lots @ %.5f  ticket=%d",
             trade.id, trade.direction, trade.symbol,
             trade.lot_size, trade.entry_price, trade.broker_ticket,
