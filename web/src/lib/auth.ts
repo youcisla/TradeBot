@@ -1,6 +1,10 @@
 import type { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 
+if (!process.env.NEXTAUTH_SECRET) {
+  console.warn("WARNING: NEXTAUTH_SECRET is not set!");
+}
+
 export const authOptions: NextAuthOptions = {
   providers: [
     CredentialsProvider({
@@ -10,7 +14,10 @@ export const authOptions: NextAuthOptions = {
       },
       async authorize(credentials) {
         const pwd = process.env.DASHBOARD_PASSWORD;
-        if (!pwd) return null;
+        if (!pwd) {
+          console.error("DASHBOARD_PASSWORD env var is not set");
+          return null;
+        }
         if (credentials?.password === pwd) {
           return { id: "1", name: "Admin" };
         }
