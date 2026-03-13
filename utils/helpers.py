@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 
 
 def current_session() -> str:
@@ -13,7 +13,7 @@ def current_session() -> str:
     Asian    00:00 – 09:00 UTC
     Overlap  12:00 – 16:00 UTC (London + NY)
     """
-    hour = datetime.utcnow().hour
+    hour = datetime.now(UTC).hour
     if 12 <= hour < 16:
         return "overlap"
     if 7 <= hour < 16:
@@ -24,4 +24,4 @@ def current_session() -> str:
 
 
 def day_of_week() -> str:
-    return datetime.utcnow().strftime("%A")
+    return datetime.now(UTC).strftime("%A")

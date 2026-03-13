@@ -9,7 +9,7 @@ symbol + direction + strategy as a final safety net.
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Callable
 
 from broker.connector import BrokerConnector
@@ -110,7 +110,7 @@ class ExecutionAgent:
             tp3_lots=tp3_lots,
             broker_ticket=result.broker_ticket,
             spread_at_entry=snap.spread,
-            open_time=datetime.utcnow(),
+            open_time=datetime.now(UTC),
             # Flatten entry snapshot
             snap_rsi_aligned=snap.rsi_aligned,
             snap_trend_aligned=snap.trend_aligned,

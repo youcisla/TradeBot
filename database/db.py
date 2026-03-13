@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import logging
 import sqlite3
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -281,7 +281,7 @@ class Database:
     # ── queries for daily stats ──────────────────────────────────────────
 
     def get_trades_closed_today(self) -> list[Trade]:
-        today = datetime.utcnow().strftime("%Y-%m-%d")
+        today = datetime.now(UTC).strftime("%Y-%m-%d")
         cur = self.conn.execute(
             "SELECT * FROM bot_trades WHERE status='CLOSED' AND close_time LIKE ?",
             (f"{today}%",),

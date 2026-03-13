@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from config import settings
@@ -55,7 +55,7 @@ class NewsFilter:
         if not self._events:
             return False
 
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         window = timedelta(minutes=settings.NEWS_BLACKOUT_MINUTES)
 
         # Extract currencies from symbol (first 3 + last 3)

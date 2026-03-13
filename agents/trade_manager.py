@@ -14,7 +14,7 @@ Responsibilities:
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Callable
 
 from broker.connector import BrokerConnector
@@ -81,7 +81,7 @@ class TradeManagerAgent:
             if pos is None:
                 # Position closed externally
                 trade.status = "CLOSED"
-                trade.close_time = datetime.utcnow()
+                trade.close_time = datetime.now(UTC)
                 trade.close_reason = "EXTERNAL"
                 self._state.save_trade(trade)
                 logger.warning("Trade %s closed externally", trade.id)
@@ -160,7 +160,7 @@ class TradeManagerAgent:
         self._broker.close_order(trade.broker_ticket, trade.symbol, trade.direction)
         trade.tp3_hit = True
         trade.status = "CLOSED"
-        trade.close_time = datetime.utcnow()
+        trade.close_time = datetime.now(UTC)
         trade.close_reason = "TP3"
         self._state.save_trade(trade)
         logger.info("TP3 hit: trade %s — fully closed", trade.id)
@@ -171,7 +171,7 @@ class TradeManagerAgent:
     def _handle_sl(self, trade: Trade) -> None:
         self._broker.close_order(trade.broker_ticket, trade.symbol, trade.direction)
         trade.status = "CLOSED"
-        trade.close_time = datetime.utcnow()
+        trade.close_time = datetime.now(UTC)
         trade.close_reason = "SL"
         self._state.save_trade(trade)
         logger.info("SL hit: trade %s — closed (PnL %.2f)", trade.id, trade.pnl)
@@ -189,7 +189,7 @@ class TradeManagerAgent:
                 continue
             self._broker.close_order(trade.broker_ticket, trade.symbol, trade.direction)
             trade.status = "CLOSED"
-            trade.close_time = datetime.utcnow()
+            trade.close_time = datetime.now(UTC)
             trade.close_reason = reason
             self._state.save_trade(trade)
         self._open_trades.clear()
@@ -199,7 +199,7 @@ class TradeManagerAgent:
             if trade.id == trade_id and trade.is_open():
                 self._broker.close_order(trade.broker_ticket, trade.symbol, trade.direction)
                 trade.status = "CLOSED"
-                trade.close_time = datetime.utcnow()
+                trade.close_time = datetime.now(UTC)
                 trade.close_reason = reason
                 self._state.save_trade(trade)
                 return

@@ -15,7 +15,7 @@ Implements (in order):
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Callable
 
 from broker.connector import BrokerConnector
@@ -140,7 +140,7 @@ class RiskAgent:
     # ── drawdown circuit breaker ─────────────────────────────────────────
 
     def _check_drawdown(self) -> bool:
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         today = now.strftime("%Y-%m-%d")
 
         # If breaker fired, check if cooldown has elapsed

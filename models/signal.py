@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 
 
 @dataclass
@@ -35,6 +35,6 @@ class Signal:
     take_profit_2: float = 0.0
     take_profit_3: float = 0.0
     confidence: float = 0.5
-    timestamp: datetime = field(default_factory=datetime.utcnow)
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
     reason: str = ""
     entry_snapshot: EntrySnapshot = field(default_factory=EntrySnapshot)

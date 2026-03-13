@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import logging
 import random
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 from broker.connector import BrokerConnector, OrderResult, PositionInfo
 from models.market_data import Candle
@@ -72,7 +72,7 @@ class MockConnector(BrokerConnector):
 
     def get_candles(self, symbol: str, timeframe: str, count: int) -> list[Candle]:
         candles: list[Candle] = []
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         for i in range(count, 0, -1):
             o = self._wobble()
             c = self._wobble()

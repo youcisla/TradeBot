@@ -1,14 +1,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 
 
 @dataclass
 class Candle:
     """Single OHLCV candle."""
 
-    timestamp: datetime = field(default_factory=datetime.utcnow)
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
     open: float = 0.0
     high: float = 0.0
     low: float = 0.0
@@ -25,7 +25,7 @@ class MarketData:
     ask: float = 0.0
     spread: float = 0.0
     volume: float = 0.0
-    timestamp: datetime = field(default_factory=datetime.utcnow)
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
     candles: list[Candle] = field(default_factory=list)
 
     @property
@@ -43,7 +43,7 @@ class MarketContext:
     ask: float = 0.0
     spread: float = 0.0
     volume: float = 0.0
-    timestamp: datetime = field(default_factory=datetime.utcnow)
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     # Technical indicators
     sma_fast: float = 0.0

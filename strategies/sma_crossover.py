@@ -8,7 +8,7 @@ and 3× risk (RR 1:1 / 1:2 / 1:3).
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Optional
 
 from config import settings
@@ -81,7 +81,7 @@ class SmaCrossoverStrategy(BaseStrategy):
             take_profit_2=tp2,
             take_profit_3=tp3,
             confidence=settings.DEFAULT_CONFIDENCE,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(UTC),
             reason=f"SMA crossover: fast({ctx.sma_fast:.5f}) {'above' if direction == 'BUY' else 'below'} slow({ctx.sma_slow:.5f})",
             entry_snapshot=snapshot,
         )

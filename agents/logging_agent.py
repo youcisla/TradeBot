@@ -36,7 +36,11 @@ class LoggingAgent:
 
     def record(self, event_type: str, data: str, level: str = "INFO") -> None:
         """Write an event to DB + Python logger."""
-        self._db.log_event(event_type, data, datetime.utcnow().isoformat())
+        self._db.log_event(
+            level=level,
+            source=event_type,
+            message=data,
+        )
         log_fn = getattr(logger, level.lower(), logger.info)
         log_fn("[%s] %s", event_type, data)
 

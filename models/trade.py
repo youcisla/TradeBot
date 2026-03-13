@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 
 
 @dataclass
@@ -26,7 +26,7 @@ class Trade:
     tp2_hit: bool = False
     tp3_hit: bool = False
     status: str = "OPEN"  # OPEN, PARTIAL, CLOSED
-    open_time: datetime = field(default_factory=datetime.utcnow)
+    open_time: datetime = field(default_factory=lambda: datetime.now(UTC))
     close_time: datetime | None = None
     pnl: float = 0.0
     close_reason: str = ""  # TP1, TP2, TP3, SL, MANUAL, EMERGENCY

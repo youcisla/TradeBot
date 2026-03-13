@@ -12,7 +12,7 @@ import logging
 import signal
 import sys
 import time
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 
 from broker.mock_connector import MockConnector
 from config import settings
@@ -138,7 +138,7 @@ def main() -> None:
             log_agent.record("RECONCILE", f"Periodic reconciliation (loop {loop_count})")
 
         # ── Daily summary ────────────────────────────────────────────────
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         today_str = now.strftime("%Y-%m-%d")
         if (now.hour >= settings.DAILY_SUMMARY_HOUR
                 and today_str != last_summary_date):
