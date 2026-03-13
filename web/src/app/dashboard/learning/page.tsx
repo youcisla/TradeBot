@@ -57,11 +57,11 @@ export default function LearningPage() {
                 <div className="flex-1 h-3 bg-terminal rounded overflow-hidden border border-terminal-border">
                   <div
                     className="h-full bg-matrix transition-all"
-                    style={{ width: `${Math.max(0, Math.min(100, c.confidence * 100))}%` }}
+                    style={{ width: `${Math.max(0, Math.min(100, Number(c.confidence) * 100))}%` }}
                   />
                 </div>
                 <span className="text-matrix text-sm w-16 text-right font-bold">
-                  {(c.confidence * 100).toFixed(0)}%
+                  {(Number(c.confidence) * 100).toFixed(0)}%
                 </span>
                 <span className="text-matrix-dim text-xs w-24 text-right">
                   {c.total_trades} trades
@@ -102,16 +102,16 @@ export default function LearningPage() {
                 <td className="p-2 text-matrix-dim">{s.session || "—"}</td>
                 <td className="p-2 text-matrix-dim">{s.market_condition || "—"}</td>
                 <td
-                  className={`p-2 text-right font-bold ${s.score >= 0 ? "text-matrix" : "text-red-500"}`}
+                  className={`p-2 text-right font-bold ${Number(s.score) >= 0 ? "text-matrix" : "text-red-500"}`}
                 >
-                  {s.score >= 0 ? "+" : ""}
+                  {Number(s.score) >= 0 ? "+" : ""}
                   {s.score}
                 </td>
                 <td
-                  className={`p-2 text-right ${s.pnl >= 0 ? "text-matrix" : "text-red-500"}`}
+                  className={`p-2 text-right ${Number(s.pnl) >= 0 ? "text-matrix" : "text-red-500"}`}
                 >
-                  {s.pnl >= 0 ? "+" : ""}
-                  {s.pnl.toFixed(2)}
+                  {Number(s.pnl) >= 0 ? "+" : ""}
+                  {Number(s.pnl).toFixed(2)}
                 </td>
                 <td className="p-2 text-matrix-dim">
                   {new Date(s.created_at).toLocaleString("en-GB", {

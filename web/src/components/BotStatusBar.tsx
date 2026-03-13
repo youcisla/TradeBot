@@ -66,7 +66,7 @@ export default function BotStatusBar() {
       <div>
         <span className="text-matrix-dim">EQUITY </span>
         <span className="text-matrix font-bold">
-          ${status.equity.toFixed(2)}
+          ${Number(status.equity).toFixed(2)}
         </span>
       </div>
       <div>
@@ -76,10 +76,10 @@ export default function BotStatusBar() {
       <div>
         <span className="text-matrix-dim">DAILY P&L </span>
         <span
-          className={`font-bold ${status.daily_pnl >= 0 ? "text-matrix" : "text-red-500"}`}
+          className={`font-bold ${Number(status.daily_pnl) >= 0 ? "text-matrix" : "text-red-500"}`}
         >
-          {status.daily_pnl >= 0 ? "+" : ""}
-          {status.daily_pnl.toFixed(2)}
+          {Number(status.daily_pnl) >= 0 ? "+" : ""}
+          {Number(status.daily_pnl).toFixed(2)}
         </span>
       </div>
       <div>

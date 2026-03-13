@@ -71,13 +71,13 @@ export default function TradesPage() {
                   {t.direction}
                 </td>
                 <td className="p-2 text-matrix-dim">{t.strategy}</td>
-                <td className="p-2 text-right">{t.entry_price.toFixed(5)}</td>
+                <td className="p-2 text-right">{Number(t.entry_price).toFixed(5)}</td>
                 <td className="p-2 text-right">{t.lot_size}</td>
                 <td
-                  className={`p-2 text-right font-bold ${t.pnl >= 0 ? "text-matrix" : "text-red-500"}`}
+                  className={`p-2 text-right font-bold ${Number(t.pnl) >= 0 ? "text-matrix" : "text-red-500"}`}
                 >
-                  {t.pnl >= 0 ? "+" : ""}
-                  {t.pnl.toFixed(2)}
+                  {Number(t.pnl) >= 0 ? "+" : ""}
+                  {Number(t.pnl).toFixed(2)}
                 </td>
                 <td className="p-2">
                   <span

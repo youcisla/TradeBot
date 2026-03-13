@@ -1,4 +1,18 @@
-import { sql } from "@vercel/postgres";
+import { Pool } from "pg";
+
+// Strip sslmode from connection string — we set ssl explicitly
+const connStr = (process.env.DATABASE_URL || "").replace(/[?&]sslmode=[^&]*/g, "");
+
+const pool = new Pool({
+  connectionString: connStr,
+  ssl: { rejectUnauthorized: false },
+  max: 5,
+});
+
+async function query(text: string, params?: unknown[]) {
+  const { rows } = await pool.query(text, params);
+  return rows;
+}
 
 // ── Types ──────────────────────────────────────────────────────────────
 export interface BotStatus {
@@ -63,37 +77,43 @@ export interface TradeScore {
 // ── Queries ────────────────────────────────────────────────────────────
 
 export async function getBotStatus(): Promise<BotStatus | null> {
-  const { rows } = await sql`SELECT * FROM bot_status WHERE id = 1`;
-  return rows[0] as BotStatus | null;
+  const rows = await query("SELECT * FROM bot_status WHERE id = 1");
+  return (rows[0] as BotStatus) ?? null;
 }
 
 export async function getAgentEvents(limit = 80): Promise<AgentEvent[]> {
-  const { rows } =
-    await sql`SELECT * FROM agent_events ORDER BY created_at DESC LIMIT ${limit}`;
+  const rows = await query(
+    "SELECT * FROM agent_events ORDER BY created_at DESC LIMIT $1",
+    [limit]
+  );
   return rows as AgentEvent[];
 }
 
 export async function getOpenTrades(): Promise<Trade[]> {
-  const { rows } =
-    await sql`SELECT * FROM trades WHERE status IN ('OPEN','PARTIAL') ORDER BY open_time DESC`;
+  const rows = await query(
+    "SELECT * FROM trades WHERE status IN ('OPEN','PARTIAL') ORDER BY open_time DESC"
+  );
   return rows as Trade[];
 }
 
 export async function getAllTrades(limit = 100): Promise<Trade[]> {
-  const { rows } =
-    await sql`SELECT * FROM trades ORDER BY open_time DESC LIMIT ${limit}`;
+  const rows = await query(
+    "SELECT * FROM trades ORDER BY open_time DESC LIMIT $1",
+    [limit]
+  );
   return rows as Trade[];
 }
 
 export async function getStrategyConfidences(): Promise<StrategyConfidence[]> {
-  const { rows } =
-    await sql`SELECT * FROM strategy_confidence ORDER BY strategy`;
+  const rows = await query("SELECT * FROM strategy_confidence ORDER BY strategy");
   return rows as StrategyConfidence[];
 }
 
 export async function getTradeScores(limit = 100): Promise<TradeScore[]> {
-  const { rows } =
-    await sql`SELECT * FROM trade_scores ORDER BY created_at DESC LIMIT ${limit}`;
+  const rows = await query(
+    "SELECT * FROM trade_scores ORDER BY created_at DESC LIMIT $1",
+    [limit]
+  );
   return rows as TradeScore[];
 }
 
@@ -101,7 +121,8 @@ export async function insertCommand(
   command: string,
   payload?: Record<string, unknown>
 ): Promise<void> {
-  await sql`INSERT INTO bot_commands (command, payload) VALUES (${command}, ${
-    payload ? JSON.stringify(payload) : null
-  })`;
+  await query(
+    "INSERT INTO bot_commands (command, payload) VALUES ($1, $2)",
+    [command, payload ? JSON.stringify(payload) : null]
+  );
 }

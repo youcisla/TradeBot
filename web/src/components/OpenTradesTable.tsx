@@ -70,12 +70,12 @@ export default function OpenTradesTable() {
                 {t.direction}
               </td>
               <td className="p-2 text-matrix-dim">{t.strategy}</td>
-              <td className="p-2 text-right">{t.entry_price.toFixed(5)}</td>
+              <td className="p-2 text-right">{Number(t.entry_price).toFixed(5)}</td>
               <td className="p-2 text-right">{t.lot_size}</td>
-              <td className="p-2 text-right text-red-400">{t.stop_loss.toFixed(5)}</td>
-              <td className="p-2 text-right text-matrix-dim">{t.take_profit_1.toFixed(5)}</td>
-              <td className={`p-2 text-right font-bold ${t.pnl >= 0 ? "text-matrix" : "text-red-500"}`}>
-                {t.pnl >= 0 ? "+" : ""}{t.pnl.toFixed(2)}
+              <td className="p-2 text-right text-red-400">{Number(t.stop_loss).toFixed(5)}</td>
+              <td className="p-2 text-right text-matrix-dim">{Number(t.take_profit_1).toFixed(5)}</td>
+              <td className={`p-2 text-right font-bold ${Number(t.pnl) >= 0 ? "text-matrix" : "text-red-500"}`}>
+                {Number(t.pnl) >= 0 ? "+" : ""}{Number(t.pnl).toFixed(2)}
               </td>
               <td className="p-2 text-right text-yellow-400">{t.status}</td>
               <td className="p-2 text-right">

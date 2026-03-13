@@ -52,11 +52,19 @@ def main() -> None:
     # ── 1. Core infrastructure ──────────────────────────────────────────
     broker: BrokerConnector
     if settings.BROKER_ACCOUNT and settings.BROKER_PASSWORD and settings.BROKER_SERVER:
-        from broker.mt5_connector import MT5Connector
-        broker = MT5Connector()
-        if not broker.connect():
-            logger.critical("MT5 connection failed — aborting")
-            sys.exit(1)
+        try:
+            from broker.mt5_connector import MT5Connector
+            broker = MT5Connector()
+            if not broker.connect():
+                logger.critical("MT5 connection failed — aborting")
+                sys.exit(1)
+        except ImportError:
+            logger.warning(
+                "MetaTrader5 package not available (requires Python ≤3.13) "
+                "— falling back to MockConnector"
+            )
+            broker = MockConnector()
+            broker.connect()
     else:
         broker = MockConnector()
         broker.connect()
