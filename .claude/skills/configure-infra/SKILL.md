@@ -34,9 +34,22 @@ Use this for initial development and demo testing:
 - Limit: 800 requests/day, 8 per minute
 - Add to `.env`: `TWELVE_DATA_KEY=your_key`
 
-**Telegram Bot (for alerts):**
+**Telegram Bot (for alerts + remote control):**
 - Create bot via BotFather on Telegram
 - Add to `.env`: `TELEGRAM_BOT_TOKEN=your_token` and `TELEGRAM_CHAT_ID=your_id`
+- Must support **two-way commands** (not just outbound alerts):
+  - `/kill` → emergency close all positions + stop loop
+  - `/status` → current open positions, equity, daily P&L
+  - `/pause` → stop opening new trades, keep managing existing ones
+  - `/resume` → resume normal operation
+- Uses `python-telegram-bot` package with webhook or polling
+
+**Economic Calendar (for news blackout filter):**
+- **Forex Factory scraper** — Free, but fragile (HTML scraping)
+- **Finnhub calendar** — Free tier available, JSON API
+- **Static weekly JSON** — Manually maintained fallback (download weekly from Forex Factory)
+- Add to `.env`: `NEWS_CALENDAR_SOURCE=finnhub` (or `forexfactory` or `static`)
+- The bot must block new trades within N minutes of high-impact events on relevant currencies
 
 ### Limitations of Free Stack
 - Slow data (not real-time)
@@ -115,7 +128,12 @@ DEMO_MODE=true
 ALPHA_VANTAGE_KEY=
 TWELVE_DATA_KEY=
 
-# Telegram Alerts
+# Economic Calendar (news filter)
+NEWS_CALENDAR_SOURCE=finnhub
+FINNHUB_API_KEY=
+NEWS_BLACKOUT_MINUTES=15
+
+# Telegram (two-way: alerts + remote commands)
 TELEGRAM_BOT_TOKEN=
 TELEGRAM_CHAT_ID=
 
@@ -123,10 +141,22 @@ TELEGRAM_CHAT_ID=
 MAX_RISK_PER_TRADE=0.02
 MAX_OPEN_TRADES=3
 MAX_DAILY_LOSS=0.05
+MAX_SPREAD=3.0
+DRAWDOWN_COOLDOWN_HOURS=24
+
+# Trade Execution
+TP1_CLOSE_PERCENT=0.40
+TP2_CLOSE_PERCENT=0.30
+TP3_CLOSE_PERCENT=0.30
+TRAILING_STOP_DISTANCE_PIPS=20
+COMMISSION_PER_LOT=7.0
+BREAKEVEN_SPREAD_OFFSET=true
 
 # Bot
 LOOP_INTERVAL_SECONDS=60
+RECONCILE_EVERY_N_LOOPS=10
 LOG_LEVEL=INFO
+DAILY_SUMMARY_HOUR=17
 ```
 
 ## Configuration in config/settings.py
