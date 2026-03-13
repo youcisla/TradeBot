@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { formatTime } from "@/lib/time";
 
 interface AgentEvent {
   id: number;
@@ -21,28 +22,29 @@ const AGENT_CLASS: Record<string, string> = {
   logging: "agent-logging",
 };
 
-function fmt(iso: string): string {
-  return new Date(iso).toLocaleTimeString("en-GB", { hour12: false });
-}
-
-export default function AgentFeed() {
+export default function AgentFeed({ symbol }: { symbol?: string | null }) {
   const [events, setEvents] = useState<AgentEvent[]>([]);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    let active = true;
     const load = () =>
       fetch("/api/events?limit=80")
-        .then((r) => r.json())
-        .then((data: AgentEvent[]) => setEvents(data.reverse()))
+        .then((r) => { if (!r.ok) throw new Error(r.statusText); return r.json(); })
+        .then((data: AgentEvent[]) => { if (active) setEvents(data.reverse()); })
         .catch(() => {});
     load();
-    const id = setInterval(load, 3000);
-    return () => clearInterval(id);
+    const id = setInterval(load, 10_000);
+    return () => { active = false; clearInterval(id); };
   }, []);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [events]);
+
+  const filtered = symbol
+    ? events.filter((e) => e.message.includes(symbol))
+    : events;
 
   return (
     <div className="border border-terminal-border rounded bg-terminal-surface flex flex-col h-[420px]">
@@ -50,9 +52,9 @@ export default function AgentFeed() {
         Agent Feed
       </div>
       <div className="flex-1 overflow-y-auto p-3 space-y-1 text-xs leading-relaxed">
-        {events.map((e) => (
+        {filtered.map((e) => (
           <div key={e.id} className="flex gap-2">
-            <span className="text-matrix-dim shrink-0">{fmt(e.created_at)}</span>
+            <span className="text-matrix-dim shrink-0">{formatTime(e.created_at)}</span>
             <span
               className={`shrink-0 font-bold uppercase w-[110px] ${AGENT_CLASS[e.agent] ?? "text-gray-500"}`}
             >

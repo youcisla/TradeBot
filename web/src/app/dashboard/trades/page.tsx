@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { formatShort } from "@/lib/time";
+import SymbolFilter from "@/components/SymbolFilter";
 
 interface Trade {
   id: string;
@@ -25,6 +27,7 @@ interface Trade {
 
 export default function TradesPage() {
   const [trades, setTrades] = useState<Trade[]>([]);
+  const [symbol, setSymbol] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/trades?all=true")
@@ -33,9 +36,12 @@ export default function TradesPage() {
       .catch(() => {});
   }, []);
 
+  const filtered = symbol ? trades.filter((t) => t.symbol === symbol) : trades;
+
   return (
     <div className="space-y-4">
       <h1 className="text-matrix text-lg font-bold">All Trades</h1>
+      <SymbolFilter value={symbol} onChange={setSymbol} />
 
       <div className="border border-terminal-border rounded bg-terminal-surface overflow-x-auto">
         <table className="w-full text-xs">
@@ -58,7 +64,7 @@ export default function TradesPage() {
             </tr>
           </thead>
           <tbody>
-            {trades.map((t) => (
+            {filtered.map((t) => (
               <tr
                 key={t.id}
                 className="border-b border-terminal-border/50 hover:bg-terminal-border/30"
@@ -97,22 +103,10 @@ export default function TradesPage() {
                 <td className="p-2">{t.tp2_hit ? "✓" : "—"}</td>
                 <td className="p-2">{t.tp3_hit ? "✓" : "—"}</td>
                 <td className="p-2 text-matrix-dim">
-                  {new Date(t.open_time).toLocaleString("en-GB", {
-                    day: "2-digit",
-                    month: "short",
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })}
+                  {formatShort(t.open_time)}
                 </td>
                 <td className="p-2 text-matrix-dim">
-                  {t.close_time
-                    ? new Date(t.close_time).toLocaleString("en-GB", {
-                        day: "2-digit",
-                        month: "short",
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })
-                    : "—"}
+                  {t.close_time ? formatShort(t.close_time) : "—"}
                 </td>
               </tr>
             ))}
@@ -120,8 +114,8 @@ export default function TradesPage() {
         </table>
       </div>
 
-      {trades.length === 0 && (
-        <div className="text-matrix-dim text-sm">No trades recorded yet.</div>
+      {filtered.length === 0 && (
+        <div className="text-matrix-dim text-sm">{symbol ? `No trades for ${symbol}.` : "No trades recorded yet."}</div>
       )}
     </div>
   );

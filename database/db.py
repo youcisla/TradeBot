@@ -137,6 +137,32 @@ INSERT INTO bot_status (id, state) VALUES (1, 'stopped')
 ON CONFLICT (id) DO NOTHING;
 """
 
+_CREATE_ICT_SETUPS = """
+CREATE TABLE IF NOT EXISTS ict_setups (
+    id                  SERIAL PRIMARY KEY,
+    symbol              TEXT NOT NULL,
+    direction           TEXT NOT NULL,
+    model               TEXT NOT NULL,
+    entry_price         NUMERIC,
+    stop_loss           NUMERIC,
+    take_profit_1       NUMERIC,
+    take_profit_2       NUMERIC,
+    take_profit_3       NUMERIC,
+    confidence          NUMERIC DEFAULT 0,
+    htf_bias            TEXT DEFAULT '',
+    htf_regime          TEXT DEFAULT '',
+    premium_discount    TEXT DEFAULT '',
+    entry_zone          TEXT DEFAULT '',
+    reason              TEXT DEFAULT '',
+    confluences         JSONB DEFAULT '{}',
+    missing             TEXT[] DEFAULT '{}',
+    session             TEXT DEFAULT '',
+    executed            BOOLEAN DEFAULT FALSE,
+    trade_id            TEXT,
+    created_at          TIMESTAMP DEFAULT NOW()
+);
+"""
+
 _ALL_TABLES = [
     _CREATE_TRADES,
     _CREATE_TRADE_SCORES,
@@ -144,11 +170,12 @@ _ALL_TABLES = [
     _CREATE_AGENT_EVENTS,
     _CREATE_BOT_COMMANDS,
     _CREATE_BOT_STATUS,
+    _CREATE_ICT_SETUPS,
 ]
 
 
 class Database:
-    """PostgreSQL wrapper with connection pooling for the trading bot."""
+    """PostgreSQL wrapper with connection pooling and auto-reconnect."""
 
     def __init__(self, dsn: str | None = None) -> None:
         self._dsn = dsn or settings.DATABASE_URL
@@ -159,20 +186,64 @@ class Database:
     # ── connection pool ──────────────────────────────────────────────────
 
     def _connect(self) -> None:
+        if self._pool:
+            try:
+                self._pool.closeall()
+            except Exception:
+                pass
         self._pool = psycopg2.pool.SimpleConnectionPool(
             minconn=1,
             maxconn=5,
             dsn=self._dsn,
+            options="-c statement_timeout=15000",
         )
         logger.info("PostgreSQL connection pool created")
 
     def _get_conn(self) -> psycopg2.extensions.connection:
+        """Get a connection from the pool, reconnecting if stale."""
         assert self._pool is not None
-        return self._pool.getconn()
+        conn = self._pool.getconn()
+        # Validate the connection is alive
+        try:
+            conn.isolation_level  # triggers check
+            with conn.cursor() as cur:
+                cur.execute("SELECT 1")
+        except (psycopg2.OperationalError, psycopg2.InterfaceError):
+            logger.warning("Stale DB connection detected — reconnecting pool")
+            try:
+                self._pool.putconn(conn, close=True)
+            except Exception:
+                pass
+            self._reconnect()
+            conn = self._pool.getconn()  # type: ignore[union-attr]
+        return conn
 
     def _put_conn(self, conn: psycopg2.extensions.connection) -> None:
         if self._pool:
-            self._pool.putconn(conn)
+            try:
+                # If the connection is in a bad state, discard it
+                if conn.closed or conn.status != psycopg2.extensions.STATUS_READY:
+                    self._pool.putconn(conn, close=True)
+                else:
+                    self._pool.putconn(conn)
+            except Exception:
+                pass
+
+    def _reconnect(self) -> None:
+        """Tear down the pool and create a fresh one."""
+        logger.info("Rebuilding DB connection pool…")
+        try:
+            if self._pool:
+                self._pool.closeall()
+        except Exception:
+            pass
+        self._pool = psycopg2.pool.SimpleConnectionPool(
+            minconn=1,
+            maxconn=5,
+            dsn=self._dsn,
+            options="-c statement_timeout=15000",
+        )
+        logger.info("DB connection pool rebuilt")
 
     def close(self) -> None:
         if self._pool:
@@ -476,5 +547,46 @@ class Database:
                     (today,),
                 )
                 return [self._row_to_trade(r) for r in cur.fetchall()]
+        finally:
+            self._put_conn(conn)
+
+    # ── ICT setup logging ────────────────────────────────────────────────
+
+    def save_ict_setup(self, setup: dict) -> None:
+        """Persist an ICT setup candidate for dashboard analytics."""
+        conn = self._get_conn()
+        try:
+            with conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """INSERT INTO ict_setups
+                           (symbol, direction, model, entry_price, stop_loss,
+                            take_profit_1, take_profit_2, take_profit_3,
+                            confidence, htf_bias, htf_regime, premium_discount,
+                            entry_zone, reason, confluences, missing, session,
+                            executed, trade_id)
+                           VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+                        (
+                            setup.get("symbol"),
+                            setup.get("direction"),
+                            setup.get("model"),
+                            setup.get("entry_price"),
+                            setup.get("stop_loss"),
+                            setup.get("take_profit_1"),
+                            setup.get("take_profit_2"),
+                            setup.get("take_profit_3"),
+                            setup.get("confidence"),
+                            setup.get("htf_bias", ""),
+                            setup.get("htf_regime", ""),
+                            setup.get("premium_discount", ""),
+                            setup.get("entry_zone", ""),
+                            setup.get("reason", ""),
+                            json.dumps(setup.get("confluences", {})),
+                            setup.get("missing", []),
+                            setup.get("session", ""),
+                            setup.get("executed", False),
+                            setup.get("trade_id"),
+                        ),
+                    )
         finally:
             self._put_conn(conn)

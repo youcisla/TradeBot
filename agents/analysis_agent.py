@@ -33,10 +33,12 @@ class AnalysisAgent:
                        f"Crunching {data.symbol} — regime={ctx.regime} trend={ctx.trend_direction} "
                        f"RSI={ctx.rsi:.1f} ATR={ctx.atr:.5f} "
                        f"SMA_fast={ctx.sma_fast:.5f} SMA_slow={ctx.sma_slow:.5f} "
+                       f"prev_fast={ctx.prev_sma_fast:.5f} prev_slow={ctx.prev_sma_slow:.5f} "
                        f"session={ctx.session} news_blackout={ctx.near_news_event}",
                        {"regime": ctx.regime, "trend": ctx.trend_direction,
                         "rsi": ctx.rsi, "atr": ctx.atr,
                         "sma_fast": ctx.sma_fast, "sma_slow": ctx.sma_slow,
+                        "prev_sma_fast": ctx.prev_sma_fast, "prev_sma_slow": ctx.prev_sma_slow,
                         "session": ctx.session, "day": ctx.day_of_week,
                         "near_news": ctx.near_news_event,
                         "price": ctx.current_price, "spread": ctx.spread})
@@ -56,6 +58,8 @@ class AnalysisAgent:
 
         sma_fast = self._sma(closes, 10)
         sma_slow = self._sma(closes, 50)
+        prev_sma_fast = self._sma(closes[:-1], 10) if len(closes) > 10 else 0.0
+        prev_sma_slow = self._sma(closes[:-1], 50) if len(closes) > 50 else 0.0
         rsi = self._rsi(closes, 14)
         atr = self._atr(data.candles, 14) if data.candles else 0.0
 
@@ -90,6 +94,8 @@ class AnalysisAgent:
             timestamp=data.timestamp,
             sma_fast=sma_fast,
             sma_slow=sma_slow,
+            prev_sma_fast=prev_sma_fast,
+            prev_sma_slow=prev_sma_slow,
             rsi=rsi,
             atr=atr,
             regime=regime,

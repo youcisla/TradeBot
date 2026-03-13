@@ -79,7 +79,7 @@ class MarketAgent:
     def _get_candles(self, symbol: str) -> list[Candle]:
         try:
             candles = self._broker.get_candles(
-                symbol, settings.DEFAULT_TIMEFRAME, count=100,
+                symbol, settings.DEFAULT_TIMEFRAME, count=250,
             )
             validator = self._validator(symbol)
             validator.validate_candles(candles)

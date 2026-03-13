@@ -63,6 +63,21 @@ class MT5Connector(BrokerConnector):
         self._connected = True
         return True
 
+    def get_available_symbols(self, candidates: list[str]) -> list[str]:
+        """Return the subset of *candidates* that are visible in the MT5 terminal."""
+        available = []
+        for sym in candidates:
+            info = mt5.symbol_info(sym)
+            if info is not None and info.visible:
+                available.append(sym)
+            else:
+                # Try enabling it
+                mt5.symbol_select(sym, True)
+                info = mt5.symbol_info(sym)
+                if info is not None:
+                    available.append(sym)
+        return available
+
     def disconnect(self) -> None:
         if self._connected:
             mt5.shutdown()

@@ -16,18 +16,19 @@ interface Trade {
   open_time: string;
 }
 
-export default function OpenTradesTable() {
+export default function OpenTradesTable({ symbol }: { symbol?: string | null }) {
   const [trades, setTrades] = useState<Trade[]>([]);
 
   useEffect(() => {
+    let active = true;
     const load = () =>
       fetch("/api/trades")
-        .then((r) => r.json())
-        .then(setTrades)
+        .then((r) => { if (!r.ok) throw new Error(r.statusText); return r.json(); })
+        .then((data) => { if (active) setTrades(data); })
         .catch(() => {});
     load();
-    const id = setInterval(load, 5000);
-    return () => clearInterval(id);
+    const id = setInterval(load, 15_000);
+    return () => { active = false; clearInterval(id); };
   }, []);
 
   async function closeTrade(tradeId: string) {
@@ -38,10 +39,12 @@ export default function OpenTradesTable() {
     });
   }
 
-  if (trades.length === 0)
+  const filtered = symbol ? trades.filter((t) => t.symbol === symbol) : trades;
+
+  if (filtered.length === 0)
     return (
       <div className="border border-terminal-border rounded bg-terminal-surface p-4 text-matrix-dim text-sm">
-        No open trades.
+        {symbol ? `No open trades for ${symbol}.` : "No open trades."}
       </div>
     );
 
@@ -63,7 +66,7 @@ export default function OpenTradesTable() {
           </tr>
         </thead>
         <tbody>
-          {trades.map((t) => (
+          {filtered.map((t) => (
             <tr key={t.id} className="border-b border-terminal-border/50 hover:bg-terminal-border/30">
               <td className="p-2 text-matrix font-bold">{t.symbol}</td>
               <td className={`p-2 font-bold ${t.direction === "BUY" ? "text-matrix" : "text-red-500"}`}>

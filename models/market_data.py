@@ -48,6 +48,8 @@ class MarketContext:
     # Technical indicators
     sma_fast: float = 0.0
     sma_slow: float = 0.0
+    prev_sma_fast: float = 0.0
+    prev_sma_slow: float = 0.0
     rsi: float = 50.0
     atr: float = 0.0
 

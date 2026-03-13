@@ -18,11 +18,16 @@ from broker.connector import BrokerConnector
 from broker.mock_connector import MockConnector
 from config import settings
 from config.symbols import SYMBOLS
+
+# ── Filter symbols to only those available on the broker ────────────────
+_active_symbols = SYMBOLS[:]
 from database.db import Database
 from filters.data_validator import DataValidationError
 from filters.news_filter import NewsFilter
 from state.persistence import StatePersistence
+from models.signal import Signal
 from strategies.sma_crossover import SmaCrossoverStrategy
+from strategies.ict_strategy import ICTStrategy
 
 from agents.market_agent import MarketAgent
 from agents.analysis_agent import AnalysisAgent
@@ -34,6 +39,7 @@ from agents.learning_agent import LearningAgent
 from agents.logging_agent import LoggingAgent
 
 from utils import telegram_bot
+from utils.helpers import is_market_open, is_any_market_open
 
 logger = logging.getLogger(__name__)
 
@@ -73,6 +79,17 @@ def main() -> None:
     state = StatePersistence(db, broker)
     news_filter = NewsFilter(db=db)
 
+    # ── Filter symbols to those available on the broker ─────────────────
+    global _active_symbols
+    if hasattr(broker, "get_available_symbols"):
+        _active_symbols = broker.get_available_symbols(SYMBOLS)
+        removed = set(SYMBOLS) - set(_active_symbols)
+        if removed:
+            logger.warning("Symbols not available on broker (removed): %s", ", ".join(sorted(removed)))
+    else:
+        _active_symbols = SYMBOLS[:]
+    logger.info("Active symbols: %s", ", ".join(_active_symbols))
+
     # ── 2. Logging agent first (sets up Python logging) ─────────────────
     log_agent = LoggingAgent(db)
     log_agent.record("STARTUP", f"Bot started — DEMO_MODE={settings.DEMO_MODE}")
@@ -81,7 +98,10 @@ def main() -> None:
     learning = LearningAgent(db)
 
     # ── 4. Strategies ───────────────────────────────────────────────────
-    strategies = [SmaCrossoverStrategy()]
+    strategies = [
+        ICTStrategy(broker=broker, db=db, min_confidence=55.0),
+        SmaCrossoverStrategy(),  # fallback
+    ]
 
     # ── 5. Agents (db passed for persona events) ────────────────────────
     market_agent = MarketAgent(broker, db=db)
@@ -131,9 +151,25 @@ def main() -> None:
 
     logger.info("Entering main loop (interval=%ds)", settings.LOOP_INTERVAL_SECONDS)
 
+    _market_closed_logged = False
+
     while not _shutdown:
         loop_start = time.monotonic()
         loop_count += 1
+
+        # ── Market hours: if ALL markets are closed, sleep longer ────────
+        if not is_any_market_open(_active_symbols):
+            if not _market_closed_logged:
+                logger.info("All markets closed — sleeping (still processing commands & heartbeat)")
+                _market_closed_logged = True
+            # Still process commands and heartbeat
+            _update_heartbeat(db, broker, trade_manager, learning)
+            _process_commands(db, trade_manager, _request_shutdown)
+            time.sleep(300)  # 5 min when all markets closed
+            continue
+        elif _market_closed_logged:
+            logger.info("Markets reopened — resuming normal operation")
+            _market_closed_logged = False
 
         try:
             _run_iteration(
@@ -248,7 +284,16 @@ def _run_iteration(
     learning: LearningAgent,
     log_agent: LoggingAgent,
 ) -> None:
-    """Single iteration of the trading loop."""
+    """Single iteration of the trading loop.
+
+    Uses a **scan-all → rank → execute-best** pipeline:
+    1. Scan every symbol and collect ALL signals from ALL strategies
+    2. Rank by confidence (highest first)
+    3. Execute top signals that pass risk validation (up to available slots)
+
+    This ensures we never miss a high-confidence setup just because another
+    symbol happened to be checked first in the list.
+    """
 
     # ── Monitor existing trades first ────────────────────────────────────
     open_before = {t.id for t in trade_manager.get_open_trades()}
@@ -277,8 +322,16 @@ def _run_iteration(
         logger.debug("Bot paused — skipping signal detection (loop %d)", loop_count)
         return
 
-    # ── Per-symbol pipeline ──────────────────────────────────────────────
-    for symbol in SYMBOLS:
+    # ══════════════════════════════════════════════════════════════════════
+    # PHASE 1: Scan ALL symbols — collect every signal
+    # ══════════════════════════════════════════════════════════════════════
+    all_signals: list[Signal] = []
+
+    for symbol in _active_symbols:
+        # Skip symbols whose market is currently closed
+        if not is_market_open(symbol):
+            continue
+
         try:
             # Step 1: Fetch market data
             data = market_agent.get_data(symbol)
@@ -289,19 +342,46 @@ def _run_iteration(
         # Step 2: Analyse
         context = analysis_agent.analyze(data)
 
-        # Step 3: Detect signal
-        signal_obj = strategy_agent.detect(context)
-        if signal_obj is None:
-            continue
+        # Step 3: Collect ALL signals from ALL strategies for this symbol
+        signals = strategy_agent.detect_all(context)
+        all_signals.extend(signals)
 
-        # Step 4: Risk check
+    if not all_signals:
+        return
+
+    # ══════════════════════════════════════════════════════════════════════
+    # PHASE 2: Rank by confidence (highest first) and deduplicate
+    # ══════════════════════════════════════════════════════════════════════
+    all_signals.sort(key=lambda s: s.confidence, reverse=True)
+
+    # Keep only the best signal per (symbol, direction) — avoids ICT+SMA
+    # both trying to open the same trade
+    seen: set[tuple[str, str]] = set()
+    ranked: list[Signal] = []
+    for sig in all_signals:
+        key = (sig.symbol, sig.direction)
+        if key not in seen:
+            seen.add(key)
+            ranked.append(sig)
+
+    logger.info(
+        "Signal scan: %d raw → %d ranked  [%s]",
+        len(all_signals), len(ranked),
+        ", ".join(f"{s.symbol} {s.direction} conf={s.confidence:.2f}" for s in ranked[:5]),
+    )
+
+    # ══════════════════════════════════════════════════════════════════════
+    # PHASE 3: Execute best signals that pass risk validation
+    # ══════════════════════════════════════════════════════════════════════
+    for signal_obj in ranked:
+        # Risk check (includes MAX_OPEN_TRADES — will naturally stop)
         if not risk_agent.validate(signal_obj):
             log_agent.log_risk_rejection(
                 signal_obj.symbol, signal_obj.direction,
                 signal_obj.strategy, "Failed risk validation")
             continue
 
-        # Step 5: Execute
+        # Execute
         trade = execution_agent.open_trade(signal_obj)
         if trade is not None:
             trade_manager.add_trade(trade)

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { timeSince, timeAgo } from "@/lib/time";
 
 interface BotStatus {
   state: string;
@@ -11,34 +12,19 @@ interface BotStatus {
   uptime_start: string | null;
 }
 
-function timeSince(iso: string | null): string {
-  if (!iso) return "—";
-  const diff = Date.now() - new Date(iso).getTime();
-  const h = Math.floor(diff / 3600000);
-  const m = Math.floor((diff % 3600000) / 60000);
-  return `${h}h ${m}m`;
-}
-
-function timeAgo(iso: string | null): string {
-  if (!iso) return "never";
-  const sec = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
-  if (sec < 60) return `${sec}s ago`;
-  if (sec < 3600) return `${Math.floor(sec / 60)}m ago`;
-  return `${Math.floor(sec / 3600)}h ago`;
-}
-
 export default function BotStatusBar() {
   const [status, setStatus] = useState<BotStatus | null>(null);
 
   useEffect(() => {
+    let active = true;
     const load = () =>
       fetch("/api/status")
-        .then((r) => r.json())
-        .then(setStatus)
+        .then((r) => { if (!r.ok) throw new Error(r.statusText); return r.json(); })
+        .then((data) => { if (active) setStatus(data); })
         .catch(() => {});
     load();
-    const id = setInterval(load, 5000);
-    return () => clearInterval(id);
+    const id = setInterval(load, 10_000);
+    return () => { active = false; clearInterval(id); };
   }, []);
 
   if (!status)

@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { formatShort } from "@/lib/time";
+import SymbolFilter from "@/components/SymbolFilter";
 
 interface StrategyConfidence {
   strategy: string;
@@ -25,6 +27,7 @@ interface TradeScore {
 export default function LearningPage() {
   const [confidences, setConfidences] = useState<StrategyConfidence[]>([]);
   const [scores, setScores] = useState<TradeScore[]>([]);
+  const [symbol, setSymbol] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/learning")
@@ -36,9 +39,12 @@ export default function LearningPage() {
       .catch(() => {});
   }, []);
 
+  const filtered = symbol ? scores.filter((s) => s.symbol === symbol) : scores;
+
   return (
     <div className="space-y-6">
       <h1 className="text-matrix text-lg font-bold">Learning System</h1>
+      <SymbolFilter value={symbol} onChange={setSymbol} />
 
       {/* Strategy Confidence */}
       <div className="border border-terminal-border rounded bg-terminal-surface p-4">
@@ -91,7 +97,7 @@ export default function LearningPage() {
             </tr>
           </thead>
           <tbody>
-            {scores.map((s) => (
+            {filtered.map((s) => (
               <tr
                 key={s.id}
                 className="border-b border-terminal-border/50 hover:bg-terminal-border/30"
@@ -114,19 +120,14 @@ export default function LearningPage() {
                   {Number(s.pnl).toFixed(2)}
                 </td>
                 <td className="p-2 text-matrix-dim">
-                  {new Date(s.created_at).toLocaleString("en-GB", {
-                    day: "2-digit",
-                    month: "short",
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })}
+                  {formatShort(s.created_at)}
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
-        {scores.length === 0 && (
-          <div className="p-4 text-matrix-dim text-sm">No scores recorded yet.</div>
+        {filtered.length === 0 && (
+          <div className="p-4 text-matrix-dim text-sm">{symbol ? `No scores for ${symbol}.` : "No scores recorded yet."}</div>
         )}
       </div>
     </div>

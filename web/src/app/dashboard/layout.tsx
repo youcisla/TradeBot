@@ -21,11 +21,20 @@ export default async function DashboardLayout({
         <Link href="/dashboard" className="text-matrix-dim hover:text-matrix transition-colors">
           Dashboard
         </Link>
+        <Link href="/dashboard/analytics" className="text-matrix-dim hover:text-matrix transition-colors">
+          Analytics
+        </Link>
         <Link href="/dashboard/trades" className="text-matrix-dim hover:text-matrix transition-colors">
           Trades
         </Link>
         <Link href="/dashboard/learning" className="text-matrix-dim hover:text-matrix transition-colors">
           Learning
+        </Link>
+        <Link href="/dashboard/strategy" className="text-matrix-dim hover:text-matrix transition-colors">
+          Strategy
+        </Link>
+        <Link href="/dashboard/ict" className="text-matrix-dim hover:text-matrix transition-colors">
+          ICT Engine
         </Link>
       </nav>
 

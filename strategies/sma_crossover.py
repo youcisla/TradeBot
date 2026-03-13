@@ -31,20 +31,21 @@ class SmaCrossoverStrategy(BaseStrategy):
             return None
 
     def _detect_inner(self, ctx: MarketContext) -> Optional[Signal]:
-        # Need enough candles to compute indicators
-        if len(ctx.candles) < 2:
-            return None
         # Need valid SMA values
         if ctx.sma_fast == 0 or ctx.sma_slow == 0:
             return None
         if ctx.atr <= 0:
             return None
 
-        # Determine crossover direction from last two candle closes
-        prev_fast = ctx.candles[-2].close
-        prev_slow = ctx.sma_slow  # simplified — use current slow as proxy
+        # Need valid previous SMA values for crossover detection
+        if ctx.prev_sma_fast == 0 or ctx.prev_sma_slow == 0:
+            return None
+
+        # Detect crossover: previous bar SMAs vs current bar SMAs
         cur_fast = ctx.sma_fast
         cur_slow = ctx.sma_slow
+        prev_fast = ctx.prev_sma_fast
+        prev_slow = ctx.prev_sma_slow
 
         direction: str | None = None
         if cur_fast > cur_slow and prev_fast <= prev_slow:

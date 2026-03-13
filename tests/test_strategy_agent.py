@@ -21,9 +21,10 @@ class TestStrategyAgent:
         ctx = MarketContext(
             symbol="EURUSD", current_price=1.1050,
             sma_fast=1.1050, sma_slow=1.1050, atr=0.0010,
+            prev_sma_fast=1.1050, prev_sma_slow=1.1050,
             candles=make_candles(60),
         )
-        # No crossover → no signal
+        # No crossover (both equal) → no signal
         result = agent.detect(ctx)
         assert result is None
 
@@ -33,6 +34,7 @@ class TestStrategyAgent:
         ctx = MarketContext(
             symbol="EURUSD", current_price=1.1100,
             sma_fast=1.1100, sma_slow=1.1000, atr=0.0010,
+            prev_sma_fast=1.0990, prev_sma_slow=1.1000,
             candles=candles,
         )
         result = agent.detect(ctx)
@@ -48,6 +50,7 @@ class TestStrategyAgent:
         ctx = MarketContext(
             symbol="EURUSD", current_price=1.1050,
             sma_fast=1.1050, sma_slow=1.1050, atr=0.0010,
+            prev_sma_fast=1.1050, prev_sma_slow=1.1050,
             candles=make_candles(60),
         )
         # No crossover so None, but the test is that it didn't short-circuit
@@ -57,19 +60,19 @@ class TestStrategyAgent:
     def test_detect_sets_confidence_on_signal(self):
         """When a signal is produced, its confidence should be set."""
         candles = make_candles(60, base=1.0800, trend=0.0005)
-        # Make the last candle's close lower than sma_slow to fake a crossover
-        # Easier: provide a context where fast > slow AND prev close < slow
+        # Simulate a bullish crossover: prev fast < prev slow, cur fast > cur slow
         ctx = MarketContext(
             symbol="EURUSD", current_price=1.1100,
             sma_fast=1.1100, sma_slow=1.1000, rsi=55.0, atr=0.0010,
+            prev_sma_fast=1.0990, prev_sma_slow=1.1000,
             candles=candles,
         )
-        # The SMA crossover strategy checks candle[-2].close vs sma_slow
-        # With uptrend candles candle[-2].close might be below sma_slow
+        # The crossover: prev_fast < prev_slow → cur_fast > cur_slow = BUY
         agent = StrategyAgent([SmaCrossoverStrategy()], lambda n: 0.8)
         result = agent.detect(ctx)
-        if result is not None:
-            assert result.confidence == 0.8
+        assert result is not None
+        assert result.confidence == 0.8
+        assert result.direction == "BUY"
 
     def test_empty_strategies_returns_none(self):
         agent = StrategyAgent([], _mock_confidence)

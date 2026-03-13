@@ -20,7 +20,11 @@ logger = logging.getLogger(__name__)
 
 
 class StrategyAgent:
-    """Iterates through active strategies and returns the first valid signal."""
+    """Runs all active strategies and collects signals.
+
+    ``detect()`` returns the single best signal (backward-compatible).
+    ``detect_all()`` returns every valid signal for ranking across symbols.
+    """
 
     def __init__(
         self,
@@ -32,22 +36,44 @@ class StrategyAgent:
         self._get_confidence = get_confidence
         self._db = db
 
+    # ── Public API ───────────────────────────────────────────────────────
+
     def detect(self, context: MarketContext) -> Optional[Signal]:
+        """Return the single best signal for one symbol (legacy API)."""
         try:
-            sig = self._detect_inner(context)
-            if sig is None:
+            signals = self._collect_signals(context)
+            if not signals:
                 self._emit("info", f"No trade on {context.symbol} — nothing looks right.")
-            return sig
+                return None
+            # Return highest confidence
+            return max(signals, key=lambda s: s.confidence)
         except Exception:
             logger.exception("StrategyAgent.detect failed")
             self._emit("error", "Strategy scan crashed — skipping this tick.")
             return None
 
+    def detect_all(self, context: MarketContext) -> list[Signal]:
+        """Return ALL valid signals from ALL strategies for one symbol.
+
+        Used by the ranking pipeline to compare signals across symbols
+        before choosing which to execute.
+        """
+        try:
+            return self._collect_signals(context)
+        except Exception:
+            logger.exception("StrategyAgent.detect_all failed")
+            return []
+
+    # ── Internal ─────────────────────────────────────────────────────────
+
     def _emit(self, level: str, msg: str, data: dict | None = None) -> None:
         if self._db:
             self._db.log_agent_event("strategy", level, msg, data)
 
-    def _detect_inner(self, context: MarketContext) -> Optional[Signal]:
+    def _collect_signals(self, context: MarketContext) -> list[Signal]:
+        """Run every strategy and collect all valid signals."""
+        signals: list[Signal] = []
+
         for strategy in self._strategies:
             confidence = self._get_confidence(strategy.name)
             if confidence < settings.CONFIDENCE_ALLOW:
@@ -70,5 +96,6 @@ class StrategyAgent:
                     strategy.name, signal.direction, signal.symbol,
                     signal.entry_price, signal.stop_loss, signal.take_profit_1,
                 )
-                return signal
-        return None
+                signals.append(signal)
+
+        return signals

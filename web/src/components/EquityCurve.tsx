@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { formatChartDate } from "@/lib/time";
 
 interface Trade {
   id: string;
@@ -23,10 +24,7 @@ export default function EquityCurve() {
         const pts = closed.map((t) => {
           cum += t.pnl;
           return {
-            date: new Date(t.close_time!).toLocaleDateString("en-GB", {
-              day: "2-digit",
-              month: "short",
-            }),
+            date: formatChartDate(t.close_time!),
             cumPnl: cum,
           };
         });
@@ -44,7 +42,7 @@ export default function EquityCurve() {
 
   const maxPnl = Math.max(...points.map((p) => p.cumPnl));
   const minPnl = Math.min(...points.map((p) => p.cumPnl));
-  const range = maxPnl - minPnl || 1;
+  const range = (maxPnl - minPnl) || 1;
   const w = 600;
   const h = 160;
   const pad = 20;

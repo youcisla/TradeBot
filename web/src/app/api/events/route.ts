@@ -9,9 +9,14 @@ export async function GET(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { searchParams } = new URL(request.url);
-  const limit = Math.min(Number(searchParams.get("limit") ?? 80), 500);
+  try {
+    const { searchParams } = new URL(request.url);
+    const limit = Math.min(Number(searchParams.get("limit") ?? 80), 500);
 
-  const events = await getAgentEvents(limit);
-  return NextResponse.json(events);
+    const events = await getAgentEvents(limit);
+    return NextResponse.json(events);
+  } catch (err) {
+    console.error("[api/events]", (err as Error).message);
+    return NextResponse.json({ error: "DB temporarily unavailable" }, { status: 503 });
+  }
 }
