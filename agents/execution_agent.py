@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import logging
 from datetime import UTC, datetime
-from typing import Callable
+from typing import TYPE_CHECKING, Callable
 
 from broker.connector import BrokerConnector
 from config import settings
@@ -18,6 +18,9 @@ from models.signal import Signal
 from models.trade import Trade
 from state.persistence import StatePersistence
 from utils import telegram_bot
+
+if TYPE_CHECKING:
+    from database.db import Database
 
 logger = logging.getLogger(__name__)
 
@@ -30,20 +33,30 @@ class ExecutionAgent:
         broker: BrokerConnector,
         state: StatePersistence,
         calculate_position_size: Callable[[Signal], float],
+        db: Database | None = None,
     ) -> None:
         self._broker = broker
         self._state = state
-        self._calc_size = calculate_position_size  # fn(Signal) -> float
+        self._calc_size = calculate_position_size
+        self._db = db
 
     def open_trade(self, signal: Signal) -> Trade | None:
         try:
+            self._emit("info",
+                       f"Executing {signal.direction} {signal.symbol} — placing order now...",
+                       {"symbol": signal.symbol, "direction": signal.direction})
             return self._open_inner(signal)
         except Exception:
             logger.exception("ExecutionAgent.open_trade failed")
+            self._emit("error", f"Execution failed for {signal.symbol} {signal.direction}!")
             telegram_bot.send_message(
                 f"❌ Execution error: {signal.symbol} {signal.direction}"
             )
             return None
+
+    def _emit(self, level: str, msg: str, data: dict | None = None) -> None:
+        if self._db:
+            self._db.log_agent_event("execution", level, msg, data)
 
     def _open_inner(self, signal: Signal) -> Trade | None:
         # ── Final duplicate guard (belt + suspenders) ────────────────────
@@ -122,8 +135,11 @@ class ExecutionAgent:
         )
 
         # ── Persist immediately ──────────────────────────────────────────
-        self._state.save_trade(trade)
-        logger.info(
+        self._state.save_trade(trade)        self._emit("info",
+                   f"Trade opened! {trade.direction} {trade.symbol} {trade.lot_size:.2f} lots "
+                   f"@ {trade.entry_price:.5f}  SL={trade.stop_loss:.5f}  ticket={trade.broker_ticket}",
+                   {"trade_id": trade.id, "ticket": trade.broker_ticket,
+                    "lots": trade.lot_size, "entry": trade.entry_price})        logger.info(
             "TRADE OPENED: %s  %s %s  %.2f lots @ %.5f  ticket=%d",
             trade.id, trade.direction, trade.symbol,
             trade.lot_size, trade.entry_price, trade.broker_ticket,

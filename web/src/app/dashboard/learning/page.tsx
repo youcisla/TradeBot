@@ -1,0 +1,134 @@
+"use client";
+
+import { useEffect, useState } from "react";
+
+interface StrategyConfidence {
+  strategy: string;
+  confidence: number;
+  total_trades: number;
+  total_score: number;
+  last_updated: string;
+}
+
+interface TradeScore {
+  id: number;
+  trade_id: string;
+  strategy: string;
+  symbol: string;
+  session: string;
+  market_condition: string;
+  score: number;
+  pnl: number;
+  created_at: string;
+}
+
+export default function LearningPage() {
+  const [confidences, setConfidences] = useState<StrategyConfidence[]>([]);
+  const [scores, setScores] = useState<TradeScore[]>([]);
+
+  useEffect(() => {
+    fetch("/api/learning")
+      .then((r) => r.json())
+      .then((data) => {
+        setConfidences(data.confidences ?? []);
+        setScores(data.scores ?? []);
+      })
+      .catch(() => {});
+  }, []);
+
+  return (
+    <div className="space-y-6">
+      <h1 className="text-matrix text-lg font-bold">Learning System</h1>
+
+      {/* Strategy Confidence */}
+      <div className="border border-terminal-border rounded bg-terminal-surface p-4">
+        <div className="text-matrix-dim text-xs uppercase tracking-widest mb-3">
+          Strategy Confidence
+        </div>
+        {confidences.length === 0 ? (
+          <div className="text-matrix-dim text-sm">No strategies tracked yet.</div>
+        ) : (
+          <div className="space-y-3">
+            {confidences.map((c) => (
+              <div key={c.strategy} className="flex items-center gap-4">
+                <span className="text-matrix font-bold w-40 text-sm">
+                  {c.strategy}
+                </span>
+                <div className="flex-1 h-3 bg-terminal rounded overflow-hidden border border-terminal-border">
+                  <div
+                    className="h-full bg-matrix transition-all"
+                    style={{ width: `${Math.max(0, Math.min(100, c.confidence * 100))}%` }}
+                  />
+                </div>
+                <span className="text-matrix text-sm w-16 text-right font-bold">
+                  {(c.confidence * 100).toFixed(0)}%
+                </span>
+                <span className="text-matrix-dim text-xs w-24 text-right">
+                  {c.total_trades} trades
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Recent Scores */}
+      <div className="border border-terminal-border rounded bg-terminal-surface overflow-x-auto">
+        <div className="px-4 pt-3 text-matrix-dim text-xs uppercase tracking-widest">
+          Recent Scores
+        </div>
+        <table className="w-full text-xs mt-2">
+          <thead className="border-b border-terminal-border text-matrix-dim uppercase tracking-wider">
+            <tr>
+              <th className="text-left p-2">Trade</th>
+              <th className="text-left p-2">Strategy</th>
+              <th className="text-left p-2">Symbol</th>
+              <th className="text-left p-2">Session</th>
+              <th className="text-left p-2">Condition</th>
+              <th className="text-right p-2">Score</th>
+              <th className="text-right p-2">PnL</th>
+              <th className="text-left p-2">Time</th>
+            </tr>
+          </thead>
+          <tbody>
+            {scores.map((s) => (
+              <tr
+                key={s.id}
+                className="border-b border-terminal-border/50 hover:bg-terminal-border/30"
+              >
+                <td className="p-2 text-matrix-dim">{s.trade_id.slice(0, 8)}</td>
+                <td className="p-2 text-matrix">{s.strategy}</td>
+                <td className="p-2">{s.symbol}</td>
+                <td className="p-2 text-matrix-dim">{s.session || "—"}</td>
+                <td className="p-2 text-matrix-dim">{s.market_condition || "—"}</td>
+                <td
+                  className={`p-2 text-right font-bold ${s.score >= 0 ? "text-matrix" : "text-red-500"}`}
+                >
+                  {s.score >= 0 ? "+" : ""}
+                  {s.score}
+                </td>
+                <td
+                  className={`p-2 text-right ${s.pnl >= 0 ? "text-matrix" : "text-red-500"}`}
+                >
+                  {s.pnl >= 0 ? "+" : ""}
+                  {s.pnl.toFixed(2)}
+                </td>
+                <td className="p-2 text-matrix-dim">
+                  {new Date(s.created_at).toLocaleString("en-GB", {
+                    day: "2-digit",
+                    month: "short",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {scores.length === 0 && (
+          <div className="p-4 text-matrix-dim text-sm">No scores recorded yet.</div>
+        )}
+      </div>
+    </div>
+  );
+}

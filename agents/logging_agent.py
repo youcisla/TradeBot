@@ -41,6 +41,8 @@ class LoggingAgent:
             source=event_type,
             message=data,
         )
+        self._db.log_agent_event("logging", level.lower(),
+                                 f"[{event_type}] {data}")
         log_fn = getattr(logger, level.lower(), logger.info)
         log_fn("[%s] %s", event_type, data)
 

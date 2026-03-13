@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import logging
 from datetime import UTC, datetime, timedelta
-from typing import Callable
+from typing import TYPE_CHECKING, Callable
 
 from broker.connector import BrokerConnector
 from config import settings
@@ -25,6 +25,9 @@ from filters.news_filter import NewsFilter
 from models.signal import Signal
 from models.trade import Trade
 from utils import telegram_bot
+
+if TYPE_CHECKING:
+    from database.db import Database
 
 logger = logging.getLogger(__name__)
 
@@ -37,10 +40,12 @@ class RiskAgent:
         broker: BrokerConnector,
         get_open_trades: Callable[[], list[Trade]],
         news_filter: NewsFilter | None = None,
+        db: Database | None = None,
     ) -> None:
         self._broker = broker
-        self._get_open_trades = get_open_trades  # fn() -> list[Trade]
+        self._get_open_trades = get_open_trades
         self._news = news_filter or NewsFilter()
+        self._db = db
 
         # Drawdown tracking
         self._day_start_equity: float = 0.0
@@ -84,6 +89,7 @@ class RiskAgent:
         # 1. Drawdown circuit breaker
         if self._check_drawdown():
             logger.warning("RISK REJECT [DRAWDOWN]: circuit breaker active")
+            self._emit("warn", "Drawdown breaker is ON — no trades allowed!")
             return False
 
         open_trades = self._get_open_trades()
@@ -124,6 +130,9 @@ class RiskAgent:
                 "RISK REJECT [MAX_TRADES]: %d open >= %d max",
                 len(open_trades), settings.MAX_OPEN_TRADES,
             )
+            self._emit("warn",
+                       f"Already at max trades ({len(open_trades)}/{settings.MAX_OPEN_TRADES}) — standing down.",
+                       {"open": len(open_trades), "max": settings.MAX_OPEN_TRADES})
             return False
 
         # 7. Position size sanity
@@ -135,7 +144,15 @@ class RiskAgent:
 
         logger.info("RISK APPROVED: %s %s %s (lot=%.2f)",
                      signal.symbol, signal.direction, signal.strategy, lot_size)
+        self._emit("info",
+                   f"All clear — {signal.direction} {signal.symbol} approved (lot={lot_size:.2f})",
+                   {"symbol": signal.symbol, "direction": signal.direction,
+                    "lot_size": lot_size})
         return True
+
+    def _emit(self, level: str, msg: str, data: dict | None = None) -> None:
+        if self._db:
+            self._db.log_agent_event("risk", level, msg, data)
 
     # ── drawdown circuit breaker ─────────────────────────────────────────
 

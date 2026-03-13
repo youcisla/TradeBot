@@ -77,4 +77,5 @@ DEFAULT_SYMBOL: str = os.getenv("DEFAULT_SYMBOL", "EURUSD")
 DEFAULT_TIMEFRAME: str = os.getenv("DEFAULT_TIMEFRAME", "H1")
 
 # ── Database ─────────────────────────────────────────────────────────────
+DATABASE_URL: str = os.getenv("DATABASE_URL", "")
 DB_PATH: str = os.getenv("DB_PATH", str(Path(__file__).resolve().parent.parent / "data" / "trading_bot.db"))

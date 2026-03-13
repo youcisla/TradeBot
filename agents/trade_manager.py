@@ -47,7 +47,12 @@ class TradeManagerAgent:
     def load_open_trades(self) -> None:
         """Load open trades from DB into memory (called on startup)."""
         self._open_trades = self._state.get_open_trades()
+        self._emit("info", f"Loaded {len(self._open_trades)} open trades from DB")
         logger.info("Loaded %d open trades from DB", len(self._open_trades))
+
+    def _emit(self, level: str, msg: str, data: dict | None = None) -> None:
+        if self._db:
+            self._db.log_agent_event("trade_manager", level, msg, data)
 
     def reconcile(self, send_alert: Callable[[str], None] | None = None) -> None:
         """Run full reconciliation: DB vs broker."""
@@ -129,12 +134,14 @@ class TradeManagerAgent:
         trade.tp1_hit = True
         trade.status = "PARTIAL"
 
-        # Move SL to breakeven (entry + spread + commission)
         be_sl = self._breakeven_price(trade)
         self._broker.modify_order(trade.broker_ticket, sl=be_sl)
         trade.stop_loss = be_sl
 
         self._state.save_trade(trade)
+        self._emit("info",
+                   f"TP1 hit on {trade.symbol}! Closed {trade.tp1_lots:.2f} lots, moving SL → breakeven ({be_sl:.5f})",
+                   {"trade_id": trade.id, "tp": 1, "lots_closed": trade.tp1_lots})
         logger.info("TP1 hit: trade %s — partial close %.2f lots, SL→BE %.5f",
                      trade.id, trade.tp1_lots, be_sl)
         telegram_bot.send_message(
@@ -150,6 +157,9 @@ class TradeManagerAgent:
             return
         trade.tp2_hit = True
         self._state.save_trade(trade)
+        self._emit("info",
+                   f"TP2 hit on {trade.symbol}! Closed {trade.tp2_lots:.2f} lots — trailing SL is now active.",
+                   {"trade_id": trade.id, "tp": 2, "lots_closed": trade.tp2_lots})
         logger.info("TP2 hit: trade %s — partial close %.2f lots, trailing enabled",
                      trade.id, trade.tp2_lots)
         telegram_bot.send_message(
@@ -163,6 +173,9 @@ class TradeManagerAgent:
         trade.close_time = datetime.now(UTC)
         trade.close_reason = "TP3"
         self._state.save_trade(trade)
+        self._emit("info",
+                   f"TP3 hit on {trade.symbol}! Trade fully closed (PnL {trade.pnl:.2f}) — perfect exit.",
+                   {"trade_id": trade.id, "tp": 3, "pnl": trade.pnl})
         logger.info("TP3 hit: trade %s — fully closed", trade.id)
         telegram_bot.send_message(
             f"🎯 TP3 hit: {trade.symbol} — trade fully closed (PnL {trade.pnl:.2f})"
@@ -174,6 +187,9 @@ class TradeManagerAgent:
         trade.close_time = datetime.now(UTC)
         trade.close_reason = "SL"
         self._state.save_trade(trade)
+        self._emit("warn",
+                   f"SL hit on {trade.symbol} — closed at loss (PnL {trade.pnl:.2f}).",
+                   {"trade_id": trade.id, "pnl": trade.pnl})
         logger.info("SL hit: trade %s — closed (PnL %.2f)", trade.id, trade.pnl)
         telegram_bot.send_message(
             f"🛑 SL hit: {trade.symbol} — trade closed (PnL {trade.pnl:.2f})"

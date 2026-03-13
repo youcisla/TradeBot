@@ -1,0 +1,64 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url("https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap");
+
+:root {
+  --matrix: #00ff41;
+  --matrix-dim: #00cc33;
+  --terminal: #0a0a0a;
+  --terminal-surface: #111111;
+  --terminal-border: #1a1a1a;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  @apply bg-terminal text-matrix font-mono;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--terminal);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--matrix-dim);
+  border-radius: 3px;
+}
+
+/* CRT scanline for header */
+.crt-scanline {
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0, 255, 65, 0.03) 2px,
+    rgba(0, 255, 65, 0.03) 4px
+  );
+}
+
+/* Blinking cursor */
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+.cursor-blink::after {
+  content: "█";
+  animation: blink 1s step-end infinite;
+}
+
+/* Agent event colors */
+.agent-market { color: #06b6d4; }      /* cyan */
+.agent-analysis { color: #eab308; }    /* yellow */
+.agent-strategy { color: #22c55e; }    /* green */
+.agent-risk { color: #f97316; }        /* orange */
+.agent-execution { color: #e5e5e5; }   /* white */
+.agent-trade_manager { color: #d946ef; } /* magenta */
+.agent-learning { color: #3b82f6; }     /* blue */
+.agent-logging { color: #6b7280; }      /* gray */

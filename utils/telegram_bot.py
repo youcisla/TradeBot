@@ -36,6 +36,14 @@ def is_paused() -> bool:
     return _pause_flag.is_set()
 
 
+def pause() -> None:
+    _pause_flag.set()
+
+
+def resume() -> None:
+    _pause_flag.clear()
+
+
 def register_callbacks(
     kill_cb: Callable[[], None],
     status_cb: Callable[[], str],

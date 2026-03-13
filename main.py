@@ -66,18 +66,19 @@ def main() -> None:
     # ── 4. Strategies ───────────────────────────────────────────────────
     strategies = [SmaCrossoverStrategy()]
 
-    # ── 5. Agents ───────────────────────────────────────────────────────
-    market_agent = MarketAgent(broker)
-    analysis_agent = AnalysisAgent(news_filter)
+    # ── 5. Agents (db passed for persona events) ────────────────────────
+    market_agent = MarketAgent(broker, db=db)
+    analysis_agent = AnalysisAgent(news_filter, db=db)
     trade_manager = TradeManagerAgent(broker, state, db)
-    risk_agent = RiskAgent(broker, trade_manager.get_open_trades, news_filter)
-    strategy_agent = StrategyAgent(strategies, learning.get_confidence)
-    execution_agent = ExecutionAgent(broker, state, risk_agent.calculate_position_size)
+    risk_agent = RiskAgent(broker, trade_manager.get_open_trades, news_filter, db=db)
+    strategy_agent = StrategyAgent(strategies, learning.get_confidence, db=db)
+    execution_agent = ExecutionAgent(broker, state, risk_agent.calculate_position_size, db=db)
 
     # ── 6. Startup reconciliation ───────────────────────────────────────
     trade_manager.load_open_trades()
     trade_manager.reconcile()
     log_agent.record("STARTUP", f"Reconciliation done — {len(trade_manager.get_open_trades())} open trades")
+    db.set_bot_uptime_start()
 
     # ── 7. Telegram ─────────────────────────────────────────────────────
     def _kill_callback() -> None:
@@ -137,6 +138,12 @@ def main() -> None:
             trade_manager.reconcile()
             log_agent.record("RECONCILE", f"Periodic reconciliation (loop {loop_count})")
 
+        # ── Bot status heartbeat ─────────────────────────────────────────
+        _update_heartbeat(db, broker, trade_manager, learning)
+
+        # ── Process UI command queue ─────────────────────────────────────
+        _process_commands(db, trade_manager, _request_shutdown)
+
         # ── Daily summary ────────────────────────────────────────────────
         now = datetime.now(UTC)
         today_str = now.strftime("%Y-%m-%d")
@@ -156,10 +163,60 @@ def main() -> None:
     logger.info("Shutting down…")
     telegram_bot.stop_polling()
     telegram_bot.send_message("🛑 Bot shutting down.")
+    db.set_bot_stopped()
     broker.disconnect()
     db.close()
     log_agent.record("SHUTDOWN", "Bot stopped gracefully")
     logger.info("Goodbye.")
+
+
+# ── Command queue processor ──────────────────────────────────────────────
+
+def _process_commands(
+    db: Database,
+    trade_manager: TradeManagerAgent,
+    request_shutdown: object,
+) -> None:
+    """Poll the bot_commands table for pending UI commands."""
+    for cmd in db.get_pending_commands():
+        cmd_name = cmd["command"]
+        try:
+            if cmd_name == "kill":
+                trade_manager.close_all("UI_KILL")
+                db.update_command(cmd["id"], "done", "All trades closed, shutting down")
+                _request_shutdown()
+            elif cmd_name == "pause":
+                telegram_bot.pause()
+                db.update_command(cmd["id"], "done", "Bot paused")
+            elif cmd_name == "resume":
+                telegram_bot.resume()
+                db.update_command(cmd["id"], "done", "Bot resumed")
+            elif cmd_name == "close_trade":
+                payload = cmd.get("payload") or {}
+                trade_id = payload.get("trade_id", "")
+                trade_manager.close_trade(trade_id, "UI_CLOSE")
+                db.update_command(cmd["id"], "done", f"Trade {trade_id} closed")
+            else:
+                db.update_command(cmd["id"], "failed", f"Unknown command: {cmd_name}")
+        except Exception as exc:
+            db.update_command(cmd["id"], "failed", str(exc))
+
+
+# ── Heartbeat updater ────────────────────────────────────────────────────
+
+def _update_heartbeat(
+    db: Database,
+    broker: MockConnector,
+    trade_manager: TradeManagerAgent,
+    learning: LearningAgent,
+) -> None:
+    """Write current bot metrics to bot_status row."""
+    equity = broker.get_equity()
+    open_count = len(trade_manager.get_open_trades())
+    report = learning.get_report()
+    daily_pnl = report.get("total_pnl", 0.0)
+    state = "paused" if telegram_bot.is_paused() else "running"
+    db.update_bot_status(state, equity, open_count, daily_pnl)
 
 
 def _run_iteration(

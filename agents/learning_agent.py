@@ -68,11 +68,20 @@ class LearningAgent:
         new_conf = max(self.CONFIDENCE_MIN, min(self.CONFIDENCE_MAX, current + delta))
         self._db.upsert_confidence(trade.strategy, new_conf, 0, 0)
 
+        self._emit("info",
+                   f"Reviewed trade {trade.id}: score={score:.1f}, "
+                   f"confidence {trade.strategy} {current:.2f}→{new_conf:.2f}",
+                   {"trade_id": trade.id, "score": score,
+                    "old_conf": current, "new_conf": new_conf})
         logger.info(
             "Trade %s scored %.1f | confidence %s: %.2f → %.2f",
             trade.id, score, trade.strategy, current, new_conf,
         )
         return score
+
+    def _emit(self, level: str, msg: str, data: dict | None = None) -> None:
+        if self._db:
+            self._db.log_agent_event("learning", level, msg, data)
 
     def get_confidence(self, strategy: str) -> float:
         val = self._db.get_confidence(strategy)

@@ -7,10 +7,14 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 from filters.news_filter import NewsFilter
 from models.market_data import MarketContext, MarketData
 from utils.helpers import current_session, day_of_week
+
+if TYPE_CHECKING:
+    from database.db import Database
 
 logger = logging.getLogger(__name__)
 
@@ -18,15 +22,27 @@ logger = logging.getLogger(__name__)
 class AnalysisAgent:
     """Computes technical indicators and market regime from raw data."""
 
-    def __init__(self, news_filter: NewsFilter | None = None) -> None:
+    def __init__(self, news_filter: NewsFilter | None = None, db: Database | None = None) -> None:
         self._news = news_filter or NewsFilter()
+        self._db = db
 
     def analyze(self, data: MarketData) -> MarketContext:
         try:
-            return self._analyze_inner(data)
+            ctx = self._analyze_inner(data)
+            self._emit("info",
+                       f"Crunching {data.symbol} — regime={ctx.regime} trend={ctx.trend_direction} "
+                       f"RSI={ctx.rsi:.1f} ATR={ctx.atr:.5f}",
+                       {"regime": ctx.regime, "trend": ctx.trend_direction,
+                        "rsi": ctx.rsi, "atr": ctx.atr})
+            return ctx
         except Exception:
             logger.exception("AnalysisAgent.analyze failed")
+            self._emit("error", f"Failed to analyze {data.symbol} — returning defaults")
             return MarketContext(symbol=data.symbol, current_price=data.mid_price)
+
+    def _emit(self, level: str, msg: str, data: dict | None = None) -> None:
+        if self._db:
+            self._db.log_agent_event("analysis", level, msg, data)
 
     def _analyze_inner(self, data: MarketData) -> MarketContext:
         closes = [c.close for c in data.candles] if data.candles else []
