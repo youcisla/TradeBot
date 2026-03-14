@@ -168,3 +168,10 @@ class MockConnector(BrokerConnector):
         logger.info("[MockBroker] Reconciliation requested — returning %d positions",
                     len(self._positions))
         return self.get_open_positions()
+
+    def get_available_symbols(self, symbols=None) -> list[str]:
+        # Return a list of mock symbols for testing, or filter if a list is provided
+        mock_symbols = ["BTCUSD", "ETHUSD", "LTCUSD", "BCHUSD", "XRPUSD"]
+        if symbols is not None:
+            return [s for s in mock_symbols if s in symbols]
+        return mock_symbols

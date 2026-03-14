@@ -40,6 +40,7 @@ from agents.logging_agent import LoggingAgent
 
 from utils import telegram_bot
 from utils.helpers import is_market_open, is_any_market_open
+from utils.symbol_event_tracker import SymbolEventTracker
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +58,10 @@ def main() -> None:
 
     # ── 1. Core infrastructure ──────────────────────────────────────────
     db = Database()
+
+    # ── 1a. Symbol event tracker (global) ───────────────────────────────
+    global symbol_event_tracker
+    symbol_event_tracker = SymbolEventTracker()
 
     # Resolve broker credentials: DB active account → .env fallback
     _acct_id: int | None = None
@@ -358,11 +363,18 @@ def _run_iteration(
     trade_manager.monitor()
     open_after = {t.id for t in trade_manager.get_open_trades()}
 
-    # ── Log newly closed trades to CSV + learning ────────────────────────
+    # Track trade open/close events per symbol
+    for t in trade_manager.get_open_trades():
+        open_time = getattr(t, 'open_time', None)
+        ts = open_time.timestamp() if open_time and hasattr(open_time, 'timestamp') else time.time()
+        symbol_event_tracker.update(t.symbol, "last_trade_open", ts)
     just_closed_ids = open_before - open_after
     for trade_id in just_closed_ids:
         closed_trade = learning._db.get_trade(trade_id)
         if closed_trade:
+            close_time = getattr(closed_trade, 'close_time', None)
+            ts = close_time.timestamp() if close_time and hasattr(close_time, 'timestamp') else time.time()
+            symbol_event_tracker.update(closed_trade.symbol, "last_trade_close", ts)
             learning.review_trade(closed_trade)
             log_agent.log_trade_to_csv(closed_trade)
             log_agent.log_trade(closed_trade.id, "CLOSED",
@@ -406,9 +418,14 @@ def _run_iteration(
             if latest_ts == last_candle_ts.get(symbol):
                 continue
             last_candle_ts[symbol] = latest_ts
+            # Track last candle timestamp per symbol
+            symbol_event_tracker.update(symbol, "last_candle", latest_ts)
 
         context = analysis_agent.analyze(data)
         signals = strategy_agent.detect_all(context)
+        # Track last signal event per symbol
+        if signals:
+            symbol_event_tracker.update(symbol, "last_signal", time.time())
         all_signals.extend(signals)
 
     if not all_signals:
