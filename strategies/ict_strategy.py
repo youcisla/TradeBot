@@ -45,6 +45,10 @@ class ICTStrategy(BaseStrategy):
         self._htf_tf = htf_timeframe
         self._htf_count = htf_candle_count
 
+    def _emit(self, level: str, msg: str, data: dict | None = None) -> None:
+        if self._db:
+            self._db.log_agent_event("strategy", level, msg, data)
+
     # ── BaseStrategy interface ───────────────────────────────────────
 
     def detect(self, context: MarketContext) -> Optional[Signal]:
@@ -87,6 +91,7 @@ class ICTStrategy(BaseStrategy):
     def _detect_inner(self, ctx: MarketContext) -> Optional[Signal]:
         candles = ctx.candles
         if len(candles) < 30:
+            self._emit("warn", f"ICT {ctx.symbol}: only {len(candles)} candles (need 30+) — skipping")
             return None
 
         # Fetch HTF candles from broker
@@ -100,7 +105,7 @@ class ICTStrategy(BaseStrategy):
                 logger.warning("Failed to fetch HTF candles for %s", ctx.symbol)
 
         # Run the ICT engine
-        ict_ctx, best = self._engine.analyze(
+        ict_ctx, best, rejected = self._engine.analyze(
             symbol=ctx.symbol,
             candles=candles,
             htf_candles=htf_candles,
@@ -111,6 +116,18 @@ class ICTStrategy(BaseStrategy):
         )
 
         if best is None:
+            # Log why to the agent feed for dashboard visibility
+            if rejected:
+                self._emit("info",
+                           f"ICT {ctx.symbol}: {rejected.model.value} setup found but score "
+                           f"{rejected.confidence:.0f}/100 < 55 threshold "
+                           f"(bias={ict_ctx.htf_bias.value} zone={ict_ctx.premium_discount})")
+            else:
+                self._emit("info",
+                           f"ICT {ctx.symbol}: no setup found "
+                           f"(bias={ict_ctx.htf_bias.value} regime={ict_ctx.htf_regime.value} "
+                           f"zone={ict_ctx.premium_discount} "
+                           f"candles={len(candles)} htf={len(htf_candles)})")
             return None
 
         # Build Signal for the existing pipeline

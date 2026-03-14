@@ -112,10 +112,17 @@ class MT5Connector(BrokerConnector):
 
     def get_candles(self, symbol: str, timeframe: str, count: int) -> list[Candle]:
         tf = _TF_MAP.get(timeframe, mt5.TIMEFRAME_H1)
+        # Ensure symbol is selected so MT5 loads its history
+        mt5.symbol_select(symbol, True)
         rates = mt5.copy_rates_from_pos(symbol, tf, 0, count)
         if rates is None:
             logger.warning("No candle data for %s %s: %s", symbol, timeframe, mt5.last_error())
             return []
+        if len(rates) < count:
+            logger.warning(
+                "MT5 returned %d/%d candles for %s %s — open the symbol chart in MT5 to load more history",
+                len(rates), count, symbol, timeframe,
+            )
         candles: list[Candle] = []
         for r in rates:
             candles.append(

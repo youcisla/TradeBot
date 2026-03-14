@@ -475,7 +475,7 @@ class TestEngine:
     def test_analyze_too_few_candles(self):
         from strategies.ict.engine import ICTEngine
         engine = ICTEngine()
-        ctx, best = engine.analyze(
+        ctx, best, rejected = engine.analyze(
             symbol="EURUSD",
             candles=[_candle(1.1, 1.11, 1.09, 1.1)],
             htf_candles=[],
@@ -489,7 +489,7 @@ class TestEngine:
         engine = ICTEngine()
         candles = _make_swing_candles(50)
         htf_candles = _make_swing_candles(30)
-        ctx, best = engine.analyze(
+        ctx, best, rejected = engine.analyze(
             symbol="EURUSD",
             candles=candles,
             htf_candles=htf_candles,

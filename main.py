@@ -118,10 +118,6 @@ def main() -> None:
     db.set_bot_uptime_start()
 
     # ── 7. Telegram ─────────────────────────────────────────────────────
-    def _kill_callback() -> None:
-        trade_manager.close_all("KILL_SWITCH")
-        _request_shutdown()
-
     def _status_callback() -> str:
         equity = broker.get_equity()
         balance = broker.get_balance()
@@ -133,7 +129,7 @@ def main() -> None:
             f"🎛 Demo: {settings.DEMO_MODE}"
         )
 
-    telegram_bot.register_callbacks(_kill_callback, _status_callback)
+    telegram_bot.register_callbacks(None, _status_callback)
     telegram_bot.start_polling()
     telegram_bot.send_message("🤖 Trading bot started (DEMO)")
 
@@ -164,8 +160,12 @@ def main() -> None:
                 _market_closed_logged = True
             # Still process commands and heartbeat
             _update_heartbeat(db, broker, trade_manager, learning)
-            _process_commands(db, trade_manager, _request_shutdown)
-            time.sleep(300)  # 5 min when all markets closed
+            _process_commands(db, trade_manager)
+            # Sleep in short bursts so kill/commands are picked up quickly
+            for _ in range(30):  # 30 × 10s = 5 min total
+                if _shutdown or telegram_bot.is_kill_requested():
+                    break
+                time.sleep(10)
             continue
         elif _market_closed_logged:
             logger.info("Markets reopened — resuming normal operation")
@@ -195,7 +195,7 @@ def main() -> None:
         _update_heartbeat(db, broker, trade_manager, learning)
 
         # ── Process UI command queue ─────────────────────────────────────
-        _process_commands(db, trade_manager, _request_shutdown)
+        _process_commands(db, trade_manager)
 
         # ── Daily summary ────────────────────────────────────────────────
         now = datetime.now(UTC)
@@ -228,27 +228,40 @@ def main() -> None:
 def _process_commands(
     db: Database,
     trade_manager: TradeManagerAgent,
-    request_shutdown: object,
 ) -> None:
-    """Poll the bot_commands table for pending UI commands."""
+    """Poll the bot_commands table and Telegram kill flag for pending commands."""
+    # ── Check Telegram kill flag (set by polling thread) ─────────────
+    if telegram_bot.is_kill_requested():
+        telegram_bot.pause()  # block new trades immediately
+        trade_manager.close_all("KILL_SWITCH")
+        telegram_bot.send_message("✅ All positions closed. Bot stopped.")
+        _request_shutdown()
+        return
+
+    # ── Process DB command queue (web dashboard) ─────────────────────
     for cmd in db.get_pending_commands():
         cmd_name = cmd["command"]
         try:
             if cmd_name == "kill":
+                telegram_bot.pause()  # block new trades during shutdown
                 trade_manager.close_all("UI_KILL")
                 db.update_command(cmd["id"], "done", "All trades closed, shutting down")
+                telegram_bot.send_message("🛑 KILL from dashboard — all positions closed, shutting down.")
                 _request_shutdown()
             elif cmd_name == "pause":
                 telegram_bot.pause()
                 db.update_command(cmd["id"], "done", "Bot paused")
+                telegram_bot.send_message("⏸️ Bot PAUSED (from dashboard)")
             elif cmd_name == "resume":
                 telegram_bot.resume()
                 db.update_command(cmd["id"], "done", "Bot resumed")
+                telegram_bot.send_message("▶️ Bot RESUMED (from dashboard)")
             elif cmd_name == "close_trade":
                 payload = cmd.get("payload") or {}
                 trade_id = payload.get("trade_id", "")
                 trade_manager.close_trade(trade_id, "UI_CLOSE")
                 db.update_command(cmd["id"], "done", f"Trade {trade_id} closed")
+                telegram_bot.send_message(f"📤 Trade {trade_id} closed (from dashboard)")
             else:
                 db.update_command(cmd["id"], "failed", f"Unknown command: {cmd_name}")
         except Exception as exc:

@@ -29,6 +29,7 @@ logger = logging.getLogger(__name__)
 _kill_callback: Callable[[], None] | None = None
 _status_callback: Callable[[], str] | None = None
 _pause_flag = threading.Event()  # set = paused
+_kill_flag = threading.Event()   # set = kill requested (processed by main thread)
 _stop_polling = threading.Event()
 
 
@@ -44,12 +45,20 @@ def resume() -> None:
     _pause_flag.clear()
 
 
+def is_kill_requested() -> bool:
+    return _kill_flag.is_set()
+
+
+def request_kill() -> None:
+    _kill_flag.set()
+
+
 def register_callbacks(
-    kill_cb: Callable[[], None],
-    status_cb: Callable[[], str],
+    kill_cb: Callable[[], None] | None = None,
+    status_cb: Callable[[], str] | None = None,
 ) -> None:
     global _kill_callback, _status_callback
-    _kill_callback = kill_cb
+    _kill_callback = kill_cb  # kept for backward compat; kill now uses _kill_flag
     _status_callback = status_cb
 
 
@@ -110,10 +119,9 @@ def _poll_updates() -> None:
 def _handle_command(text: str) -> None:
     cmd = text.lower().split()[0] if text else ""
     if cmd == "/kill":
-        send_message("🛑 KILL received — closing all positions and stopping bot…")
-        if _kill_callback:
-            _kill_callback()
-        send_message("✅ All positions closed. Bot stopped.")
+        send_message("🛑 KILL received — will close all positions and stop bot…")
+        _pause_flag.set()   # immediately block new trades
+        _kill_flag.set()    # main thread will execute close_all + shutdown
     elif cmd == "/status":
         if _status_callback:
             report = _status_callback()

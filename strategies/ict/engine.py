@@ -55,7 +55,7 @@ class ICTEngine:
     Usage::
 
         engine = ICTEngine()
-        ctx, best = engine.analyze(
+        ctx, best, rejected = engine.analyze(
             symbol="EURUSD",
             candles=h1_candles,
             htf_candles=h4_candles,
@@ -78,10 +78,12 @@ class ICTEngine:
         ask: float = 0.0,
         atr: float = 0.0,
         timeframe: str = "H1",
-    ) -> tuple[ICTContext, Optional[SetupCandidate]]:
+    ) -> tuple[ICTContext, Optional[SetupCandidate], Optional[SetupCandidate]]:
         """Run the full ICT analysis pipeline.
 
-        Returns (ICTContext, best_setup_or_None).
+        Returns (ICTContext, best_setup_or_None, rejected_setup_or_None).
+        The third element is populated when a setup was found but scored
+        below *min_confidence*.
         """
         ctx = ICTContext(
             symbol=symbol,
@@ -97,7 +99,7 @@ class ICTEngine:
 
         if len(candles) < 20:
             logger.debug("Not enough candles for ICT analysis on %s", symbol)
-            return ctx, None
+            return ctx, None, None
 
         # ── Layer A: HTF Bias & Regime ───────────────────────────────
         ctx.htf_bias = resolve_htf_bias(htf_candles)
@@ -181,7 +183,7 @@ class ICTEngine:
 
         if not candidates:
             logger.debug("No ICT setups found on %s", symbol)
-            return ctx, None
+            return ctx, None, None
 
         # ── Score & Select Best ──────────────────────────────────────
         best: Optional[SetupCandidate] = None
@@ -201,7 +203,8 @@ class ICTEngine:
                 "Best ICT setup on %s scored %.1f (min=%.1f) — skipping",
                 symbol, best.confidence, self.min_confidence,
             )
-            return ctx, None
+            # Return the rejected setup as second element so callers can log it
+            return ctx, None, best
 
         if best:
             logger.info(
@@ -210,4 +213,4 @@ class ICTEngine:
                 best.entry_price, best.confidence, best.model.value,
             )
 
-        return ctx, best
+        return ctx, best, None

@@ -209,6 +209,7 @@ class TradeManagerAgent:
             trade.close_reason = reason
             self._state.save_trade(trade)
         self._open_trades.clear()
+        self._emit("critical", f"CLOSE ALL: {reason} — all positions closed")
 
     def close_trade(self, trade_id: str, reason: str) -> None:
         for trade in self._open_trades:
@@ -218,6 +219,10 @@ class TradeManagerAgent:
                 trade.close_time = datetime.now(UTC)
                 trade.close_reason = reason
                 self._state.save_trade(trade)
+                self._emit("info",
+                           f"Trade {trade.symbol} closed: {reason} (PnL {trade.pnl:.2f})",
+                           {"trade_id": trade.id, "reason": reason})
+                logger.info("Trade %s closed: %s", trade.id, reason)
                 return
 
     # ── helpers ──────────────────────────────────────────────────────────

@@ -93,5 +93,5 @@ _env_active = os.getenv("ACTIVE_SYMBOLS", "")
 SYMBOLS: list[str] = (
     [s.strip() for s in _env_active.split(",") if s.strip()]
     if _env_active
-    else FOREX_MAJORS  # default: trade the 7 majors
+    else ALL_SYMBOLS  # default: trade all 30+ symbols
 )
