@@ -102,9 +102,17 @@ def detect_fib_levels(
     if disp.direction == Bias.BULLISH:
         gz_top = anchor_high - GZ_TOP_RATIO * leg_range
         gz_bottom = anchor_high - GZ_BOTTOM_RATIO * leg_range
+        inval = anchor_high - 0.786 * leg_range
+        ext_1_0 = anchor_high
+        ext_neg_0_272 = anchor_high + 0.272 * leg_range
+        ext_neg_0_618 = anchor_high + 0.618 * leg_range
     else:
         gz_top = anchor_low + GZ_TOP_RATIO * leg_range
         gz_bottom = anchor_low + GZ_BOTTOM_RATIO * leg_range
+        inval = anchor_low + 0.786 * leg_range
+        ext_1_0 = anchor_low
+        ext_neg_0_272 = anchor_low - 0.272 * leg_range
+        ext_neg_0_618 = anchor_low - 0.618 * leg_range
 
     return FibonacciRetracement(
         direction=disp.direction,
@@ -113,6 +121,11 @@ def detect_fib_levels(
         levels=levels,
         golden_zone_top=round(max(gz_top, gz_bottom), 6),
         golden_zone_bottom=round(min(gz_top, gz_bottom), 6),
+        golden_zone_mid=round((gz_top + gz_bottom) / 2.0, 6),
+        invalidation_price=round(inval, 6),
+        ext_1_000=round(ext_1_0, 6),
+        ext_neg_0_272=round(ext_neg_0_272, 6),
+        ext_neg_0_618=round(ext_neg_0_618, 6),
         anchor_displacement=disp,
         timestamp=disp.timestamp,
     )

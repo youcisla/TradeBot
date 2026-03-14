@@ -174,6 +174,7 @@ class FibonacciRetracement:
     levels: list[FibonacciLevel] = field(default_factory=list)
     golden_zone_top: float = 0.0         # 0.618 retracement price
     golden_zone_bottom: float = 0.0      # 0.705 retracement price
+    golden_zone_mid: float = 0.0         # midpoint of GZ (optimal entry)
     anchor_displacement: Optional[Displacement] = None
     timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
     # Confluence flags
@@ -183,6 +184,12 @@ class FibonacciRetracement:
     has_liquidity_target: bool = False    # Clear target exists
     # Retracement depth
     retracement_depth: str = ""           # "too_shallow", "acceptable", "golden_zone", "too_deep"
+    # Invalidation (0.786 level) — used for SL placement
+    invalidation_price: float = 0.0      # 0.786 fib level price
+    # Extension levels — used for TP targets
+    ext_1_000: float = 0.0               # full leg target (displacement high/low)
+    ext_neg_0_272: float = 0.0           # -0.272 extension
+    ext_neg_0_618: float = 0.0           # -0.618 extension
 
 
 # ── Fair Value Gap ───────────────────────────────────────────────────────

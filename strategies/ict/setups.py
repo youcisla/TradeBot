@@ -119,8 +119,18 @@ def _calc_sl(
     fvg: Optional[FairValueGap] = None,
     sweep: Optional[LiquiditySweep] = None,
 ) -> tuple[float, str]:
-    """Calculate stop loss — below OB/FVG/sweep level + ATR buffer."""
+    """Calculate stop loss — 0.786 Fib invalidation, or below OB/FVG/sweep + ATR buffer."""
     buffer = ctx.atr * 0.3 if ctx.atr > 0 else 0.0005  # small buffer
+
+    # NEW: 0.786 Fibonacci invalidation (optimal strict risk logic)
+    if ctx.fibonacci:
+        aligned = (direction == "BUY" and ctx.fibonacci.direction == Bias.BULLISH) or \
+                  (direction == "SELL" and ctx.fibonacci.direction == Bias.BEARISH)
+        if aligned:
+            if direction == "BUY":
+                return round(ctx.fibonacci.invalidation_price - buffer, 5), "fib_invalidation"
+            else:
+                return round(ctx.fibonacci.invalidation_price + buffer, 5), "fib_invalidation"
 
     if direction == "BUY":
         candidates = []
@@ -156,10 +166,18 @@ def _calc_tps(
     sl: float,
     direction: str,
 ) -> tuple[float, float, float, str]:
-    """Calculate 3 take-profit levels using opposing liquidity and RR."""
+    """Calculate 3 take-profit levels using Fib extensions, opposing liquidity, or RR."""
     risk = abs(entry - sl)
     if risk == 0:
         risk = ctx.atr if ctx.atr > 0 else 0.001
+
+    # NEW: 1.0, -0.272, -0.618 Fibonacci institutional targets
+    if ctx.fibonacci:
+        aligned = (direction == "BUY" and ctx.fibonacci.direction == Bias.BULLISH) or \
+                  (direction == "SELL" and ctx.fibonacci.direction == Bias.BEARISH)
+        if aligned:
+            fib = ctx.fibonacci
+            return round(fib.ext_1_000, 5), round(fib.ext_neg_0_272, 5), round(fib.ext_neg_0_618, 5), "fib_extensions"
 
     if direction == "BUY":
         # Try to use BSL levels as targets
@@ -212,7 +230,18 @@ def _build_candidate(
 ) -> SetupCandidate:
     """Build a fully populated SetupCandidate."""
     entry = ctx.current_price
+    
+    # 1. Refine entry price to Golden Zone midpoint for optimal positioning
+    if ctx.fibonacci:
+        aligned = (direction == "BUY" and ctx.fibonacci.direction == Bias.BULLISH) or \
+                  (direction == "SELL" and ctx.fibonacci.direction == Bias.BEARISH)
+        if aligned:
+            entry = ctx.fibonacci.golden_zone_mid
+
+    # 2. Strict 0.786 SL invalidation
     sl, sl_reason = _calc_sl(ctx, direction, ob, fvg, sweep)
+    
+    # 3. Institutional Fib extension targets
     tp1, tp2, tp3, tp_reason = _calc_tps(ctx, entry, sl, direction)
 
     return SetupCandidate(

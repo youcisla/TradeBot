@@ -345,3 +345,47 @@ class TestScoringFibonacci:
         score = _score_fibonacci(ctx, setup)
 
         assert score == 0.0
+
+
+class TestFibonacciTargets:
+    """Test Fibonacci integration for TP, SL, and Entry refinement."""
+
+    def _make_bullish_fib(self):
+        # Bullish leg from 1.000 to 1.100 (range 0.100)
+        # GZ = 0.618 to 0.705 retracement
+        return FibonacciRetracement(
+            direction=Bias.BULLISH,
+            anchor_low=1.000, anchor_high=1.100,
+            golden_zone_top=1.0382,
+            golden_zone_bottom=1.0295,
+            golden_zone_mid=1.03385,
+            invalidation_price=1.0214,  # 1.100 - (0.786 * 0.1)
+            ext_1_000=1.100,
+            ext_neg_0_272=1.1272,      # 1.100 + (0.272 * 0.1)
+            ext_neg_0_618=1.1618,      # 1.100 + (0.618 * 0.1)
+            timestamp=_ts(),
+        )
+
+    def test_calc_sl_uses_fibonacci_invalidation(self):
+        ctx = ICTContext(fibonacci=self._make_bullish_fib())
+        ctx.atr = 0.001
+        
+        from strategies.ict.setups import _calc_sl
+        sl, reason = _calc_sl(ctx, "BUY")
+        
+        # Should be invalidation_price - atr*0.3 buffer
+        expected_sl = round(1.0214 - 0.0003, 5)
+        assert sl == expected_sl
+        assert reason == "fib_invalidation"
+
+    def test_calc_tps_uses_fibonacci_extensions(self):
+        ctx = ICTContext(fibonacci=self._make_bullish_fib())
+        
+        from strategies.ict.setups import _calc_tps
+        tp1, tp2, tp3, reason = _calc_tps(ctx, entry=1.03385, sl=1.0211, direction="BUY")
+        
+        assert tp1 == 1.100
+        assert tp2 == 1.1272
+        assert tp3 == 1.1618
+        assert reason == "fib_extensions"
+
