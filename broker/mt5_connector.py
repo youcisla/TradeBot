@@ -34,8 +34,18 @@ _TF_MAP: dict[str, int] = {
 class MT5Connector(BrokerConnector):
     """Real MetaTrader 5 broker connection."""
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        account: str | None = None,
+        password: str | None = None,
+        server: str | None = None,
+    ) -> None:
         self._connected = False
+        self._account = account or settings.BROKER_ACCOUNT
+        self._password = password or settings.BROKER_PASSWORD
+        self._server = server or settings.BROKER_SERVER
+        # Populated after connect()
+        self.account_info_cache: dict | None = None
 
     # ── account ──────────────────────────────────────────────────────────
 
@@ -44,11 +54,11 @@ class MT5Connector(BrokerConnector):
             logger.error("MT5 initialize failed: %s", mt5.last_error())
             return False
 
-        account = int(settings.BROKER_ACCOUNT)
+        account = int(self._account)
         authorized = mt5.login(
             account,
-            password=settings.BROKER_PASSWORD,
-            server=settings.BROKER_SERVER,
+            password=self._password,
+            server=self._server,
         )
         if not authorized:
             logger.error("MT5 login failed: %s", mt5.last_error())
@@ -60,23 +70,85 @@ class MT5Connector(BrokerConnector):
             "MT5 connected: account=%d  server=%s  balance=%.2f  leverage=%d",
             info.login, info.server, info.balance, info.leverage,
         )
+        self.account_info_cache = {
+            "login": info.login,
+            "server": info.server,
+            "balance": info.balance,
+            "equity": info.equity,
+            "leverage": info.leverage,
+            "name": info.name,
+            "company": info.company,
+        }
         self._connected = True
         return True
 
     def get_available_symbols(self, candidates: list[str]) -> list[str]:
-        """Return the subset of *candidates* that are visible in the MT5 terminal."""
+        """Return the subset of *candidates* that are visible in the MT5 terminal.
+
+        If a symbol isn't found under its canonical name, common broker
+        suffixes/variants are tried automatically.  A mapping is stored in
+        ``self.symbol_map`` so the rest of the code can translate.
+        """
         available = []
+        self.symbol_map: dict[str, str] = {}   # canonical → broker name
+        self._reverse_map: dict[str, str] = {}  # broker name → canonical
+
+        # Common suffixes / variants brokers use
+        _SUFFIXES = ["", ".r", ".ecn", "m", "+", ".a", ".b", ".i",
+                     ".pro", ".raw", ".std", ".", "#", "-ECN"]
+        # Some brokers use completely different names for commodities
+        _ALIASES: dict[str, list[str]] = {
+            "XAUUSD": ["Gold", "GOLD", "GoldUSD", "XAUUSD.r", "XAUUSD+"],
+            "XAGUSD": ["Silver", "SILVER", "SilverUSD", "XAGUSD.r"],
+            "USOUSD": ["USOIL", "WTI", "CrudeOIL", "USOil", "USOUSD.r", "WTI.r", "USOIL.r"],
+            "UKOUSD": ["UKOIL", "Brent", "BrentOil", "UKOUSD.r", "UKOIL.r"],
+        }
+
         for sym in candidates:
-            info = mt5.symbol_info(sym)
-            if info is not None and info.visible:
+            broker_sym = self._find_broker_symbol(sym, _SUFFIXES, _ALIASES)
+            if broker_sym:
                 available.append(sym)
-            else:
-                # Try enabling it
-                mt5.symbol_select(sym, True)
-                info = mt5.symbol_info(sym)
-                if info is not None:
-                    available.append(sym)
+                self.symbol_map[sym] = broker_sym
+                self._reverse_map[broker_sym] = sym
+            # else: symbol not found at all — silently skipped
+
         return available
+
+    def _find_broker_symbol(self, sym: str, suffixes: list[str],
+                            aliases: dict[str, list[str]]) -> str | None:
+        """Try to find *sym* on the broker under any known variant."""
+        # 1. Exact match
+        info = mt5.symbol_info(sym)
+        if info is not None:
+            mt5.symbol_select(sym, True)
+            return sym
+
+        # 2. Enable then retry
+        mt5.symbol_select(sym, True)
+        info = mt5.symbol_info(sym)
+        if info is not None:
+            return sym
+
+        # 3. Try suffixes
+        for sfx in suffixes:
+            if not sfx:
+                continue
+            candidate = sym + sfx
+            mt5.symbol_select(candidate, True)
+            info = mt5.symbol_info(candidate)
+            if info is not None:
+                logger.info("Symbol mapped: %s → %s", sym, candidate)
+                return candidate
+
+        # 4. Try aliases
+        for alias in aliases.get(sym, []):
+            mt5.symbol_select(alias, True)
+            info = mt5.symbol_info(alias)
+            if info is not None:
+                logger.info("Symbol mapped: %s → %s (alias)", sym, alias)
+                return alias
+
+        return None
 
     def disconnect(self) -> None:
         if self._connected:
@@ -94,12 +166,17 @@ class MT5Connector(BrokerConnector):
 
     # ── market data ──────────────────────────────────────────────────────
 
+    def resolve(self, symbol: str) -> str:
+        """Translate canonical symbol to broker symbol name."""
+        return getattr(self, 'symbol_map', {}).get(symbol, symbol)
+
     def get_tick(self, symbol: str) -> dict[str, float]:
-        tick = mt5.symbol_info_tick(symbol)
+        broker_sym = self.resolve(symbol)
+        tick = mt5.symbol_info_tick(broker_sym)
         if tick is None:
             # Try enabling the symbol
-            mt5.symbol_select(symbol, True)
-            tick = mt5.symbol_info_tick(symbol)
+            mt5.symbol_select(broker_sym, True)
+            tick = mt5.symbol_info_tick(broker_sym)
         if tick is None:
             raise RuntimeError(f"No tick data for {symbol}: {mt5.last_error()}")
         spread = tick.ask - tick.bid
@@ -111,12 +188,13 @@ class MT5Connector(BrokerConnector):
         }
 
     def get_candles(self, symbol: str, timeframe: str, count: int) -> list[Candle]:
+        broker_sym = self.resolve(symbol)
         tf = _TF_MAP.get(timeframe, mt5.TIMEFRAME_H1)
         # Ensure symbol is selected so MT5 loads its history
-        mt5.symbol_select(symbol, True)
-        rates = mt5.copy_rates_from_pos(symbol, tf, 0, count)
+        mt5.symbol_select(broker_sym, True)
+        rates = mt5.copy_rates_from_pos(broker_sym, tf, 0, count)
         if rates is None:
-            logger.warning("No candle data for %s %s: %s", symbol, timeframe, mt5.last_error())
+            logger.warning("No candle data for %s (%s) %s: %s", symbol, broker_sym, timeframe, mt5.last_error())
             return []
         if len(rates) < count:
             logger.warning(
@@ -148,8 +226,9 @@ class MT5Connector(BrokerConnector):
         tp: float | None = None,
         comment: str = "",
     ) -> OrderResult:
-        mt5.symbol_select(symbol, True)
-        tick = mt5.symbol_info_tick(symbol)
+        broker_sym = self.resolve(symbol)
+        mt5.symbol_select(broker_sym, True)
+        tick = mt5.symbol_info_tick(broker_sym)
         if tick is None:
             return OrderResult(success=False, message=f"No tick for {symbol}")
 
@@ -158,14 +237,14 @@ class MT5Connector(BrokerConnector):
 
         request = {
             "action": mt5.TRADE_ACTION_DEAL,
-            "symbol": symbol,
+            "symbol": broker_sym,
             "volume": float(round(lot_size, 2)),
             "type": order_type,
             "price": price,
             "sl": float(sl),
             "deviation": 20,
             "magic": 202603,
-            "comment": comment[:63],
+            "comment": comment.encode("ascii", "ignore").decode("ascii")[:31],
             "type_time": mt5.ORDER_TIME_GTC,
             "type_filling": mt5.ORDER_FILLING_IOC,
         }
@@ -214,8 +293,9 @@ class MT5Connector(BrokerConnector):
 
     def close_partial(self, ticket: int, symbol: str, lot_size: float,
                       direction: str) -> bool:
-        mt5.symbol_select(symbol, True)
-        tick = mt5.symbol_info_tick(symbol)
+        broker_sym = self.resolve(symbol)
+        mt5.symbol_select(broker_sym, True)
+        tick = mt5.symbol_info_tick(broker_sym)
         if tick is None:
             return False
 
@@ -224,7 +304,7 @@ class MT5Connector(BrokerConnector):
 
         request = {
             "action": mt5.TRADE_ACTION_DEAL,
-            "symbol": symbol,
+            "symbol": broker_sym,
             "volume": float(round(lot_size, 2)),
             "type": close_type,
             "position": ticket,

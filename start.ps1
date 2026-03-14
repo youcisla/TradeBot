@@ -34,9 +34,9 @@ if (-not (Test-Path $nodeModules)) {
     Write-Host "[OK] npm install complete." -ForegroundColor Green
 }
 
-$envLocal = Join-Path $webDir ".env.local"
-if (-not (Test-Path $envLocal)) {
-    Write-Host "[ERROR] web/.env.local not found. Copy web/.env.example and fill in values." -ForegroundColor Red
+$envFile = Join-Path $Root ".env"
+if (-not (Test-Path $envFile)) {
+    Write-Host "[ERROR] .env not found. Copy .env.example and fill in values." -ForegroundColor Red
     exit 1
 }
 

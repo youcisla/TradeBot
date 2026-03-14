@@ -24,6 +24,8 @@ import psycopg2
 import psycopg2.extras
 import psycopg2.pool
 
+from utils.crypto import encrypt, decrypt
+
 from config import settings
 from models.trade import Trade
 
@@ -163,6 +165,48 @@ CREATE TABLE IF NOT EXISTS ict_setups (
 );
 """
 
+_CREATE_BROKER_ACCOUNTS = """
+CREATE TABLE IF NOT EXISTS broker_accounts (
+    id              SERIAL PRIMARY KEY,
+    user_id         INTEGER,
+    name            TEXT NOT NULL,
+    account_number  TEXT NOT NULL,
+    password        TEXT NOT NULL,
+    server          TEXT NOT NULL,
+    is_demo         BOOLEAN DEFAULT TRUE,
+    is_active       BOOLEAN DEFAULT FALSE,
+    created_at      TIMESTAMP DEFAULT NOW(),
+    last_connected  TIMESTAMP
+);
+"""
+
+_CREATE_DASHBOARD_USERS = """
+CREATE TABLE IF NOT EXISTS dashboard_users (
+    id              SERIAL PRIMARY KEY,
+    username        TEXT NOT NULL UNIQUE,
+    password_hash   TEXT NOT NULL,
+    created_at      TIMESTAMP DEFAULT NOW()
+);
+"""
+
+_ALTER_BOT_STATUS_BROKER = """
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                   WHERE table_name='bot_status' AND column_name='broker_account') THEN
+        ALTER TABLE bot_status ADD COLUMN broker_account TEXT DEFAULT '';
+        ALTER TABLE bot_status ADD COLUMN broker_server TEXT DEFAULT '';
+        ALTER TABLE bot_status ADD COLUMN broker_name TEXT DEFAULT '';
+        ALTER TABLE bot_status ADD COLUMN balance NUMERIC DEFAULT 0;
+        ALTER TABLE bot_status ADD COLUMN leverage INTEGER DEFAULT 0;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                   WHERE table_name='broker_accounts' AND column_name='user_id') THEN
+        ALTER TABLE broker_accounts ADD COLUMN user_id INTEGER;
+    END IF;
+END $$;
+"""
+
 _ALL_TABLES = [
     _CREATE_TRADES,
     _CREATE_TRADE_SCORES,
@@ -171,6 +215,8 @@ _ALL_TABLES = [
     _CREATE_BOT_COMMANDS,
     _CREATE_BOT_STATUS,
     _CREATE_ICT_SETUPS,
+    _CREATE_BROKER_ACCOUNTS,
+    _CREATE_DASHBOARD_USERS,
 ]
 
 
@@ -260,6 +306,7 @@ class Database:
                     for ddl in _ALL_TABLES:
                         cur.execute(ddl)
                     cur.execute(_INIT_BOT_STATUS)
+                    cur.execute(_ALTER_BOT_STATUS_BROKER)
             logger.info("Database tables verified")
         finally:
             self._put_conn(conn)
@@ -498,7 +545,10 @@ class Database:
     # ── bot status heartbeat ─────────────────────────────────────────────
 
     def update_bot_status(self, state: str, equity: float,
-                          open_trades: int, daily_pnl: float) -> None:
+                          open_trades: int, daily_pnl: float,
+                          broker_account: str = "", broker_server: str = "",
+                          broker_name: str = "", balance: float = 0.0,
+                          leverage: int = 0) -> None:
         conn = self._get_conn()
         try:
             with conn:
@@ -506,9 +556,13 @@ class Database:
                     cur.execute(
                         """UPDATE bot_status SET
                                state = %s, last_tick = NOW(),
-                               equity = %s, open_trades = %s, daily_pnl = %s
+                               equity = %s, open_trades = %s, daily_pnl = %s,
+                               broker_account = %s, broker_server = %s,
+                               broker_name = %s, balance = %s, leverage = %s
                            WHERE id = 1""",
-                        (state, equity, open_trades, daily_pnl),
+                        (state, equity, open_trades, daily_pnl,
+                         broker_account, broker_server, broker_name,
+                         balance, leverage),
                     )
         finally:
             self._put_conn(conn)
@@ -588,5 +642,210 @@ class Database:
                             setup.get("trade_id"),
                         ),
                     )
+        finally:
+            self._put_conn(conn)
+
+    # ── broker accounts ──────────────────────────────────────────────────
+
+    def get_broker_accounts(self, user_id: int | None = None) -> list[dict]:
+        """Return all broker accounts (password excluded)."""
+        conn = self._get_conn()
+        try:
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                if user_id:
+                    cur.execute(
+                        """SELECT id, user_id, name, account_number, server,
+                                  is_demo, is_active, created_at, last_connected
+                           FROM broker_accounts WHERE user_id = %s
+                           ORDER BY created_at DESC""",
+                        (user_id,),
+                    )
+                else:
+                    cur.execute(
+                        """SELECT id, user_id, name, account_number, server,
+                                  is_demo, is_active, created_at, last_connected
+                           FROM broker_accounts ORDER BY created_at DESC"""
+                    )
+                return [dict(r) for r in cur.fetchall()]
+        finally:
+            self._put_conn(conn)
+
+    def get_active_broker_account(self) -> dict | None:
+        """Return the active broker account (with decrypted password)."""
+        conn = self._get_conn()
+        try:
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute(
+                    "SELECT * FROM broker_accounts WHERE is_active = TRUE LIMIT 1"
+                )
+                row = cur.fetchone()
+                if not row:
+                    return None
+                result = dict(row)
+                result["password"] = decrypt(result["password"])
+                return result
+        finally:
+            self._put_conn(conn)
+
+    def add_broker_account(self, name: str, account_number: str,
+                           password: str, server: str,
+                           is_demo: bool = True,
+                           user_id: int | None = None) -> int:
+        """Insert a new broker account (password encrypted). Returns row id."""
+        conn = self._get_conn()
+        try:
+            with conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """INSERT INTO broker_accounts
+                           (user_id, name, account_number, password, server, is_demo)
+                           VALUES (%s, %s, %s, %s, %s, %s)
+                           RETURNING id""",
+                        (user_id, name, account_number,
+                         encrypt(password), server, is_demo),
+                    )
+                    return cur.fetchone()[0]
+        finally:
+            self._put_conn(conn)
+
+    def update_broker_account(self, account_id: int, name: str,
+                              account_number: str, password: str | None,
+                              server: str, is_demo: bool) -> None:
+        """Update an existing broker account. Encrypts password if provided."""
+        conn = self._get_conn()
+        try:
+            with conn:
+                with conn.cursor() as cur:
+                    if password:
+                        cur.execute(
+                            """UPDATE broker_accounts SET
+                                   name=%s, account_number=%s, password=%s,
+                                   server=%s, is_demo=%s
+                               WHERE id=%s""",
+                            (name, account_number, encrypt(password),
+                             server, is_demo, account_id),
+                        )
+                    else:
+                        cur.execute(
+                            """UPDATE broker_accounts SET
+                                   name=%s, account_number=%s,
+                                   server=%s, is_demo=%s
+                               WHERE id=%s""",
+                            (name, account_number, server, is_demo,
+                             account_id),
+                        )
+        finally:
+            self._put_conn(conn)
+
+    def delete_broker_account(self, account_id: int) -> None:
+        conn = self._get_conn()
+        try:
+            with conn:
+                with conn.cursor() as cur:
+                    cur.execute("DELETE FROM broker_accounts WHERE id = %s",
+                                (account_id,))
+        finally:
+            self._put_conn(conn)
+
+    def activate_broker_account(self, account_id: int) -> None:
+        """Set one account as active, deactivating all others."""
+        conn = self._get_conn()
+        try:
+            with conn:
+                with conn.cursor() as cur:
+                    cur.execute("UPDATE broker_accounts SET is_active = FALSE")
+                    cur.execute(
+                        "UPDATE broker_accounts SET is_active = TRUE WHERE id = %s",
+                        (account_id,),
+                    )
+        finally:
+            self._put_conn(conn)
+
+    def mark_broker_connected(self, account_id: int) -> None:
+        conn = self._get_conn()
+        try:
+            with conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "UPDATE broker_accounts SET last_connected = NOW() WHERE id = %s",
+                        (account_id,),
+                    )
+        finally:
+            self._put_conn(conn)
+
+    # ── dashboard users ──────────────────────────────────────────────────
+
+    def get_user_by_username(self, username: str) -> dict | None:
+        """Return a user row (id, username, password_hash) or None."""
+        conn = self._get_conn()
+        try:
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute(
+                    "SELECT * FROM dashboard_users WHERE username = %s",
+                    (username,),
+                )
+                row = cur.fetchone()
+                return dict(row) if row else None
+        finally:
+            self._put_conn(conn)
+
+    def get_user_by_id(self, user_id: int) -> dict | None:
+        conn = self._get_conn()
+        try:
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute(
+                    "SELECT id, username, created_at FROM dashboard_users WHERE id = %s",
+                    (user_id,),
+                )
+                row = cur.fetchone()
+                return dict(row) if row else None
+        finally:
+            self._put_conn(conn)
+
+    def create_user(self, username: str, password_hash: str) -> int:
+        """Insert a new dashboard user. Returns the new row id."""
+        conn = self._get_conn()
+        try:
+            with conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """INSERT INTO dashboard_users (username, password_hash)
+                           VALUES (%s, %s) RETURNING id""",
+                        (username, password_hash),
+                    )
+                    return cur.fetchone()[0]
+        finally:
+            self._put_conn(conn)
+
+    def update_user_password(self, user_id: int, password_hash: str) -> None:
+        conn = self._get_conn()
+        try:
+            with conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "UPDATE dashboard_users SET password_hash = %s WHERE id = %s",
+                        (password_hash, user_id),
+                    )
+        finally:
+            self._put_conn(conn)
+
+    def get_all_users(self) -> list[dict]:
+        """Return all users (id, username, created_at — no password hash)."""
+        conn = self._get_conn()
+        try:
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute(
+                    "SELECT id, username, created_at FROM dashboard_users ORDER BY created_at"
+                )
+                return [dict(r) for r in cur.fetchall()]
+        finally:
+            self._put_conn(conn)
+
+    def user_count(self) -> int:
+        conn = self._get_conn()
+        try:
+            with conn.cursor() as cur:
+                cur.execute("SELECT COUNT(*) FROM dashboard_users")
+                return cur.fetchone()[0]
         finally:
             self._put_conn(conn)

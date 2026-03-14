@@ -50,6 +50,11 @@ export interface BotStatus {
   open_trades: number;
   daily_pnl: number;
   uptime_start: string | null;
+  broker_account: string;
+  broker_server: string;
+  broker_name: string;
+  balance: number;
+  leverage: number;
 }
 
 export interface AgentEvent {
@@ -99,6 +104,25 @@ export interface TradeScore {
   market_condition: string;
   score: number;
   pnl: number;
+  created_at: string;
+}
+
+export interface BrokerAccount {
+  id: number;
+  user_id: number | null;
+  name: string;
+  account_number: string;
+  server: string;
+  is_demo: boolean;
+  is_active: boolean;
+  created_at: string;
+  last_connected: string | null;
+}
+
+export interface DashboardUser {
+  id: number;
+  username: string;
+  password_hash?: string;
   created_at: string;
 }
 
@@ -286,4 +310,184 @@ export async function getIctSessionStats() {
     GROUP BY session
     ORDER BY total DESC
   `);
+}
+
+// ── Broker Accounts ─────────────────────────────────────────────────────
+
+export async function getBrokerAccounts(userId?: number): Promise<BrokerAccount[]> {
+  if (userId) {
+    const rows = await query(
+      `SELECT id, user_id, name, account_number, server, is_demo, is_active,
+              created_at, last_connected
+       FROM broker_accounts WHERE user_id = $1 ORDER BY created_at DESC`,
+      [userId]
+    );
+    return rows as BrokerAccount[];
+  }
+  const rows = await query(
+    `SELECT id, user_id, name, account_number, server, is_demo, is_active,
+            created_at, last_connected
+     FROM broker_accounts ORDER BY created_at DESC`
+  );
+  return rows as BrokerAccount[];
+}
+
+export async function addBrokerAccount(
+  name: string,
+  accountNumber: string,
+  encryptedPassword: string,
+  server: string,
+  isDemo: boolean,
+  userId?: number
+): Promise<number> {
+  const rows = await query(
+    `INSERT INTO broker_accounts (user_id, name, account_number, password, server, is_demo)
+     VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+    [userId ?? null, name, accountNumber, encryptedPassword, server, isDemo]
+  );
+  return rows[0].id;
+}
+
+export async function updateBrokerAccount(
+  id: number,
+  name: string,
+  accountNumber: string,
+  encryptedPassword: string | null,
+  server: string,
+  isDemo: boolean
+): Promise<void> {
+  if (encryptedPassword) {
+    await query(
+      `UPDATE broker_accounts SET name=$1, account_number=$2, password=$3, server=$4, is_demo=$5 WHERE id=$6`,
+      [name, accountNumber, encryptedPassword, server, isDemo, id]
+    );
+  } else {
+    await query(
+      `UPDATE broker_accounts SET name=$1, account_number=$2, server=$3, is_demo=$4 WHERE id=$5`,
+      [name, accountNumber, server, isDemo, id]
+    );
+  }
+}
+
+export async function deleteBrokerAccount(id: number): Promise<void> {
+  await query("DELETE FROM broker_accounts WHERE id = $1", [id]);
+}
+
+export async function activateBrokerAccount(id: number): Promise<void> {
+  await query("UPDATE broker_accounts SET is_active = FALSE");
+  await query("UPDATE broker_accounts SET is_active = TRUE WHERE id = $1", [id]);
+}
+
+// ── Dashboard Users ─────────────────────────────────────────────────────
+
+export async function getUserByUsername(
+  username: string
+): Promise<DashboardUser | null> {
+  const rows = await query(
+    "SELECT * FROM dashboard_users WHERE username = $1",
+    [username]
+  );
+  return (rows[0] as DashboardUser) ?? null;
+}
+
+export async function getUserById(
+  id: number
+): Promise<DashboardUser | null> {
+  const rows = await query(
+    "SELECT id, username, created_at FROM dashboard_users WHERE id = $1",
+    [id]
+  );
+  return (rows[0] as DashboardUser) ?? null;
+}
+
+export async function createUser(
+  username: string,
+  passwordHash: string
+): Promise<number> {
+  const rows = await query(
+    "INSERT INTO dashboard_users (username, password_hash) VALUES ($1, $2) RETURNING id",
+    [username, passwordHash]
+  );
+  return rows[0].id;
+}
+
+export async function updateUserPassword(
+  userId: number,
+  passwordHash: string
+): Promise<void> {
+  await query(
+    "UPDATE dashboard_users SET password_hash = $1 WHERE id = $2",
+    [passwordHash, userId]
+  );
+}
+
+export async function getUserCount(): Promise<number> {
+  const rows = await query("SELECT COUNT(*)::int AS count FROM dashboard_users");
+  return rows[0].count;
+}
+
+// ── Encryption helper (mirrors Python utils/crypto.py) ──────────────────
+
+import crypto from "crypto";
+
+function getFernetKey(): Buffer | null {
+  const envKey = process.env.ENCRYPTION_KEY;
+  if (!envKey) return null;
+  return crypto.createHash("sha256").update(envKey).digest();
+}
+
+/**
+ * Encrypt a plaintext string using AES-256-CBC + HMAC (Fernet-compatible
+ * layout simplified to standard Node.js crypto).
+ *
+ * We use AES-256-CBC with a random IV, then HMAC-SHA256 for integrity.
+ * Format: base64( IV(16) + HMAC(32) + ciphertext )
+ */
+export function encryptValue(plaintext: string): string {
+  const key = getFernetKey();
+  if (!key) return plaintext; // no key → store as-is (dev fallback)
+
+  const iv = crypto.randomBytes(16);
+  const cipher = crypto.createCipheriv("aes-256-cbc", key, iv);
+  const encrypted = Buffer.concat([
+    cipher.update(plaintext, "utf8"),
+    cipher.final(),
+  ]);
+  const hmac = crypto
+    .createHmac("sha256", key)
+    .update(Buffer.concat([iv, encrypted]))
+    .digest();
+  // iv(16) + hmac(32) + ciphertext
+  return Buffer.concat([iv, hmac, encrypted]).toString("base64");
+}
+
+export function decryptValue(ciphertext: string): string {
+  const key = getFernetKey();
+  if (!key) return ciphertext;
+
+  try {
+    const buf = Buffer.from(ciphertext, "base64");
+    if (buf.length < 48) return ciphertext; // too short → legacy plaintext
+    const iv = buf.subarray(0, 16);
+    const storedHmac = buf.subarray(16, 48);
+    const encrypted = buf.subarray(48);
+
+    // Verify HMAC
+    const computedHmac = crypto
+      .createHmac("sha256", key)
+      .update(Buffer.concat([iv, encrypted]))
+      .digest();
+    if (!crypto.timingSafeEqual(storedHmac, computedHmac)) {
+      return ciphertext; // HMAC mismatch → probably legacy plaintext
+    }
+
+    const decipher = crypto.createDecipheriv("aes-256-cbc", key, iv);
+    const decrypted = Buffer.concat([
+      decipher.update(encrypted),
+      decipher.final(),
+    ]);
+    return decrypted.toString("utf8");
+  } catch {
+    return ciphertext; // decrypt fail → legacy plaintext
+  }
 }

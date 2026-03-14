@@ -56,14 +56,35 @@ def main() -> None:
     global _shutdown
 
     # ── 1. Core infrastructure ──────────────────────────────────────────
+    db = Database()
+
+    # Resolve broker credentials: DB active account → .env fallback
+    _acct_id: int | None = None
+    db_account = db.get_active_broker_account()
+    if db_account:
+        acct_num = db_account["account_number"]
+        acct_pwd = db_account["password"]
+        acct_srv = db_account["server"]
+        _acct_id = db_account["id"]
+        logger.info("Using DB broker account: %s @ %s (id=%d)",
+                     acct_num, acct_srv, _acct_id)
+    else:
+        acct_num = settings.BROKER_ACCOUNT
+        acct_pwd = settings.BROKER_PASSWORD
+        acct_srv = settings.BROKER_SERVER
+
     broker: BrokerConnector
-    if settings.BROKER_ACCOUNT and settings.BROKER_PASSWORD and settings.BROKER_SERVER:
+    if acct_num and acct_pwd and acct_srv:
         try:
             from broker.mt5_connector import MT5Connector
-            broker = MT5Connector()
+            broker = MT5Connector(
+                account=acct_num, password=acct_pwd, server=acct_srv,
+            )
             if not broker.connect():
                 logger.critical("MT5 connection failed — aborting")
                 sys.exit(1)
+            if _acct_id:
+                db.mark_broker_connected(_acct_id)
         except ImportError:
             logger.warning(
                 "MetaTrader5 package not available (requires Python ≤3.13) "
@@ -75,7 +96,6 @@ def main() -> None:
         broker = MockConnector()
         broker.connect()
 
-    db = Database()
     state = StatePersistence(db, broker)
     news_filter = NewsFilter(db=db)
 
@@ -99,7 +119,7 @@ def main() -> None:
 
     # ── 4. Strategies ───────────────────────────────────────────────────
     strategies = [
-        ICTStrategy(broker=broker, db=db, min_confidence=55.0),
+        ICTStrategy(broker=broker, db=db, min_confidence=50.0),
         SmaCrossoverStrategy(),  # fallback
     ]
 
@@ -148,6 +168,8 @@ def main() -> None:
     logger.info("Entering main loop (interval=%ds)", settings.LOOP_INTERVAL_SECONDS)
 
     _market_closed_logged = False
+    # Track last candle timestamp per symbol to skip redundant scans
+    _last_candle_ts: dict[str, float] = {}
 
     while not _shutdown:
         loop_start = time.monotonic()
@@ -182,6 +204,7 @@ def main() -> None:
                 trade_manager=trade_manager,
                 learning=learning,
                 log_agent=log_agent,
+                last_candle_ts=_last_candle_ts,
             )
         except Exception:
             logger.exception("Unhandled error in main loop iteration %d", loop_count)
@@ -278,11 +301,32 @@ def _update_heartbeat(
 ) -> None:
     """Write current bot metrics to bot_status row."""
     equity = broker.get_equity()
+    balance = broker.get_balance()
     open_count = len(trade_manager.get_open_trades())
     report = learning.get_report()
     daily_pnl = report.get("total_pnl", 0.0)
     state = "paused" if telegram_bot.is_paused() else "running"
-    db.update_bot_status(state, equity, open_count, daily_pnl)
+
+    # Broker connection metadata
+    broker_account = ""
+    broker_server = ""
+    broker_name = ""
+    leverage = 0
+    info = getattr(broker, "account_info_cache", None)
+    if info:
+        broker_account = str(info.get("login", ""))
+        broker_server = info.get("server", "")
+        broker_name = info.get("name", "")
+        leverage = info.get("leverage", 0)
+
+    db.update_bot_status(
+        state, equity, open_count, daily_pnl,
+        broker_account=broker_account,
+        broker_server=broker_server,
+        broker_name=broker_name,
+        balance=balance,
+        leverage=leverage,
+    )
 
 
 def _run_iteration(
@@ -296,6 +340,7 @@ def _run_iteration(
     trade_manager: TradeManagerAgent,
     learning: LearningAgent,
     log_agent: LoggingAgent,
+    last_candle_ts: dict[str, float],
 ) -> None:
     """Single iteration of the trading loop.
 
@@ -340,22 +385,29 @@ def _run_iteration(
     # ══════════════════════════════════════════════════════════════════════
     all_signals: list[Signal] = []
 
+    # Symbols with open positions — skip strategy scan (saves compute,
+    # avoids duplicate-reject log spam)
+    open_symbols = {t.symbol for t in trade_manager.get_open_trades()}
+
     for symbol in _active_symbols:
-        # Skip symbols whose market is currently closed
         if not is_market_open(symbol):
             continue
-
+        if symbol in open_symbols:
+            continue
         try:
-            # Step 1: Fetch market data
             data = market_agent.get_data(symbol)
         except DataValidationError as e:
             logger.warning("Data validation failed for %s: %s — skipping", symbol, e)
             continue
 
-        # Step 2: Analyse
-        context = analysis_agent.analyze(data)
+        # Skip if the latest candle hasn't changed (same bar)
+        if data.candles:
+            latest_ts = data.candles[-1].timestamp.timestamp()
+            if latest_ts == last_candle_ts.get(symbol):
+                continue
+            last_candle_ts[symbol] = latest_ts
 
-        # Step 3: Collect ALL signals from ALL strategies for this symbol
+        context = analysis_agent.analyze(data)
         signals = strategy_agent.detect_all(context)
         all_signals.extend(signals)
 

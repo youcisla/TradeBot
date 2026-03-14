@@ -1,17 +1,18 @@
-"""Economic calendar blackout filter (stub for V1).
+"""Economic calendar blackout filter.
 
-V1 ships with a static-JSON approach: a ``news_events.json`` file can be
-placed next to this module and it will be loaded at startup.  The filter
-checks whether a high-impact event is within *NEWS_BLACKOUT_MINUTES* of
-the current time and returns True to block trading.
+Fetches high-impact economic events from Finnhub's free Economic Calendar
+endpoint and caches them locally.  Falls back to a static ``news_events.json``
+file if the API key is missing or the fetch fails.
 
-When a real API key is provided, the ``finnhub`` source is used.
+Events are refreshed automatically every 6 hours.
 """
 
 from __future__ import annotations
 
 import json
 import logging
+import urllib.request
+import urllib.error
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -24,6 +25,9 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 _EVENTS_FILE = Path(__file__).parent / "news_events.json"
+_CACHE_FILE = Path(__file__).parent / "news_cache.json"
+_REFRESH_INTERVAL = timedelta(hours=6)
+_FETCH_RETRY_COOLDOWN = timedelta(hours=1)
 
 
 def _load_static_events() -> list[dict[str, str]]:
@@ -37,6 +41,73 @@ def _load_static_events() -> list[dict[str, str]]:
     return []
 
 
+def _load_cache() -> tuple[list[dict[str, str]], datetime | None]:
+    """Load cached Finnhub events and their fetch timestamp."""
+    if _CACHE_FILE.exists():
+        try:
+            with open(_CACHE_FILE, "r") as f:
+                data = json.load(f)
+            fetched_at = datetime.fromisoformat(data["fetched_at"])
+            return data.get("events", []), fetched_at
+        except (json.JSONDecodeError, KeyError, ValueError):
+            logger.warning("Corrupted news cache — will re-fetch")
+    return [], None
+
+
+def _save_cache(events: list[dict[str, str]]) -> None:
+    with open(_CACHE_FILE, "w") as f:
+        json.dump({"fetched_at": datetime.now(UTC).isoformat(), "events": events}, f)
+
+
+def _fetch_finnhub_calendar() -> list[dict[str, str]]:
+    """Fetch the next 7 days of economic events from Finnhub."""
+    key = settings.FINNHUB_API_KEY
+    if not key:
+        return []
+
+    today = datetime.now(UTC).date()
+    from_date = today.isoformat()
+    to_date = (today + timedelta(days=7)).isoformat()
+    url = (
+        f"https://finnhub.io/api/v1/calendar/economic"
+        f"?from={from_date}&to={to_date}&token={key}"
+    )
+
+    try:
+        req = urllib.request.Request(url, headers={"Accept": "application/json"})
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            raw = json.loads(resp.read().decode())
+    except (urllib.error.URLError, json.JSONDecodeError, OSError) as exc:
+        logger.warning("Finnhub calendar fetch failed: %s", exc)
+        return []
+
+    parsed: list[dict[str, str]] = []
+    for ev in raw.get("economicCalendar", []):
+        impact = ev.get("impact", 0)
+        # Finnhub uses 1=low, 2=medium, 3=high
+        if impact < 3:
+            continue
+        country = ev.get("country") or ""
+        # Map country to currency (common ones)
+        currency = {
+            "US": "USD", "EU": "EUR", "GB": "GBP", "JP": "JPY",
+            "AU": "AUD", "CA": "CAD", "NZ": "NZD", "CH": "CHF",
+        }.get(country, country) or country
+        time_str = ev.get("time") or "00:00:00"
+        date_str = ev.get("date") or ""
+        if not date_str:
+            continue
+        parsed.append({
+            "currency": currency,
+            "time": f"{date_str}T{time_str}",
+            "impact": "high",
+            "title": ev.get("event", "Unknown") or "Unknown",
+        })
+
+    logger.info("Finnhub: fetched %d high-impact events for next 7 days", len(parsed))
+    return parsed
+
+
 class NewsFilter:
     """Determines whether trading should be paused due to an imminent
     high-impact news event.
@@ -44,11 +115,51 @@ class NewsFilter:
 
     def __init__(self, db: Database | None = None) -> None:
         self._db = db
-        self._events: list[dict[str, str]] = _load_static_events()
+        self._last_fetch: datetime | None = None
+        self._last_fetch_failed: datetime | None = None
+        self._events: list[dict[str, str]] = []
+        self._load_events()
+
+    def _load_events(self) -> None:
+        """Load events from cache/Finnhub, falling back to static file."""
+        # Try cache first
+        cached, fetched_at = _load_cache()
+        if cached and fetched_at and (datetime.now(UTC) - fetched_at < _REFRESH_INTERVAL):
+            self._events = cached
+            self._last_fetch = fetched_at
+            logger.info("NewsFilter loaded %d events from cache", len(cached))
+            return
+
+        # Skip Finnhub if we recently failed (avoid log spam)
+        if (self._last_fetch_failed
+                and (datetime.now(UTC) - self._last_fetch_failed) < _FETCH_RETRY_COOLDOWN):
+            # Reuse whatever we have (cache or static)
+            if not self._events:
+                self._events = cached or _load_static_events()
+            return
+
+        # Try Finnhub
+        finnhub_events = _fetch_finnhub_calendar()
+        if finnhub_events:
+            self._events = finnhub_events
+            self._last_fetch = datetime.now(UTC)
+            self._last_fetch_failed = None
+            _save_cache(finnhub_events)
+            return
+
+        # Finnhub failed — record failure time
+        if not self._last_fetch_failed:
+            self._last_fetch_failed = datetime.now(UTC)
+            logger.warning("Finnhub fetch failed — will retry in %s",
+                           _FETCH_RETRY_COOLDOWN)
+
+        # Fallback to static file
+        self._events = _load_static_events()
         if self._events:
             logger.info("NewsFilter loaded %d static events", len(self._events))
         else:
-            logger.info("NewsFilter: no static events loaded — filter is inactive")
+            if not self._last_fetch_failed or self._last_fetch_failed == datetime.now(UTC):
+                logger.info("NewsFilter: no events available — filter inactive")
 
     def _emit(self, level: str, msg: str, data: dict | None = None) -> None:
         if self._db:
@@ -61,6 +172,13 @@ class NewsFilter:
 
             {"currency": "USD", "time": "2026-03-13T13:30:00", "impact": "high", "title": "CPI"}
         """
+        # Auto-refresh every 6 hours (respects failure cooldown internally)
+        if (
+            self._last_fetch is None
+            or (datetime.now(UTC) - self._last_fetch) >= _REFRESH_INTERVAL
+        ):
+            self._load_events()
+
         if not self._events:
             self._emit("info", f"No calendar events loaded — {symbol} news check skipped",
                        {"symbol": symbol, "events_loaded": 0})

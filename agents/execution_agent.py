@@ -84,7 +84,7 @@ class ExecutionAgent:
             lot_size=lot_size,
             sl=signal.stop_loss,
             tp=None,  # We manage TPs ourselves
-            comment=f"{signal.strategy}|{signal.reason[:40]}",
+            comment=signal.strategy,
         )
 
         if not result.success:

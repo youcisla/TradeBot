@@ -82,7 +82,7 @@ def detect_regime(
         is_volatile = atr > avg_range * 1.5
 
     # Trending: strong directional dominance + decent body ratio
-    if (bulls >= 7 or bears >= 7) and body_ratio > 0.4:
+    if (bulls >= 6 or bears >= 6) and body_ratio > 0.3:
         return Regime.TRENDING
 
     # Volatile but indecisive
@@ -97,11 +97,20 @@ def detect_regime(
     if (f_bulls >= 4 and s_bulls <= 1) or (f_bulls <= 1 and s_bulls >= 4):
         return Regime.REVERSING
 
-    # Default: ranging
+    # Ranging: small body candles, no strong direction
     if body_ratio < 0.35:
         return Regime.RANGING
 
-    return Regime.UNKNOWN
+    # Moderate trend: weaker directional dominance
+    if (bulls >= 5 or bears >= 5) and body_ratio > 0.25:
+        return Regime.TRENDING
+
+    # Volatile: decent-sized bodies but no clear direction
+    if body_ratio > 0.35 and abs(bulls - bears) <= 3:
+        return Regime.VOLATILE
+
+    # Last resort: ranging
+    return Regime.RANGING
 
 
 def build_htf_dealing_range(

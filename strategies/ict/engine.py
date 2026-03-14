@@ -24,7 +24,7 @@ from typing import Optional
 
 from models.market_data import Candle
 from models.ict_models import (
-    Bias, ICTContext, SetupCandidate, ConfidenceBreakdown,
+    Bias, ICTContext, SetupCandidate, SetupModel, ConfidenceBreakdown,
 )
 from strategies.ict.structure import (
     find_swing_points, detect_structure_breaks,
@@ -65,8 +65,10 @@ class ICTEngine:
         )
     """
 
-    def __init__(self, min_confidence: float = 55.0) -> None:
+    def __init__(self, min_confidence: float = 50.0,
+                 range_min_confidence: float = 42.0) -> None:
         self.min_confidence = min_confidence
+        self.range_min_confidence = range_min_confidence
 
     def analyze(
         self,
@@ -197,14 +199,19 @@ class ICTEngine:
                 best_score = breakdown.total
                 best = setup
 
-        # Filter by minimum confidence
-        if best and best.confidence < self.min_confidence:
-            logger.debug(
-                "Best ICT setup on %s scored %.1f (min=%.1f) — skipping",
-                symbol, best.confidence, self.min_confidence,
-            )
-            # Return the rejected setup as second element so callers can log it
-            return ctx, None, best
+        # Filter by minimum confidence (range models use a lower bar
+        # since they inherently lack HTF-bias points)
+        if best:
+            _is_range = best.model in (SetupModel.RANGE_DEALING_LONG,
+                                       SetupModel.RANGE_DEALING_SHORT)
+            threshold = self.range_min_confidence if _is_range else self.min_confidence
+            if best.confidence < threshold:
+                logger.debug(
+                    "Best ICT setup on %s scored %.1f (min=%.1f) — skipping",
+                    symbol, best.confidence, threshold,
+                )
+                # Return the rejected setup as second element so callers can log it
+                return ctx, None, best
 
         if best:
             logger.info(

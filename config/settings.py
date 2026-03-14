@@ -36,6 +36,9 @@ NEWS_BLACKOUT_MINUTES: int = int(os.getenv("NEWS_BLACKOUT_MINUTES", "15"))
 TELEGRAM_BOT_TOKEN: str = os.getenv("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT_ID: str = os.getenv("TELEGRAM_CHAT_ID", "")
 
+# ── Security ─────────────────────────────────────────────────────────────
+ENCRYPTION_KEY: str = os.getenv("ENCRYPTION_KEY", "")
+
 # ── Risk ─────────────────────────────────────────────────────────────────
 MAX_RISK_PER_TRADE: float = float(os.getenv("MAX_RISK_PER_TRADE", "0.02"))
 MAX_OPEN_TRADES: int = int(os.getenv("MAX_OPEN_TRADES", "3"))
@@ -43,7 +46,13 @@ MAX_DAILY_LOSS: float = float(os.getenv("MAX_DAILY_LOSS", "0.05"))
 MAX_SPREAD_PIPS: float = float(os.getenv("MAX_SPREAD_PIPS", "3.0"))
 DRAWDOWN_COOLDOWN_HOURS: int = int(os.getenv("DRAWDOWN_COOLDOWN_HOURS", "24"))
 MIN_LOT_SIZE: float = float(os.getenv("MIN_LOT_SIZE", "0.01"))
-
+# Per-asset-class spread limits.
+# Forex/exotic/commodity use pip-based limits.
+# Crypto uses a percentage-of-price limit (0.1 = 0.1%) because dollar
+# spreads vary wildly across instruments ($17 on BTC vs $0.002 on XRP).
+MAX_SPREAD_PCT_CRYPTO: float = float(os.getenv("MAX_SPREAD_PCT_CRYPTO", "2.5"))
+MAX_SPREAD_PIPS_COMMODITY: float = float(os.getenv("MAX_SPREAD_PIPS_COMMODITY", "10.0"))
+MAX_SPREAD_PIPS_EXOTIC: float = float(os.getenv("MAX_SPREAD_PIPS_EXOTIC", "15.0"))
 # ── Trade Execution ──────────────────────────────────────────────────────
 TP1_CLOSE_PERCENT: float = float(os.getenv("TP1_CLOSE_PERCENT", "0.40"))
 TP2_CLOSE_PERCENT: float = float(os.getenv("TP2_CLOSE_PERCENT", "0.30"))

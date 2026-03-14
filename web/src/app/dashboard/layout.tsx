@@ -36,6 +36,9 @@ export default async function DashboardLayout({
         <Link href="/dashboard/ict" className="text-matrix-dim hover:text-matrix transition-colors">
           ICT Engine
         </Link>
+        <Link href="/dashboard/settings" className="text-matrix-dim hover:text-matrix transition-colors">
+          Settings
+        </Link>
       </nav>
 
       {/* Main content */}

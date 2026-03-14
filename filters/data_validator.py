@@ -76,21 +76,30 @@ class DataValidator:
         if expected_gap is None:
             expected_gap = timedelta(hours=1)  # default H1
 
+        # Allow larger gaps for weekends (Fri 22:00 to Sun 22:00 = ~48h)
+        # and known server maintenance windows
+        max_tolerable = timedelta(hours=50)
+
         for i in range(1, len(candles)):
             gap = candles[i].timestamp - candles[i - 1].timestamp
-            # Allow up to 1.5× expected gap to account for weekends / holidays
-            if gap > expected_gap * 1.5:
-                logger.warning(
-                    "Candle gap: %s → %s (%.0f min, expected %.0f min)",
-                    candles[i - 1].timestamp,
-                    candles[i].timestamp,
-                    gap.total_seconds() / 60,
-                    expected_gap.total_seconds() / 60,
-                )
-                self._emit("warn",
-                           f"Candle gap: {gap.total_seconds()/60:.0f}min between "
-                           f"{candles[i-1].timestamp} and {candles[i].timestamp}",
-                           {"gap_min": gap.total_seconds() / 60})
+            # Allow up to 1.5× expected gap for minor delays
+            if gap <= expected_gap * 1.5:
+                continue
+            # Silently skip weekend/maintenance gaps (< 50h)
+            if gap <= max_tolerable:
+                continue
+            # Only warn on truly anomalous gaps
+            logger.warning(
+                "Candle gap: %s → %s (%.0f min, expected %.0f min)",
+                candles[i - 1].timestamp,
+                candles[i].timestamp,
+                gap.total_seconds() / 60,
+                expected_gap.total_seconds() / 60,
+            )
+            self._emit("warn",
+                       f"Candle gap: {gap.total_seconds()/60:.0f}min between "
+                       f"{candles[i-1].timestamp} and {candles[i].timestamp}",
+                       {"gap_min": gap.total_seconds() / 60})
 
     def _emit(self, level: str, msg: str, data: dict | None = None) -> None:
         if self._db:

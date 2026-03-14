@@ -38,12 +38,16 @@ class ICTStrategy(BaseStrategy):
         min_confidence: float = 55.0,
         htf_timeframe: str = "H4",
         htf_candle_count: int = 200,
+        entry_timeframe: str = "M15",
+        entry_candle_count: int = 250,
     ) -> None:
         self._broker = broker
         self._db = db
         self._engine = ICTEngine(min_confidence=min_confidence)
         self._htf_tf = htf_timeframe
         self._htf_count = htf_candle_count
+        self._entry_tf = entry_timeframe
+        self._entry_count = entry_candle_count
 
     def _emit(self, level: str, msg: str, data: dict | None = None) -> None:
         if self._db:
@@ -94,7 +98,7 @@ class ICTStrategy(BaseStrategy):
             self._emit("warn", f"ICT {ctx.symbol}: only {len(candles)} candles (need 30+) — skipping")
             return None
 
-        # Fetch HTF candles from broker
+        # Fetch HTF candles from broker (H4 for bias/regime)
         htf_candles: list[Candle] = []
         if self._broker:
             try:
@@ -104,23 +108,56 @@ class ICTStrategy(BaseStrategy):
             except Exception:
                 logger.warning("Failed to fetch HTF candles for %s", ctx.symbol)
 
+        # Fetch entry-TF candles (M15) for more precise setup detection
+        entry_candles: list[Candle] = []
+        if self._broker and self._entry_tf != settings.DEFAULT_TIMEFRAME:
+            try:
+                entry_candles = self._broker.get_candles(
+                    ctx.symbol, self._entry_tf, self._entry_count,
+                )
+            except Exception:
+                logger.warning("Failed to fetch %s candles for %s",
+                               self._entry_tf, ctx.symbol)
+
+        # Run on entry TF first (more precise), fall back to H1
+        execution_candles = entry_candles if len(entry_candles) >= 30 else candles
+        execution_tf = self._entry_tf if len(entry_candles) >= 30 else settings.DEFAULT_TIMEFRAME
+
         # Run the ICT engine
         ict_ctx, best, rejected = self._engine.analyze(
             symbol=ctx.symbol,
-            candles=candles,
+            candles=execution_candles,
             htf_candles=htf_candles,
             current_price=ctx.current_price,
             bid=ctx.bid,
             ask=ctx.ask,
             atr=ctx.atr,
+            timeframe=execution_tf,
         )
+
+        # If M15 found nothing, try H1 as a fallback
+        if best is None and execution_candles is not candles and len(candles) >= 30:
+            ict_ctx, best, rejected = self._engine.analyze(
+                symbol=ctx.symbol,
+                candles=candles,
+                htf_candles=htf_candles,
+                current_price=ctx.current_price,
+                bid=ctx.bid,
+                ask=ctx.ask,
+                atr=ctx.atr,
+                timeframe=settings.DEFAULT_TIMEFRAME,
+            )
 
         if best is None:
             # Log why to the agent feed for dashboard visibility
             if rejected:
+                # Determine which threshold applied
+                from models.ict_models import SetupModel as _SM
+                _is_range = rejected.model in (_SM.RANGE_DEALING_LONG, _SM.RANGE_DEALING_SHORT)
+                _thresh = self._engine.range_min_confidence if _is_range else self._engine.min_confidence
                 self._emit("info",
                            f"ICT {ctx.symbol}: {rejected.model.value} setup found but score "
-                           f"{rejected.confidence:.0f}/100 < 55 threshold "
+                           f"{rejected.confidence:.0f}/100 < {_thresh:.0f} threshold "
                            f"(bias={ict_ctx.htf_bias.value} zone={ict_ctx.premium_discount})")
             else:
                 self._emit("info",

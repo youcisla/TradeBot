@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING, Callable
 
 from broker.connector import BrokerConnector
 from config import settings
-from config.symbols import pip_value
+from config.symbols import pip_value, asset_class
 from filters.news_filter import NewsFilter
 from models.signal import Signal
 from models.trade import Trade
@@ -100,6 +100,9 @@ class RiskAgent:
                 "RISK REJECT [DUPLICATE]: %s %s %s already open",
                 signal.symbol, signal.direction, signal.strategy,
             )
+            self._emit("warn",
+                       f"DUPLICATE — {signal.symbol} {signal.direction} already open",
+                       {"symbol": signal.symbol, "check": "duplicate"})
             return False
 
         # 3. Correlation guard
@@ -108,21 +111,55 @@ class RiskAgent:
                 "RISK REJECT [CORRELATION]: %s %s already open from another strategy",
                 signal.symbol, signal.direction,
             )
+            self._emit("warn",
+                       f"CORRELATION — {signal.symbol} already open from another strategy",
+                       {"symbol": signal.symbol, "check": "correlation"})
             return False
 
         # 4. News blackout
         if self._news.is_blackout(signal.symbol):
             logger.warning("RISK REJECT [NEWS]: blackout for %s", signal.symbol)
+            self._emit("warn",
+                       f"NEWS BLACKOUT — {signal.symbol} blocked by upcoming event",
+                       {"symbol": signal.symbol, "check": "news"})
             return False
 
-        # 5. Live spread check
-        spread_pips = signal.entry_snapshot.spread / pip_value(signal.symbol)
-        if spread_pips > settings.MAX_SPREAD_PIPS:
-            logger.warning(
-                "RISK REJECT [SPREAD]: %.1f pips > max %.1f for %s",
-                spread_pips, settings.MAX_SPREAD_PIPS, signal.symbol,
-            )
-            return False
+        # 5. Live spread check (per-asset-class limits)
+        ac = asset_class(signal.symbol)
+        if ac == "crypto":
+            # Percentage-of-price check for crypto
+            price = signal.entry_price or 1.0
+            spread_pct = (signal.entry_snapshot.spread / price) * 100
+            if spread_pct > settings.MAX_SPREAD_PCT_CRYPTO:
+                logger.warning(
+                    "RISK REJECT [SPREAD]: %.3f%% > max %.1f%% for %s (crypto)",
+                    spread_pct, settings.MAX_SPREAD_PCT_CRYPTO, signal.symbol,
+                )
+                self._emit("warn",
+                           f"SPREAD — {signal.symbol} {spread_pct:.2f}% > max {settings.MAX_SPREAD_PCT_CRYPTO}%",
+                           {"symbol": signal.symbol, "check": "spread",
+                            "spread_pct": round(spread_pct, 3), "max": settings.MAX_SPREAD_PCT_CRYPTO})
+                return False
+        else:
+            pv = pip_value(signal.symbol)
+            spread_pips = signal.entry_snapshot.spread / pv
+            if ac == "commodity":
+                max_spread = settings.MAX_SPREAD_PIPS_COMMODITY
+            elif ac == "exotic":
+                max_spread = settings.MAX_SPREAD_PIPS_EXOTIC
+            else:
+                max_spread = settings.MAX_SPREAD_PIPS
+
+            if spread_pips > max_spread:
+                logger.warning(
+                    "RISK REJECT [SPREAD]: %.1f pips > max %.1f for %s (%s)",
+                    spread_pips, max_spread, signal.symbol, ac,
+                )
+                self._emit("warn",
+                           f"SPREAD — {signal.symbol} {spread_pips:.1f} pips > max {max_spread} ({ac})",
+                           {"symbol": signal.symbol, "check": "spread",
+                            "spread_pips": round(spread_pips, 1), "max": max_spread})
+                return False
 
         # 6. Max open trades
         if len(open_trades) >= settings.MAX_OPEN_TRADES:
@@ -140,6 +177,10 @@ class RiskAgent:
         if lot_size < settings.MIN_LOT_SIZE:
             logger.warning("RISK REJECT [LOT_SIZE]: calculated %.2f < min %.2f",
                            lot_size, settings.MIN_LOT_SIZE)
+            self._emit("warn",
+                       f"LOT_SIZE — {signal.symbol} calculated {lot_size:.3f} < min {settings.MIN_LOT_SIZE}",
+                       {"symbol": signal.symbol, "check": "lot_size",
+                        "lot_size": lot_size, "min": settings.MIN_LOT_SIZE})
             return False
 
         logger.info("RISK APPROVED: %s %s %s (lot=%.2f)",

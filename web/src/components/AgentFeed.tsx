@@ -24,6 +24,7 @@ const AGENT_CLASS: Record<string, string> = {
 
 export default function AgentFeed({ symbol }: { symbol?: string | null }) {
   const [events, setEvents] = useState<AgentEvent[]>([]);
+  const [copied, setCopied] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -46,10 +47,38 @@ export default function AgentFeed({ symbol }: { symbol?: string | null }) {
     ? events.filter((e) => e.message.includes(symbol))
     : events;
 
+  const copyLog = () => {
+    const text = filtered
+      .map((e) => `${formatTime(e.created_at)} [${e.agent}] ${e.message}`)
+      .join("\n");
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+
   return (
     <div className="border border-terminal-border rounded bg-terminal-surface flex flex-col h-[420px]">
-      <div className="px-3 py-2 border-b border-terminal-border text-matrix-dim text-xs uppercase tracking-widest">
-        Agent Feed
+      <div className="px-3 py-2 border-b border-terminal-border flex items-center justify-between">
+        <span className="text-matrix-dim text-xs uppercase tracking-widest">
+          Agent Feed
+        </span>
+        <button
+          onClick={copyLog}
+          title="Copy log to clipboard"
+          className="text-matrix-dim hover:text-matrix transition-colors p-1"
+        >
+          {copied ? (
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="20 6 9 17 4 12" />
+            </svg>
+          ) : (
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+            </svg>
+          )}
+        </button>
       </div>
       <div className="flex-1 overflow-y-auto p-3 space-y-1 text-xs leading-relaxed">
         {filtered.map((e) => (

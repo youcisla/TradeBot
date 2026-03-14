@@ -194,6 +194,11 @@ def _score_session(ctx: ICTContext) -> float:
     """0-7: Session/time quality."""
     si = ctx.session_info
 
+    # Crypto trades 24/7 — don't penalize for session
+    from config.symbols import asset_class
+    if asset_class(ctx.symbol) == "crypto":
+        return 5.0  # flat credit, crypto doesn't have killzones
+
     if si.session == SessionName.OFF_HOURS:
         return 0.0
 
