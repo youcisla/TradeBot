@@ -8,6 +8,7 @@ Sub-modules:
     orderblock  – order block detection
     session     – session/killzone/macro logic
     bias        – higher-timeframe bias resolver
+    fibonacci   – Fibonacci retracement & Golden Zone confluence
     scoring     – confidence scoring
     setups      – setup model detection
     engine      – unified orchestrator

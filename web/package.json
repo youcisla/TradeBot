@@ -11,6 +11,7 @@
   "dependencies": {
     "bcryptjs": "^3.0.3",
     "dotenv": "^17.3.1",
+    "lightweight-charts": "^4.2.3",
     "next": "^16.1.6",
     "next-auth": "^4.24.11",
     "pg": "^8.13.0",

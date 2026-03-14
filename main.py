@@ -39,6 +39,7 @@ from agents.learning_agent import LearningAgent
 from agents.logging_agent import LoggingAgent
 
 from utils import telegram_bot
+from utils import candle_server
 from utils.helpers import is_market_open, is_any_market_open
 from utils.symbol_event_tracker import SymbolEventTracker
 
@@ -114,6 +115,9 @@ def main() -> None:
     else:
         _active_symbols = SYMBOLS[:]
     logger.info("Active symbols: %s", ", ".join(_active_symbols))
+
+    # ── 1b. Candle HTTP server for dashboard charts ──────────────────────
+    candle_server.start(broker)
 
     # ── 2. Logging agent first (sets up Python logging) ─────────────────
     log_agent = LoggingAgent(db)
@@ -242,6 +246,7 @@ def main() -> None:
 
     # ── 10. Shutdown ─────────────────────────────────────────────────────
     logger.info("Shutting down…")
+    candle_server.stop()
     telegram_bot.stop_polling()
     telegram_bot.send_message("🛑 Bot shutting down.")
     db.set_bot_stopped()

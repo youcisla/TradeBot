@@ -244,6 +244,8 @@ def _build_candidate(
         ob_present=ob is not None,
         session_valid=ctx.session_info.in_killzone,
         rr_acceptable=_rr_ok(entry, sl, tp2 if tp2 else tp1),
+        fibonacci_aligned=_fib_aligned(ctx, direction),
+        in_golden_zone=_in_gz(ctx, direction),
         missing=missing,
         sweep=sweep,
         fvg=fvg,
@@ -259,6 +261,25 @@ def _rr_ok(entry: float, sl: float, tp: float) -> bool:
     risk = abs(entry - sl)
     reward = abs(tp - entry)
     return reward >= risk * 1.5 if risk > 0 else False
+
+
+def _fib_aligned(ctx: ICTContext, direction: str) -> bool:
+    """Check if Fibonacci direction matches setup direction."""
+    fib = ctx.fibonacci
+    if fib is None:
+        return False
+    return (
+        (direction == "BUY" and fib.direction == Bias.BULLISH)
+        or (direction == "SELL" and fib.direction == Bias.BEARISH)
+    )
+
+
+def _in_gz(ctx: ICTContext, direction: str) -> bool:
+    """Check if current price is in Golden Zone for the direction."""
+    fib = ctx.fibonacci
+    if fib is None or not _fib_aligned(ctx, direction):
+        return False
+    return fib.retracement_depth == "golden_zone"
 
 
 # ══════════════════════════════════════════════════════════════════════════

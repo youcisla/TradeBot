@@ -45,6 +45,10 @@ from strategies.ict.bias import (
 )
 from strategies.ict.scoring import score_setup
 from strategies.ict.setups import detect_all_setups
+from strategies.ict.fibonacci import (
+    detect_fib_levels, check_golden_zone_confluence,
+    check_liquidity_target, validate_retracement_depth,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -179,6 +183,18 @@ class ICTEngine:
             htf_obs = detect_order_blocks(htf_candles, htf_disps, "H4")
             update_ob_status(htf_obs, htf_candles)
             ctx.htf_obs = get_active_obs(htf_obs)
+
+        # ── Layer H: Fibonacci ──────────────────────────────────────────
+        fib = detect_fib_levels(
+            candles, displacements, highs, lows, ctx.htf_bias,
+        )
+        if fib:
+            check_golden_zone_confluence(fib, ctx.active_fvgs, ctx.active_obs)
+            check_liquidity_target(
+                fib, ctx.bsl_levels, ctx.ssl_levels, current_price,
+            )
+            validate_retracement_depth(fib, current_price)
+            ctx.fibonacci = fib
 
         # ── Setup Detection ──────────────────────────────────────────
         candidates = detect_all_setups(ctx)

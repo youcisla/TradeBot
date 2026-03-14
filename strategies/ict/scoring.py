@@ -1,6 +1,6 @@
-"""Scoring Engine — compute the 0-100 ICT confidence score.
+"""Scoring Engine — compute the 0-115 ICT confidence score.
 
-Implements ConfidenceBreakdown with 10 weighted components:
+Implements ConfidenceBreakdown with 11 weighted components:
   htf_bias        0-15   HTF directional alignment
   premium_discount 0-12  Correct zone for the direction
   liquidity_sweep  0-15  Sweep quality and recency
@@ -11,8 +11,9 @@ Implements ConfidenceBreakdown with 10 weighted components:
   session_time     0-7   Trading during killzone / macro
   target_clarity   0-5   Clear opposing liquidity for TP
   rr_quality       0-5   Risk-reward ratio quality
+  fibonacci_quality 0-15  Golden Zone + institutional confluence
                  -----
-  Total             100
+  Total             115
 """
 
 from __future__ import annotations
@@ -37,6 +38,7 @@ def score_setup(ctx: ICTContext, setup: SetupCandidate) -> ConfidenceBreakdown:
     bd.session_time = _score_session(ctx)
     bd.target_clarity = _score_target(ctx, setup)
     bd.rr_quality = _score_rr(setup)
+    bd.fibonacci_quality = _score_fibonacci(ctx, setup)
 
     bd.compute_total()
     return bd
@@ -252,3 +254,61 @@ def _score_rr(setup: SetupCandidate) -> float:
     if rr >= 1.0:
         return 2.0
     return 0.0
+
+
+def _score_fibonacci(ctx: ICTContext, setup: SetupCandidate) -> float:
+    """0-15: Fibonacci Golden Zone alignment and confluence.
+
+    Points:
+      +5  price in Golden Zone (0.618-0.705)
+      +3  Golden Zone overlaps FVG CE
+      +3  Golden Zone overlaps OB mean threshold
+      +2  clear liquidity target exists
+      +2  premium/discount alignment
+      -3  retracement too deep (>0.786)
+      -2  retracement too shallow (<0.382)
+    """
+    fib = ctx.fibonacci
+    if fib is None:
+        return 0.0
+
+    # Direction check: Fibonacci must match setup direction
+    aligned = (
+        (setup.direction == "BUY" and fib.direction == Bias.BULLISH)
+        or (setup.direction == "SELL" and fib.direction == Bias.BEARISH)
+    )
+    if not aligned:
+        return 0.0
+
+    score = 0.0
+
+    # Golden Zone alignment
+    depth = fib.retracement_depth
+    if depth == "golden_zone":
+        score += 5.0
+    elif depth == "acceptable":
+        score += 2.0
+    elif depth == "deep":
+        score += 1.0
+    elif depth == "too_deep":
+        score -= 3.0
+    elif depth == "too_shallow":
+        score -= 2.0
+
+    # FVG CE confluence
+    if fib.gz_fvg_confluence:
+        score += 3.0
+
+    # OB mean threshold confluence
+    if fib.gz_ob_confluence:
+        score += 3.0
+
+    # Liquidity target
+    if fib.has_liquidity_target:
+        score += 2.0
+
+    # Premium/discount alignment
+    if setup.premium_discount_aligned:
+        score += 2.0
+
+    return max(min(score, 15.0), -3.0)  # clamp -3 to 15

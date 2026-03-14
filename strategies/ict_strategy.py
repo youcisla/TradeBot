@@ -135,6 +135,13 @@ class ICTStrategy(BaseStrategy):
             timeframe=execution_tf,
         )
 
+        # Store ICT context for dashboard Fibonacci visualization
+        try:
+            from utils.candle_server import set_ict_context
+            set_ict_context(ctx.symbol, ict_ctx)
+        except Exception:
+            pass
+
         # If M15 found nothing, try H1 as a fallback
         if best is None and execution_candles is not candles and len(candles) >= 30:
             ict_ctx, best, rejected = self._engine.analyze(
@@ -147,6 +154,11 @@ class ICTStrategy(BaseStrategy):
                 atr=ctx.atr,
                 timeframe=settings.DEFAULT_TIMEFRAME,
             )
+            try:
+                from utils.candle_server import set_ict_context
+                set_ict_context(ctx.symbol, ict_ctx)
+            except Exception:
+                pass
 
         if best is None:
             # Log why to the agent feed for dashboard visibility

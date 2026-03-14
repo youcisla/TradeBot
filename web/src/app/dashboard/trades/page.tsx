@@ -56,6 +56,7 @@ export default function TradesPage() {
               <th className="text-right p-2">PnL</th>
               <th className="text-left p-2">Status</th>
               <th className="text-left p-2">Reason</th>
+              <th className="text-left p-2">SL</th>
               <th className="text-left p-2">TP1</th>
               <th className="text-left p-2">TP2</th>
               <th className="text-left p-2">TP3</th>
@@ -99,9 +100,10 @@ export default function TradesPage() {
                   </span>
                 </td>
                 <td className="p-2 text-matrix-dim">{t.close_reason || "—"}</td>
-                <td className="p-2">{t.tp1_hit ? "✓" : "—"}</td>
-                <td className="p-2">{t.tp2_hit ? "✓" : "—"}</td>
-                <td className="p-2">{t.tp3_hit ? "✓" : "—"}</td>
+                <td className="p-2">{Number(t.stop_loss) ? Number(t.stop_loss).toFixed(5) : "—"}</td>
+                <td className="p-2">{Number(t.take_profit_1) ? Number(t.take_profit_1).toFixed(5) : "—"}</td>
+                <td className="p-2">{Number(t.take_profit_2) ? Number(t.take_profit_2).toFixed(5) : "—"}</td>
+                <td className="p-2">{Number(t.take_profit_3) ? Number(t.take_profit_3).toFixed(5) : "—"}</td>
                 <td className="p-2 text-matrix-dim">
                   {formatShort(t.open_time)}
                 </td>

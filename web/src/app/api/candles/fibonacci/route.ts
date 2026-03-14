@@ -1,0 +1,36 @@
+import { NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+
+export const dynamic = "force-dynamic";
+
+const CANDLE_SERVER = process.env.CANDLE_SERVER_URL || "http://localhost:5555";
+
+export async function GET(request: Request) {
+  const session = await getServerSession(authOptions);
+  if (!session)
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const { searchParams } = new URL(request.url);
+  const symbol = searchParams.get("symbol") || "EURUSD";
+
+  try {
+    const url = `${CANDLE_SERVER}/fibonacci?symbol=${encodeURIComponent(symbol)}`;
+    const res = await fetch(url, { signal: AbortSignal.timeout(5_000) });
+
+    if (!res.ok) {
+      return NextResponse.json(
+        { levels: [], golden_zone: null },
+        { status: 200 }
+      );
+    }
+
+    const data = await res.json();
+    return NextResponse.json(data);
+  } catch {
+    return NextResponse.json(
+      { levels: [], golden_zone: null },
+      { status: 200 }
+    );
+  }
+}

@@ -155,6 +155,36 @@ class Displacement:
     timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
+# ── Fibonacci ────────────────────────────────────────────────────────────
+
+@dataclass
+class FibonacciLevel:
+    """A single Fibonacci retracement level."""
+    ratio: float = 0.0           # 0.382, 0.5, 0.618, 0.705, 0.786
+    price: float = 0.0
+    label: str = ""              # "0.382", "0.618 (GZ top)", etc.
+
+
+@dataclass
+class FibonacciRetracement:
+    """Fibonacci retracement anchored to a displacement leg."""
+    direction: Bias = Bias.NEUTRAL       # BULLISH = low→high leg
+    anchor_low: float = 0.0              # leg low  (swing low)
+    anchor_high: float = 0.0             # leg high (displacement candle)
+    levels: list[FibonacciLevel] = field(default_factory=list)
+    golden_zone_top: float = 0.0         # 0.618 retracement price
+    golden_zone_bottom: float = 0.0      # 0.705 retracement price
+    anchor_displacement: Optional[Displacement] = None
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
+    # Confluence flags
+    gz_fvg_confluence: bool = False       # Golden Zone overlaps FVG CE
+    gz_ob_confluence: bool = False        # Golden Zone overlaps OB mean_threshold
+    gz_ce_confluence: bool = False        # Golden Zone overlaps CE specifically
+    has_liquidity_target: bool = False    # Clear target exists
+    # Retracement depth
+    retracement_depth: str = ""           # "too_shallow", "acceptable", "golden_zone", "too_deep"
+
+
 # ── Fair Value Gap ───────────────────────────────────────────────────────
 
 @dataclass
@@ -267,6 +297,9 @@ class ICTContext:
     recent_displacement: Optional[Displacement] = None
     displacement_active: bool = False
 
+    # Layer H — Fibonacci
+    fibonacci: Optional[FibonacciRetracement] = None
+
     # Layer E — FVG
     active_fvgs: list[FairValueGap] = field(default_factory=list)
     htf_fvgs: list[FairValueGap] = field(default_factory=list)
@@ -322,6 +355,8 @@ class SetupCandidate:
     ob_present: bool = False
     session_valid: bool = False
     rr_acceptable: bool = False
+    fibonacci_aligned: bool = False
+    in_golden_zone: bool = False
 
     # Missing confluences
     missing: list[str] = field(default_factory=list)
@@ -353,13 +388,14 @@ class ConfidenceBreakdown:
     session_time: float = 0.0    # 0-7
     target_clarity: float = 0.0  # 0-5
     rr_quality: float = 0.0      # 0-5
-    total: float = 0.0           # sum, 0-100
+    fibonacci_quality: float = 0.0  # 0-15  (Golden Zone + confluence)
+    total: float = 0.0           # sum, 0-115
 
     def compute_total(self) -> float:
         self.total = round(
             self.htf_bias + self.premium_discount + self.liquidity_sweep
             + self.mss_quality + self.displacement + self.fvg_quality
             + self.ob_quality + self.session_time + self.target_clarity
-            + self.rr_quality, 1
+            + self.rr_quality + self.fibonacci_quality, 1
         )
         return self.total

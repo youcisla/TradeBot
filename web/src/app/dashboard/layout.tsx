@@ -21,6 +21,9 @@ export default async function DashboardLayout({
         <Link href="/dashboard" className="text-matrix-dim hover:text-matrix transition-colors">
           Dashboard
         </Link>
+        <Link href="/dashboard/chart" className="text-matrix-dim hover:text-matrix transition-colors">
+          Chart
+        </Link>
         <Link href="/dashboard/analytics" className="text-matrix-dim hover:text-matrix transition-colors">
           Analytics
         </Link>
