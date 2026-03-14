@@ -24,6 +24,30 @@ interface TradeScore {
   created_at: string;
 }
 
+/** Convert raw DB slugs like "ict_smc:TREND_CONTINUATION_LONG" → "Trend Continuation Long" */
+function formatStrategy(raw: string): string {
+  // If it has a colon (e.g. "ict_smc:REVERSAL_AFTER_SWEEP"), show only the model part
+  const model = raw.includes(":") ? raw.split(":").pop()! : raw;
+  // Convert UPPER_SNAKE_CASE → Title Case
+  return model
+    .toLowerCase()
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+/** Badge color based on confidence level */
+function confColor(conf: number): string {
+  if (conf >= 0.7) return "text-matrix";
+  if (conf >= 0.5) return "text-yellow-400";
+  return "text-red-400";
+}
+
+function barColor(conf: number): string {
+  if (conf >= 0.7) return "bg-matrix";
+  if (conf >= 0.5) return "bg-yellow-500";
+  return "bg-red-500";
+}
+
 export default function LearningPage() {
   const [confidences, setConfidences] = useState<StrategyConfidence[]>([]);
   const [scores, setScores] = useState<TradeScore[]>([]);
@@ -55,25 +79,31 @@ export default function LearningPage() {
           <div className="text-matrix-dim text-sm">No strategies tracked yet.</div>
         ) : (
           <div className="space-y-3">
-            {confidences.map((c) => (
-              <div key={c.strategy} className="flex items-center gap-4">
-                <span className="text-matrix font-bold w-40 text-sm">
-                  {c.strategy}
-                </span>
-                <div className="flex-1 h-3 bg-terminal rounded overflow-hidden border border-terminal-border">
-                  <div
-                    className="h-full bg-matrix transition-all"
-                    style={{ width: `${Math.max(0, Math.min(100, Number(c.confidence) * 100))}%` }}
-                  />
+            {confidences.map((c) => {
+              const pct = Math.max(0, Math.min(100, Number(c.confidence) * 100));
+              return (
+                <div key={c.strategy} className="flex items-center gap-4">
+                  <span
+                    className="text-matrix font-bold w-56 text-sm truncate"
+                    title={c.strategy}
+                  >
+                    {formatStrategy(c.strategy)}
+                  </span>
+                  <div className="flex-1 h-3 bg-terminal rounded overflow-hidden border border-terminal-border">
+                    <div
+                      className={`h-full transition-all ${barColor(Number(c.confidence))}`}
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
+                  <span className={`text-sm w-16 text-right font-bold ${confColor(Number(c.confidence))}`}>
+                    {pct.toFixed(0)}%
+                  </span>
+                  <span className="text-matrix-dim text-xs w-24 text-right">
+                    {c.total_trades} trades
+                  </span>
                 </div>
-                <span className="text-matrix text-sm w-16 text-right font-bold">
-                  {(Number(c.confidence) * 100).toFixed(0)}%
-                </span>
-                <span className="text-matrix-dim text-xs w-24 text-right">
-                  {c.total_trades} trades
-                </span>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
@@ -103,7 +133,9 @@ export default function LearningPage() {
                 className="border-b border-terminal-border/50 hover:bg-terminal-border/30"
               >
                 <td className="p-2 text-matrix-dim">{s.trade_id.slice(0, 8)}</td>
-                <td className="p-2 text-matrix">{s.strategy}</td>
+                <td className="p-2 text-matrix" title={s.strategy}>
+                  {formatStrategy(s.strategy)}
+                </td>
                 <td className="p-2">{s.symbol}</td>
                 <td className="p-2 text-matrix-dim">{s.session || "—"}</td>
                 <td className="p-2 text-matrix-dim">{s.market_condition || "—"}</td>

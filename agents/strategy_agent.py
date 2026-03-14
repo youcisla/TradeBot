@@ -85,12 +85,16 @@ class StrategyAgent:
 
             signal = strategy.detect(context)
             if signal is not None:
-                signal.confidence = confidence
+                # If strategy provides its own dynamic confidence (e.g. from ICT setups with historical backtest), keep it
+                # Otherwise, fallback to the generic strategy confidence
+                final_confidence = signal.confidence if signal.confidence != 0.5 else confidence
+                signal.confidence = final_confidence
+                
                 self._emit("info",
-                           f"Signal detected! {strategy.name} says {signal.direction} "
-                           f"{signal.symbol} @ {signal.entry_price:.5f} (conf={confidence:.2f})",
-                           {"strategy": strategy.name, "direction": signal.direction,
-                            "symbol": signal.symbol, "confidence": confidence})
+                           f"Signal detected! {signal.strategy or strategy.name} says {signal.direction} "
+                           f"{signal.symbol} @ {signal.entry_price:.5f} (conf={final_confidence:.2f})",
+                           {"strategy": signal.strategy or strategy.name, "direction": signal.direction,
+                            "symbol": signal.symbol, "confidence": final_confidence})
                 logger.info(
                     "Signal from %s: %s %s @ %.5f  SL=%.5f  TP1=%.5f",
                     strategy.name, signal.direction, signal.symbol,

@@ -179,6 +179,25 @@ class ICTStrategy(BaseStrategy):
                            f"candles={len(candles)} htf={len(htf_candles)})")
             return None
 
+        # We include historical backtest analysis in the Agent decision
+        model_slug = f"{self.name}:{best.model.name}"
+        historical_conf = 0.5
+        
+        if self._db:
+            historical_conf = self._db.get_confidence(model_slug)
+            # If backtesting proved this model is unprofitable, the agent suppresses the signal
+            if historical_conf < settings.CONFIDENCE_ALLOW:
+                self._emit("info", f"Rejecting {best.model.name} setup due to poor historical confidence ({historical_conf:.2f})")
+                return None
+                
+        # Blend the real-time confluence score (115 scale) with historical confidence
+        realtime_conf = max(0.1, min(1.0, best.confidence / 100.0))
+        final_conf = (historical_conf + realtime_conf) / 2.0
+        
+        if final_conf < settings.CONFIDENCE_ALLOW:
+            self._emit("info", f"Rejecting {best.model.name} (blended conf {final_conf:.2f} < {settings.CONFIDENCE_ALLOW})")
+            return None
+
         # Build Signal for the existing pipeline
         snapshot = EntrySnapshot(
             spread=ctx.spread,
@@ -213,13 +232,13 @@ class ICTStrategy(BaseStrategy):
         reason = (
             f"ICT {best.model.value}: {best.reason} | "
             f"Confluences: {', '.join(confluences)} | "
-            f"Score: {best.confidence:.0f}/100"
+            f"Score: {best.confidence:.0f}/100 | Hist_Conf: {historical_conf:.2f}"
         )
         if best.missing:
             reason += f" | Missing: {', '.join(best.missing)}"
 
         signal = Signal(
-            strategy=self.name,
+            strategy=model_slug,  # Tell TradeManager exactly which model this is!
             symbol=ctx.symbol,
             direction=best.direction,
             entry_price=best.entry_price,
@@ -227,7 +246,7 @@ class ICTStrategy(BaseStrategy):
             take_profit_1=best.take_profit_1,
             take_profit_2=best.take_profit_2,
             take_profit_3=best.take_profit_3,
-            confidence=best.confidence / 100.0,  # normalize to 0-1 for pipeline
+            confidence=final_conf,  # normalized to 0.0 - 1.0
             timestamp=datetime.now(UTC),
             reason=reason,
             entry_snapshot=snapshot,

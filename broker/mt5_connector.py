@@ -244,7 +244,7 @@ class MT5Connector(BrokerConnector):
             "sl": float(sl),
             "deviation": 20,
             "magic": 202603,
-            "comment": comment.encode("ascii", "ignore").decode("ascii")[:31],
+            "comment": comment.encode("ascii", "ignore").decode("ascii")[:29],
             "type_time": mt5.ORDER_TIME_GTC,
             "type_filling": mt5.ORDER_FILLING_IOC,
         }
@@ -366,4 +366,5 @@ class MT5Connector(BrokerConnector):
             stop_loss=pos.sl,
             current_price=pos.price_current,
             pnl=pos.profit,
+            comment=getattr(pos, 'comment', ''),
         )

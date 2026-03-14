@@ -36,6 +36,7 @@ class PositionInfo:
     stop_loss: float
     current_price: float
     pnl: float
+    comment: str = ""
 
 
 class BrokerConnector(ABC):
