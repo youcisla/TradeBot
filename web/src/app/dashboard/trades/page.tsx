@@ -100,15 +100,21 @@ export default function TradesPage() {
                   </span>
                 </td>
                 <td className="p-2 text-matrix-dim">{t.close_reason || "—"}</td>
-                <td className="p-2">{Number(t.stop_loss) ? Number(t.stop_loss).toFixed(5) : "—"}</td>
-                <td className="p-2">{Number(t.take_profit_1) ? Number(t.take_profit_1).toFixed(5) : "—"}</td>
-                <td className="p-2">{Number(t.take_profit_2) ? Number(t.take_profit_2).toFixed(5) : "—"}</td>
-                <td className="p-2">{Number(t.take_profit_3) ? Number(t.take_profit_3).toFixed(5) : "—"}</td>
-                <td className="p-2 text-matrix-dim">
-                  {formatShort(t.open_time)}
-                </td>
-                <td className="p-2 text-matrix-dim">
-                  {t.close_time ? formatShort(t.close_time) : "—"}
+                <td className="p-2">{typeof t.stop_loss === "number" ? t.stop_loss.toFixed(5) : "—"}</td>
+                <td className="p-2">{typeof t.take_profit_1 === "number" ? t.take_profit_1.toFixed(5) : "—"}</td>
+                <td className="p-2">{typeof t.take_profit_2 === "number" ? t.take_profit_2.toFixed(5) : "—"}</td>
+                <td className="p-2">{typeof t.take_profit_3 === "number" ? t.take_profit_3.toFixed(5) : "—"}</td>
+                <td className="p-2 text-matrix-dim">{formatShort(t.open_time)}</td>
+                <td className="p-2 text-matrix-dim">{t.close_time ? formatShort(t.close_time) : "—"}</td>
+                <td className="p-2">
+                  <a
+                    href={`https://www.tradingview.com/chart/?symbol=${encodeURIComponent(t.symbol)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-matrix underline hover:text-matrix-dim"
+                  >
+                    Chart
+                  </a>
                 </td>
               </tr>
             ))}
