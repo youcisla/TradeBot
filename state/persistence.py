@@ -68,6 +68,15 @@ class StatePersistence:
                 msg = f"RECONCILE: broker position ticket {ticket} ({pos.symbol}) not in DB — adopting"
                 logger.critical(msg)
                 mismatches.append(msg)
+                # Try to recover TP identity from comment
+                tp1 = tp2 = tp3 = 0.0
+                if hasattr(pos, 'comment') and pos.comment:
+                    if "_TP1" in pos.comment:
+                        tp1 = getattr(pos, 'take_profit', 0.0) or 0.0
+                    elif "_TP2" in pos.comment:
+                        tp2 = getattr(pos, 'take_profit', 0.0) or 0.0
+                    elif "_TP3" in pos.comment:
+                        tp3 = getattr(pos, 'take_profit', 0.0) or 0.0
                 orphan = Trade(
                     symbol=pos.symbol,
                     strategy="UNKNOWN_RECONCILED",
@@ -75,6 +84,9 @@ class StatePersistence:
                     entry_price=pos.entry_price,
                     lot_size=pos.lot_size,
                     stop_loss=pos.stop_loss,
+                    take_profit_1=tp1,
+                    take_profit_2=tp2,
+                    take_profit_3=tp3,
                     broker_ticket=pos.ticket,
                     status="OPEN",
                 )

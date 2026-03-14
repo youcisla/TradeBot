@@ -34,8 +34,10 @@ class PositionInfo:
     lot_size: float
     entry_price: float
     stop_loss: float
-    current_price: float
-    pnl: float
+    take_profit: float | None = None
+    current_price: float = 0.0
+    pnl: float = 0.0
+    magic: int = 0
     comment: str = ""
 
 

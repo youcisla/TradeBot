@@ -1,3 +1,4 @@
+import pytest
 """Tests for TradeManagerAgent."""
 
 from unittest.mock import patch
@@ -8,6 +9,105 @@ from tests.conftest import make_trade
 
 
 class TestTradeManagerAgent:
+
+        @pytest.mark.parametrize("tp_level,tp_field,tp_value", [
+            ("_TP1", "take_profit_1", 1.1200),
+            ("_TP2", "take_profit_2", 1.1300),
+            ("_TP3", "take_profit_3", 1.1400),
+        ])
+        def test_tp_reconciliation_correct(self, broker, state, db, tp_level, tp_field, tp_value):
+            # Place a position with correct TP
+            comment = f"strategy{tp_level}"
+            pos = PositionInfo(
+                ticket=100_010, symbol="EURUSD", direction="BUY", lot_size=0.10,
+                entry_price=1.1000, stop_loss=1.0900, take_profit=tp_value, current_price=1.1000, pnl=0.0,
+                magic=202603, comment=comment,
+            )
+            broker._positions[100_010] = pos
+            trade = make_trade(broker_ticket=100_010)
+            setattr(trade, tp_field, tp_value)
+            state.save_trade(trade)
+            mgr = self._make_manager(broker, state, db)
+            mgr._open_trades = [trade]
+            # Should not attempt to modify TP
+            mgr.sync_existing_position_targets()
+            # TP should remain unchanged
+            assert broker._positions[100_010].take_profit == tp_value
+
+        @pytest.mark.parametrize("tp_level,tp_field,tp_value", [
+            ("_TP1", "take_profit_1", 1.1200),
+            ("_TP2", "take_profit_2", 1.1300),
+            ("_TP3", "take_profit_3", 1.1400),
+        ])
+        def test_tp_reconciliation_missing(self, broker, state, db, tp_level, tp_field, tp_value):
+            # Place a position with missing TP
+            comment = f"strategy{tp_level}"
+            pos = PositionInfo(
+                ticket=100_011, symbol="EURUSD", direction="BUY", lot_size=0.10,
+                entry_price=1.1000, stop_loss=1.0900, take_profit=None, current_price=1.1000, pnl=0.0,
+                magic=202603, comment=comment,
+            )
+            broker._positions[100_011] = pos
+            trade = make_trade(broker_ticket=100_011)
+            setattr(trade, tp_field, tp_value)
+            state.save_trade(trade)
+            mgr = self._make_manager(broker, state, db)
+            mgr._open_trades = [trade]
+            # Should set TP
+            mgr.sync_existing_position_targets()
+            assert abs(broker._positions[100_011].take_profit - tp_value) < 1e-5
+
+        @pytest.mark.parametrize("tp_level,tp_field,tp_value", [
+            ("_TP1", "take_profit_1", 1.1200),
+            ("_TP2", "take_profit_2", 1.1300),
+            ("_TP3", "take_profit_3", 1.1400),
+        ])
+        def test_tp_reconciliation_incorrect(self, broker, state, db, tp_level, tp_field, tp_value):
+            # Place a position with wrong TP
+            comment = f"strategy{tp_level}"
+            pos = PositionInfo(
+                ticket=100_012, symbol="EURUSD", direction="BUY", lot_size=0.10,
+                entry_price=1.1000, stop_loss=1.0900, take_profit=tp_value + 0.01, current_price=1.1000, pnl=0.0,
+                magic=202603, comment=comment,
+            )
+            broker._positions[100_012] = pos
+            trade = make_trade(broker_ticket=100_012)
+            setattr(trade, tp_field, tp_value)
+            state.save_trade(trade)
+            mgr = self._make_manager(broker, state, db)
+            mgr._open_trades = [trade]
+            # Should fix TP
+            mgr.sync_existing_position_targets()
+            assert abs(broker._positions[100_012].take_profit - tp_value) < 1e-5
+
+        def test_tp_reconciliation_skips_manual(self, broker, state, db):
+            # Position with wrong magic/comment should be skipped
+            pos = PositionInfo(
+                ticket=100_013, symbol="EURUSD", direction="BUY", lot_size=0.10,
+                entry_price=1.1000, stop_loss=1.0900, take_profit=1.1200, current_price=1.1000, pnl=0.0,
+                magic=123456, comment="manual_trade",
+            )
+            broker._positions[100_013] = pos
+            mgr = self._make_manager(broker, state, db)
+            # Should not touch manual trade
+            mgr.sync_existing_position_targets()
+            assert broker._positions[100_013].take_profit == 1.1200
+
+        def test_tp_reconciliation_orphan_adoption(self, broker, state, db):
+            # Orphan position with TP1 in comment
+            pos = PositionInfo(
+                ticket=100_014, symbol="EURUSD", direction="BUY", lot_size=0.10,
+                entry_price=1.1000, stop_loss=1.0900, take_profit=1.1200, current_price=1.1000, pnl=0.0,
+                magic=202603, comment="strategy_TP1",
+            )
+            broker._positions[100_014] = pos
+            # No DB trade
+            mgr = self._make_manager(broker, state, db)
+            mgr._open_trades = []
+            # Should not error, should skip if no DB trade
+            mgr.sync_existing_position_targets()
+            # Should not change TP
+            assert broker._positions[100_014].take_profit == 1.1200
     def _make_manager(self, broker, state, db):
         return TradeManagerAgent(broker, state, db)
 

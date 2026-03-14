@@ -364,7 +364,9 @@ class MT5Connector(BrokerConnector):
             lot_size=pos.volume,
             entry_price=pos.price_open,
             stop_loss=pos.sl,
+            take_profit=getattr(pos, 'tp', None),
             current_price=pos.price_current,
             pnl=pos.profit,
+            magic=getattr(pos, 'magic', 0),
             comment=getattr(pos, 'comment', ''),
         )

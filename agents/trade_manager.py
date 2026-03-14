@@ -55,9 +55,71 @@ class TradeManagerAgent:
             self._db.log_agent_event("trade_manager", level, msg, data)
 
     def reconcile(self, send_alert: Callable[[str], None] | None = None) -> None:
-        """Run full reconciliation: DB vs broker."""
+        """Run full reconciliation: DB vs broker, including TP repair."""
         alert_fn = send_alert or telegram_bot.send_message
         self._open_trades = self._state.reconcile(alert_fn)
+        self.sync_existing_position_targets(alert_fn)
+
+    def sync_existing_position_targets(self, send_alert: Callable[[str], None] = lambda msg: None) -> None:
+        """Scan all open broker positions, ensure bot-owned TPs are correct."""
+        broker_positions = self._broker.get_open_positions()
+        db_trades = {t.broker_ticket: t for t in self._open_trades if t.broker_ticket}
+        mismatches = []
+        for pos in broker_positions:
+            # Ownership check: magic number and comment pattern
+            if getattr(pos, 'magic', 0) != 202603:
+                continue
+            if not pos.comment or not any(tp in pos.comment for tp in ("_TP1", "_TP2", "_TP3")):
+                continue
+            # Determine intended TP
+            intended_tp = None
+            tp_level = None
+            trade = db_trades.get(pos.ticket)
+            if trade:
+                # Use DB if available
+                if "_TP1" in pos.comment:
+                    intended_tp = trade.take_profit_1
+                    tp_level = "TP1"
+                elif "_TP2" in pos.comment:
+                    intended_tp = trade.take_profit_2
+                    tp_level = "TP2"
+                elif "_TP3" in pos.comment:
+                    intended_tp = trade.take_profit_3
+                    tp_level = "TP3"
+            else:
+                # Try to parse TP from comment pattern
+                if "_TP1" in pos.comment:
+                    tp_level = "TP1"
+                elif "_TP2" in pos.comment:
+                    tp_level = "TP2"
+                elif "_TP3" in pos.comment:
+                    tp_level = "TP3"
+                # Fallback: try to parse from comment (not robust)
+                # Could extend to parse symbol/strategy if needed
+            # If no intended TP, skip
+            if intended_tp is None and tp_level:
+                # Try to recover from position itself if possible
+                # (not robust, but better than nothing)
+                intended_tp = getattr(pos, 'take_profit', None)
+            if intended_tp is None:
+                continue
+            # Compare broker TP to intended TP
+            broker_tp = getattr(pos, 'take_profit', None)
+            if broker_tp is None or abs(broker_tp - intended_tp) > 1e-5:
+                # Attempt to fix
+                ok = self._broker.modify_order(pos.ticket, tp=intended_tp)
+                msg = (f"TP RECONCILE: ticket {pos.ticket} {pos.symbol} {tp_level} "
+                       f"broker TP={broker_tp} intended TP={intended_tp} — "
+                       f"{'FIXED' if ok else 'FAILED'}")
+                if not ok:
+                    msg += " (broker rejected modification)"
+                mismatches.append(msg)
+                logger.warning(msg)
+            else:
+                logger.info(f"TP OK: ticket {pos.ticket} {pos.symbol} {tp_level} TP={broker_tp}")
+        if mismatches:
+            alert_text = "⚠️ TP RECONCILIATION:\n" + "\n".join(mismatches)
+            send_alert(alert_text)
 
     def get_open_trades(self) -> list[Trade]:
         return [t for t in self._open_trades if t.is_open()]

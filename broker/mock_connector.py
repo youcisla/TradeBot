@@ -90,6 +90,7 @@ class MockConnector(BrokerConnector):
 
     # ── order management ─────────────────────────────────────────────────
 
+
     def place_order(self, symbol: str, direction: str, lot_size: float,
                     sl: float, tp: float | None = None,
                     comment: str = "") -> OrderResult:
@@ -102,13 +103,14 @@ class MockConnector(BrokerConnector):
         pos = PositionInfo(
             ticket=ticket, symbol=symbol, direction=direction,
             lot_size=lot_size, entry_price=fill_price,
-            stop_loss=sl, current_price=fill_price, pnl=0.0,
+            stop_loss=sl, take_profit=tp, current_price=fill_price, pnl=0.0,
+            magic=202603, comment=comment,
         )
         self._positions[ticket] = pos
 
         logger.info(
-            "[MockBroker] ORDER %s %s %.2f lots %s @ %.5f  SL=%.5f  %s",
-            direction, symbol, lot_size, order_id, fill_price, sl, comment,
+            "[MockBroker] ORDER %s %s %.2f lots %s @ %.5f  SL=%.5f TP=%s %s",
+            direction, symbol, lot_size, order_id, fill_price, sl, tp, comment,
         )
         return OrderResult(
             success=True, order_id=order_id, broker_ticket=ticket,
@@ -123,6 +125,8 @@ class MockConnector(BrokerConnector):
             return False
         if sl is not None:
             self._positions[ticket].stop_loss = sl
+        if tp is not None:
+            self._positions[ticket].take_profit = tp
         logger.info("[MockBroker] MODIFY ticket=%d  new_sl=%s  new_tp=%s", ticket, sl, tp)
         return True
 
