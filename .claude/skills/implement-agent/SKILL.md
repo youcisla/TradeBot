@@ -70,19 +70,30 @@ class AnalysisAgent:
 
 **Responsibilities:**
 - Receive market context from Analysis Agent
-- Run active strategies against the context
-- Generate trade signals with entry price, direction, SL, TP1, TP2, TP3
-- Only return signals that pass the strategy's own quality filter
-- Check strategy confidence score from Learning Agent before signaling
+- Run ALL active strategies against the context
+- Collect ALL valid signals (not just the first match)
+- Check strategy confidence score from Learning Agent before running each strategy
+- Return all signals for ranking by the main loop
 
 **Interface:**
 ```python
 class StrategyAgent:
     def detect(self, context: MarketContext) -> Optional[Signal]:
-        """Returns a trade signal or None."""
+        """Returns the highest-confidence signal or None. Backward-compatible wrapper."""
+    
+    def detect_all(self, context: MarketContext) -> list[Signal]:
+        """Returns ALL valid signals from ALL strategies for this context.
+        Used by the scan-rank-execute pipeline in main.py."""
+    
+    def _collect_signals(self, context: MarketContext) -> list[Signal]:
+        """Internal: iterates all strategies, collects every valid signal."""
 ```
 
+The main loop calls `detect_all()` for each symbol, collects all signals across all symbols, ranks by confidence, then executes the best ones. This ensures no high-confidence setup is missed because another symbol was processed first.
+
 Each strategy must define: entry conditions, SL calculation, TP1/TP2/TP3 levels.
+
+Registered strategies: ICT/SMC (primary), SMA Crossover (fallback).
 
 ---
 
@@ -322,8 +333,9 @@ class LoggingAgent:
 ## Implementation Rules
 
 1. Each agent is a single Python class in its own file under `agents/`
-2. Agents communicate through data models defined in `models/`
-3. No agent should directly call another agent — the main loop orchestrates
+2. Agents communicate through data models defined in `models/` (including `models/ict_models.py` for ICT structures)
+3. No agent should directly call another agent — the main loop orchestrates via the scan-rank-execute pipeline
 4. All config values come from `config/settings.py`
 5. Every agent must handle its own errors gracefully and log them
 6. Use type hints throughout
+7. Database is PostgreSQL via Supabase (7 tables: trades, trade_scores, strategy_confidence, agent_events, bot_commands, bot_status, ict_setups)

@@ -17,7 +17,7 @@ Use this for initial development and demo testing:
 | Runtime | Local PC | Bot runs on your machine |
 | Market Data | Alpha Vantage or Twelve Data | Free tier, rate limited |
 | Paper Trading | Alpaca API (optional) | For testing without broker |
-| Database | SQLite | Local file, no server needed |
+| Database | PostgreSQL via Supabase | Shared by bot + web dashboard |
 | Alerts | Telegram Bot | Free, instant notifications |
 | Code Hosting | GitHub | Private repo |
 | Broker | PU Prime demo account | Free demo with virtual funds |

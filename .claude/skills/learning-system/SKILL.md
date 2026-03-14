@@ -135,7 +135,7 @@ The learning agent tracks performance across multiple dimensions to discover fav
 
 ```sql
 CREATE TABLE trade_scores (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id SERIAL PRIMARY KEY,
     trade_id TEXT NOT NULL,
     strategy TEXT NOT NULL,
     symbol TEXT NOT NULL,
@@ -161,7 +161,28 @@ CREATE TABLE strategy_confidence (
     total_score INTEGER DEFAULT 0,
     last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE ict_setups (
+    id SERIAL PRIMARY KEY,
+    symbol TEXT NOT NULL,
+    timeframe TEXT,
+    setup_model TEXT NOT NULL,
+    direction TEXT NOT NULL,
+    confidence REAL NOT NULL,
+    confluences JSONB,
+    scoring_breakdown JSONB,
+    entry_price REAL,
+    stop_loss REAL,
+    tp1 REAL,
+    tp2 REAL,
+    tp3 REAL,
+    session_name TEXT,
+    htf_bias TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
 ```
+
+All tables are in PostgreSQL via Supabase (shared by bot + web dashboard).
 
 ## Performance Reports
 

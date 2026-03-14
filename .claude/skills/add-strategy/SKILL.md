@@ -169,27 +169,43 @@ class StrategyAgent:
         self.strategies = strategies
         self.learning = learning_agent
     
+    def detect_all(self, context: MarketContext) -> list[Signal]:
+        """Returns ALL valid signals from ALL strategies for this context.
+        The main loop ranks them by confidence and executes the best."""
+        return self._collect_signals(context)
+    
     def detect(self, context: MarketContext) -> Optional[Signal]:
+        """Backward-compatible wrapper: returns highest-confidence signal."""
+        signals = self._collect_signals(context)
+        return max(signals, key=lambda s: s.confidence) if signals else None
+    
+    def _collect_signals(self, context: MarketContext) -> list[Signal]:
+        signals = []
         for strategy in self.strategies:
             confidence = self.learning.get_confidence(strategy.name)
             if confidence < CONFIDENCE_ALLOW:
                 continue  # Strategy disabled by learning system
-            
             signal = strategy.detect(context)
             if signal:
                 signal.confidence = confidence
-                return signal
-        return None
+                signals.append(signal)
+        return signals
 ```
+
+**Current registered strategies:**
+- **ICT/SMC** (`strategies/ict_strategy.py`) — Primary strategy, 10-module engine, 0–100 confidence scoring
+- **SMA Crossover** (`strategies/sma_crossover.py`) — Fallback strategy
+
+The main loop uses `detect_all()` to collect ALL signals from ALL symbols, ranks by confidence, then executes the best ones. A new strategy is automatically included in the scan-rank-execute pipeline.
 
 ## V1 Strategy Requirements
 
 For the minimum viable version:
-- **1 symbol only** (e.g., EURUSD or XAUUSD)
-- **1 timeframe only** (e.g., 15min or 1H)
-- **Simple, well-known setup** (e.g., moving average crossover, breakout, or support/resistance bounce)
+- **Multiple symbols** supported (30 symbols across 5 asset classes)
+- **Multiple timeframes** possible (H1 default, H4 for HTF in ICT)
 - Must define clear entry, SL, and TP1/TP2/TP3 rules
 - Must include a `reason` string explaining the signal
+- Signals are collected via `detect_all()` and ranked across all symbols
 
 ## Strategy Checklist
 
