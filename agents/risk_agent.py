@@ -161,16 +161,16 @@ class RiskAgent:
                             "spread_pips": round(spread_pips, 1), "max": max_spread})
                 return False
 
-        # 6. Max open trades
-        if len(open_trades) >= settings.MAX_OPEN_TRADES:
-            logger.warning(
-                "RISK REJECT [MAX_TRADES]: %d open >= %d max",
-                len(open_trades), settings.MAX_OPEN_TRADES,
-            )
-            self._emit("warn",
-                       f"Already at max trades ({len(open_trades)}/{settings.MAX_OPEN_TRADES}) — standing down.",
-                       {"open": len(open_trades), "max": settings.MAX_OPEN_TRADES})
-            return False
+        # 6. Max open trades (disabled)
+        # if len(open_trades) >= settings.MAX_OPEN_TRADES:
+        #     logger.warning(
+        #         "RISK REJECT [MAX_TRADES]: %d open >= %d max",
+        #         len(open_trades), settings.MAX_OPEN_TRADES,
+        #     )
+        #     self._emit("warn",
+        #                f"Already at max trades ({len(open_trades)}/{settings.MAX_OPEN_TRADES}) — standing down.",
+        #                {"open": len(open_trades), "max": settings.MAX_OPEN_TRADES})
+        #     return False
 
         # 7. Position size sanity
         lot_size = self.calculate_position_size(signal)
