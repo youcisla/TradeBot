@@ -21,25 +21,23 @@ interface NormEvent {
   ts: string | null;
 }
 
-// Pipeline agents in execution order
 const PIPELINE: { key: string; label: string; color: string }[] = [
   { key: "market",        label: "Market",   color: "#06b6d4" },
   { key: "analysis",      label: "Analysis", color: "#eab308" },
   { key: "strategy",      label: "Strategy", color: "#22c55e" },
   { key: "risk",          label: "Risk",     color: "#f97316" },
-  { key: "execution",     label: "Exec",     color: "#e5e5e5" },
+  { key: "execution",     label: "Exec",     color: "#e2e8f0" },
   { key: "trade_manager", label: "TradeMgr", color: "#d946ef" },
 ];
 
-// Support agents (cross-cutting)
 const SUPPORT: { key: string; label: string; color: string }[] = [
   { key: "learning", label: "Learning", color: "#3b82f6" },
-  { key: "logging",  label: "Logging",  color: "#6b7280" },
+  { key: "logging",  label: "Logging",  color: "#94a3b8" },
 ];
 
 const ALL_AGENTS = [...PIPELINE, ...SUPPORT];
 
-// 6×8 pixel art robot sprite (each cell = 4px → 24×32 SVG)
+// 6×8 pixel-art robot (each cell = 4 px → 24×32 native SVG units)
 const SPRITE: number[][] = [
   [0, 0, 1, 1, 0, 0],
   [0, 1, 1, 1, 1, 0],
@@ -53,24 +51,17 @@ const SPRITE: number[][] = [
 
 type AgentState = "idle" | "active" | "alert";
 
-function PixelBot({
-  color,
-  state,
-  scale = 1,
-}: {
-  color: string;
-  state: AgentState;
-  scale?: number;
-}) {
-  const fill = state === "alert" ? "#ff4444" : color;
-  const glow = state !== "idle" ? `drop-shadow(0 0 ${state === "alert" ? 6 : 3}px ${fill})` : undefined;
-  const w = Math.round(24 * scale);
-  const h = Math.round(32 * scale);
+function PixelBot({ color, state, size = 52 }: { color: string; state: AgentState; size?: number }) {
+  const fill  = state === "alert" ? "#f87171" : color;
+  const glow  = state === "idle"  ? undefined
+    : `drop-shadow(0 0 ${state === "alert" ? 7 : 4}px ${fill})`;
+  const alpha = state === "idle" ? 0.38 : 1;
+
   return (
     <svg
       viewBox="0 0 24 32"
-      width={w}
-      height={h}
+      width={size}
+      height={Math.round(size * 32 / 24)}
       style={{ imageRendering: "pixelated", filter: glow, display: "block" }}
     >
       {SPRITE.flatMap((row, ry) =>
@@ -78,12 +69,8 @@ function PixelBot({
           cell ? (
             <rect
               key={`${ry}-${cx}`}
-              x={cx * 4}
-              y={ry * 4}
-              width={4}
-              height={4}
-              fill={fill}
-              opacity={state === "idle" ? 0.4 : 1}
+              x={cx * 4} y={ry * 4} width={4} height={4}
+              fill={fill} opacity={alpha}
             />
           ) : null
         )
@@ -92,45 +79,57 @@ function PixelBot({
   );
 }
 
-// Animated flowing arrow between two pipeline agents
 function PipeArrow({ color, active }: { color: string; active: boolean }) {
   return (
     <svg
-      width="32"
-      height="14"
-      viewBox="0 0 32 14"
-      style={{ display: "block", flexShrink: 0, marginBottom: 18 }}
+      width="36" height="16" viewBox="0 0 36 16"
+      style={{ display: "block", flexShrink: 0, marginBottom: 22 }}
     >
       <line
-        x1="0" y1="7" x2="23" y2="7"
-        stroke={active ? color : "#1e2e1e"}
-        strokeWidth="2"
-        strokeDasharray={active ? "4 2" : "none"}
+        x1="0" y1="8" x2="26" y2="8"
+        stroke={active ? color : "#1a2a1a"}
+        strokeWidth={active ? 2.5 : 1.5}
+        strokeDasharray={active ? "5 2.5" : undefined}
       />
-      <polygon
-        points="23,3 31,7 23,11"
-        fill={active ? color : "#1e2e1e"}
-      />
+      <polygon points="26,3 35,8 26,13" fill={active ? color : "#1a2a1a"} />
       {active && (
-        <circle r="2.5" fill={color} opacity="0.95">
-          <animateMotion dur="0.55s" repeatCount="1" path="M0,7 L23,7" />
+        <circle r="3" fill={color} opacity="0.9">
+          <animateMotion dur="0.5s" repeatCount="1" path="M0,8 L26,8" />
         </circle>
       )}
     </svg>
   );
 }
 
-export default function AgentFeed({ symbol }: { symbol?: string | null }) {
-  const [events, setEvents] = useState<NormEvent[]>([]);
-  const [agentStates, setAgentStates] = useState<Record<string, AgentState>>({});
-  const [speechBubbles, setSpeechBubbles] = useState<Record<string, string>>({});
-  const [activeArrows, setActiveArrows] = useState<Set<string>>(new Set());
-  const [copied, setCopied] = useState(false);
+// Tiny pulsing dot showing per-agent liveness
+function LiveDot({ color, state }: { color: string; state: AgentState }) {
+  return (
+    <span
+      style={{
+        display: "inline-block",
+        width: 6,
+        height: 6,
+        borderRadius: "50%",
+        background: state === "idle" ? "#1e2e1e" : color,
+        boxShadow: state !== "idle" ? `0 0 6px ${color}` : undefined,
+        transition: "background 0.3s, box-shadow 0.3s",
+        marginBottom: 3,
+      }}
+    />
+  );
+}
 
-  const lastRef = useRef<Record<string, NormEvent>>({});
-  const animTOs = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+export default function AgentFeed({ symbol }: { symbol?: string | null }) {
+  const [events,       setEvents]       = useState<NormEvent[]>([]);
+  const [agentStates,  setAgentStates]  = useState<Record<string, AgentState>>({});
+  const [bubbles,      setBubbles]      = useState<Record<string, string>>({});
+  const [activeArrows, setActiveArrows] = useState<Set<string>>(new Set());
+  const [copied,       setCopied]       = useState(false);
+
+  const lastRef   = useRef<Record<string, NormEvent>>({});
+  const animTOs   = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const speechTOs = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
-  const arrowTOs = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const arrowTOs  = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -138,16 +137,16 @@ export default function AgentFeed({ symbol }: { symbol?: string | null }) {
 
     async function poll() {
       try {
-        const res = await fetch("/api/events?limit=40");
+        const res  = await fetch("/api/events?limit=40");
         const data = await res.json();
         const raw: AgentEvent[] = Array.isArray(data) ? data : (data.events ?? []);
 
         const norm: NormEvent[] = raw.map((ev) => ({
-          id: ev.id,
+          id:    ev.id,
           agent: (ev.agent ?? "").toLowerCase(),
           level: ev.level ?? "info",
-          msg: ((ev.msg ?? ev.message ?? "") as string),
-          ts: ((ev.ts ?? ev.created_at ?? null) as string | null),
+          msg:   String(ev.msg ?? ev.message ?? ""),
+          ts:    String(ev.ts ?? ev.created_at ?? "") || null,
         }));
 
         if (!mounted) return;
@@ -155,68 +154,57 @@ export default function AgentFeed({ symbol }: { symbol?: string | null }) {
 
         // Latest event per agent
         const latest: Record<string, NormEvent> = {};
-        norm.forEach((ev) => {
-          if (!latest[ev.agent]) latest[ev.agent] = ev;
-        });
+        norm.forEach((ev) => { if (!latest[ev.agent]) latest[ev.agent] = ev; });
 
         Object.entries(latest).forEach(([key, ev]) => {
           const prev = lastRef.current[key];
-          if (prev && prev.ts === ev.ts) return;
+          if (prev?.ts === ev.ts) return;
           lastRef.current[key] = ev;
 
-          const state: AgentState =
-            ev.level === "error" || ev.level === "warn" ? "alert" : "active";
-
+          const state: AgentState = ev.level === "error" || ev.level === "warn" ? "alert" : "active";
           setAgentStates((s) => ({ ...s, [key]: state }));
 
-          const bubble = ev.msg.length > 52 ? ev.msg.slice(0, 49) + "…" : ev.msg;
-          setSpeechBubbles((s) => ({ ...s, [key]: bubble }));
+          const text = ev.msg.length > 55 ? ev.msg.slice(0, 52) + "…" : ev.msg;
+          setBubbles((s) => ({ ...s, [key]: text }));
           clearTimeout(speechTOs.current[key]);
           speechTOs.current[key] = setTimeout(() => {
-            setSpeechBubbles((s) => ({ ...s, [key]: "" }));
-          }, 3500);
+            setBubbles((s) => ({ ...s, [key]: "" }));
+          }, 4000);
 
           clearTimeout(animTOs.current[key]);
           animTOs.current[key] = setTimeout(() => {
             setAgentStates((s) => ({ ...s, [key]: "idle" }));
-          }, state === "active" ? 900 : 1500);
+          }, state === "active" ? 900 : 1600);
 
-          // Animate outgoing arrow
-          const pipeIdx = PIPELINE.findIndex((a) => a.key === key);
-          if (pipeIdx >= 0 && pipeIdx < PIPELINE.length - 1) {
-            const ak = `${key}→${PIPELINE[pipeIdx + 1].key}`;
+          // Flow arrow to next pipeline agent
+          const idx = PIPELINE.findIndex((a) => a.key === key);
+          if (idx >= 0 && idx < PIPELINE.length - 1) {
+            const ak = `${key}→${PIPELINE[idx + 1].key}`;
             setActiveArrows((s) => new Set([...s, ak]));
             clearTimeout(arrowTOs.current[ak]);
             arrowTOs.current[ak] = setTimeout(() => {
               setActiveArrows((s) => { const n = new Set(s); n.delete(ak); return n; });
-            }, 700);
+            }, 650);
           }
         });
-      } catch {
-        // network error — silently ignore
-      }
+      } catch { /* silent */ }
     }
 
     poll();
-    const id = setInterval(poll, 2500);
-    return () => {
-      mounted = false;
-      clearInterval(id);
-    };
+    const id = setInterval(poll, 800);
+    return () => { mounted = false; clearInterval(id); };
   }, []);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [events]);
 
-  const filtered = symbol
-    ? events.filter((e) => e.msg.includes(symbol))
-    : events;
+  const filtered = symbol ? events.filter((e) => e.msg.includes(symbol)) : events;
 
   const copyLog = () => {
-    const text = filtered
-      .map((e) => `${e.ts ? formatTime(e.ts) : "--:--"} [${e.agent}] ${e.msg}`)
-      .join("\n");
+    const text = filtered.map((e) =>
+      `${e.ts ? formatTime(e.ts) : "--:--"} [${e.agent}] ${e.msg}`
+    ).join("\n");
     navigator.clipboard.writeText(text).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
@@ -224,23 +212,25 @@ export default function AgentFeed({ symbol }: { symbol?: string | null }) {
   };
 
   return (
-    <div className="border border-terminal-border rounded bg-terminal-surface flex flex-col h-[540px]">
+    <div className="border border-terminal-border rounded bg-terminal-surface flex flex-col h-[580px]">
+
       {/* ── Header ── */}
       <div className="px-3 py-2 border-b border-terminal-border flex items-center justify-between shrink-0">
-        <span className="text-matrix-dim text-xs uppercase tracking-widest">
-          Agent Orchestration
-        </span>
+        <div className="flex items-center gap-2">
+          <span className="text-matrix-dim text-xs uppercase tracking-widest">Agent Orchestration</span>
+          <span className="text-[10px] text-matrix-dim opacity-50">PIPELINE ×{PIPELINE.length} · SUPPORT ×{SUPPORT.length}</span>
+        </div>
         <button
           onClick={copyLog}
           title="Copy log"
           className="text-matrix-dim hover:text-matrix transition-colors p-1"
         >
           {copied ? (
-            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <polyline points="20 6 9 17 4 12" />
             </svg>
           ) : (
-            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
               <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
             </svg>
@@ -250,75 +240,83 @@ export default function AgentFeed({ symbol }: { symbol?: string | null }) {
 
       {/* ── Theater ── */}
       <div
-        className="shrink-0 border-b border-terminal-border"
-        style={{ background: "#080d08", paddingTop: 48, paddingBottom: 10, paddingLeft: 8, paddingRight: 8 }}
+        className="shrink-0 border-b border-terminal-border overflow-hidden"
+        style={{ background: "linear-gradient(180deg,#060c06 0%,#0a120a 100%)", paddingTop: 54, paddingBottom: 14 }}
       >
+        {/* CRT scanline overlay */}
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            pointerEvents: "none",
+            backgroundImage: "repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(0,255,65,0.025) 3px,rgba(0,255,65,0.025) 4px)",
+            zIndex: 1,
+          }}
+        />
+
         {/* Pipeline row */}
-        <div className="flex items-end justify-center">
+        <div className="relative flex items-end justify-center" style={{ zIndex: 2 }}>
           {PIPELINE.map((agent, i) => {
-            const state = agentStates[agent.key] ?? "idle";
-            const bubble = speechBubbles[agent.key];
-            const arrowKey = i < PIPELINE.length - 1
-              ? `${agent.key}→${PIPELINE[i + 1].key}`
-              : null;
+            const state    = agentStates[agent.key] ?? "idle";
+            const bubble   = bubbles[agent.key];
+            const arrowKey = i < PIPELINE.length - 1 ? `${agent.key}→${PIPELINE[i + 1].key}` : null;
 
             return (
               <div key={agent.key} className="flex items-end">
                 {/* Agent column */}
-                <div className="relative flex flex-col items-center" style={{ width: 58 }}>
+                <div className="relative flex flex-col items-center" style={{ width: 70 }}>
+
                   {/* Speech bubble */}
-                  <div
-                    style={{
-                      position: "absolute",
-                      top: -42,
-                      left: "50%",
-                      transform: "translateX(-50%)",
-                      background: "#0e150e",
-                      border: `1px solid ${agent.color}`,
-                      borderRadius: 3,
-                      padding: "2px 5px",
-                      fontSize: 8,
-                      fontFamily: "'JetBrains Mono', monospace",
-                      color: agent.color,
-                      whiteSpace: "nowrap",
-                      opacity: bubble ? 1 : 0,
-                      transition: "opacity 0.3s",
-                      pointerEvents: "none",
-                      zIndex: 20,
-                      maxWidth: 130,
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                    }}
-                  >
+                  <div style={{
+                    position: "absolute",
+                    top: -50,
+                    left: "50%",
+                    transform: "translateX(-50%)",
+                    background: "#0a120a",
+                    border: `1px solid ${agent.color}`,
+                    borderRadius: 4,
+                    padding: "3px 7px",
+                    fontSize: 10,
+                    fontFamily: "'JetBrains Mono', monospace",
+                    color: agent.color,
+                    whiteSpace: "nowrap",
+                    opacity: bubble ? 1 : 0,
+                    transition: "opacity 0.25s",
+                    pointerEvents: "none",
+                    zIndex: 20,
+                    maxWidth: 160,
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    letterSpacing: 0.3,
+                  }}>
                     {bubble || " "}
                   </div>
 
-                  {/* Pixel bot with animation class */}
+                  {/* Live dot */}
+                  <LiveDot color={agent.color} state={state} />
+
+                  {/* Pixel bot */}
                   <div className={`pxbot pxbot-${state}`}>
-                    <PixelBot color={agent.color} state={state} scale={1.25} />
+                    <PixelBot color={agent.color} state={state} size={44} />
                   </div>
 
                   {/* Label */}
-                  <span
-                    style={{
-                      marginTop: 4,
-                      fontSize: 9,
-                      fontFamily: "'JetBrains Mono', monospace",
-                      color: agent.color,
-                      opacity: state === "idle" ? 0.45 : 1,
-                      transition: "opacity 0.3s",
-                    }}
-                  >
+                  <span style={{
+                    marginTop: 5,
+                    fontSize: 10,
+                    fontFamily: "'JetBrains Mono', monospace",
+                    color: agent.color,
+                    opacity: state === "idle" ? 0.4 : 1,
+                    transition: "opacity 0.3s",
+                    letterSpacing: 0.5,
+                  }}>
                     {agent.label}
                   </span>
                 </div>
 
-                {/* Arrow to next */}
+                {/* Arrow */}
                 {arrowKey && (
-                  <PipeArrow
-                    color={agent.color}
-                    active={activeArrows.has(arrowKey)}
-                  />
+                  <PipeArrow color={agent.color} active={activeArrows.has(arrowKey)} />
                 )}
               </div>
             );
@@ -326,28 +324,39 @@ export default function AgentFeed({ symbol }: { symbol?: string | null }) {
         </div>
 
         {/* Support agents row */}
-        <div className="flex justify-center gap-10 mt-3">
+        <div className="relative flex justify-center gap-12 mt-4" style={{ zIndex: 2 }}>
+          <span style={{ fontSize: 9, color: "#1e3a1e", fontFamily: "'JetBrains Mono', monospace", alignSelf: "center", marginRight: 4, letterSpacing: 1 }}>
+            SUPPORT
+          </span>
           {SUPPORT.map((agent) => {
-            const state = agentStates[agent.key] ?? "idle";
-            const bubble = speechBubbles[agent.key];
+            const state  = agentStates[agent.key] ?? "idle";
+            const bubble = bubbles[agent.key];
             return (
               <div
                 key={agent.key}
                 className="flex items-center gap-2"
-                style={{ opacity: state === "idle" ? 0.4 : 1, transition: "opacity 0.3s" }}
+                style={{ opacity: state === "idle" ? 0.38 : 1, transition: "opacity 0.3s" }}
               >
                 <div className={`pxbot pxbot-${state}`}>
-                  <PixelBot color={agent.color} state={state} scale={0.9} />
+                  <PixelBot color={agent.color} state={state} size={30} />
                 </div>
                 <div>
-                  <div style={{ fontSize: 9, color: agent.color, fontFamily: "'JetBrains Mono', monospace" }}>
+                  <div style={{ fontSize: 10, color: agent.color, fontFamily: "'JetBrains Mono', monospace", letterSpacing: 0.5 }}>
                     {agent.label}
                   </div>
-                  {bubble && (
-                    <div style={{ fontSize: 8, color: agent.color, fontFamily: "'JetBrains Mono', monospace", opacity: 0.75, maxWidth: 140, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      » {bubble}
-                    </div>
-                  )}
+                  <div style={{
+                    fontSize: 9,
+                    color: agent.color,
+                    fontFamily: "'JetBrains Mono', monospace",
+                    opacity: bubble ? 0.8 : 0,
+                    transition: "opacity 0.25s",
+                    maxWidth: 150,
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}>
+                    {bubble ? `» ${bubble}` : " "}
+                  </div>
                 </div>
               </div>
             );
@@ -356,28 +365,30 @@ export default function AgentFeed({ symbol }: { symbol?: string | null }) {
       </div>
 
       {/* ── Event log ── */}
-      <div className="flex-1 overflow-y-auto p-2 space-y-0.5 font-mono">
+      <div className="flex-1 overflow-y-auto px-2 pt-1.5 pb-1 space-y-px font-mono">
         {filtered.length === 0 && (
-          <div className="text-matrix-dim text-xs py-2 text-center">no events</div>
+          <div className="text-matrix-dim text-xs py-3 text-center opacity-40">awaiting events…</div>
         )}
         {filtered.map((e, i) => {
-          const agentColor = ALL_AGENTS.find((a) => a.key === e.agent)?.color ?? "#6b7280";
-          const msgColor =
+          const agentColor = ALL_AGENTS.find((a) => a.key === e.agent)?.color ?? "#64748b";
+          const msgColor   =
             e.level === "error" ? "#f87171"
-            : e.level === "warn" ? "#facc15"
-            : "#9ca3af";
+            : e.level === "warn"  ? "#fbbf24"
+            : "#cbd5e1";
+          const dot =
+            e.level === "error" ? "#f87171"
+            : e.level === "warn"  ? "#fbbf24"
+            : "#334155";
           return (
-            <div key={e.id ?? i} className="flex gap-2 leading-tight">
-              <span className="text-matrix-dim shrink-0" style={{ fontSize: 10 }}>
+            <div key={e.id ?? i} className="flex items-start gap-2 leading-snug hover:bg-white/[0.02] rounded px-1 py-px transition-colors">
+              <span style={{ fontSize: 10, color: "#334155", flexShrink: 0, marginTop: 1 }}>
                 {e.ts ? formatTime(e.ts) : "--:--:--"}
               </span>
-              <span
-                className="shrink-0 font-bold uppercase"
-                style={{ fontSize: 10, color: agentColor, width: 90 }}
-              >
+              <span style={{ fontSize: 9, color: dot, flexShrink: 0, marginTop: 3 }}>●</span>
+              <span style={{ fontSize: 10, color: agentColor, flexShrink: 0, fontWeight: 700, width: 82, letterSpacing: 0.3 }}>
                 [{e.agent}]
               </span>
-              <span style={{ fontSize: 10, color: msgColor }}>
+              <span style={{ fontSize: 11, color: msgColor, lineHeight: 1.4 }}>
                 {e.msg}
               </span>
             </div>
@@ -389,13 +400,13 @@ export default function AgentFeed({ symbol }: { symbol?: string | null }) {
       {/* ── Pixel animation keyframes ── */}
       <style>{`
         .pxbot { display: inline-block; }
-        .pxbot-idle  { animation: pxfloat 2.3s ease-in-out infinite; }
-        .pxbot-active { animation: pxbounce 0.55s cubic-bezier(.3,1.7,.4,1) 1; }
-        .pxbot-alert  { animation: pxshake 0.35s linear 3, pxflash 0.35s linear 3; }
-        @keyframes pxfloat  { 0%,100% { transform: translateY(0); }  50% { transform: translateY(-5px); } }
-        @keyframes pxbounce { 0% { transform: translateY(0); } 35% { transform: translateY(-13px); } 65% { transform: translateY(0); } 100% { transform: translateY(-3px); } }
-        @keyframes pxshake  { 0%,100% { transform: translateX(0); } 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
-        @keyframes pxflash  { 0%,100% { filter: brightness(1); } 50% { filter: brightness(2.8); } }
+        .pxbot-idle   { animation: pxfloat 2.4s ease-in-out infinite; }
+        .pxbot-active { animation: pxbounce 0.5s cubic-bezier(.3,1.8,.4,1) 1; }
+        .pxbot-alert  { animation: pxshake 0.3s linear 4, pxflash 0.3s linear 4; }
+        @keyframes pxfloat  { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-6px)} }
+        @keyframes pxbounce { 0%{transform:translateY(0)} 30%{transform:translateY(-15px)} 65%{transform:translateY(0)} 100%{transform:translateY(-3px)} }
+        @keyframes pxshake  { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-6px)} 75%{transform:translateX(6px)} }
+        @keyframes pxflash  { 0%,100%{filter:brightness(1)} 50%{filter:brightness(3)} }
       `}</style>
     </div>
   );

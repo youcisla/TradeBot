@@ -33,7 +33,7 @@ function timeAgo(ts: string | number | null | undefined): string {
 
 function crewmateSVG() {
   return (
-    <svg className="crewmate" viewBox="0 0 60 80">
+    <svg className="crewmate" viewBox="0 0 60 80" width="72" height="96">
       <ellipse className="crewmate-body" cx="30" cy="38" rx="22" ry="30" fill="var(--agent-color)" stroke="#222" strokeWidth="3" />
       <rect x="16" y="22" width="28" height="12" rx="6" fill="#fff" stroke="#222" strokeWidth="2" />
       <ellipse cx="30" cy="70" rx="10" ry="6" fill="#222" />
@@ -98,7 +98,7 @@ export default function AgentTheater() {
         // Network error, do nothing
       }
     }
-    const interval = setInterval(pollEvents, 2000);
+    const interval = setInterval(pollEvents, 800);
     pollEvents();
     return () => {
       clearInterval(interval);
@@ -113,18 +113,18 @@ export default function AgentTheater() {
       const now = Date.now();
       AGENTS.forEach((agent) => {
         const key = agent.key;
-        if (!lastEventTimestamps[key] || now - lastEventTimestamps[key] > 5000) {
+        if (!lastEventTimestamps[key] || now - lastEventTimestamps[key] > 3000) {
           setAgentStates((prev) => ({ ...prev, [key]: "idle" }));
         }
       });
-    }, 2000);
+    }, 1000);
     return () => clearInterval(interval);
   }, [lastEventTimestamps]);
 
   return (
     <div style={{ minHeight: "100vh", background: "#0a0f0a", color: "#00ff88", fontFamily: "'Courier New', monospace" }}>
       <h1 style={{ marginTop: 32, color: "#00ff88", fontSize: "2rem", textAlign: "center" }}>Agent Theater</h1>
-      <div className="theater" style={{ display: "flex", justifyContent: "center", alignItems: "flex-end", gap: 32, marginTop: 48, marginBottom: 32 }}>
+      <div className="theater" style={{ display: "flex", justifyContent: "center", alignItems: "flex-end", gap: 56, marginTop: 72, marginBottom: 48 }}>
         {AGENTS.map((agent) => {
           const state = agentStates[agent.key] || "idle";
           return (
@@ -132,16 +132,16 @@ export default function AgentTheater() {
               key={agent.key}
               className={`agent ${agent.label} ${state}`}
               id={`agent-${agent.key}`}
-              style={{ position: "relative", width: 60, height: 80, display: "flex", flexDirection: "column", alignItems: "center", "--agent-color": agent.color } as React.CSSProperties}
+              style={{ position: "relative", width: 90, display: "flex", flexDirection: "column", alignItems: "center", "--agent-color": agent.color } as React.CSSProperties}
             >
               <div
                 className={`speech-bubble${speechBubbles[agent.key] ? " active" : ""}`}
-                style={{ position: "absolute", top: -48, left: "50%", transform: "translateX(-50%)", background: "#111", color: "#00ff88", border: "2px solid #00ff88", borderRadius: 8, padding: "6px 12px", fontSize: 13, fontFamily: "'Courier New', monospace", whiteSpace: "pre", opacity: speechBubbles[agent.key] ? 1 : 0, pointerEvents: "none", transition: "opacity 0.3s", zIndex: 2 }}
+                style={{ position: "absolute", top: -56, left: "50%", transform: "translateX(-50%)", background: "#111", color: "#00ff88", border: "2px solid #00ff88", borderRadius: 8, padding: "6px 14px", fontSize: 12, fontFamily: "'Courier New', monospace", whiteSpace: "nowrap", opacity: speechBubbles[agent.key] ? 1 : 0, pointerEvents: "none", transition: "opacity 0.3s", zIndex: 2, maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis" }}
               >
                 {speechBubbles[agent.key]}
               </div>
               {crewmateSVG()}
-              <div className="agent-label" style={{ marginTop: 6, fontSize: 13, color: "#00ff88", textAlign: "center", textShadow: "0 0 2px #000" }}>{agent.label}</div>
+              <div className="agent-label" style={{ marginTop: 10, fontSize: 13, color: "#00ff88", textAlign: "center", textShadow: "0 0 2px #000", letterSpacing: 1 }}>{agent.label}</div>
             </div>
           );
         })}
