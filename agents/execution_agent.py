@@ -112,6 +112,11 @@ class ExecutionAgent:
                 )
             return None
 
+        # Estimate round-trip commission for display/PnL tracking.
+        # COMMISSION_PER_LOT is defined per standard lot; works as a flat
+        # per-lot rate here regardless of asset class.
+        commission = round(lot_size * settings.COMMISSION_PER_LOT, 2)
+
         snap = signal.entry_snapshot
         trade = Trade(
             symbol=signal.symbol,
@@ -119,6 +124,7 @@ class ExecutionAgent:
             direction=signal.direction,
             entry_price=result.fill_price,
             lot_size=lot_size,
+            commission=commission,
             stop_loss=signal.stop_loss,
             take_profit_1=signal.take_profit_1 or 0.0,
             take_profit_2=signal.take_profit_2 or 0.0,

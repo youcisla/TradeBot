@@ -150,6 +150,23 @@ class MT5Connector(BrokerConnector):
 
         return None
 
+    def get_contract_size(self, symbol: str) -> float:
+        """Fetch the actual contract size from MT5 symbol info."""
+        broker_sym = self.resolve(symbol)
+        info = mt5.symbol_info(broker_sym)
+        if info is not None:
+            cs = float(info.trade_contract_size)
+            from config.symbols import contract_size as _cfg_cs
+            cfg_cs = _cfg_cs(symbol)
+            if abs(cs - cfg_cs) > 0.01:
+                logger.warning(
+                    "CONTRACT SIZE MISMATCH for %s: broker=%.2f config=%.2f — using broker value",
+                    symbol, cs, cfg_cs,
+                )
+            return cs
+        from config.symbols import contract_size as _cfg_cs
+        return _cfg_cs(symbol)
+
     def disconnect(self) -> None:
         if self._connected:
             mt5.shutdown()

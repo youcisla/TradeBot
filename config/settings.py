@@ -46,6 +46,7 @@ MAX_DAILY_LOSS: float = float(os.getenv("MAX_DAILY_LOSS", "0.05"))
 MAX_SPREAD_PIPS: float = float(os.getenv("MAX_SPREAD_PIPS", "3.0"))
 DRAWDOWN_COOLDOWN_HOURS: int = int(os.getenv("DRAWDOWN_COOLDOWN_HOURS", "24"))
 MIN_LOT_SIZE: float = float(os.getenv("MIN_LOT_SIZE", "0.01"))
+MAX_LOT_SIZE: float = float(os.getenv("MAX_LOT_SIZE", "5.0"))
 # Per-asset-class spread limits.
 # Forex/exotic/commodity use pip-based limits.
 # Crypto uses a percentage-of-price limit (0.1 = 0.1%) because dollar

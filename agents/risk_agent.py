@@ -81,10 +81,16 @@ class RiskAgent:
         sl_distance = abs(signal.entry_price - signal.stop_loss)
         if sl_distance == 0:
             return settings.MIN_LOT_SIZE
-        cs = contract_size(signal.symbol)
+        cs = self._broker.get_contract_size(signal.symbol)
         risk_per_lot = sl_distance * cs
         lot_size = risk_amount / risk_per_lot
-        lot_size = max(settings.MIN_LOT_SIZE, round(lot_size, 2))
+        raw_lot = round(lot_size, 2)
+        lot_size = max(settings.MIN_LOT_SIZE, min(settings.MAX_LOT_SIZE, raw_lot))
+        if raw_lot > settings.MAX_LOT_SIZE:
+            logger.warning(
+                "LOT CAP applied for %s: calculated %.2f → capped at %.2f (SL distance=%.5f)",
+                signal.symbol, raw_lot, lot_size, sl_distance,
+            )
 
         # Apply confidence scaling
         if signal.confidence < settings.CONFIDENCE_REDUCED:
@@ -92,7 +98,7 @@ class RiskAgent:
         elif signal.confidence < settings.CONFIDENCE_FULL:
             lot_size = round(lot_size * 0.7, 2)
 
-        return max(settings.MIN_LOT_SIZE, lot_size)
+        return max(settings.MIN_LOT_SIZE, min(settings.MAX_LOT_SIZE, lot_size))
 
     # ── internal checks (ordered fail-fast) ──────────────────────────────
 

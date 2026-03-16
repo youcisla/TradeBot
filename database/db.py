@@ -55,6 +55,7 @@ CREATE TABLE IF NOT EXISTS trades (
     open_time           TIMESTAMP NOT NULL,
     close_time          TIMESTAMP,
     pnl                 NUMERIC DEFAULT 0.0,
+    commission          NUMERIC DEFAULT 0.0,
     close_reason        TEXT DEFAULT '',
     broker_ticket       BIGINT DEFAULT 0,
     spread_at_entry     NUMERIC DEFAULT 0.0,
@@ -189,6 +190,16 @@ CREATE TABLE IF NOT EXISTS dashboard_users (
 );
 """
 
+_ALTER_TRADES_COMMISSION = """
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                   WHERE table_name='trades' AND column_name='commission') THEN
+        ALTER TABLE trades ADD COLUMN commission NUMERIC DEFAULT 0.0;
+    END IF;
+END $$;
+"""
+
 _ALTER_BOT_STATUS_BROKER = """
 DO $$
 BEGIN
@@ -307,6 +318,7 @@ class Database:
                         cur.execute(ddl)
                     cur.execute(_INIT_BOT_STATUS)
                     cur.execute(_ALTER_BOT_STATUS_BROKER)
+                    cur.execute(_ALTER_TRADES_COMMISSION)
             logger.info("Database tables verified")
         finally:
             self._put_conn(conn)
@@ -325,20 +337,21 @@ class Database:
                             stop_loss, take_profit_1, take_profit_2, take_profit_3,
                             tp1_lots, tp2_lots, tp3_lots,
                             tp1_hit, tp2_hit, tp3_hit, status,
-                            open_time, close_time, pnl, close_reason,
+                            open_time, close_time, pnl, commission, close_reason,
                             broker_ticket, spread_at_entry,
                             snap_rsi_aligned, snap_trend_aligned,
                             snap_volume_sufficient, snap_near_news_event,
                             snap_market_condition, snap_session, snap_day_of_week
                         ) VALUES (
                             %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,
-                            %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s
+                            %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s
                         )
                         ON CONFLICT (id) DO UPDATE SET
                             stop_loss=EXCLUDED.stop_loss,
                             tp1_hit=EXCLUDED.tp1_hit, tp2_hit=EXCLUDED.tp2_hit,
                             tp3_hit=EXCLUDED.tp3_hit, status=EXCLUDED.status,
                             close_time=EXCLUDED.close_time, pnl=EXCLUDED.pnl,
+                            commission=EXCLUDED.commission,
                             close_reason=EXCLUDED.close_reason,
                             lot_size=EXCLUDED.lot_size,
                             spread_at_entry=EXCLUDED.spread_at_entry
@@ -349,7 +362,7 @@ class Database:
                             t.take_profit_3, t.tp1_lots, t.tp2_lots, t.tp3_lots,
                             t.tp1_hit, t.tp2_hit, t.tp3_hit, t.status,
                             t.open_time, t.close_time,
-                            t.pnl, t.close_reason, t.broker_ticket, t.spread_at_entry,
+                            t.pnl, t.commission, t.close_reason, t.broker_ticket, t.spread_at_entry,
                             t.snap_rsi_aligned, t.snap_trend_aligned,
                             t.snap_volume_sufficient, t.snap_near_news_event,
                             t.snap_market_condition, t.snap_session, t.snap_day_of_week,
@@ -409,6 +422,7 @@ class Database:
             open_time=row["open_time"],
             close_time=row["close_time"],
             pnl=float(row["pnl"] or 0),
+            commission=float(row["commission"] or 0),
             close_reason=row["close_reason"] or "",
             broker_ticket=int(row["broker_ticket"] or 0),
             spread_at_entry=float(row["spread_at_entry"] or 0),

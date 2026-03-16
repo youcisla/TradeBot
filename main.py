@@ -187,8 +187,11 @@ def main() -> None:
     logger.info("Entering main loop (interval=%ds)", settings.LOOP_INTERVAL_SECONDS)
 
     _market_closed_logged = False
-    # Track last candle timestamp per symbol to skip redundant scans
-    _last_candle_ts: dict[str, float] = {}
+    # Minimum wall-clock seconds between re-scanning the same symbol.
+    # Set to 15 min so the ICT engine (which internally uses M15 candles)
+    # gets fresh data every bar rather than being blocked until the next H1 close.
+    _SCAN_COOLDOWN_S: float = 15 * 60  # 15 minutes
+    _last_scan_ts: dict[str, float] = {}  # symbol → monotonic time of last analysis
 
     while not _shutdown:
         loop_start = time.monotonic()
@@ -223,7 +226,8 @@ def main() -> None:
                 trade_manager=trade_manager,
                 learning=learning,
                 log_agent=log_agent,
-                last_candle_ts=_last_candle_ts,
+                last_scan_ts=_last_scan_ts,
+                scan_cooldown=_SCAN_COOLDOWN_S,
             )
         except Exception:
             logger.exception("Unhandled error in main loop iteration %d", loop_count)
@@ -370,7 +374,8 @@ def _run_iteration(
     trade_manager: TradeManagerAgent,
     learning: LearningAgent,
     log_agent: LoggingAgent,
-    last_candle_ts: dict[str, float],
+    last_scan_ts: dict[str, float],
+    scan_cooldown: float,
 ) -> None:
     """Single iteration of the trading loop.
 
@@ -417,7 +422,8 @@ def _run_iteration(
 
     # ── Skip new signals if paused ───────────────────────────────────────
     if telegram_bot.is_paused():
-        logger.debug("Bot paused — skipping signal detection (loop %d)", loop_count)
+        logger.warning("Bot is PAUSED — skipping signal detection (loop %d). "
+                       "Use /resume or the dashboard to resume.", loop_count)
         return
 
     # ══════════════════════════════════════════════════════════════════════
@@ -429,11 +435,22 @@ def _run_iteration(
     # avoids duplicate-reject log spam)
     open_symbols = {t.symbol for t in trade_manager.get_open_trades()}
 
+    now_mono = time.monotonic()
+    scanned: list[str] = []
+    skipped_cooldown: list[str] = []
+
     for symbol in _active_symbols:
         if not is_market_open(symbol):
             continue
         if symbol in open_symbols:
             continue
+
+        # Per-symbol cooldown — re-scan every 15 min (aligns with M15 bar)
+        if now_mono - last_scan_ts.get(symbol, 0.0) < scan_cooldown:
+            skipped_cooldown.append(symbol)
+            continue
+        last_scan_ts[symbol] = now_mono
+
         try:
             if _tui:
                 _tui.set_agent_status("market", f"fetching {symbol}")
@@ -442,14 +459,10 @@ def _run_iteration(
             logger.warning("Data validation failed for %s: %s — skipping", symbol, e)
             continue
 
-        # Skip if the latest candle hasn't changed (same bar)
         if data.candles:
-            latest_ts = data.candles[-1].timestamp.timestamp()
-            if latest_ts == last_candle_ts.get(symbol):
-                continue
-            last_candle_ts[symbol] = latest_ts
-            # Track last candle timestamp per symbol
-            symbol_event_tracker.update(symbol, "last_candle", latest_ts)
+            symbol_event_tracker.update(symbol, "last_candle",
+                                        data.candles[-1].timestamp.timestamp())
+        scanned.append(symbol)
 
         if _tui:
             _tui.set_agent_status("analysis", f"analyzing {symbol}")
@@ -463,10 +476,16 @@ def _run_iteration(
             if _tui:
                 for sig in signals:
                     _tui.add_event("strategy", "info",
-                                   f"{sig.direction} {sig.symbol} conf={sig.confidence:.0f}%")
+                                   f"{sig.direction} {sig.symbol} conf={sig.confidence:.0%}")
         all_signals.extend(signals)
 
+    if skipped_cooldown:
+        logger.debug("Cooldown active for: %s", ", ".join(skipped_cooldown))
+    if not scanned:
+        logger.debug("Loop %d: all symbols on cooldown or skipped", loop_count)
+        return
     if not all_signals:
+        logger.info("Loop %d: scanned %s — no signals generated", loop_count, ", ".join(scanned))
         return
 
     # ══════════════════════════════════════════════════════════════════════

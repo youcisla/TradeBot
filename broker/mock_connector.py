@@ -12,6 +12,7 @@ import random
 from datetime import UTC, datetime, timedelta
 
 from broker.connector import BrokerConnector, OrderResult, PositionInfo
+from config.symbols import contract_size as _contract_size
 from models.market_data import Candle
 
 logger = logging.getLogger(__name__)
@@ -159,10 +160,11 @@ class MockConnector(BrokerConnector):
             tick = self.get_tick(pos.symbol)
             cp = tick["bid"] if pos.direction == "BUY" else tick["ask"]
             pos.current_price = cp
+            cs = _contract_size(pos.symbol)
             if pos.direction == "BUY":
-                pos.pnl = round((cp - pos.entry_price) * pos.lot_size * 100_000, 2)
+                pos.pnl = round((cp - pos.entry_price) * pos.lot_size * cs, 2)
             else:
-                pos.pnl = round((pos.entry_price - cp) * pos.lot_size * 100_000, 2)
+                pos.pnl = round((pos.entry_price - cp) * pos.lot_size * cs, 2)
         return list(self._positions.values())
 
     def get_fill_size(self, order_id: str) -> float:

@@ -102,6 +102,16 @@ class BrokerConnector(ABC):
     def get_fill_size(self, order_id: str) -> float:
         """Return actual filled lot size for an order."""
 
+    def get_contract_size(self, symbol: str) -> float:
+        """Return the broker's actual contract size (units per 1 lot) for *symbol*.
+
+        Defaults to the config lookup so mock/test connectors work without
+        overriding.  MT5Connector overrides this with live symbol_info data
+        to prevent hardcoded-vs-broker mismatches.
+        """
+        from config.symbols import contract_size as _cs
+        return _cs(symbol)
+
     # ── reconciliation ───────────────────────────────────────────────────
 
     @abstractmethod

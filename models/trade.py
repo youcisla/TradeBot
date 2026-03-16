@@ -29,6 +29,7 @@ class Trade:
     open_time: datetime = field(default_factory=lambda: datetime.now(UTC))
     close_time: datetime | None = None
     pnl: float = 0.0
+    commission: float = 0.0   # round-trip commission charged by broker (deducted from pnl)
     close_reason: str = ""  # TP1, TP2, TP3, SL, MANUAL, EMERGENCY
     broker_ticket: int = 0
     spread_at_entry: float = 0.0

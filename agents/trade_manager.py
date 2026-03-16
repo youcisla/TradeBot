@@ -155,7 +155,12 @@ class TradeManagerAgent:
                     reason = "TP3"
                 elif trade.tp1_hit:
                     reason = "TP2"
-                elif not trade.tp1_hit and trade.take_profit_1:
+                elif trade.pnl < -0.01:
+                    # Negative PnL and no bot-managed TP hit → SL was triggered
+                    # (either by the broker server-side or manual intervention)
+                    reason = "SL"
+                elif trade.take_profit_1 and trade.pnl > 0:
+                    # Position closed profitably at broker level before bot processed it
                     reason = "TP1"
                 else:
                     reason = "EXTERNAL"
@@ -268,13 +273,16 @@ class TradeManagerAgent:
         trade.status = "CLOSED"
         trade.close_time = datetime.now(UTC)
         trade.close_reason = "TP3"
+        true_pnl = round(trade.pnl - trade.commission, 2)
         self._state.save_trade(trade)
         self._emit("info",
-                   f"TP3 hit on {trade.symbol}! Trade fully closed (PnL {trade.pnl:.2f}) — perfect exit.",
-                   {"trade_id": trade.id, "tp": 3, "pnl": trade.pnl})
-        logger.info("TP3 hit: trade %s — fully closed", trade.id)
+                   f"TP3 hit on {trade.symbol}! Trade fully closed "
+                   f"(gross {trade.pnl:.2f} − commission {trade.commission:.2f} = {true_pnl:.2f}) — perfect exit.",
+                   {"trade_id": trade.id, "tp": 3, "pnl": trade.pnl, "true_pnl": true_pnl})
+        logger.info("TP3 hit: trade %s — fully closed (true PnL %.2f)", trade.id, true_pnl)
         telegram_bot.send_message(
-            f"🎯 TP3 hit: {trade.symbol} — trade fully closed (PnL {trade.pnl:.2f})"
+            f"🎯 TP3 hit: {trade.symbol} — fully closed "
+            f"gross {trade.pnl:.2f} − commission {trade.commission:.2f} = **{true_pnl:.2f}**"
         )
 
     def _handle_sl(self, trade: Trade, pos_map: dict) -> None:
@@ -285,13 +293,18 @@ class TradeManagerAgent:
         trade.status = "CLOSED"
         trade.close_time = datetime.now(UTC)
         trade.close_reason = "SL"
+        true_pnl = round(trade.pnl - trade.commission, 2)
         self._state.save_trade(trade)
         self._emit("warn",
-                   f"SL hit on {trade.symbol} — closed at loss (PnL {trade.pnl:.2f}).",
-                   {"trade_id": trade.id, "pnl": trade.pnl})
-        logger.info("SL hit: trade %s — closed (PnL %.2f)", trade.id, trade.pnl)
+                   f"SL hit on {trade.symbol} — closed at loss "
+                   f"(gross {trade.pnl:.2f} − commission {trade.commission:.2f} = {true_pnl:.2f}).",
+                   {"trade_id": trade.id, "pnl": trade.pnl, "commission": trade.commission,
+                    "true_pnl": true_pnl})
+        logger.info("SL hit: trade %s — closed (gross PnL %.2f, commission %.2f, true %.2f)",
+                    trade.id, trade.pnl, trade.commission, true_pnl)
         telegram_bot.send_message(
-            f"🛑 SL hit: {trade.symbol} — trade closed (PnL {trade.pnl:.2f})"
+            f"🛑 SL hit: {trade.symbol} — "
+            f"gross {trade.pnl:.2f} − commission {trade.commission:.2f} = **{true_pnl:.2f}**"
         )
 
     # ── emergency close ──────────────────────────────────────────────────
