@@ -19,7 +19,7 @@ import logging
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
-from typing import Optional
+from typing import Any, Optional
 
 import psycopg2.extras
 from database.db import Database
@@ -32,8 +32,9 @@ logger = logging.getLogger(__name__)
 # ── Globals set by start() ───────────────────────────────────────────────
 _broker: BrokerConnector | None = None
 _server: ThreadingHTTPServer | None = None
-_ict_contexts: dict[str, object] = {}  # symbol → latest ICTContext
-_db: Optional["Database"] = None  # lazily initialised in start()
+_ict_contexts: dict[str, Any] = {}  # symbol → latest ICTContext
+_ict_lock = threading.Lock()
+_db: Optional["Database"] = None  # set by start() — shared with bot
 
 # Supported timeframes (validated against incoming requests)
 _VALID_TFS = {"M1", "M5", "M15", "M30", "H1", "H4", "D1", "W1", "MN1"}
@@ -135,18 +136,24 @@ class _CandleHandler(BaseHTTPRequestHandler):
                     """,
                     (limit,),
                 )
-                events = [
-                    {
-                        "agent": row["agent"],
-                        "level": row["level"],
-                        "msg": row["message"],
-                        "data": row["data"],
-                        "ts": row["created_at"].isoformat() if row["created_at"] else None,
-                    }
-                    for row in cur.fetchall()
-                ]
+                rows = cur.fetchall()
+            conn.commit()
+            events = [
+                {
+                    "agent": row["agent"],
+                    "level": row["level"],
+                    "msg": row["message"],
+                    "data": row["data"],
+                    "ts": row["created_at"].isoformat() if row["created_at"] else None,
+                }
+                for row in rows
+            ]
         except Exception as exc:
             logger.warning("agent-events query failed: %s", exc)
+            try:
+                conn.rollback()
+            except Exception:
+                pass
             self._json_response(500, {"error": str(exc)})
             return
         finally:
@@ -159,7 +166,8 @@ class _CandleHandler(BaseHTTPRequestHandler):
         params = parse_qs(query)
         symbol = (params.get("symbol") or ["EURUSD"])[0].upper()
 
-        ctx = _ict_contexts.get(symbol)
+        with _ict_lock:
+            ctx = _ict_contexts.get(symbol)
         if ctx is None or not hasattr(ctx, "fibonacci") or ctx.fibonacci is None:
             self._json_response(200, {"levels": [], "golden_zone": None})
             return
@@ -210,15 +218,12 @@ class _CandleHandler(BaseHTTPRequestHandler):
 
 # ── Public API ───────────────────────────────────────────────────────────
 
-def start(broker: BrokerConnector, port: int | None = None) -> None:
+def start(broker: BrokerConnector, db: "Database", port: int | None = None) -> None:
     """Start the candle HTTP server as a daemon thread."""
     global _broker, _server, _db
     _broker = broker
+    _db = db  # share the bot's existing connection pool — no second pool
     _port = port or int(getattr(settings, "CANDLE_SERVER_PORT", 5555))
-
-    # Initialise DB reference here so the handler never needs to import lazily
-    from database.db import Database
-    _db = Database()
 
     _server = ThreadingHTTPServer(("0.0.0.0", _port), _CandleHandler)
     _server.daemon_threads = True
@@ -239,4 +244,5 @@ def stop() -> None:
 
 def set_ict_context(symbol: str, ctx: object) -> None:
     """Store the latest ICT context for a symbol (called by main loop)."""
-    _ict_contexts[symbol] = ctx
+    with _ict_lock:
+        _ict_contexts[symbol] = ctx

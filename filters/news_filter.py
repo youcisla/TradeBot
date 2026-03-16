@@ -130,36 +130,21 @@ class NewsFilter:
             logger.info("NewsFilter loaded %d events from cache", len(cached))
             return
 
-        # Skip Finnhub if we recently failed (avoid log spam)
-        if (self._last_fetch_failed
-                and (datetime.now(UTC) - self._last_fetch_failed) < _FETCH_RETRY_COOLDOWN):
-            # Reuse whatever we have (cache or static)
-            if not self._events:
-                self._events = cached or _load_static_events()
-            return
-
-        # Try Finnhub
-        finnhub_events = _fetch_finnhub_calendar()
-        if finnhub_events:
-            self._events = finnhub_events
-            self._last_fetch = datetime.now(UTC)
-            self._last_fetch_failed = None
-            _save_cache(finnhub_events)
-            return
-
-        # Finnhub failed — record failure time
-        if not self._last_fetch_failed:
-            self._last_fetch_failed = datetime.now(UTC)
-            logger.warning("Finnhub fetch failed — will retry in %s",
-                           _FETCH_RETRY_COOLDOWN)
+        # Finnhub disabled — skip to static file fallback
+        # finnhub_events = _fetch_finnhub_calendar()
+        # if finnhub_events:
+        #     self._events = finnhub_events
+        #     self._last_fetch = datetime.now(UTC)
+        #     self._last_fetch_failed = None
+        #     _save_cache(finnhub_events)
+        #     return
 
         # Fallback to static file
         self._events = _load_static_events()
         if self._events:
             logger.info("NewsFilter loaded %d static events", len(self._events))
         else:
-            if not self._last_fetch_failed or self._last_fetch_failed == datetime.now(UTC):
-                logger.info("NewsFilter: no events available — filter inactive")
+            logger.info("NewsFilter: no static events available — news filter inactive")
 
     def _emit(self, level: str, msg: str, data: dict | None = None) -> None:
         if self._db:

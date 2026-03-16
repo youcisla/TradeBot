@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING, Callable
 
 from broker.connector import BrokerConnector
 from config import settings
-from config.symbols import pip_value, asset_class
+from config.symbols import pip_value, contract_size, asset_class
 from filters.news_filter import NewsFilter
 from models.signal import Signal
 from models.trade import Trade
@@ -64,15 +64,26 @@ class RiskAgent:
             return False
 
     def calculate_position_size(self, signal: Signal) -> float:
-        """Return lot size based on risk parameters."""
+        """Return lot size based on risk parameters.
+
+        Formula: lot_size = risk_usd / (sl_distance × contract_size)
+
+        contract_size is the number of base-currency units per 1 standard lot.
+        For USD-quoted instruments the dollar risk per lot is directly:
+            sl_distance_in_price × contract_size
+        Examples:
+          EURUSD: sl_distance=0.0007, contract=100,000 → risk/lot=$70
+          BTCUSD: sl_distance=500.0,  contract=1       → risk/lot=$500
+          BCHUSD: sl_distance=1.77,   contract=1       → risk/lot=$1.77
+        """
         balance = self._broker.get_balance()
         risk_amount = balance * settings.MAX_RISK_PER_TRADE
         sl_distance = abs(signal.entry_price - signal.stop_loss)
         if sl_distance == 0:
             return settings.MIN_LOT_SIZE
-        pv = pip_value(signal.symbol)
-        sl_pips = sl_distance / pv
-        lot_size = risk_amount / (sl_pips * 10)  # simplified pip-value calc
+        cs = contract_size(signal.symbol)
+        risk_per_lot = sl_distance * cs
+        lot_size = risk_amount / risk_per_lot
         lot_size = max(settings.MIN_LOT_SIZE, round(lot_size, 2))
 
         # Apply confidence scaling
@@ -160,17 +171,6 @@ class RiskAgent:
                            {"symbol": signal.symbol, "check": "spread",
                             "spread_pips": round(spread_pips, 1), "max": max_spread})
                 return False
-
-        # 6. Max open trades (disabled)
-        # if len(open_trades) >= settings.MAX_OPEN_TRADES:
-        #     logger.warning(
-        #         "RISK REJECT [MAX_TRADES]: %d open >= %d max",
-        #         len(open_trades), settings.MAX_OPEN_TRADES,
-        #     )
-        #     self._emit("warn",
-        #                f"Already at max trades ({len(open_trades)}/{settings.MAX_OPEN_TRADES}) — standing down.",
-        #                {"open": len(open_trades), "max": settings.MAX_OPEN_TRADES})
-        #     return False
 
         # 7. Position size sanity
         lot_size = self.calculate_position_size(signal)

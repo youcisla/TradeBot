@@ -77,6 +77,36 @@ for _s in EXOTICS:
     SYMBOL_CLASS[_s] = "exotic"
 
 
+# ── Contract sizes (units of base asset per 1 standard lot) ─────────────
+# These reflect the most common MT5 broker conventions.
+# Standard forex: 100,000 base currency units per lot.
+# Crypto: 1 coin per lot (BTC, ETH, LTC, BCH) or 1000 coins (XRP).
+# Metals: 100 oz gold, 5000 oz silver; Oil: 100 barrels.
+CONTRACT_SIZES: dict[str, float] = {
+    # Forex — 100,000 base units per standard lot
+    **{s: 100_000.0 for s in FOREX_MAJORS + FOREX_CROSSES},
+    # Commodities
+    "XAUUSD": 100.0,    # 100 troy oz
+    "XAGUSD": 5_000.0,  # 5,000 troy oz
+    "USOUSD": 100.0,    # 100 barrels
+    "UKOUSD": 100.0,    # 100 barrels
+    # Crypto — 1 coin per lot (standard at most ECN brokers)
+    "BTCUSD": 1.0,
+    "ETHUSD": 1.0,
+    "XRPUSD": 1_000.0,  # most brokers: 1 lot = 1,000 XRP
+    "LTCUSD": 1.0,
+    "BCHUSD": 1.0,
+    # Exotics — 100,000 base units
+    "USDZAR": 100_000.0,
+    "USDTRY": 100_000.0,
+}
+
+
+def contract_size(symbol: str) -> float:
+    """Return the number of base-currency units per 1 standard lot."""
+    return CONTRACT_SIZES.get(symbol, 100_000.0)
+
+
 def pip_value(symbol: str) -> float:
     """Return the pip size for *symbol*, defaulting to 0.0001."""
     return PIP_VALUES.get(symbol, 0.0001)

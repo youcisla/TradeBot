@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -rh \"^import \\\\|^from \" c:/Users/Y.chehboub/Downloads/TradingBot/backtesting --include=*.py)",
+      "Bash(.venv/Scripts/pip install:*)"
+    ]
+  }
+}

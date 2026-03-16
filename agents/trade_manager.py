@@ -146,12 +146,27 @@ class TradeManagerAgent:
 
             pos = pos_map.get(trade.broker_ticket)
             if pos is None:
-                # Position closed externally
+                # Position no longer open — determine why.
+                # If the bot already processed the TP/SL handler this iteration
+                # (tp*_hit flags updated), the trade will be marked CLOSED by
+                # that handler.  If not, the broker closed it (TP hit server-side
+                # or manual close).  Infer the most likely reason from state.
+                if trade.tp1_hit and trade.tp2_hit:
+                    reason = "TP3"
+                elif trade.tp1_hit:
+                    reason = "TP2"
+                elif not trade.tp1_hit and trade.take_profit_1:
+                    reason = "TP1"
+                else:
+                    reason = "EXTERNAL"
                 trade.status = "CLOSED"
                 trade.close_time = datetime.now(UTC)
-                trade.close_reason = "EXTERNAL"
+                trade.close_reason = reason
                 self._state.save_trade(trade)
-                logger.warning("Trade %s closed externally", trade.id)
+                if reason == "EXTERNAL":
+                    logger.warning("Trade %s closed externally (manual/margin-call)", trade.id)
+                else:
+                    logger.info("Trade %s closed by broker at %s", trade.id, reason)
                 continue
 
             current_price = pos.current_price
@@ -160,39 +175,53 @@ class TradeManagerAgent:
             # ── Check TP1 ────────────────────────────────────────────────
             if not trade.tp1_hit:
                 if self._tp_reached(trade, current_price, trade.take_profit_1):
-                    self._handle_tp1(trade)
+                    self._handle_tp1(trade, pos_map)
 
             # ── Check TP2 ────────────────────────────────────────────────
             elif not trade.tp2_hit:
                 if self._tp_reached(trade, current_price, trade.take_profit_2):
-                    self._handle_tp2(trade)
-                else:
-                    # No trailing yet — waiting for TP2
-                    pass
+                    self._handle_tp2(trade, pos_map)
 
             # ── Check TP3 ────────────────────────────────────────────────
             elif not trade.tp3_hit:
                 # Trail SL
                 self._trail_stop(trade, current_price)
                 if self._tp_reached(trade, current_price, trade.take_profit_3):
-                    self._handle_tp3(trade)
+                    self._handle_tp3(trade, pos_map)
 
             # ── Check SL ─────────────────────────────────────────────────
             if trade.is_open() and self._sl_hit(trade, current_price):
-                self._handle_sl(trade)
+                self._handle_sl(trade, pos_map)
 
         # Remove fully closed trades from in-memory list
         self._open_trades = [t for t in self._open_trades if t.is_open()]
 
     # ── TP / SL handlers ─────────────────────────────────────────────────
 
-    def _handle_tp1(self, trade: Trade) -> None:
+    def _position_still_open(self, ticket: int, pos_map: dict | None = None) -> bool:
+        """Return True if the broker ticket is still in the open positions list.
+
+        Pass pos_map (from _monitor_inner) to avoid an extra broker API call.
+        Falls back to a fresh broker call if pos_map is not provided.
+        """
+        if pos_map is not None:
+            return ticket in pos_map
+        try:
+            return any(p.ticket == ticket for p in self._broker.get_open_positions())
+        except Exception:
+            return True  # assume still open on error — safer
+
+    def _handle_tp1(self, trade: Trade, pos_map: dict) -> None:
         ok = self._broker.close_partial(
             trade.broker_ticket, trade.symbol, trade.tp1_lots, trade.direction,
         )
         if not ok:
-            logger.error("Failed to close TP1 partial for trade %s", trade.id)
-            return
+            # Broker may have already closed the position at the TP level itself.
+            # If it's gone, treat that as a successful TP hit rather than EXTERNAL.
+            if self._position_still_open(trade.broker_ticket, pos_map):
+                logger.error("Failed to close TP1 partial for trade %s", trade.id)
+                return
+            logger.info("TP1 closed by broker for trade %s — treating as TP hit", trade.id)
         trade.tp1_hit = True
         trade.status = "PARTIAL"
 
@@ -210,13 +239,15 @@ class TradeManagerAgent:
             f"✅ TP1 hit: {trade.symbol} — closed {trade.tp1_lots} lots, SL→ breakeven"
         )
 
-    def _handle_tp2(self, trade: Trade) -> None:
+    def _handle_tp2(self, trade: Trade, pos_map: dict) -> None:
         ok = self._broker.close_partial(
             trade.broker_ticket, trade.symbol, trade.tp2_lots, trade.direction,
         )
         if not ok:
-            logger.error("Failed to close TP2 partial for trade %s", trade.id)
-            return
+            if self._position_still_open(trade.broker_ticket, pos_map):
+                logger.error("Failed to close TP2 partial for trade %s", trade.id)
+                return
+            logger.info("TP2 closed by broker for trade %s — treating as TP hit", trade.id)
         trade.tp2_hit = True
         self._state.save_trade(trade)
         self._emit("info",
@@ -228,8 +259,11 @@ class TradeManagerAgent:
             f"✅ TP2 hit: {trade.symbol} — closed {trade.tp2_lots} lots, trailing SL active"
         )
 
-    def _handle_tp3(self, trade: Trade) -> None:
-        self._broker.close_order(trade.broker_ticket, trade.symbol, trade.direction)
+    def _handle_tp3(self, trade: Trade, pos_map: dict) -> None:
+        ok = self._broker.close_order(trade.broker_ticket, trade.symbol, trade.direction)
+        if not ok and self._position_still_open(trade.broker_ticket, pos_map):
+            logger.error("Failed to close TP3 for trade %s — position still open", trade.id)
+            return
         trade.tp3_hit = True
         trade.status = "CLOSED"
         trade.close_time = datetime.now(UTC)
@@ -243,8 +277,11 @@ class TradeManagerAgent:
             f"🎯 TP3 hit: {trade.symbol} — trade fully closed (PnL {trade.pnl:.2f})"
         )
 
-    def _handle_sl(self, trade: Trade) -> None:
-        self._broker.close_order(trade.broker_ticket, trade.symbol, trade.direction)
+    def _handle_sl(self, trade: Trade, pos_map: dict) -> None:
+        ok = self._broker.close_order(trade.broker_ticket, trade.symbol, trade.direction)
+        if not ok and self._position_still_open(trade.broker_ticket, pos_map):
+            logger.error("Failed to close SL for trade %s — position still open", trade.id)
+            return
         trade.status = "CLOSED"
         trade.close_time = datetime.now(UTC)
         trade.close_reason = "SL"
@@ -291,6 +328,8 @@ class TradeManagerAgent:
 
     @staticmethod
     def _tp_reached(trade: Trade, current: float, tp: float) -> bool:
+        if not tp:  # 0.0 or None means TP not set — never treat as reached
+            return False
         if trade.direction == "BUY":
             return current >= tp
         return current <= tp

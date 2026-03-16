@@ -40,6 +40,7 @@ from agents.logging_agent import LoggingAgent
 
 from utils import telegram_bot
 from utils import candle_server
+from utils import terminal_ui as tui
 from utils.helpers import is_market_open, is_any_market_open
 from utils.symbol_event_tracker import SymbolEventTracker
 
@@ -117,7 +118,7 @@ def main() -> None:
     logger.info("Active symbols: %s", ", ".join(_active_symbols))
 
     # ── 1b. Candle HTTP server for dashboard charts ──────────────────────
-    candle_server.start(broker)
+    candle_server.start(broker, db)
 
     # ── 2. Logging agent first (sets up Python logging) ─────────────────
     log_agent = LoggingAgent(db)
@@ -145,6 +146,10 @@ def main() -> None:
     trade_manager.reconcile()
     log_agent.record("STARTUP", f"Reconciliation done — {len(trade_manager.get_open_trades())} open trades")
     db.set_bot_uptime_start()
+
+    # ── 6b. Terminal UI (Rich live dashboard) ───────────────────────────
+    _ui = tui.init(refresh_per_second=4)
+    _ui.set_bot_status("STARTING", open_trades=len(trade_manager.get_open_trades()))
 
     # ── 7. Telegram ─────────────────────────────────────────────────────
     def _status_callback() -> str:
@@ -246,6 +251,7 @@ def main() -> None:
 
     # ── 10. Shutdown ─────────────────────────────────────────────────────
     logger.info("Shutting down…")
+    _ui.stop()
     candle_server.stop()
     telegram_bot.stop_polling()
     telegram_bot.send_message("🛑 Bot shutting down.")
@@ -338,6 +344,15 @@ def _update_heartbeat(
         leverage=leverage,
     )
 
+    ui = tui.get_ui()
+    if ui is not None:
+        ui.set_bot_status(
+            state.upper(), equity=equity, balance=balance,
+            daily_pnl=daily_pnl, open_trades=open_count,
+        )
+        for t in trade_manager.get_open_trades():
+            ui.set_trade(t)
+
 
 def _run_iteration(
     *,
@@ -364,6 +379,9 @@ def _run_iteration(
     """
 
     # ── Monitor existing trades first ────────────────────────────────────
+    _tui = tui.get_ui()
+    if _tui:
+        _tui.set_agent_status("trade_mgr", "monitoring open positions")
     open_before = {t.id for t in trade_manager.get_open_trades()}
     trade_manager.monitor()
     open_after = {t.id for t in trade_manager.get_open_trades()}
@@ -412,6 +430,8 @@ def _run_iteration(
         if symbol in open_symbols:
             continue
         try:
+            if _tui:
+                _tui.set_agent_status("market", f"fetching {symbol}")
             data = market_agent.get_data(symbol)
         except DataValidationError as e:
             logger.warning("Data validation failed for %s: %s — skipping", symbol, e)
@@ -426,11 +446,19 @@ def _run_iteration(
             # Track last candle timestamp per symbol
             symbol_event_tracker.update(symbol, "last_candle", latest_ts)
 
+        if _tui:
+            _tui.set_agent_status("analysis", f"analyzing {symbol}")
         context = analysis_agent.analyze(data)
+        if _tui:
+            _tui.set_agent_status("strategy", f"scanning {symbol}")
         signals = strategy_agent.detect_all(context)
         # Track last signal event per symbol
         if signals:
             symbol_event_tracker.update(symbol, "last_signal", time.time())
+            if _tui:
+                for sig in signals:
+                    _tui.add_event("strategy", "info",
+                                   f"{sig.direction} {sig.symbol} conf={sig.confidence:.0f}%")
         all_signals.extend(signals)
 
     if not all_signals:
@@ -461,22 +489,37 @@ def _run_iteration(
     # PHASE 3: Execute best signals that pass risk validation
     # ══════════════════════════════════════════════════════════════════════
     for signal_obj in ranked:
-        # Risk check (includes MAX_OPEN_TRADES — will naturally stop)
+        # Risk check (drawdown, spread, lot-size, etc.)
+        if _tui:
+            _tui.set_agent_status("risk", f"validating {signal_obj.symbol} {signal_obj.direction}")
         if not risk_agent.validate(signal_obj):
             log_agent.log_risk_rejection(
                 signal_obj.symbol, signal_obj.direction,
                 signal_obj.strategy, "Failed risk validation")
+            if _tui:
+                _tui.add_event("risk", "warn",
+                               f"REJECT {signal_obj.symbol} {signal_obj.direction}")
             continue
 
         # Execute
+        if _tui:
+            _tui.set_agent_status("execution", f"opening {signal_obj.direction} {signal_obj.symbol}")
         trade = execution_agent.open_trade(signal_obj)
         if trade is not None:
             trade_manager.add_trade(trade)
             log_agent.log_trade(trade.id, "OPENED",
                                 f"{trade.direction} {trade.symbol} {trade.lot_size} lots")
             log_agent.log_trade_to_csv(trade)
+            if _tui:
+                _tui.set_trade(trade)
+                _tui.add_event("execution", "info",
+                               f"OPENED {trade.direction} {trade.symbol} @ {trade.entry_price:.5f}")
 
             # Score will happen when trade closes (in trade_manager.monitor)
+
+    if _tui:
+        for name in ("market", "analysis", "strategy", "risk", "execution", "trade_mgr"):
+            _tui.set_agent_idle(name)
 
 
 if __name__ == "__main__":

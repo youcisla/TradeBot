@@ -76,81 +76,83 @@ class ExecutionAgent:
             logger.warning("EXEC REJECT: lot_size %.2f below minimum", lot_size)
             return None
 
-        # Determine TP levels and lots
-        tp_levels = []
-        if signal.take_profit_1 and signal.take_profit_1 > 0:
-            tp_levels.append((signal.take_profit_1, round(lot_size * settings.TP1_CLOSE_PERCENT, 2)))
-        if signal.take_profit_2 and signal.take_profit_2 > 0:
-            tp_levels.append((signal.take_profit_2, round(lot_size * settings.TP2_CLOSE_PERCENT, 2)))
-        if signal.take_profit_3 and signal.take_profit_3 > 0:
-            tp_levels.append((signal.take_profit_3, round(lot_size - (lot_size * settings.TP1_CLOSE_PERCENT) - (lot_size * settings.TP2_CLOSE_PERCENT), 2)))
+        # Calculate per-TP lot allocations
+        tp1_lots = round(lot_size * settings.TP1_CLOSE_PERCENT, 2)
+        tp2_lots = round(lot_size * settings.TP2_CLOSE_PERCENT, 2)
+        tp3_lots = round(lot_size - tp1_lots - tp2_lots, 2)
 
-        if not tp_levels:
-            # No TP, just send one order with SL
-            tp_levels = [(None, lot_size)]
-
-        trades = []
-        for idx, (tp, lots) in enumerate(tp_levels):
-            if lots < settings.MIN_LOT_SIZE:
-                continue
-            result = self._broker.place_order(
-                symbol=signal.symbol,
-                direction=signal.direction,
-                lot_size=lots,
-                sl=signal.stop_loss,
-                tp=tp,
-                comment=signal.strategy + (f"_TP{idx+1}" if tp else ""),
-            )
-            if not result.success:
-                logger.error("Order failed: %s", result.message)
+        # Place ONE order for the full position.
+        # Set broker-side TP at TP3 (furthest) as a crash-safety net only —
+        # trade_manager manages the actual partial exits via close_partial.
+        broker_tp = signal.take_profit_3 or signal.take_profit_1 or None
+        result = self._broker.place_order(
+            symbol=signal.symbol,
+            direction=signal.direction,
+            lot_size=lot_size,
+            sl=signal.stop_loss,
+            tp=broker_tp,
+            comment=signal.strategy,
+        )
+        if not result.success:
+            logger.error("Order failed: %s", result.message)
+            # Error 10017 = trade disabled in MT5 terminal (autotrading off).
+            # This is terminal-level, not symbol-level — pause the bot immediately.
+            if "10017" in (result.message or ""):
+                telegram_bot.send_message(
+                    "⛔ MT5 Trade Disabled (error 10017) — autotrading is OFF in the terminal.\n"
+                    "Re-enable 'Algo Trading' in MT5 and use /resume to continue."
+                )
+                telegram_bot.pause()
+                self._emit("error",
+                           "MT5 autotrading is disabled (10017) — bot paused",
+                           {"error": result.message})
+            else:
                 telegram_bot.send_message(
                     f"❌ Order failed: {signal.symbol} {signal.direction} — {result.message}"
                 )
-                continue
-            snap = signal.entry_snapshot
-            trade = Trade(
-                symbol=signal.symbol,
-                strategy=signal.strategy,
-                direction=signal.direction,
-                entry_price=result.fill_price,
-                lot_size=lots,
-                stop_loss=signal.stop_loss,
-                take_profit_1=tp if tp else 0.0,
-                take_profit_2=0.0,
-                take_profit_3=0.0,
-                tp1_lots=lots if idx == 0 else 0.0,
-                tp2_lots=lots if idx == 1 else 0.0,
-                tp3_lots=lots if idx == 2 else 0.0,
-                broker_ticket=result.broker_ticket,
-                spread_at_entry=snap.spread,
-                open_time=datetime.now(UTC),
-                snap_rsi_aligned=snap.rsi_aligned,
-                snap_trend_aligned=snap.trend_aligned,
-                snap_volume_sufficient=snap.volume_sufficient,
-                snap_near_news_event=snap.near_news_event,
-                snap_market_condition=snap.market_condition,
-                snap_session=snap.session,
-                snap_day_of_week=snap.day_of_week,
-            )
-            self._state.save_trade(trade)
-            self._emit("info",
-                       f"Trade opened! {trade.direction} {trade.symbol} {trade.lot_size:.2f} lots "
-                       f"@ {trade.entry_price:.5f}  SL={trade.stop_loss:.5f}  ticket={trade.broker_ticket}",
-                       {"trade_id": trade.id, "ticket": trade.broker_ticket,
-                        "lots": trade.lot_size, "entry": trade.entry_price})
-            logger.info(
-                "TRADE OPENED: %s  %s %s  %.2f lots @ %.5f  ticket=%d",
-                trade.id, trade.direction, trade.symbol,
-                trade.lot_size, trade.entry_price, trade.broker_ticket,
-            )
-            telegram_bot.send_message(
-                f"📈 Trade opened: {trade.direction} {trade.symbol} "
-                f"{trade.lot_size} lots @ {trade.entry_price:.5f}  "
-                f"SL={trade.stop_loss:.5f} TP={tp if tp else '-'}"
-            )
-            trades.append(trade)
+            return None
 
-        if trades:
-            # Return the first trade object for compatibility
-            return trades[0]
-        return None
+        snap = signal.entry_snapshot
+        trade = Trade(
+            symbol=signal.symbol,
+            strategy=signal.strategy,
+            direction=signal.direction,
+            entry_price=result.fill_price,
+            lot_size=lot_size,
+            stop_loss=signal.stop_loss,
+            take_profit_1=signal.take_profit_1 or 0.0,
+            take_profit_2=signal.take_profit_2 or 0.0,
+            take_profit_3=signal.take_profit_3 or 0.0,
+            tp1_lots=tp1_lots,
+            tp2_lots=tp2_lots,
+            tp3_lots=tp3_lots,
+            broker_ticket=result.broker_ticket,
+            spread_at_entry=snap.spread,
+            open_time=datetime.now(UTC),
+            snap_rsi_aligned=snap.rsi_aligned,
+            snap_trend_aligned=snap.trend_aligned,
+            snap_volume_sufficient=snap.volume_sufficient,
+            snap_near_news_event=snap.near_news_event,
+            snap_market_condition=snap.market_condition,
+            snap_session=snap.session,
+            snap_day_of_week=snap.day_of_week,
+        )
+        self._state.save_trade(trade)
+        self._emit("info",
+                   f"Trade opened! {trade.direction} {trade.symbol} {lot_size:.2f} lots "
+                   f"@ {trade.entry_price:.5f}  SL={trade.stop_loss:.5f}  "
+                   f"TP1={trade.take_profit_1:.5f}  ticket={trade.broker_ticket}",
+                   {"trade_id": trade.id, "ticket": trade.broker_ticket,
+                    "lots": lot_size, "entry": trade.entry_price})
+        logger.info(
+            "TRADE OPENED: %s  %s %s  %.2f lots @ %.5f  ticket=%d",
+            trade.id, trade.direction, trade.symbol,
+            lot_size, trade.entry_price, trade.broker_ticket,
+        )
+        telegram_bot.send_message(
+            f"📈 Trade opened: {trade.direction} {trade.symbol} "
+            f"{lot_size} lots @ {trade.entry_price:.5f}  "
+            f"SL={trade.stop_loss:.5f}  "
+            f"TP1={trade.take_profit_1:.5f} TP2={trade.take_profit_2:.5f} TP3={trade.take_profit_3:.5f}"
+        )
+        return trade
