@@ -1,18 +1,26 @@
 "use client";
 import React, { useEffect } from "react";
 
+type AgentEvent = {
+  agent: string;
+  level: string;
+  msg: string;
+  ts: string | null;
+  [k: string]: unknown;
+};
+
 const AGENTS = [
-  { key: "market", label: "Market", color: "#00ccff" },
-  { key: "analysis", label: "Analysis", color: "#ffcc00" },
-  { key: "strategy", label: "Strategy", color: "#ff9900" },
-  { key: "risk", label: "Risk", color: "#ff4444" },
-  { key: "execution", label: "Execution", color: "#00ff88" },
+  { key: "market",       label: "Market",       color: "#00ccff" },
+  { key: "analysis",     label: "Analysis",     color: "#ffcc00" },
+  { key: "strategy",     label: "Strategy",     color: "#ff9900" },
+  { key: "risk",         label: "Risk",         color: "#ff4444" },
+  { key: "execution",    label: "Execution",    color: "#00ff88" },
   { key: "trademanager", label: "TradeManager", color: "#ff44ff" },
-  { key: "learning", label: "Learning", color: "#aa44ff" },
-  { key: "logging", label: "Logging", color: "#888888" },
+  { key: "learning",     label: "Learning",     color: "#aa44ff" },
+  { key: "logging",      label: "Logging",      color: "#0904ff" },
 ];
 
-function timeAgo(ts) {
+function timeAgo(ts: string | number | null | undefined): string {
   if (!ts) return "idle";
   const now = Date.now();
   const t = typeof ts === "string" ? new Date(ts).getTime() : ts;
@@ -36,25 +44,30 @@ function crewmateSVG() {
 }
 
 export default function AgentTheater() {
-  const lastEventsRef = React.useRef({});
-  const [lastEventTimestamps, setLastEventTimestamps] = React.useState({});
-  const [agentStates, setAgentStates] = React.useState({});
-  const [speechBubbles, setSpeechBubbles] = React.useState({});
+  const lastEventsRef = React.useRef<Record<string, AgentEvent>>({});
+  const [lastEventTimestamps, setLastEventTimestamps] = React.useState<Record<string, number>>({});
+  const [agentStates, setAgentStates] = React.useState<Record<string, string>>({});
+  const [speechBubbles, setSpeechBubbles] = React.useState<Record<string, string>>({});
 
-  // Animation timeouts
-  const animationTimeouts = React.useRef({});
-  const speechTimeouts = React.useRef({});
+  const animationTimeouts = React.useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const speechTimeouts = React.useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
   // Poll events
   useEffect(() => {
-    let mounted = true;
     async function pollEvents() {
       try {
-        const res = await fetch("/api/agent-events?limit=20");
+        const res = await fetch("/api/events?limit=20");
         const data = await res.json();
-        if (!data.events) return;
-        const latest = {};
-        data.events.forEach((ev) => {
+        const rawEvents = Array.isArray(data) ? data : (data.events ?? []);
+        if (!rawEvents.length) return;
+
+        const events: AgentEvent[] = rawEvents.map((ev: Record<string, unknown>) => ({
+          ...ev,
+          msg: (ev.msg ?? ev.message ?? "") as string,
+          ts: (ev.ts ?? ev.created_at ?? null) as string | null,
+        }));
+        const latest: Record<string, AgentEvent> = {};
+        events.forEach((ev: AgentEvent) => {
           const key = (ev.agent || "").toLowerCase();
           if (!latest[key]) latest[key] = ev;
         });
@@ -62,10 +75,8 @@ export default function AgentTheater() {
           const key = agent.key;
           const ev = latest[key];
           if (ev && (!lastEventsRef.current[key] || lastEventsRef.current[key].ts !== ev.ts)) {
-            // New event for this agent
             lastEventsRef.current[key] = ev;
-            setLastEventTimestamps((prev) => ({ ...prev, [key]: new Date(ev.ts).getTime() }));
-            // Animation state
+            setLastEventTimestamps((prev) => ({ ...prev, [key]: ev.ts ? new Date(ev.ts).getTime() : Date.now() }));
             let state = "idle";
             if (ev.level === "warn" || ev.level === "error") state = "alert";
             else if (ev.level === "info") state = "active";
@@ -83,19 +94,17 @@ export default function AgentTheater() {
             }, state === "active" ? 800 : state === "alert" ? 1200 : 2000);
           }
         });
-      } catch (e) {
+      } catch {
         // Network error, do nothing
       }
     }
     const interval = setInterval(pollEvents, 2000);
     pollEvents();
     return () => {
-      mounted = false;
       clearInterval(interval);
-      Object.values(animationTimeouts.current).forEach(clearTimeout);
-      Object.values(speechTimeouts.current).forEach(clearTimeout);
+      Object.values(animationTimeouts.current).forEach((id) => clearTimeout(id));
+      Object.values(speechTimeouts.current).forEach((id) => clearTimeout(id));
     };
-    // eslint-disable-next-line
   }, []);
 
   // Idle fallback
@@ -123,7 +132,7 @@ export default function AgentTheater() {
               key={agent.key}
               className={`agent ${agent.label} ${state}`}
               id={`agent-${agent.key}`}
-              style={{ position: "relative", width: 60, height: 80, display: "flex", flexDirection: "column", alignItems: "center", "--agent-color": agent.color }}
+              style={{ position: "relative", width: 60, height: 80, display: "flex", flexDirection: "column", alignItems: "center", "--agent-color": agent.color } as React.CSSProperties}
             >
               <div
                 className={`speech-bubble${speechBubbles[agent.key] ? " active" : ""}`}
@@ -140,7 +149,7 @@ export default function AgentTheater() {
       <div className="status-bar" style={{ width: "100vw", background: "#111", color: "#00ff88", fontFamily: "'Courier New', monospace", fontSize: 14, padding: "10px 0 8px 0", display: "flex", justifyContent: "center", gap: 32, borderTop: "2px solid #00ff88", position: "fixed", bottom: 0, left: 0, zIndex: 10 }}>
         {AGENTS.map((agent) => {
           const lastTs = lastEventTimestamps[agent.key];
-          const lastLevel = (lastEvents[agent.key] && lastEvents[agent.key].level) || "idle";
+          const lastLevel = lastEventsRef.current[agent.key]?.level ?? "idle";
           let dotClass = "idle";
           if (lastLevel === "warn") dotClass = "warn";
           else if (lastLevel === "error") dotClass = "error";

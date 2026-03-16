@@ -25,6 +25,34 @@ from utils import telegram_bot
 
 logger = logging.getLogger(__name__)
 
+# ANSI colour codes (work on Windows 10+ CMD and PowerShell)
+_RED    = "\033[91m"
+_YELLOW = "\033[93m"
+_BOLD   = "\033[1m"
+_RESET  = "\033[0m"
+
+_LEVEL_COLOUR = {
+    logging.ERROR:    _RED,
+    logging.CRITICAL: _RED + _BOLD,
+    logging.WARNING:  _YELLOW,
+}
+
+
+class _ErrorConsoleFormatter(logging.Formatter):
+    """Prints only ERROR / CRITICAL to the terminal, loudly coloured."""
+
+    _BAR = "─" * 72
+
+    def format(self, record: logging.LogRecord) -> str:
+        colour = _LEVEL_COLOUR.get(record.levelno, "")
+        ts = self.formatTime(record, "%H:%M:%S")
+        header = f"{colour}{_BOLD}{'⚠' if record.levelno == logging.WARNING else '✖'} {record.levelname} [{ts}] {record.name}{_RESET}"
+        body   = record.getMessage()
+        if record.exc_info:
+            body += "\n" + self.formatException(record.exc_info)
+        return f"\n{self._BAR}\n{header}\n{colour}{body}{_RESET}\n{self._BAR}\n"
+
+
 _TRADE_CSV_HEADERS = [
     "id", "symbol", "strategy", "direction", "entry_price", "lot_size",
     "stop_loss", "take_profit_1", "take_profit_2", "take_profit_3",
@@ -122,24 +150,24 @@ class LoggingAgent:
 
         root.setLevel(logging.DEBUG)
 
-        fmt = logging.Formatter(
+        file_fmt = logging.Formatter(
             "%(asctime)s | %(levelname)-8s | %(name)s | %(message)s",
             datefmt="%Y-%m-%d %H:%M:%S",
         )
 
-        # Console handler
+        # ── Console: errors only, visually loud ──────────────────────────
         ch = logging.StreamHandler()
-        ch.setLevel(logging.INFO)
-        ch.setFormatter(fmt)
+        ch.setLevel(logging.ERROR)
+        ch.setFormatter(_ErrorConsoleFormatter())
         root.addHandler(ch)
 
-        # Rotating file handler
+        # ── File: full debug log, rotating ───────────────────────────────
         log_file = self._log_dir / f"bot_{date.today().isoformat()}.log"
         fh = logging.handlers.RotatingFileHandler(
             log_file, maxBytes=5_000_000, backupCount=5, encoding="utf-8",
         )
         fh.setLevel(logging.DEBUG)
-        fh.setFormatter(fmt)
+        fh.setFormatter(file_fmt)
         root.addHandler(fh)
 
         logger.info("Logging configured → %s", log_file)

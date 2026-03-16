@@ -9,9 +9,14 @@ Phase 1 uses MockConnector + DEMO_MODE = True — fully runnable end-to-end.
 from __future__ import annotations
 
 import logging
+import os
 import signal
 import sys
 import time
+
+# Enable ANSI colour codes on Windows CMD / PowerShell
+if sys.platform == "win32":
+    os.system("")  # activates VT100 processing for the current console
 from datetime import UTC, date, datetime
 
 from broker.connector import BrokerConnector

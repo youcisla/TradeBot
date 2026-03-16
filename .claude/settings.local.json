@@ -2,7 +2,9 @@
   "permissions": {
     "allow": [
       "Bash(grep -rh \"^import \\\\|^from \" c:/Users/Y.chehboub/Downloads/TradingBot/backtesting --include=*.py)",
-      "Bash(.venv/Scripts/pip install:*)"
+      "Bash(.venv/Scripts/pip install:*)",
+      "Bash(.venv/Scripts/python scripts/reset_dashboard_user.py --username admin --password admin123)",
+      "Bash(npx tsc:*)"
     ]
   }
 }
