@@ -19,90 +19,153 @@ interface Props {
   onChange: (symbol: string) => void;
 }
 
+function SymBtn({ sym, active, onClick }: { sym: string; active: boolean; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        padding: "5px 6px",
+        fontFamily: "'JetBrains Mono', monospace",
+        fontSize: 9, fontWeight: 700, letterSpacing: "0.02em",
+        background: active ? "rgba(0,255,136,0.15)" : "transparent",
+        border: `1px solid ${active ? "rgba(0,255,136,0.4)" : "#1c1c28"}`,
+        borderRadius: 3,
+        color: active ? "#00ff88" : "#2a3a4a",
+        cursor: "pointer",
+        width: "100%",
+        textAlign: "center",
+        transition: "background 0.1s, color 0.1s, border-color 0.1s",
+      }}
+      onMouseEnter={(e) => {
+        if (!active) {
+          const btn = e.currentTarget as HTMLButtonElement;
+          btn.style.color = "#c0ccd8";
+          btn.style.borderColor = "#2a3a4a";
+        }
+      }}
+      onMouseLeave={(e) => {
+        if (!active) {
+          const btn = e.currentTarget as HTMLButtonElement;
+          btn.style.color = "#2a3a4a";
+          btn.style.borderColor = "#1c1c28";
+        }
+      }}
+    >
+      {sym}
+    </button>
+  );
+}
+
 export default function ChartSymbolSelector({ value, onChange }: Props) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
 
   const allSymbols = Object.values(SYMBOL_GROUPS).flat();
-  const filtered = search
-    ? allSymbols.filter((s) => s.includes(search.toUpperCase()))
-    : null;
+  const filtered = search ? allSymbols.filter((s) => s.includes(search.toUpperCase())) : null;
+
+  const close = () => { setOpen(false); setSearch(""); };
 
   return (
-    <div className="relative">
-      {/* Current symbol button */}
+    <div style={{ position: "relative" }}>
+      {/* Trigger button */}
       <button
         onClick={() => setOpen(!open)}
-        className="flex items-center gap-2 px-4 py-2 bg-terminal-surface border border-terminal-border rounded hover:border-matrix/50 transition-colors"
+        style={{
+          display: "flex", alignItems: "center", gap: 8,
+          padding: "6px 14px",
+          background: "#0a0a12",
+          border: "1px solid #1c1c28",
+          borderRadius: 5,
+          fontFamily: "'JetBrains Mono', monospace",
+          fontSize: 12, fontWeight: 700,
+          color: "#00d4ff",
+          cursor: "pointer",
+          transition: "border-color 0.12s",
+        }}
+        onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.borderColor = "rgba(0,212,255,0.4)"; }}
+        onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.borderColor = "#1c1c28"; }}
       >
-        <span className="text-matrix font-bold text-sm">{value}</span>
+        {value}
         <svg
-          className={`w-3 h-3 text-matrix-dim transition-transform ${open ? "rotate-180" : ""}`}
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
+          width="10" height="10" viewBox="0 0 24 24"
+          fill="none" stroke="#2a3a4a" strokeWidth={2.5}
+          strokeLinecap="round" strokeLinejoin="round"
+          style={{ transform: open ? "rotate(180deg)" : "none", transition: "transform 0.15s" }}
         >
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          <path d="M19 9l-7 7-7-7" />
         </svg>
       </button>
 
       {/* Dropdown */}
       {open && (
-        <div className="absolute top-full left-0 mt-1 z-50 w-80 max-h-96 overflow-y-auto bg-terminal-surface border border-terminal-border rounded shadow-lg shadow-black/50">
+        <div style={{
+          position: "absolute",
+          top: "calc(100% + 4px)",
+          left: 0,
+          zIndex: 50,
+          width: 300,
+          maxHeight: 380,
+          overflowY: "auto",
+          background: "#0a0a12",
+          border: "1px solid #1c1c28",
+          borderRadius: 6,
+          boxShadow: "0 8px 32px rgba(0,0,0,0.6)",
+        }}>
           {/* Search */}
-          <div className="p-2 border-b border-terminal-border">
+          <div style={{ padding: "8px 10px", borderBottom: "1px solid #1c1c28" }}>
             <input
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search symbol..."
-              className="w-full px-3 py-1.5 text-xs bg-terminal border border-terminal-border rounded text-matrix placeholder:text-matrix-dim/50 focus:outline-none focus:border-matrix/50"
+              placeholder="Search symbol…"
               autoFocus
+              style={{
+                width: "100%",
+                background: "#06060c",
+                border: "1px solid #1c1c28",
+                borderRadius: 4,
+                padding: "5px 10px",
+                fontFamily: "'JetBrains Mono', monospace",
+                fontSize: 10.5, color: "#c0ccd8",
+                outline: "none",
+                boxSizing: "border-box",
+              }}
             />
           </div>
 
-          {/* Filtered results */}
+          {/* Results */}
           {filtered ? (
-            <div className="p-2 grid grid-cols-4 gap-1">
+            <div style={{ padding: "8px 10px", display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 4 }}>
               {filtered.map((sym) => (
-                <button
-                  key={sym}
-                  onClick={() => { onChange(sym); setOpen(false); setSearch(""); }}
-                  className={`px-2 py-1.5 text-[10px] font-bold rounded border transition-all ${
-                    sym === value
-                      ? "bg-matrix/20 text-matrix border-matrix"
-                      : "bg-terminal text-matrix-dim border-terminal-border hover:text-matrix hover:border-matrix/50"
-                  }`}
-                >
-                  {sym}
-                </button>
+                <SymBtn key={sym} sym={sym} active={sym === value} onClick={() => { onChange(sym); close(); }} />
               ))}
               {filtered.length === 0 && (
-                <div className="col-span-4 text-matrix-dim text-xs text-center py-2">
+                <div style={{
+                  gridColumn: "1 / -1", textAlign: "center",
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: 9.5, color: "#1e2e1e", padding: "12px 0",
+                }}>
                   No symbols found
                 </div>
               )}
             </div>
           ) : (
-            /* Grouped view */
-            Object.entries(SYMBOL_GROUPS).map(([group, symbols]) => (
-              <div key={group} className="border-b border-terminal-border last:border-0">
-                <div className="px-3 py-1.5 text-[10px] text-matrix-dim/60 uppercase tracking-widest">
+            Object.entries(SYMBOL_GROUPS).map(([group, symbols], gi, arr) => (
+              <div key={group} style={{ borderBottom: gi < arr.length - 1 ? "1px solid #1c1c28" : "none" }}>
+                <div style={{
+                  padding: "6px 12px 2px",
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: 8, fontWeight: 700, letterSpacing: "0.18em",
+                  textTransform: "uppercase", color: "#1a2a1a",
+                }}>
                   {group}
                 </div>
-                <div className="px-2 pb-2 grid grid-cols-4 gap-1">
+                <div style={{
+                  padding: "4px 10px 8px",
+                  display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 4,
+                }}>
                   {symbols.map((sym) => (
-                    <button
-                      key={sym}
-                      onClick={() => { onChange(sym); setOpen(false); }}
-                      className={`px-2 py-1.5 text-[10px] font-bold rounded border transition-all ${
-                        sym === value
-                          ? "bg-matrix/20 text-matrix border-matrix"
-                          : "bg-terminal text-matrix-dim border-terminal-border hover:text-matrix hover:border-matrix/50"
-                      }`}
-                    >
-                      {sym}
-                    </button>
+                    <SymBtn key={sym} sym={sym} active={sym === value} onClick={() => { onChange(sym); close(); }} />
                   ))}
                 </div>
               </div>
@@ -111,11 +174,11 @@ export default function ChartSymbolSelector({ value, onChange }: Props) {
         </div>
       )}
 
-      {/* Click outside to close */}
+      {/* Click-outside backdrop */}
       {open && (
         <div
-          className="fixed inset-0 z-40"
-          onClick={() => { setOpen(false); setSearch(""); }}
+          style={{ position: "fixed", inset: 0, zIndex: 40 }}
+          onClick={close}
         />
       )}
     </div>

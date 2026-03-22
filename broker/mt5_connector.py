@@ -175,11 +175,27 @@ class MT5Connector(BrokerConnector):
 
     def get_balance(self) -> float:
         info = mt5.account_info()
-        return float(info.balance) if info else 0.0
+        if info is not None:
+            val = float(info.balance)
+            if self.account_info_cache is not None:
+                self.account_info_cache["balance"] = val
+            return val
+        # MT5 called from wrong thread (ThreadPoolExecutor) — use cache
+        if self.account_info_cache is not None:
+            return float(self.account_info_cache.get("balance", 0.0))
+        return 0.0
 
     def get_equity(self) -> float:
         info = mt5.account_info()
-        return float(info.equity) if info else 0.0
+        if info is not None:
+            val = float(info.equity)
+            if self.account_info_cache is not None:
+                self.account_info_cache["equity"] = val
+            return val
+        # MT5 called from wrong thread (ThreadPoolExecutor) — use cache
+        if self.account_info_cache is not None:
+            return float(self.account_info_cache.get("equity", 0.0))
+        return 0.0
 
     # ── market data ──────────────────────────────────────────────────────
 

@@ -226,7 +226,7 @@ export default function ICTPage() {
       {/* KPI row */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 12 }}>
         <KpiCard label="Total Setups"     value={confluenceStats?.total_setups ?? 0}                                       color="#f5c518" />
-        <KpiCard label="Avg Confidence"   value={`${(confluenceStats?.avg_confidence ?? 0).toFixed(0)}/100`}               color="#00ff88" />
+        <KpiCard label="Avg Confidence"   value={`${Number(confluenceStats?.avg_confidence ?? 0).toFixed(0)}/100`}         color="#00ff88" />
         <KpiCard label="Models Active"    value={modelStats.length}                                                        color="#00d4ff" />
         <KpiCard label="Active Sessions"  value={sessionStats.length}                                                      color="#ff9d00" />
       </div>

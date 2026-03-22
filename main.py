@@ -387,10 +387,18 @@ def _update_heartbeat(
 ) -> None:
     """Write current bot metrics to bot_status row."""
     global _hb_equity, _hb_balance
-    equity = _broker_call_safe(broker.get_equity, default=_hb_equity)
-    balance = _broker_call_safe(broker.get_balance, default=_hb_balance)
-    _hb_equity = equity
-    _hb_balance = balance
+    # Call directly on the main thread — MT5 API is NOT thread-safe and
+    # returns None when called from a ThreadPoolExecutor thread.
+    try:
+        equity = broker.get_equity()
+        _hb_equity = equity
+    except Exception:
+        equity = _hb_equity
+    try:
+        balance = broker.get_balance()
+        _hb_balance = balance
+    except Exception:
+        balance = _hb_balance
     open_count = len(trade_manager.get_open_trades())
     report = learning.get_report()
     daily_pnl = report.get("total_pnl", 0.0)

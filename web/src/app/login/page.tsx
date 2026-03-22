@@ -3,14 +3,59 @@
 import { signIn } from "next-auth/react";
 import { FormEvent, useState } from "react";
 
+function LoginInput({
+  type,
+  value,
+  onChange,
+  placeholder,
+  autoFocus,
+  autoComplete,
+}: {
+  type: string;
+  value: string;
+  onChange: (v: string) => void;
+  placeholder: string;
+  autoFocus?: boolean;
+  autoComplete?: string;
+}) {
+  const [focused, setFocused] = useState(false);
+  return (
+    <input
+      type={type}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder={placeholder}
+      autoFocus={autoFocus}
+      autoComplete={autoComplete}
+      onFocus={() => setFocused(true)}
+      onBlur={() => setFocused(false)}
+      style={{
+        display: "block",
+        width: "100%",
+        background: "#06060c",
+        border: `1px solid ${focused ? "#00ff88" : "#1c1c28"}`,
+        borderRadius: 4,
+        padding: "9px 12px",
+        fontFamily: "'JetBrains Mono', monospace",
+        fontSize: 12,
+        color: "#c0ccd8",
+        outline: "none",
+        boxShadow: focused ? "0 0 0 2px rgba(0,255,136,0.15)" : "none",
+        transition: "border-color 0.15s, box-shadow 0.15s",
+        boxSizing: "border-box",
+        marginBottom: 10,
+      }}
+    />
+  );
+}
+
 export default function LoginPage() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [error, setError]       = useState(false);
+  const [loading, setLoading]   = useState(false);
   const [isFirstLogin, setIsFirstLogin] = useState<boolean | null>(null);
 
-  // Check if this is the first login (no users exist)
   useState(() => {
     fetch("/api/auth/check")
       .then((r) => r.json())
@@ -22,11 +67,7 @@ export default function LoginPage() {
     e.preventDefault();
     setLoading(true);
     setError(false);
-    const res = await signIn("credentials", {
-      username,
-      password,
-      redirect: false,
-    });
+    const res = await signIn("credentials", { username, password, redirect: false });
     if (res?.ok) {
       window.location.href = "/dashboard";
     } else {
@@ -35,56 +76,122 @@ export default function LoginPage() {
     }
   }
 
+  const disabled = loading || !username || !password;
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-terminal">
+    <div style={{
+      minHeight: "100vh",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      background: "#080808",
+    }}>
       <form
         onSubmit={handleSubmit}
-        className="border border-terminal-border rounded bg-terminal-surface p-8 w-full max-w-sm"
+        style={{
+          background: "#0a0a12",
+          border: "1px solid #1c1c28",
+          borderTop: "2px solid #00ff88",
+          borderRadius: 8,
+          padding: "36px 32px",
+          width: "100%",
+          maxWidth: 340,
+          boxSizing: "border-box",
+        }}
       >
-        <div className="text-matrix text-lg font-bold mb-1 cursor-blink">
-          TRADING BOT
-        </div>
-        <div className="text-matrix-dim text-xs mb-6">
-          {isFirstLogin
-            ? "First login — your credentials will create the admin account."
-            : "Enter your credentials to continue."}
+        {/* Logo / brand */}
+        <div style={{ marginBottom: 24 }}>
+          <div style={{
+            fontFamily: "'JetBrains Mono', monospace",
+            fontSize: 9, fontWeight: 700, letterSpacing: "0.2em",
+            textTransform: "uppercase", color: "#2a3a4a",
+            marginBottom: 4,
+          }}>
+            NeuralFX
+          </div>
+          <div style={{
+            fontFamily: "'JetBrains Mono', monospace",
+            fontSize: 18, fontWeight: 700,
+            color: "#00ff88",
+            textShadow: "0 0 18px rgba(0,255,136,0.35)",
+          }}>
+            TRADING BOT
+          </div>
+          <div style={{
+            fontFamily: "'JetBrains Mono', monospace",
+            fontSize: 10, color: "#2a3a4a",
+            marginTop: 6, lineHeight: 1.5,
+          }}>
+            {isFirstLogin
+              ? "First login — credentials will create the admin account."
+              : "Enter your credentials to continue."}
+          </div>
         </div>
 
-        <input
+        <LoginInput
           type="text"
           value={username}
-          onChange={(e) => setUsername(e.target.value)}
+          onChange={setUsername}
           placeholder="username"
           autoFocus
           autoComplete="username"
-          className="w-full bg-terminal border border-terminal-border rounded px-3 py-2 text-matrix text-sm font-mono focus:outline-none focus:border-matrix mb-3"
         />
-
-        <input
+        <LoginInput
           type="password"
           value={password}
-          onChange={(e) => setPassword(e.target.value)}
+          onChange={setPassword}
           placeholder="password"
           autoComplete="current-password"
-          className="w-full bg-terminal border border-terminal-border rounded px-3 py-2 text-matrix text-sm font-mono focus:outline-none focus:border-matrix mb-4"
         />
 
         {error && (
-          <div className="text-red-500 text-xs mb-3">
+          <div style={{
+            background: "rgba(255,68,85,0.08)",
+            border: "1px solid rgba(255,68,85,0.25)",
+            borderRadius: 4,
+            padding: "7px 10px",
+            fontFamily: "'JetBrains Mono', monospace",
+            fontSize: 10, color: "#ff4455",
+            marginBottom: 10,
+          }}>
             Access denied — wrong credentials.
           </div>
         )}
 
         <button
           type="submit"
-          disabled={loading || !username || !password}
-          className="w-full border border-matrix text-matrix rounded py-2 text-xs font-bold uppercase hover:bg-matrix hover:text-black transition-colors disabled:opacity-40"
+          disabled={disabled}
+          style={{
+            display: "block",
+            width: "100%",
+            padding: "10px",
+            background: disabled ? "rgba(0,255,136,0.03)" : "rgba(0,255,136,0.1)",
+            border: `1px solid ${disabled ? "rgba(0,255,136,0.15)" : "rgba(0,255,136,0.35)"}`,
+            borderRadius: 4,
+            fontFamily: "'JetBrains Mono', monospace",
+            fontSize: 11, fontWeight: 700, letterSpacing: "0.1em",
+            textTransform: "uppercase",
+            color: disabled ? "#1a3a1a" : "#00ff88",
+            cursor: disabled ? "not-allowed" : "pointer",
+            marginTop: 4,
+            transition: "background 0.15s, box-shadow 0.15s",
+          }}
+          onMouseEnter={(e) => {
+            if (!disabled) {
+              (e.currentTarget as HTMLButtonElement).style.background = "rgba(0,255,136,0.18)";
+              (e.currentTarget as HTMLButtonElement).style.boxShadow = "0 0 14px rgba(0,255,136,0.2)";
+            }
+          }}
+          onMouseLeave={(e) => {
+            (e.currentTarget as HTMLButtonElement).style.background = disabled ? "rgba(0,255,136,0.03)" : "rgba(0,255,136,0.1)";
+            (e.currentTarget as HTMLButtonElement).style.boxShadow = "none";
+          }}
         >
           {loading
             ? "Authenticating…"
             : isFirstLogin
-              ? "CREATE ACCOUNT & LOGIN"
-              : "AUTHENTICATE"}
+              ? "Create Account & Login"
+              : "Authenticate"}
         </button>
       </form>
     </div>

@@ -21,7 +21,7 @@ export default function EquityCurve() {
           .sort((a, b) => (a.close_time! > b.close_time! ? 1 : -1));
         let cum = 0;
         const pts = closed.map((t) => {
-          cum += t.pnl;
+          cum += Number(t.pnl);
           return { date: formatChartDate(t.close_time!), cumPnl: cum };
         });
         setPoints(pts);
