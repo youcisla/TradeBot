@@ -117,6 +117,23 @@ def asset_class(symbol: str) -> str:
     return SYMBOL_CLASS.get(symbol, "unknown")
 
 
+def commission_per_lot(symbol: str) -> float:
+    """Return the round-trip commission per standard lot for *symbol*.
+
+    Rates are configured per asset class in settings so they can be tuned
+    once the broker's actual fee schedule is confirmed.
+    """
+    from config import settings  # lazy import to avoid circular dependency
+    ac = asset_class(symbol)
+    if ac == "crypto":
+        return settings.COMMISSION_PER_LOT_CRYPTO
+    elif ac == "commodity":
+        return settings.COMMISSION_PER_LOT_COMMODITY
+    elif ac == "exotic":
+        return settings.COMMISSION_PER_LOT_EXOTIC
+    return settings.COMMISSION_PER_LOT  # forex_major, forex_cross
+
+
 # ── Active symbols (what the bot actually trades) ───────────────────────
 # Override via env:  ACTIVE_SYMBOLS=EURUSD,GBPUSD,XAUUSD
 _env_active = os.getenv("ACTIVE_SYMBOLS", "")

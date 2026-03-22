@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Callable
 
 from broker.connector import BrokerConnector
 from config import settings
+from config.symbols import commission_per_lot
 from models.signal import Signal
 from models.trade import Trade
 from state.persistence import StatePersistence
@@ -84,7 +85,9 @@ class ExecutionAgent:
         # Place ONE order for the full position.
         # Set broker-side TP at TP3 (furthest) as a crash-safety net only —
         # trade_manager manages the actual partial exits via close_partial.
-        broker_tp = signal.take_profit_3 or signal.take_profit_1 or None
+        # Use explicit > 0 check: 0.0 is falsy in Python and would otherwise
+        # fall through to TP1, causing the broker to close the full position early.
+        broker_tp = signal.take_profit_3 if signal.take_profit_3 > 0 else None
         result = self._broker.place_order(
             symbol=signal.symbol,
             direction=signal.direction,
@@ -113,9 +116,8 @@ class ExecutionAgent:
             return None
 
         # Estimate round-trip commission for display/PnL tracking.
-        # COMMISSION_PER_LOT is defined per standard lot; works as a flat
-        # per-lot rate here regardless of asset class.
-        commission = round(lot_size * settings.COMMISSION_PER_LOT, 2)
+        # Rate varies by asset class (crypto/commodity/exotic may differ from forex).
+        commission = round(lot_size * commission_per_lot(signal.symbol), 2)
 
         snap = signal.entry_snapshot
         trade = Trade(

@@ -39,6 +39,13 @@ TELEGRAM_CHAT_ID: str = os.getenv("TELEGRAM_CHAT_ID", "")
 # ── Security ─────────────────────────────────────────────────────────────
 ENCRYPTION_KEY: str = os.getenv("ENCRYPTION_KEY", "")
 
+# ── Trading Council (algorithmic quality gate) ───────────────────────────
+# Set COUNCIL_ENABLED=true to activate the three-expert algorithmic debate.
+# Signals must score >= COUNCIL_MIN_CONFIDENCE (default 80%) to proceed.
+# On unexpected errors the council fails open — trading is never blocked.
+COUNCIL_ENABLED: bool = os.getenv("COUNCIL_ENABLED", "false").lower() == "true"
+COUNCIL_MIN_CONFIDENCE: float = float(os.getenv("COUNCIL_MIN_CONFIDENCE", "0.80"))
+
 # ── Risk ─────────────────────────────────────────────────────────────────
 MAX_RISK_PER_TRADE: float = float(os.getenv("MAX_RISK_PER_TRADE", "0.02"))
 MAX_OPEN_TRADES: int = int(os.getenv("MAX_OPEN_TRADES", "3"))
@@ -59,7 +66,12 @@ TP1_CLOSE_PERCENT: float = float(os.getenv("TP1_CLOSE_PERCENT", "0.40"))
 TP2_CLOSE_PERCENT: float = float(os.getenv("TP2_CLOSE_PERCENT", "0.30"))
 TP3_CLOSE_PERCENT: float = float(os.getenv("TP3_CLOSE_PERCENT", "0.30"))
 TRAILING_STOP_DISTANCE_PIPS: float = float(os.getenv("TRAILING_STOP_DISTANCE_PIPS", "20"))
+# Per-asset-class round-trip commission in account currency per standard lot.
+# Defaults to 7.0 for all classes; override via .env once PuPrime rates are confirmed.
 COMMISSION_PER_LOT: float = float(os.getenv("COMMISSION_PER_LOT", "7.0"))
+COMMISSION_PER_LOT_CRYPTO: float = float(os.getenv("COMMISSION_PER_LOT_CRYPTO", "7.0"))
+COMMISSION_PER_LOT_COMMODITY: float = float(os.getenv("COMMISSION_PER_LOT_COMMODITY", "7.0"))
+COMMISSION_PER_LOT_EXOTIC: float = float(os.getenv("COMMISSION_PER_LOT_EXOTIC", "7.0"))
 BREAKEVEN_SPREAD_OFFSET: bool = os.getenv("BREAKEVEN_SPREAD_OFFSET", "true").lower() == "true"
 
 # ── Bot Loop ─────────────────────────────────────────────────────────────
@@ -86,6 +98,16 @@ SPIKE_PERCENT_THRESHOLD: float = float(os.getenv("SPIKE_PERCENT_THRESHOLD", "2.0
 # ── Symbols (default for V1) ────────────────────────────────────────────
 DEFAULT_SYMBOL: str = os.getenv("DEFAULT_SYMBOL", "EURUSD")
 DEFAULT_TIMEFRAME: str = os.getenv("DEFAULT_TIMEFRAME", "H1")
+
+# ── Neural LSTM Strategy ─────────────────────────────────────────────────
+NEURAL_MIN_CONFIDENCE: float = float(os.getenv("NEURAL_MIN_CONFIDENCE", "0.60"))
+NEURAL_SEQ_LEN: int          = int(os.getenv("NEURAL_SEQ_LEN", "50"))
+NEURAL_TRAIN_YEARS: int      = int(os.getenv("NEURAL_TRAIN_YEARS", "2"))
+NEURAL_RETRAIN_EVERY: int    = int(os.getenv("NEURAL_RETRAIN_EVERY", "20"))  # trades
+NEURAL_MODELS_DIR: str       = os.getenv("NEURAL_MODELS_DIR", str(Path(__file__).resolve().parent.parent / "models" / "neural"))
+NEURAL_TRAIN_EPOCHS: int     = int(os.getenv("NEURAL_TRAIN_EPOCHS", "20"))
+NEURAL_HIDDEN_SIZE: int      = int(os.getenv("NEURAL_HIDDEN_SIZE", "64"))
+NEURAL_NUM_LAYERS: int       = int(os.getenv("NEURAL_NUM_LAYERS", "2"))
 
 # ── Database ─────────────────────────────────────────────────────────────
 DATABASE_URL: str = os.getenv("DATABASE_URL", "")

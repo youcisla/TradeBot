@@ -112,6 +112,14 @@ class BrokerConnector(ABC):
         from config.symbols import contract_size as _cs
         return _cs(symbol)
 
+    def get_closed_pnl(self, ticket: int) -> float | None:
+        """Return the realised P&L for a closed position by broker ticket.
+
+        Returns None if the broker doesn't support history queries (e.g. mock).
+        MT5Connector overrides this with history_deals_get().
+        """
+        return None
+
     # ── reconciliation ───────────────────────────────────────────────────
 
     @abstractmethod

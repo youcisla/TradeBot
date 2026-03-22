@@ -52,14 +52,21 @@ class StatePersistence:
 
         mismatches: list[str] = []
 
-        # 1. Trades in DB but NOT on broker → mark closed
+        # 1. Trades in DB but NOT on broker → mark closed, fetch real PnL
         for ticket, trade in db_map.items():
             if ticket not in broker_map:
-                msg = f"RECONCILE: trade {trade.id} (ticket {ticket}) in DB but broker says closed"
+                closed_pnl = self._broker.get_closed_pnl(ticket)
+                pnl_str = f"pnl={closed_pnl:.2f}" if closed_pnl is not None else "pnl=unknown"
+                msg = (
+                    f"RECONCILE: trade {trade.id} (ticket {ticket}) "
+                    f"in DB but broker says closed — {pnl_str}"
+                )
                 logger.critical(msg)
                 mismatches.append(msg)
                 trade.status = "CLOSED"
                 trade.close_reason = "RECONCILE_BROKER_CLOSED"
+                if closed_pnl is not None:
+                    trade.pnl = closed_pnl
                 self.save_trade(trade)
 
         # 2. Positions on broker but NOT in DB → adopt them

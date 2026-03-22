@@ -8,6 +8,7 @@ Phase 1 uses MockConnector + DEMO_MODE = True — fully runnable end-to-end.
 
 from __future__ import annotations
 
+import concurrent.futures
 import logging
 import os
 import signal
@@ -30,9 +31,11 @@ from database.db import Database
 from filters.data_validator import DataValidationError
 from filters.news_filter import NewsFilter
 from state.persistence import StatePersistence
+from models.market_data import MarketContext
 from models.signal import Signal
-from strategies.sma_crossover import SmaCrossoverStrategy
-from strategies.ict_strategy import ICTStrategy
+# Rule-based strategies kept for Council confirmation logic (not used as primary generators)
+# from strategies.sma_crossover import SmaCrossoverStrategy
+# from strategies.ict_strategy import ICTStrategy
 
 from agents.market_agent import MarketAgent
 from agents.analysis_agent import AnalysisAgent
@@ -42,6 +45,9 @@ from agents.execution_agent import ExecutionAgent
 from agents.trade_manager import TradeManagerAgent
 from agents.learning_agent import LearningAgent
 from agents.logging_agent import LoggingAgent
+from agents.council_agent import CouncilAgent   # stays: confirms neural signals
+from agents.model_manager import ModelManager
+from agents.neural_strategy import NeuralStrategy
 
 from utils import telegram_bot
 from utils import candle_server
@@ -129,16 +135,19 @@ def main() -> None:
     log_agent = LoggingAgent(db)
     log_agent.record("STARTUP", f"Bot started — DEMO_MODE={settings.DEMO_MODE}")
 
-    # ── 3. Learning agent ───────────────────────────────────────────────
-    learning = LearningAgent(db)
+    # ── 3. Neural model manager (trains per-symbol LSTMs in background) ─
+    model_manager = ModelManager(broker=broker)
 
-    # ── 4. Strategies ───────────────────────────────────────────────────
-    strategies = [
-        ICTStrategy(broker=broker, db=db, min_confidence=50.0),
-        SmaCrossoverStrategy(),  # fallback
-    ]
+    # ── 4. Learning agent ───────────────────────────────────────────────
+    learning = LearningAgent(db, model_manager=model_manager)
 
-    # ── 5. Agents (db passed for persona events) ────────────────────────
+    # ── 5. Strategies — Neural LSTM is the sole primary signal generator.
+    #       ICT / SMA crossover are kept as files; the Council (below) still
+    #       uses their logic via ICTExpert / TraditionalExpert for confirmation.
+    neural_strategy = NeuralStrategy(model_manager)
+    strategies = [neural_strategy]
+
+    # ── 6. Agents (db passed for persona events) ────────────────────────
     market_agent = MarketAgent(broker, db=db)
     analysis_agent = AnalysisAgent(news_filter, db=db)
     trade_manager = TradeManagerAgent(broker, state, db)
@@ -146,13 +155,34 @@ def main() -> None:
     strategy_agent = StrategyAgent(strategies, learning.get_confidence, db=db)
     execution_agent = ExecutionAgent(broker, state, risk_agent.calculate_position_size, db=db)
 
-    # ── 6. Startup reconciliation ───────────────────────────────────────
+    # ── Trading Council (optional algorithmic quality gate) ──────────────
+    council: CouncilAgent | None = None
+    if settings.COUNCIL_ENABLED:
+        council = CouncilAgent()
+        logger.info(
+            "Trading Council ENABLED (min confidence: %.0f%%)",
+            settings.COUNCIL_MIN_CONFIDENCE * 100,
+        )
+        log_agent.record(
+            "STARTUP",
+            "Trading Council is active — 3-expert algorithmic gate ON",
+        )
+
+    # ── 7. Startup reconciliation ───────────────────────────────────────
     trade_manager.load_open_trades()
     trade_manager.reconcile()
     log_agent.record("STARTUP", f"Reconciliation done — {len(trade_manager.get_open_trades())} open trades")
     db.set_bot_uptime_start()
 
-    # ── 6b. Terminal UI (Rich live dashboard) ───────────────────────────
+    # ── 7b. Kick off neural model training / loading (background) ────────
+    model_manager.initialize(_active_symbols)
+    log_agent.record(
+        "STARTUP",
+        f"Neural LSTM training started for {len(_active_symbols)} symbols "
+        f"(existing models load instantly; new ones train in background)",
+    )
+
+    # ── 7c. Terminal UI (Rich live dashboard) ───────────────────────────
     _ui = tui.init(refresh_per_second=4)
     _ui.set_bot_status("STARTING", open_trades=len(trade_manager.get_open_trades()))
 
@@ -203,7 +233,10 @@ def main() -> None:
                 logger.info("All markets closed — sleeping (still processing commands & heartbeat)")
                 _market_closed_logged = True
             # Still process commands and heartbeat
-            _update_heartbeat(db, broker, trade_manager, learning)
+            try:
+                _update_heartbeat(db, broker, trade_manager, learning)
+            except Exception:
+                logger.warning("Heartbeat update failed — continuing")
             _process_commands(db, trade_manager)
             # Sleep in short bursts so kill/commands are picked up quickly
             for _ in range(30):  # 30 × 10s = 5 min total
@@ -226,6 +259,7 @@ def main() -> None:
                 trade_manager=trade_manager,
                 learning=learning,
                 log_agent=log_agent,
+                council=council,
                 last_scan_ts=_last_scan_ts,
                 scan_cooldown=_SCAN_COOLDOWN_S,
             )
@@ -238,7 +272,10 @@ def main() -> None:
             log_agent.record("RECONCILE", f"Periodic reconciliation (loop {loop_count})")
 
         # ── Bot status heartbeat ─────────────────────────────────────────
-        _update_heartbeat(db, broker, trade_manager, learning)
+        try:
+            _update_heartbeat(db, broker, trade_manager, learning)
+        except Exception:
+            logger.warning("Heartbeat update failed — continuing")
 
         # ── Process UI command queue ─────────────────────────────────────
         _process_commands(db, trade_manager)
@@ -250,6 +287,15 @@ def main() -> None:
                 and today_str != last_summary_date):
             report = learning.get_report()
             log_agent.send_daily_summary(report)
+            # Save daily performance snapshot and compare to yesterday
+            try:
+                learning.snapshot_daily()
+                if now.weekday() == 6:          # Sunday → weekly snapshot
+                    learning.snapshot_weekly()
+                if now.day == 1:                # 1st of month → monthly snapshot
+                    learning.snapshot_monthly()
+            except Exception:
+                logger.exception("Performance snapshot failed — bot continues")
             last_summary_date = today_str
 
         # ── Time-corrected sleep ─────────────────────────────────────────
@@ -264,6 +310,7 @@ def main() -> None:
     candle_server.stop()
     telegram_bot.stop_polling()
     telegram_bot.send_message("🛑 Bot shutting down.")
+    model_manager.shutdown()
     db.set_bot_stopped()
     broker.disconnect()
     db.close()
@@ -318,6 +365,20 @@ def _process_commands(
 
 # ── Heartbeat updater ────────────────────────────────────────────────────
 
+_hb_equity: float = 0.0
+_hb_balance: float = 0.0
+
+
+def _broker_call_safe(fn, *args, timeout: float = 5.0, default: float = 0.0) -> float:
+    """Call *fn* in a thread; return *default* if it hangs or raises."""
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
+        fut = ex.submit(fn, *args)
+        try:
+            return fut.result(timeout=timeout)
+        except Exception:
+            return default
+
+
 def _update_heartbeat(
     db: Database,
     broker: BrokerConnector,
@@ -325,8 +386,11 @@ def _update_heartbeat(
     learning: LearningAgent,
 ) -> None:
     """Write current bot metrics to bot_status row."""
-    equity = broker.get_equity()
-    balance = broker.get_balance()
+    global _hb_equity, _hb_balance
+    equity = _broker_call_safe(broker.get_equity, default=_hb_equity)
+    balance = _broker_call_safe(broker.get_balance, default=_hb_balance)
+    _hb_equity = equity
+    _hb_balance = balance
     open_count = len(trade_manager.get_open_trades())
     report = learning.get_report()
     daily_pnl = report.get("total_pnl", 0.0)
@@ -374,6 +438,7 @@ def _run_iteration(
     trade_manager: TradeManagerAgent,
     learning: LearningAgent,
     log_agent: LoggingAgent,
+    council: CouncilAgent | None,
     last_scan_ts: dict[str, float],
     scan_cooldown: float,
 ) -> None:
@@ -430,6 +495,8 @@ def _run_iteration(
     # PHASE 1: Scan ALL symbols — collect every signal
     # ══════════════════════════════════════════════════════════════════════
     all_signals: list[Signal] = []
+    # Map signal → its MarketContext so the council has candles + indicators
+    signal_contexts: dict[int, MarketContext] = {}  # id(signal) → MarketContext
 
     # Symbols with open positions — skip strategy scan (saves compute,
     # avoids duplicate-reject log spam)
@@ -477,6 +544,9 @@ def _run_iteration(
                 for sig in signals:
                     _tui.add_event("strategy", "info",
                                    f"{sig.direction} {sig.symbol} conf={sig.confidence:.0%}")
+            # Store context keyed by signal id for council review later
+            for sig in signals:
+                signal_contexts[id(sig)] = context
         all_signals.extend(signals)
 
     if skipped_cooldown:
@@ -510,10 +580,55 @@ def _run_iteration(
     )
 
     # ══════════════════════════════════════════════════════════════════════
-    # PHASE 3: Execute best signals that pass risk validation
+    # PHASE 3: Execute best signals that pass council + risk validation
     # ══════════════════════════════════════════════════════════════════════
     for signal_obj in ranked:
-        # Risk check (drawdown, spread, lot-size, etc.)
+
+        # ── Trading Council gate (3-expert algorithmic debate) ──────────
+        if council is not None:
+            ctx = signal_contexts.get(id(signal_obj))
+            if ctx is not None:
+                if _tui:
+                    _tui.set_agent_status(
+                        "council",
+                        f"debating {signal_obj.symbol} {signal_obj.direction}",
+                    )
+                verdict = council.review(signal_obj, ctx)
+                if not verdict.approved:
+                    msg = (
+                        f"Council REJECTED {signal_obj.symbol} {signal_obj.direction} "
+                        f"({verdict.confidence:.0%} < {settings.COUNCIL_MIN_CONFIDENCE:.0%}) — "
+                        f"{verdict.reasoning}"
+                    )
+                    logger.info(msg)
+                    log_agent.log_risk_rejection(
+                        signal_obj.symbol, signal_obj.direction,
+                        signal_obj.strategy, f"Council: {verdict.reasoning}",
+                    )
+                    if _tui:
+                        _tui.add_event(
+                            "council", "warn",
+                            f"REJECT {signal_obj.symbol} {verdict.confidence:.0%}",
+                        )
+                    from utils import telegram_bot as _tg
+                    _tg.send_message(
+                        f"🏛️ Council REJECTED {signal_obj.direction} {signal_obj.symbol} "
+                        f"— {verdict.confidence:.0%} confidence\n{verdict.reasoning}"
+                    )
+                    continue
+                else:
+                    logger.info(
+                        "Council APPROVED %s %s (%.0f%%)",
+                        signal_obj.symbol, signal_obj.direction,
+                        verdict.confidence * 100,
+                    )
+                    if _tui:
+                        _tui.add_event(
+                            "council", "info",
+                            f"APPROVED {signal_obj.symbol} {verdict.confidence:.0%}",
+                        )
+
+        # ── Risk check (drawdown, spread, lot-size, etc.) ────────────────
         if _tui:
             _tui.set_agent_status("risk", f"validating {signal_obj.symbol} {signal_obj.direction}")
         if not risk_agent.validate(signal_obj):

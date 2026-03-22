@@ -53,12 +53,13 @@ body {
   animation: blink 1s step-end infinite;
 }
 
-/* Agent event colors */
-.agent-market { color: #06b6d4; }      /* cyan */
-.agent-analysis { color: #eab308; }    /* yellow */
-.agent-strategy { color: #22c55e; }    /* green */
-.agent-risk { color: #f97316; }        /* orange */
-.agent-execution { color: #e5e5e5; }   /* white */
-.agent-trade_manager { color: #d946ef; } /* magenta */
-.agent-learning { color: #3b82f6; }     /* blue */
-.agent-logging { color: #6b7280; }      /* gray */
+/* Agent event colors — cyberpunk palette */
+.agent-market        { color: #00d4ff; }   /* electric cyan      */
+.agent-analysis      { color: #f5c518; }   /* amber gold         */
+.agent-strategy      { color: #00ff88; }   /* neon mint          */
+.agent-council       { color: #ff9d00; }   /* golden orange      */
+.agent-risk          { color: #ff4455; }   /* alarm red          */
+.agent-execution     { color: #f0f0f0; }   /* bright white       */
+.agent-trade_manager { color: #bf7fff; }   /* neon violet        */
+.agent-learning      { color: #4da6ff; }   /* sky blue           */
+.agent-logging       { color: #5c6a78; }   /* cool slate         */

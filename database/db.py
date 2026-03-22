@@ -190,6 +190,33 @@ CREATE TABLE IF NOT EXISTS dashboard_users (
 );
 """
 
+_CREATE_PERFORMANCE_SNAPSHOTS = """
+CREATE TABLE IF NOT EXISTS performance_snapshots (
+    id          SERIAL PRIMARY KEY,
+    period_type TEXT NOT NULL,
+    period_key  TEXT NOT NULL,
+    trades      INTEGER DEFAULT 0,
+    wins        INTEGER DEFAULT 0,
+    losses      INTEGER DEFAULT 0,
+    total_pnl   NUMERIC DEFAULT 0,
+    avg_score   NUMERIC DEFAULT 0,
+    win_rate    NUMERIC DEFAULT 0,
+    created_at  TIMESTAMP DEFAULT NOW(),
+    UNIQUE(period_type, period_key)
+);
+"""
+
+_ALTER_STRATEGY_CONFIDENCE_STREAK = """
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                   WHERE table_name='strategy_confidence' AND column_name='win_streak') THEN
+        ALTER TABLE strategy_confidence ADD COLUMN win_streak INTEGER DEFAULT 0;
+        ALTER TABLE strategy_confidence ADD COLUMN last_score NUMERIC DEFAULT 0;
+    END IF;
+END $$;
+"""
+
 _ALTER_TRADES_COMMISSION = """
 DO $$
 BEGIN
@@ -228,6 +255,7 @@ _ALL_TABLES = [
     _CREATE_ICT_SETUPS,
     _CREATE_BROKER_ACCOUNTS,
     _CREATE_DASHBOARD_USERS,
+    _CREATE_PERFORMANCE_SNAPSHOTS,
 ]
 
 
@@ -319,6 +347,7 @@ class Database:
                     cur.execute(_INIT_BOT_STATUS)
                     cur.execute(_ALTER_BOT_STATUS_BROKER)
                     cur.execute(_ALTER_TRADES_COMMISSION)
+                    cur.execute(_ALTER_STRATEGY_CONFIDENCE_STREAK)
             logger.info("Database tables verified")
         finally:
             self._put_conn(conn)
@@ -494,6 +523,153 @@ class Database:
                                total_score=EXCLUDED.total_score,
                                last_updated=NOW()""",
                         (strategy, confidence, total_trades, total_score),
+                    )
+        finally:
+            self._put_conn(conn)
+
+    def get_rolling_avg_score(self, strategy: str, n: int = 10) -> float | None:
+        """Average score of the last N scored trades for this strategy."""
+        conn = self._get_conn()
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """SELECT AVG(score) FROM (
+                           SELECT score FROM trade_scores
+                           WHERE strategy = %s
+                           ORDER BY created_at DESC LIMIT %s
+                       ) sub""",
+                    (strategy, n),
+                )
+                row = cur.fetchone()
+                return float(row[0]) if row and row[0] is not None else None
+        finally:
+            self._put_conn(conn)
+
+    def get_strategy_streak(self, strategy: str) -> int:
+        """Current win streak for a strategy (0 if not tracked yet)."""
+        conn = self._get_conn()
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT win_streak FROM strategy_confidence WHERE strategy = %s",
+                    (strategy,),
+                )
+                row = cur.fetchone()
+                return int(row[0]) if row and row[0] is not None else 0
+        finally:
+            self._put_conn(conn)
+
+    def update_strategy_streak(self, strategy: str,
+                                win_streak: int, last_score: float) -> None:
+        conn = self._get_conn()
+        try:
+            with conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """INSERT INTO strategy_confidence
+                               (strategy, confidence, win_streak, last_score, last_updated)
+                           VALUES (%s, %s, %s, %s, NOW())
+                           ON CONFLICT (strategy) DO UPDATE SET
+                               win_streak = EXCLUDED.win_streak,
+                               last_score = EXCLUDED.last_score,
+                               last_updated = NOW()""",
+                        (strategy, settings.DEFAULT_CONFIDENCE, win_streak, last_score),
+                    )
+        finally:
+            self._put_conn(conn)
+
+    def save_performance_snapshot(
+        self,
+        period_type: str,
+        period_key: str,
+        trades: int,
+        wins: int,
+        losses: int,
+        total_pnl: float,
+        avg_score: float,
+        win_rate: float,
+    ) -> None:
+        conn = self._get_conn()
+        try:
+            with conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """INSERT INTO performance_snapshots
+                               (period_type, period_key, trades, wins, losses,
+                                total_pnl, avg_score, win_rate)
+                           VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
+                           ON CONFLICT (period_type, period_key) DO UPDATE SET
+                               trades    = EXCLUDED.trades,
+                               wins      = EXCLUDED.wins,
+                               losses    = EXCLUDED.losses,
+                               total_pnl = EXCLUDED.total_pnl,
+                               avg_score = EXCLUDED.avg_score,
+                               win_rate  = EXCLUDED.win_rate""",
+                        (period_type, period_key, trades, wins, losses,
+                         total_pnl, avg_score, win_rate),
+                    )
+        finally:
+            self._put_conn(conn)
+
+    def get_previous_snapshot(self, period_type: str,
+                              before_key: str) -> dict | None:
+        """Most recent completed snapshot of this period type before the given key."""
+        conn = self._get_conn()
+        try:
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute(
+                    """SELECT * FROM performance_snapshots
+                       WHERE period_type = %s AND period_key < %s
+                       ORDER BY period_key DESC LIMIT 1""",
+                    (period_type, before_key),
+                )
+                row = cur.fetchone()
+                return dict(row) if row else None
+        finally:
+            self._put_conn(conn)
+
+    def get_period_stats(self, since: "datetime", until: "datetime") -> dict:
+        """Aggregate win/loss/PnL/score stats for trade_scores in [since, until)."""
+        conn = self._get_conn()
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """SELECT COUNT(*),
+                              COUNT(*) FILTER (WHERE pnl > 0),
+                              COUNT(*) FILTER (WHERE pnl <= 0),
+                              COALESCE(SUM(pnl), 0),
+                              COALESCE(AVG(score), 0)
+                       FROM trade_scores
+                       WHERE created_at >= %s AND created_at < %s""",
+                    (since, until),
+                )
+                row = cur.fetchone()
+                if not row or row[0] == 0:
+                    return {"trades": 0, "wins": 0, "losses": 0,
+                            "total_pnl": 0.0, "avg_score": 0.0, "win_rate": 0.0}
+                trades, wins, losses, total_pnl, avg_score = row
+                return {
+                    "trades":    int(trades),
+                    "wins":      int(wins),
+                    "losses":    int(losses),
+                    "total_pnl": float(total_pnl),
+                    "avg_score": float(avg_score),
+                    "win_rate":  round(int(wins) / int(trades), 4) if trades else 0.0,
+                }
+        finally:
+            self._put_conn(conn)
+
+    def boost_all_strategy_confidence(self, boost: float) -> None:
+        """Add *boost* to every strategy's confidence, capped at 1.0."""
+        conn = self._get_conn()
+        try:
+            with conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """UPDATE strategy_confidence
+                           SET confidence = LEAST(1.0, confidence + %s),
+                               last_updated = NOW()""",
+                        (boost,),
                     )
         finally:
             self._put_conn(conn)

@@ -19,7 +19,7 @@ from typing import Callable
 
 from broker.connector import BrokerConnector
 from config import settings
-from config.symbols import pip_value
+from config.symbols import pip_value, contract_size, commission_per_lot
 from database.db import Database
 from models.trade import Trade
 from state.persistence import StatePersistence
@@ -355,10 +355,18 @@ class TradeManagerAgent:
 
     @staticmethod
     def _breakeven_price(trade: Trade) -> float:
-        """Entry + spread + commission offset."""
-        pv = pip_value(trade.symbol)
-        commission_pips = settings.COMMISSION_PER_LOT / (10 * 100_000) / pv
-        offset = trade.spread_at_entry + commission_pips * pv
+        """Entry + spread + commission offset.
+
+        Commission offset converts the per-lot dollar commission into a price
+        offset: commission_usd / contract_size gives the price movement needed
+        to recover commission cost.
+          EURUSD (100k/lot): 7 / 100_000 = 0.00007  (~0.7 pips)
+          BTCUSD (1/lot):    7 / 1       = 7.0       ($7 price move)
+          XAUUSD (100/lot):  7 / 100     = 0.07      ($0.07 per oz)
+        """
+        cs = contract_size(trade.symbol)
+        commission_offset = commission_per_lot(trade.symbol) / cs
+        offset = trade.spread_at_entry + commission_offset
         if trade.direction == "BUY":
             return round(trade.entry_price + offset, 5)
         return round(trade.entry_price - offset, 5)

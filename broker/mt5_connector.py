@@ -359,6 +359,16 @@ class MT5Connector(BrokerConnector):
             return float(deal[0].volume)
         return 0.0
 
+    def get_closed_pnl(self, ticket: int) -> float | None:
+        """Sum profit of all deals belonging to this position ticket."""
+        try:
+            deals = mt5.history_deals_get(position=ticket)
+            if deals:
+                return float(sum(d.profit for d in deals))
+        except Exception:
+            logger.debug("history_deals_get failed for ticket %d", ticket)
+        return None
+
     def reconcile(self) -> list[PositionInfo]:
         return self.get_open_positions()
 
