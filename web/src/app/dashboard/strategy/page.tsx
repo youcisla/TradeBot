@@ -1,233 +1,323 @@
 "use client";
 
-function Card({ title, children }: { title: string; children: React.ReactNode }) {
+const S = {
+  card: {
+    background: "#0e0e10" as const,
+    border: "1px solid #1c1c28",
+    borderRadius: 8,
+    padding: "20px 22px",
+    position: "relative" as const,
+    overflow: "hidden" as const,
+  },
+  heading: {
+    fontSize: 9,
+    fontFamily: "'JetBrains Mono', monospace",
+    color: "#2a3a4a",
+    letterSpacing: "0.18em",
+    textTransform: "uppercase" as const,
+    fontWeight: 600,
+    marginBottom: 14,
+    borderBottom: "1px solid #1c1c28",
+    paddingBottom: 10,
+  },
+  label: {
+    fontSize: 9.5,
+    color: "#3a4a5a",
+    fontFamily: "'JetBrains Mono', monospace",
+  },
+  value: {
+    fontSize: 11,
+    color: "#9aa8b8",
+    fontFamily: "'JetBrains Mono', monospace",
+    fontWeight: 600,
+  },
+  mono: {
+    fontFamily: "'JetBrains Mono', monospace",
+  },
+};
+
+function Card({ title, accent, children }: { title: string; accent?: string; children: React.ReactNode }) {
+  const accentColor = accent ?? "#00ff41";
   return (
-    <div className="border border-terminal-border rounded bg-terminal-surface p-5">
-      <div className="text-matrix text-xs font-bold uppercase tracking-widest mb-3 border-b border-terminal-border pb-2">
-        {title}
-      </div>
+    <div style={S.card}>
+      <div style={{
+        position: "absolute", top: 0, left: 0, right: 0, height: 1,
+        background: `linear-gradient(90deg, transparent, ${accentColor}44, transparent)`,
+      }} />
+      <div style={S.heading}>{title}</div>
       {children}
     </div>
   );
 }
 
-function Row({ label, value, hint }: { label: string; value: string; hint?: string }) {
+function Row({ label, value, hint, color }: { label: string; value: string; hint?: string; color?: string }) {
   return (
-    <div className="flex justify-between items-start py-1 border-b border-terminal-border/20 last:border-0">
-      <span className="text-matrix-dim text-[11px]">{label}</span>
-      <span className="text-right">
-        <span className="text-matrix text-[11px] font-bold">{value}</span>
-        {hint && <span className="text-matrix-dim text-[9px] block">{hint}</span>}
+    <div style={{
+      display: "flex", justifyContent: "space-between", alignItems: "flex-start",
+      padding: "5px 0", borderBottom: "1px solid rgba(28,28,40,0.4)",
+    }}>
+      <span style={S.label}>{label}</span>
+      <span style={{ textAlign: "right" }}>
+        <span style={{ ...S.value, color: color ?? "#9aa8b8" }}>{value}</span>
+        {hint && <span style={{ display: "block", fontSize: 8.5, color: "#2a3a4a", ...S.mono }}>{hint}</span>}
       </span>
     </div>
   );
 }
 
-const TAG = "px-2 py-0.5 rounded text-[9px] font-bold uppercase";
+function Tag({ children, color }: { children: React.ReactNode; color: "green" | "red" | "yellow" | "blue" | "purple" }) {
+  const colors = {
+    green:  { bg: "rgba(0,255,136,0.12)",  text: "#00ff88", border: "rgba(0,255,136,0.25)" },
+    red:    { bg: "rgba(255,68,85,0.12)",   text: "#ff4455", border: "rgba(255,68,85,0.25)" },
+    yellow: { bg: "rgba(245,197,24,0.12)",  text: "#f5c518", border: "rgba(245,197,24,0.25)" },
+    blue:   { bg: "rgba(77,166,255,0.12)",  text: "#4da6ff", border: "rgba(77,166,255,0.25)" },
+    purple: { bg: "rgba(213,0,249,0.12)",   text: "#d500f9", border: "rgba(213,0,249,0.25)" },
+  }[color];
+  return (
+    <span style={{
+      display: "inline-block",
+      padding: "2px 9px", borderRadius: 3, marginRight: 8,
+      fontSize: 9, fontWeight: 700, letterSpacing: "0.08em",
+      fontFamily: "'JetBrains Mono', monospace",
+      background: colors.bg, color: colors.text,
+      border: `1px solid ${colors.border}`,
+      textTransform: "uppercase" as const,
+    }}>
+      {children}
+    </span>
+  );
+}
+
+const FEATURES = [
+  { name: "close_ret",    desc: "log(close / prev_close)",           note: "price momentum" },
+  { name: "high_body",    desc: "(high − close) / ATR",               note: "upper wick ratio" },
+  { name: "low_body",     desc: "(close − low) / ATR",                note: "lower wick ratio" },
+  { name: "candle_body",  desc: "(close − open) / ATR",               note: "body direction & size" },
+  { name: "volume_z",     desc: "(vol − vol_mean) / vol_std",         note: "z-score over 50 bars" },
+  { name: "rsi_centered", desc: "(RSI(14) − 50) / 50",               note: "normalized momentum" },
+  { name: "sma_ratio",    desc: "(sma_fast − sma_slow) / ATR",        note: "trend alignment" },
+  { name: "atr_pct",     desc: "ATR / close",                        note: "relative volatility" },
+  { name: "spread_atr",  desc: "spread / ATR",                       note: "0 when unavailable" },
+];
 
 export default function StrategyPage() {
   return (
-    <div className="space-y-6">
-      <h1 className="text-matrix text-lg font-bold">Strategy & Risk Model</h1>
-      <p className="text-matrix-dim text-xs leading-relaxed">
-        This page documents the trading logic, risk rules, and learning feedback loop that the bot uses in production.
-        All parameters are configurable via environment variables.
-      </p>
+    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Current Strategy */}
-        <Card title="Active Strategy — SMA Crossover">
-          <div className="space-y-2 text-[11px] text-matrix-dim leading-relaxed">
-            <p>
-              <span className={`${TAG} bg-green-900/40 text-green-400 mr-2`}>BUY</span>
-              When the <span className="text-matrix font-bold">SMA(10)</span> crosses <strong>above</strong> the{" "}
-              <span className="text-matrix font-bold">SMA(50)</span>.
-            </p>
-            <p>
-              <span className={`${TAG} bg-red-900/40 text-red-400 mr-2`}>SELL</span>
-              When the <span className="text-matrix font-bold">SMA(10)</span> crosses <strong>below</strong> the{" "}
-              <span className="text-matrix font-bold">SMA(50)</span>.
-            </p>
-            <p className="pt-2 border-t border-terminal-border/30">
-              <strong className="text-matrix">Stop Loss</strong>: 1× ATR(14) from entry price
-            </p>
-            <p>
-              <strong className="text-matrix">Take Profits</strong>: R:R ratio 1:1, 1:2, 1:3 (TP1 = 1× risk, TP2 = 2× risk, TP3 = 3× risk)
-            </p>
+      {/* Header */}
+      <div>
+        <div style={{
+          fontSize: 9, fontFamily: "'JetBrains Mono', monospace",
+          color: "#2a3a4a", letterSpacing: "0.2em", textTransform: "uppercase",
+        }}>
+          Architecture
+        </div>
+        <h1 style={{
+          fontSize: 20, fontFamily: "'JetBrains Mono', monospace",
+          fontWeight: 700, marginTop: 2,
+          background: "linear-gradient(90deg, #d500f9, #00ff88)",
+          WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
+        }}>
+          Neural LSTM Strategy
+        </h1>
+        <p style={{
+          fontSize: 11, ...S.mono, color: "#3a4a5a", marginTop: 8, lineHeight: 1.6,
+        }}>
+          A 2-layer LSTM trained on 2 years of H1 OHLCV data per symbol. The Council (ICT + DanialFX + Traditional experts)
+          acts as a confirmation gate for every neural signal. Models train automatically at startup and fine-tune continuously as real trades close.
+        </p>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+
+        {/* Model Architecture */}
+        <Card title="LSTM Model Architecture" accent="#d500f9">
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <div style={{
+              fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5,
+              color: "#9aa8b8", lineHeight: 1.7,
+              background: "#0a0a12", border: "1px solid #1c1c28",
+              borderRadius: 5, padding: "12px 14px",
+            }}>
+              <div style={{ color: "#d500f9" }}>LSTMTradingModel</div>
+              <div style={{ paddingLeft: 14, color: "#4a5568" }}>Input  : (batch, <span style={{ color: "#f5c518" }}>50</span>, <span style={{ color: "#f5c518" }}>9</span>)   — 50 H1 bars × 9 features</div>
+              <div style={{ paddingLeft: 14, color: "#4a5568" }}>LSTM   : hidden=<span style={{ color: "#00ff88" }}>64</span>, layers=<span style={{ color: "#00ff88" }}>2</span>, dropout=0.2</div>
+              <div style={{ paddingLeft: 14, color: "#4a5568" }}>Output : (batch, <span style={{ color: "#f5c518" }}>3</span>)       — [BUY, SELL, HOLD]</div>
+            </div>
+            <Row label="Sequence length" value="50 bars" hint="last 50 H1 candles" />
+            <Row label="Input features" value="9" hint="per timestep" />
+            <Row label="Hidden size" value="64" />
+            <Row label="LSTM layers" value="2" />
+            <Row label="Output classes" value="BUY / SELL / HOLD" color="#d500f9" />
+            <Row label="Min confidence" value="60%" hint="to generate a signal" color="#00ff88" />
           </div>
         </Card>
 
-        {/* Indicators */}
-        <Card title="Technical Indicators">
-          <table className="w-full text-[11px]">
-            <thead className="text-matrix-dim uppercase border-b border-terminal-border text-[9px]">
-              <tr>
-                <th className="text-left py-1">Indicator</th>
-                <th className="text-right py-1">Period</th>
-                <th className="text-left py-1 pl-3">Usage</th>
+        {/* Input Features */}
+        <Card title="Input Features (9 per bar)" accent="#f5c518">
+          <table style={{
+            width: "100%", borderCollapse: "collapse",
+            fontFamily: "'JetBrains Mono', monospace", fontSize: 10,
+          }}>
+            <thead>
+              <tr style={{ borderBottom: "1px solid #1c1c28" }}>
+                <th style={{ padding: "4px 6px", textAlign: "left", fontSize: 8.5, color: "#2a3a4a", letterSpacing: "0.12em", textTransform: "uppercase" }}>#</th>
+                <th style={{ padding: "4px 6px", textAlign: "left", fontSize: 8.5, color: "#2a3a4a", letterSpacing: "0.12em", textTransform: "uppercase" }}>Name</th>
+                <th style={{ padding: "4px 6px", textAlign: "left", fontSize: 8.5, color: "#2a3a4a", letterSpacing: "0.12em", textTransform: "uppercase" }}>Formula / Notes</th>
               </tr>
             </thead>
-            <tbody className="text-matrix-dim">
-              <tr className="border-b border-terminal-border/20">
-                <td className="py-1 text-matrix font-bold">SMA Fast</td>
-                <td className="py-1 text-right">10</td>
-                <td className="py-1 pl-3">Crossover signals</td>
-              </tr>
-              <tr className="border-b border-terminal-border/20">
-                <td className="py-1 text-matrix font-bold">SMA Slow</td>
-                <td className="py-1 text-right">50</td>
-                <td className="py-1 pl-3">Crossover signals + trend</td>
-              </tr>
-              <tr className="border-b border-terminal-border/20">
-                <td className="py-1 text-matrix font-bold">RSI</td>
-                <td className="py-1 text-right">14</td>
-                <td className="py-1 pl-3">Filter — direction alignment</td>
-              </tr>
-              <tr>
-                <td className="py-1 text-matrix font-bold">ATR</td>
-                <td className="py-1 text-right">14</td>
-                <td className="py-1 pl-3">SL distance + regime detection</td>
-              </tr>
+            <tbody>
+              {FEATURES.map((f, i) => (
+                <tr key={f.name} style={{ borderBottom: "1px solid rgba(28,28,40,0.4)" }}>
+                  <td style={{ padding: "5px 6px", color: "#2a3a4a" }}>{i}</td>
+                  <td style={{ padding: "5px 6px", color: "#f5c518", fontWeight: 700 }}>{f.name}</td>
+                  <td style={{ padding: "5px 6px", color: "#4a5568" }}>
+                    <div>{f.desc}</div>
+                    <div style={{ fontSize: 8.5, color: "#2a3a4a" }}>{f.note}</div>
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </Card>
 
+        {/* Auto-Labeling */}
+        <Card title="Auto-Labeling (Training Data)" accent="#00ff88">
+          <div style={{ ...S.mono, fontSize: 10.5, color: "#7a8a9a", lineHeight: 1.7 }}>
+            <p style={{ marginBottom: 10, color: "#4a5568" }}>
+              For each bar <span style={{ color: "#00ff88" }}>i</span>, look forward <span style={{ color: "#f5c518" }}>20</span> bars.
+              The first direction to move ≥ <span style={{ color: "#f5c518" }}>1.5 × ATR</span> from entry wins:
+            </p>
+            <div style={{ paddingLeft: 12 }}>
+              <div><Tag color="green">BUY</Tag><span style={{ color: "#4a5568" }}>Up first → label = 0</span></div>
+              <div style={{ marginTop: 6 }}><Tag color="red">SELL</Tag><span style={{ color: "#4a5568" }}>Down first → label = 1</span></div>
+              <div style={{ marginTop: 6 }}><Tag color="yellow">HOLD</Tag><span style={{ color: "#4a5568" }}>Neither in 20 bars → label = 2</span></div>
+            </div>
+          </div>
+          <div style={{ marginTop: 14 }}>
+            <Row label="Horizon"        value="20 bars" hint="forward look-ahead" />
+            <Row label="ATR multiplier" value="1.5×"    hint="of 14-bar ATR" />
+            <Row label="Label ratio"    value="~33% / 33% / 33%" hint="balanced with class weights" />
+          </div>
+        </Card>
+
+        {/* Training */}
+        <Card title="Training Pipeline" accent="#00d4ff">
+          <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+            <Row label="History"       value="2 years H1" hint="per symbol" />
+            <Row label="Split"         value="80% train / 20% val" hint="temporal (no shuffle)" />
+            <Row label="Optimizer"     value="Adam, lr=0.001" />
+            <Row label="Loss"          value="Weighted CrossEntropy" hint="compensates class imbalance" />
+            <Row label="Batch size"    value="32" />
+            <Row label="Epochs"        value="20 max" hint="early stop: patience=3" />
+            <Row label="Thread pool"   value="4 workers" hint="parallel per-symbol training" />
+            <Row label="Model file"    value="{SYMBOL}_H1.pt" hint="models/neural/" />
+          </div>
+
+          {/* Flow */}
+          <div style={{
+            marginTop: 14, fontFamily: "'JetBrains Mono', monospace", fontSize: 9.5,
+            background: "#0a0a12", border: "1px solid #1c1c28",
+            borderRadius: 5, padding: "10px 14px",
+            color: "#4a5568", lineHeight: 2,
+          }}>
+            <div style={{ color: "#00d4ff" }}>Startup:</div>
+            <div style={{ paddingLeft: 10 }}>→ check models/neural/ (skip if &lt; 7 days old)</div>
+            <div style={{ paddingLeft: 10 }}>→ download H1 history via data_downloader</div>
+            <div style={{ paddingLeft: 10 }}>→ auto_label() → build_features() → train LSTM</div>
+            <div style={{ paddingLeft: 10 }}>→ save .pt + .json (normalizer params)</div>
+            <div style={{ paddingLeft: 10, color: "#00ff88" }}>→ model READY — bot starts trading</div>
+          </div>
+        </Card>
+
+        {/* Fine-Tuning */}
+        <Card title="Continuous Fine-Tuning" accent="#76ff03">
+          <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+            <Row label="Replay buffer"   value="200 trades" hint="ring buffer per symbol" />
+            <Row label="Trigger"         value="every 20 closures" hint="per symbol" />
+            <Row label="Fine-tune epochs" value="5" />
+            <Row label="Learning rate"   value="0.0001" hint="10× lower to prevent forgetting" />
+            <Row label="Label source"    value="trade PnL" hint="profit → reinforce, loss → HOLD" color="#76ff03" />
+          </div>
+          <div style={{
+            marginTop: 14, fontFamily: "'JetBrains Mono', monospace", fontSize: 9.5,
+            background: "#0a0a12", border: "1px solid #1c1c28",
+            borderRadius: 5, padding: "10px 14px",
+            color: "#4a5568", lineHeight: 2,
+          }}>
+            <div style={{ color: "#76ff03" }}>Trade closes:</div>
+            <div style={{ paddingLeft: 10 }}>learning_agent.review_trade()</div>
+            <div style={{ paddingLeft: 10 }}>→ model_manager.record_outcome(label)</div>
+            <div style={{ paddingLeft: 10 }}>→ replay_buffer.append((features, label))</div>
+            <div style={{ paddingLeft: 10 }}>→ [every 20] background fine-tune thread</div>
+          </div>
+        </Card>
+
+        {/* Signal Flow */}
+        <Card title="Signal Pipeline (Main Loop)" accent="#ff9d00">
+          <div style={{
+            fontFamily: "'JetBrains Mono', monospace", fontSize: 9.5,
+            color: "#4a5568", lineHeight: 2,
+            background: "#0a0a12", border: "1px solid #1c1c28",
+            borderRadius: 5, padding: "10px 14px",
+          }}>
+            <div><span style={{ color: "#00d4ff" }}>Market</span> → get H1 candles + context</div>
+            <div><span style={{ color: "#f5c518" }}>Analysis</span> → RSI, ATR, trend, regime</div>
+            <div><span style={{ color: "#d500f9" }}>Neural</span> → LSTM.predict() → (direction, p%)</div>
+            <div style={{ paddingLeft: 14, color: "#2a3a4a" }}>if p &lt; 60% → skip</div>
+            <div><span style={{ color: "#ff9d00" }}>Council</span> → ICT + DanialFX + Traditional confirm</div>
+            <div style={{ paddingLeft: 14, color: "#2a3a4a" }}>majority vote required to proceed</div>
+            <div><span style={{ color: "#ff4455" }}>Risk</span> → position size, daily limits, spread</div>
+            <div><span style={{ color: "#f0f0f0" }}>Exec</span> → open MT5 order (SL=2×ATR, TP×3)</div>
+            <div><span style={{ color: "#bf7fff" }}>TradeMgr</span> → partial close, breakeven, trailing</div>
+          </div>
+        </Card>
+
         {/* Risk Management */}
         <Card title="Risk Management">
-          <div className="space-y-1">
-            <Row label="Max Risk per Trade" value="2%" hint="of account equity" />
-            <Row label="Max Open Trades" value="3" />
-            <Row label="Max Daily Loss" value="5%" hint="of account equity" />
-            <Row label="Max Spread" value="3.0 pips" hint="rejects trades above this" />
-            <Row label="Drawdown Cooldown" value="24 hours" hint="pauses after max daily loss" />
-            <Row label="Min Lot Size" value="0.01" />
-            <Row label="Commission" value="$7 / lot" hint="factored into breakeven" />
-            <Row label="News Blackout" value="15 min" hint="before & after high-impact events" />
+          <Row label="Max Risk per Trade" value="2%"         hint="of account equity" />
+          <Row label="Max Open Trades"    value="3" />
+          <Row label="Max Daily Loss"     value="5%"         hint="of account equity" />
+          <Row label="Max Spread"         value="3.0 pips"   hint="rejects trades above this" />
+          <Row label="Stop Loss"          value="2 × ATR"    hint="from entry" color="#ff4455" />
+          <Row label="TP1"                value="1R"         hint="close 40%" color="#00ff88" />
+          <Row label="TP2"                value="2R"         hint="close 30%, trailing starts" color="#00ff88" />
+          <Row label="TP3"                value="3R"         hint="close remainder" color="#00ff88" />
+          <Row label="Commission"         value="$7 / lot"   hint="factored into breakeven" />
+          <Row label="News blackout"      value="15 min"     hint="before & after high-impact" />
+        </Card>
+
+        {/* Score System */}
+        <Card title="Learning Score System">
+          <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: "'JetBrains Mono', monospace", fontSize: 10 }}>
+            <thead>
+              <tr style={{ borderBottom: "1px solid #1c1c28" }}>
+                <th style={{ padding: "4px 6px", textAlign: "left", fontSize: 8.5, color: "#2a3a4a", letterSpacing: "0.1em", textTransform: "uppercase" }}>Outcome</th>
+                <th style={{ padding: "4px 6px", textAlign: "right", fontSize: 8.5, color: "#2a3a4a", letterSpacing: "0.1em", textTransform: "uppercase" }}>Score</th>
+                <th style={{ padding: "4px 6px", textAlign: "left", fontSize: 8.5, color: "#2a3a4a", letterSpacing: "0.1em", textTransform: "uppercase" }}>Rule</th>
+              </tr>
+            </thead>
+            <tbody>
+              {[
+                { label: "Clean Win",    score: "+3", color: "#00ff88", rule: "Profit ≥ 2R" },
+                { label: "Messy Win",    score: "+1", color: "#76ff03", rule: "Profit > 0 but < 2R" },
+                { label: "Normal Loss",  score: "−2", color: "#f5c518", rule: "SL hit, entry valid" },
+                { label: "Bad Loss",     score: "−5", color: "#ff4455", rule: "SL hit + loss > 1.5R" },
+              ].map((r) => (
+                <tr key={r.label} style={{ borderBottom: "1px solid rgba(28,28,40,0.4)" }}>
+                  <td style={{ padding: "5px 6px", color: r.color }}>{r.label}</td>
+                  <td style={{ padding: "5px 6px", textAlign: "right", fontWeight: 700, color: r.color }}>{r.score}</td>
+                  <td style={{ padding: "5px 6px", color: "#4a5568" }}>{r.rule}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <div style={{ marginTop: 12, fontSize: 9.5, color: "#2a3a4a", fontFamily: "'JetBrains Mono', monospace", lineHeight: 1.6 }}>
+            Bonus: +0.5 each for RSI aligned, trend aligned, volume sufficient, no news event.
+            Confidence step: 0.02 per score point · min 10% · max 100%.
           </div>
         </Card>
 
-        {/* Trade Execution */}
-        <Card title="Trade Execution Model">
-          <div className="space-y-1">
-            <Row label="TP1 Close" value="40%" hint="of position" />
-            <Row label="TP2 Close" value="30%" hint="of position" />
-            <Row label="TP3 Close" value="30%" hint="remainder" />
-            <Row label="Trailing Stop" value="20 pips" hint="activates after TP2" />
-            <Row label="Breakeven SL" value="After TP1" hint="entry + spread + commission" />
-          </div>
-          <div className="mt-3 p-3 bg-terminal rounded border border-terminal-border/40 text-[10px] text-matrix-dim font-mono leading-relaxed">
-            <div>Signal approved → Execution Agent opens</div>
-            <div className="pl-4">→ TP1 hit → close 40%, SL → breakeven</div>
-            <div className="pl-4">→ TP2 hit → close 30%, trailing SL starts</div>
-            <div className="pl-4">→ TP3 hit → close 30%, trade closed</div>
-            <div className="pl-4">→ SL hit → close all remaining</div>
-          </div>
-        </Card>
-
-        {/* Market Regime */}
-        <Card title="Market Regime Detection">
-          <div className="space-y-2 text-[11px] text-matrix-dim">
-            <p>
-              <span className={`${TAG} bg-yellow-900/40 text-yellow-400 mr-2`}>VOLATILE</span>
-              14-bar price range &gt; 3× ATR
-            </p>
-            <p>
-              <span className={`${TAG} bg-blue-900/40 text-blue-400 mr-2`}>TRENDING</span>
-              |SMA(10) − SMA(50)| &gt; ATR
-            </p>
-            <p>
-              <span className={`${TAG} bg-purple-900/40 text-purple-400 mr-2`}>RANGING</span>
-              Neither volatile nor trending
-            </p>
-            <p className="pt-2 text-[10px] border-t border-terminal-border/30">
-              Regime is stored in the entry snapshot and used by the learning system for post-trade scoring.
-            </p>
-          </div>
-        </Card>
-
-        {/* Learning System */}
-        <Card title="Learning & Feedback Loop">
-          <div className="space-y-2 text-[11px]">
-            <p className="text-matrix-dim">
-              After each closed trade, the bot assigns an objective score based on the entry snapshot:
-            </p>
-            <table className="w-full text-[10px]">
-              <thead className="text-matrix-dim uppercase border-b border-terminal-border text-[9px]">
-                <tr>
-                  <th className="text-left py-1">Outcome</th>
-                  <th className="text-right py-1">Score</th>
-                  <th className="text-left py-1 pl-3">Rule</th>
-                </tr>
-              </thead>
-              <tbody className="text-matrix-dim">
-                <tr className="border-b border-terminal-border/20">
-                  <td className="py-1 text-green-400">Clean Win</td>
-                  <td className="py-1 text-right text-green-400 font-bold">+3</td>
-                  <td className="py-1 pl-3">Profit + all filters aligned</td>
-                </tr>
-                <tr className="border-b border-terminal-border/20">
-                  <td className="py-1 text-yellow-400">Messy Win</td>
-                  <td className="py-1 text-right text-yellow-400 font-bold">+1</td>
-                  <td className="py-1 pl-3">Profit but filter marginal</td>
-                </tr>
-                <tr className="border-b border-terminal-border/20">
-                  <td className="py-1 text-orange-400">Normal Loss</td>
-                  <td className="py-1 text-right text-orange-400 font-bold">−2</td>
-                  <td className="py-1 pl-3">SL hit, entry was valid</td>
-                </tr>
-                <tr className="border-b border-terminal-border/20">
-                  <td className="py-1 text-red-400">Bad Loss</td>
-                  <td className="py-1 text-right text-red-400 font-bold">−5</td>
-                  <td className="py-1 pl-3">SL hit + filter violation</td>
-                </tr>
-                <tr>
-                  <td className="py-1 text-red-600">Rule Violation</td>
-                  <td className="py-1 text-right text-red-600 font-bold">−10</td>
-                  <td className="py-1 pl-3">Forced past a filter</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </Card>
-
-        {/* Confidence */}
-        <Card title="Confidence Levels">
-          <div className="space-y-1">
-            <Row label="Default (new strategy)" value="0.50" />
-            <Row label="Full confidence (no throttling)" value="≥ 0.70" />
-            <Row label="Reduced (smaller lots)" value="0.30 – 0.50" />
-            <Row label="Disabled (no trading)" value="&lt; 0.20" />
-          </div>
-          <p className="text-matrix-dim text-[10px] mt-3">
-            Confidence adjusts automatically per strategy based on cumulative trade scores.
-            Strategies below the disable threshold stop receiving signals until manually re-enabled.
-          </p>
-        </Card>
-
-        {/* Data Sources */}
-        <Card title="Data Sources & Filters">
-          <div className="space-y-2 text-[11px] text-matrix-dim">
-            <p><strong className="text-matrix">Market Data:</strong> MetaTrader 5 (real-time ticks + candles)</p>
-            <p><strong className="text-matrix">News Calendar:</strong> ForexFactory / economic API (high-impact events)</p>
-            <p><strong className="text-matrix">Session Detection:</strong> London, New York, Asian, Overlap — auto-tagged</p>
-            <p className="pt-2 border-t border-terminal-border/30">
-              <strong className="text-matrix">Pre-trade filters:</strong> spread check, news blackout, spike detection,
-              stale-quote guard, max open trades, daily loss limit, drawdown cooldown.
-            </p>
-          </div>
-        </Card>
-
-        {/* Known Limitations */}
-        <Card title="Known Limitations">
-          <ul className="list-disc list-inside space-y-1 text-[11px] text-matrix-dim">
-            <li>Single strategy active (SMA Crossover). More planned.</li>
-            <li>MT5 partial close uses counter-order, not native partial close API.</li>
-            <li>News data depends on external API availability.</li>
-            <li>No multi-timeframe confirmation yet (uses single M15 by default).</li>
-            <li>Learning system rule-based only — no ML/AI model retraining.</li>
-            <li>Demo mode enabled during Phase 1 — no real money at risk.</li>
-          </ul>
-        </Card>
       </div>
     </div>
   );

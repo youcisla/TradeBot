@@ -1,7 +1,7 @@
 ---
 name: implement-agent
-description: Implement or modify one of the trading bot agents (Market, Analysis, Strategy, Risk, Execution, Trade Manager, Learning, Logging). Provides the specification and contract for each agent. Use when building, extending, or debugging any agent module.
-argument-hint: <agent-name> (market|analysis|strategy|risk|execution|trade-manager|learning|logging)
+description: Implement or modify one of the trading bot agents (Market, Analysis, Strategy, Neural, ModelManager, Risk, Execution, Trade Manager, Learning, Logging). Provides the specification and contract for each agent. Use when building, extending, or debugging any agent module.
+argument-hint: <agent-name> (market|analysis|strategy|neural|model-manager|risk|execution|trade-manager|learning|logging)
 ---
 
 # Implement Agent: $ARGUMENTS
@@ -327,6 +327,92 @@ class LoggingAgent:
 - Open positions with current P&L
 - Any strategies that changed confidence state
 - Any anomalies (data gaps, reconnects, rejected signals)
+
+---
+
+## Neural Strategy Agent (`agents/neural_strategy.py`)
+
+**Key:** `neural`
+**Question:** What does the LSTM model predict?
+
+**Responsibilities:**
+- Wrap ModelManager to provide a `BaseStrategy`-compatible interface
+- Call `model_manager.predict(symbol, candles, context)` → (direction, confidence) or None
+- Return `Signal` if confidence ≥ `settings.NEURAL_MIN_CONFIDENCE`
+- Return `None` if model not trained yet for this symbol, or confidence too low
+- SL = 2×ATR; TP1/2/3 = 1R/2R/3R (risk-based)
+- Capture EntrySnapshot at signal time for learning system
+
+**Interface:**
+```python
+class NeuralStrategy(BaseStrategy):
+    name = "neural"
+
+    def __init__(self, model_manager: "ModelManager"):
+        self.model_manager = model_manager
+
+    def detect(self, context: MarketContext) -> Optional[Signal]:
+        result = self.model_manager.predict(context.symbol, context.candles, context)
+        if result is None:
+            return None
+        direction, confidence = result
+        if confidence < settings.NEURAL_MIN_CONFIDENCE:
+            return None
+        # Build signal with ATR-based SL/TP, EntrySnapshot, return Signal
+        ...
+
+    def calculate_sl(self, context, direction): ...  # 2×ATR
+    def calculate_tps(self, context, entry, sl, direction): ...  # 1R, 2R, 3R
+```
+
+---
+
+## Model Manager (`agents/model_manager.py`)
+
+**Key:** `model_manager`
+**Question:** Is the LSTM model trained and ready? Can we infer?
+
+**Responsibilities:**
+- Download 2yr H1 history per symbol at startup (via `backtesting/data_downloader`)
+- Auto-label candles (BUY/SELL/HOLD using 20-bar forward horizon)
+- Train `LSTMTradingModel` per symbol (80/20 temporal split)
+- Save model weights + normalizer params to `models/neural/`
+- Load cached models if < 7 days old (skip re-train)
+- Provide `predict()` for inference (last 50 candles → softmax)
+- Maintain replay buffer (200 most recent closed trades per symbol)
+- Fine-tune model every 20 new trade closures (5 epochs, lr=0.0001)
+- Log training progress via `agent_events` DB table (key: `model_manager`)
+
+**Interface:**
+```python
+class ModelManager:
+    def initialize(self, symbols: list[str]) -> None:
+        """Start background training for all symbols. Non-blocking."""
+
+    def get_model(self, symbol: str) -> Optional[LSTMTradingModel]:
+        """Returns trained model or None if not ready yet."""
+
+    def predict(self, symbol: str, candles: list[Candle], context: MarketContext) -> Optional[tuple[str, float]]:
+        """Returns (direction, confidence) or None if model not ready."""
+
+    def record_outcome(self, symbol: str, candle_window: np.ndarray, label: int) -> None:
+        """Add a closed trade outcome to the replay buffer. Trigger fine-tune if ready."""
+
+    def _train_symbol(self, symbol: str) -> None:
+        """Background: download → label → train → save."""
+
+    def _fine_tune(self, symbol: str) -> None:
+        """Background: fine-tune on replay buffer for 5 epochs."""
+```
+
+**Storage layout:**
+```
+models/neural/
+  {SYMBOL}_H1.pt    ← PyTorch state dict (LSTMTradingModel)
+  {SYMBOL}_H1.json  ← FeatureNormalizer: {"mean": [...9], "std": [...9]}
+```
+
+**Thread safety:** Training runs in a `ThreadPoolExecutor(max_workers=4)`. Use `threading.Lock()` per-symbol to protect model loading during inference.
 
 ---
 

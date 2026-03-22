@@ -1,20 +1,8 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { formatShort } from "@/lib/time";
 import SymbolFilter from "@/components/SymbolFilter";
-
-function Card({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div className="border border-terminal-border rounded bg-terminal-surface p-5">
-      <div className="text-matrix text-xs font-bold uppercase tracking-widest mb-3 border-b border-terminal-border pb-2">
-        {title}
-      </div>
-      {children}
-    </div>
-  );
-}
-
-const TAG = "px-2 py-0.5 rounded text-[9px] font-bold uppercase";
 
 interface Setup {
   id: number;
@@ -66,31 +54,108 @@ interface ConfluenceStats {
 }
 
 const MODEL_LABELS: Record<string, string> = {
-  trend_continuation_long: "Trend Cont. Long",
+  trend_continuation_long:  "Trend Cont. Long",
   trend_continuation_short: "Trend Cont. Short",
-  reversal_after_sweep: "Reversal After Sweep",
-  range_dealing_long: "Range Dealing Long",
-  range_dealing_short: "Range Dealing Short",
-  session_sweep_reversal: "Session Sweep Rev.",
+  reversal_after_sweep:     "Reversal After Sweep",
+  range_dealing_long:       "Range Dealing Long",
+  range_dealing_short:      "Range Dealing Short",
+  session_sweep_reversal:   "Session Sweep Rev.",
 };
 
 const CONFLUENCE_LABELS: [string, string][] = [
-  ["htf_aligned", "HTF Bias Aligned"],
-  ["swept", "Liquidity Swept"],
-  ["mss", "MSS Confirmed"],
-  ["displacement", "Displacement"],
-  ["fvg", "FVG Present"],
-  ["ob", "Order Block"],
+  ["htf_aligned",   "HTF Bias Aligned"],
+  ["swept",         "Liquidity Swept"],
+  ["mss",           "MSS Confirmed"],
+  ["displacement",  "Displacement"],
+  ["fvg",           "FVG Present"],
+  ["ob",            "Order Block"],
   ["session_valid", "Killzone Active"],
 ];
 
+const SCORE_ROWS: [string, string, string][] = [
+  ["HTF Bias",        "15", "H4/D1 directional alignment"],
+  ["Premium/Discount","12", "Correct price zone for direction"],
+  ["Liquidity Sweep", "15", "Recent sweep quality & recency"],
+  ["MSS Quality",     "15", "Market structure shift confirmation"],
+  ["Displacement",    "10", "Impulsive candle intent confirmation"],
+  ["FVG Quality",     "8",  "Fair value gap presence & zone"],
+  ["OB Quality",      "8",  "Order block confluence"],
+  ["Session/Time",    "7",  "Killzone & macro window activity"],
+  ["Target Clarity",  "5",  "Clear opposing liquidity for TP"],
+  ["R:R Quality",     "5",  "Risk-reward ratio assessment"],
+];
+
+function confColor(v: number): string {
+  if (v >= 70) return "#00ff88";
+  if (v >= 55) return "#f5c518";
+  if (v >= 40) return "#ff9d00";
+  return "#ff4455";
+}
+
+function KpiCard({ label, value, color = "#00d4ff" }: { label: string; value: string | number; color?: string }) {
+  return (
+    <div style={{
+      background: "#0a0a12",
+      border: "1px solid #1c1c28",
+      borderTop: `2px solid ${color}`,
+      borderRadius: 8,
+      padding: "16px 20px",
+      textAlign: "center",
+    }}>
+      <div style={{
+        fontFamily: "'JetBrains Mono', monospace",
+        fontSize: 22, fontWeight: 700,
+        color,
+        textShadow: `0 0 14px ${color}55`,
+      }}>
+        {value}
+      </div>
+      <div style={{
+        fontFamily: "'JetBrains Mono', monospace",
+        fontSize: 8.5, letterSpacing: "0.14em",
+        textTransform: "uppercase", color: "#2a3a4a", marginTop: 4,
+      }}>
+        {label}
+      </div>
+    </div>
+  );
+}
+
+function Card({ title, accent = "#1c1c28", children }: {
+  title: string;
+  accent?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div style={{
+      background: "#0a0a12",
+      border: "1px solid #1c1c28",
+      borderTop: `2px solid ${accent}`,
+      borderRadius: 8,
+      padding: "18px 20px",
+    }}>
+      <div style={{
+        fontFamily: "'JetBrains Mono', monospace",
+        fontSize: 9, fontWeight: 700, letterSpacing: "0.16em",
+        textTransform: "uppercase", color: "#2a3a4a",
+        marginBottom: 14,
+        paddingBottom: 10,
+        borderBottom: "1px solid #1c1c28",
+      }}>
+        {title}
+      </div>
+      {children}
+    </div>
+  );
+}
+
 export default function ICTPage() {
-  const [symbol, setSymbol] = useState<string | null>(null);
-  const [setups, setSetups] = useState<Setup[]>([]);
-  const [modelStats, setModelStats] = useState<ModelStat[]>([]);
+  const [symbol, setSymbol]                 = useState<string | null>(null);
+  const [setups, setSetups]                 = useState<Setup[]>([]);
+  const [modelStats, setModelStats]         = useState<ModelStat[]>([]);
   const [confluenceStats, setConfluenceStats] = useState<ConfluenceStats | null>(null);
-  const [sessionStats, setSessionStats] = useState<SessionStat[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [sessionStats, setSessionStats]     = useState<SessionStat[]>([]);
+  const [loading, setLoading]               = useState(true);
 
   const fetchData = useCallback(async () => {
     try {
@@ -102,72 +167,103 @@ export default function ICTPage() {
       setModelStats(data.modelStats ?? []);
       setConfluenceStats(data.confluenceStats ?? null);
       setSessionStats(data.sessionStats ?? []);
-    } catch {
-      /* ignore */
-    } finally {
-      setLoading(false);
-    }
+    } catch { /* ignore */ }
+    finally { setLoading(false); }
   }, [symbol]);
 
   useEffect(() => {
     fetchData();
-    const interval = setInterval(fetchData, 30_000);
-    return () => clearInterval(interval);
+    const iv = setInterval(fetchData, 30_000);
+    return () => clearInterval(iv);
   }, [fetchData]);
 
   const filtered = symbol ? setups.filter((s) => s.symbol === symbol) : setups;
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-20">
-        <span className="text-matrix text-xs animate-pulse">Loading ICT engine data…</span>
+      <div style={{
+        display: "flex", alignItems: "center", justifyContent: "center",
+        padding: "80px 0",
+        fontFamily: "'JetBrains Mono', monospace", fontSize: 11,
+        color: "#2a3a4a",
+      }}>
+        Scanning ICT engine data…
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+
+      {/* Header */}
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
         <div>
-          <h1 className="text-matrix text-lg font-bold">ICT / SMC Strategy Engine</h1>
-          <p className="text-matrix-dim text-xs mt-1">
-            Real-time overview of ICT setup detection, confluences, and scoring
+          <div style={{
+            fontSize: 9, fontFamily: "'JetBrains Mono', monospace",
+            color: "#2a3a4a", letterSpacing: "0.2em", textTransform: "uppercase",
+          }}>
+            ICT / SMC Strategy Engine
+          </div>
+          <h1 style={{
+            fontSize: 20, fontFamily: "'JetBrains Mono', monospace",
+            fontWeight: 700,
+            background: "linear-gradient(90deg, #f5c518, #ff9d00)",
+            WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
+            marginTop: 2,
+          }}>
+            ICT Setup Detection
+          </h1>
+          <p style={{
+            fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: "#2a3a4a",
+            marginTop: 4,
+          }}>
+            Real-time ICT confluences · 30s refresh
           </p>
         </div>
         <SymbolFilter value={symbol} onChange={setSymbol} />
       </div>
 
-      {/* KPI Row */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <KPI label="Total Setups" value={confluenceStats?.total_setups ?? 0} />
-        <KPI label="Avg Confidence" value={`${confluenceStats?.avg_confidence ?? 0}/100`} />
-        <KPI label="Models Active" value={modelStats.length} />
-        <KPI label="Active Sessions" value={sessionStats.length} />
+      {/* KPI row */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 12 }}>
+        <KpiCard label="Total Setups"     value={confluenceStats?.total_setups ?? 0}                                       color="#f5c518" />
+        <KpiCard label="Avg Confidence"   value={`${(confluenceStats?.avg_confidence ?? 0).toFixed(0)}/100`}               color="#00ff88" />
+        <KpiCard label="Models Active"    value={modelStats.length}                                                        color="#00d4ff" />
+        <KpiCard label="Active Sessions"  value={sessionStats.length}                                                      color="#ff9d00" />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Setup Model Distribution */}
-        <Card title="Setup Model Distribution">
+      {/* 2-col grid */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))", gap: 16 }}>
+
+        {/* Model distribution */}
+        <Card title="Setup Model Distribution" accent="#f5c518">
           {modelStats.length === 0 ? (
-            <p className="text-matrix-dim text-[11px]">No setups detected yet</p>
+            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: "#1e2e1e", padding: "10px 0" }}>
+              No setups detected yet.
+            </div>
           ) : (
-            <table className="w-full text-[11px]">
-              <thead className="text-matrix-dim uppercase border-b border-terminal-border text-[9px]">
-                <tr>
-                  <th className="text-left py-1">Model</th>
-                  <th className="text-right py-1">Total</th>
-                  <th className="text-right py-1">Executed</th>
-                  <th className="text-right py-1">Avg Score</th>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5 }}>
+              <thead>
+                <tr style={{ borderBottom: "1px solid #1c1c28" }}>
+                  {["Model", "Total", "Exec'd", "Score"].map((h) => (
+                    <th key={h} style={{
+                      padding: "6px 8px",
+                      textAlign: h === "Total" || h === "Exec'd" || h === "Score" ? "right" : "left",
+                      fontSize: 8.5, letterSpacing: "0.12em", textTransform: "uppercase",
+                      color: "#2a3a4a", fontWeight: 600,
+                    }}>{h}</th>
+                  ))}
                 </tr>
               </thead>
-              <tbody className="text-matrix-dim">
+              <tbody>
                 {modelStats.map((m) => (
-                  <tr key={m.model} className="border-b border-terminal-border/20">
-                    <td className="py-1.5 text-matrix font-bold">{MODEL_LABELS[m.model] || m.model}</td>
-                    <td className="py-1.5 text-right">{m.total}</td>
-                    <td className="py-1.5 text-right">{m.executed}</td>
-                    <td className="py-1.5 text-right">
-                      <ConfBadge value={m.avg_confidence} />
+                  <tr key={m.model} style={{ borderBottom: "1px solid rgba(28,28,40,0.5)" }}>
+                    <td style={{ padding: "7px 8px", color: "#9aa8b8", fontWeight: 700, fontSize: 10 }}>
+                      {MODEL_LABELS[m.model] || m.model}
+                    </td>
+                    <td style={{ padding: "7px 8px", textAlign: "right", color: "#4a5568" }}>{m.total}</td>
+                    <td style={{ padding: "7px 8px", textAlign: "right", color: "#4a5568" }}>{m.executed}</td>
+                    <td style={{ padding: "7px 8px", textAlign: "right", fontWeight: 700, color: confColor(m.avg_confidence) }}>
+                      {Number(m.avg_confidence).toFixed(0)}
                     </td>
                   </tr>
                 ))}
@@ -176,27 +272,49 @@ export default function ICTPage() {
           )}
         </Card>
 
-        {/* Confluence Frequency */}
-        <Card title="Confluence Frequency">
+        {/* Confluence frequency */}
+        <Card title="Confluence Frequency" accent="#00d4ff">
           {!confluenceStats || confluenceStats.total_setups === 0 ? (
-            <p className="text-matrix-dim text-[11px]">No data yet</p>
+            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: "#1e2e1e", padding: "10px 0" }}>
+              No data yet.
+            </div>
           ) : (
-            <div className="space-y-2">
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               {CONFLUENCE_LABELS.map(([key, label]) => {
                 const count = (confluenceStats as unknown as Record<string, number>)[key] ?? 0;
                 const pct = confluenceStats.total_setups > 0
                   ? Math.round((count / confluenceStats.total_setups) * 100)
                   : 0;
+                const color = pct >= 70 ? "#00ff88" : pct >= 50 ? "#f5c518" : "#ff9d00";
                 return (
-                  <div key={key} className="flex items-center gap-3">
-                    <span className="text-matrix-dim text-[10px] w-28 shrink-0">{label}</span>
-                    <div className="flex-1 h-3 bg-terminal rounded overflow-hidden border border-terminal-border/30">
-                      <div
-                        className="h-full bg-matrix/40 rounded"
-                        style={{ width: `${pct}%` }}
-                      />
+                  <div key={key} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <span style={{
+                      fontFamily: "'JetBrains Mono', monospace",
+                      fontSize: 10, color: "#2a3a4a",
+                      width: 120, flexShrink: 0,
+                    }}>
+                      {label}
+                    </span>
+                    <div style={{
+                      flex: 1, height: 5, background: "#0e0e10",
+                      border: "1px solid #1c1c28", borderRadius: 3,
+                      overflow: "hidden",
+                    }}>
+                      <div style={{
+                        height: "100%", borderRadius: 3,
+                        width: `${pct}%`,
+                        background: `linear-gradient(90deg, ${color}88, ${color})`,
+                        boxShadow: `0 0 6px ${color}44`,
+                        transition: "width 0.8s cubic-bezier(0.4, 0, 0.2, 1)",
+                      }} />
                     </div>
-                    <span className="text-matrix text-[10px] font-bold w-12 text-right">{pct}%</span>
+                    <span style={{
+                      fontFamily: "'JetBrains Mono', monospace",
+                      fontSize: 10.5, fontWeight: 700, color,
+                      width: 36, textAlign: "right", flexShrink: 0,
+                    }}>
+                      {pct}%
+                    </span>
                   </div>
                 );
               })}
@@ -204,28 +322,34 @@ export default function ICTPage() {
           )}
         </Card>
 
-        {/* Session Distribution */}
-        <Card title="Session Distribution">
+        {/* Session distribution */}
+        <Card title="Session Distribution" accent="#ff9d00">
           {sessionStats.length === 0 ? (
-            <p className="text-matrix-dim text-[11px]">No session data</p>
+            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: "#1e2e1e", padding: "10px 0" }}>
+              No session data.
+            </div>
           ) : (
-            <table className="w-full text-[11px]">
-              <thead className="text-matrix-dim uppercase border-b border-terminal-border text-[9px]">
-                <tr>
-                  <th className="text-left py-1">Session</th>
-                  <th className="text-right py-1">Setups</th>
-                  <th className="text-right py-1">Executed</th>
-                  <th className="text-right py-1">Avg Score</th>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5 }}>
+              <thead>
+                <tr style={{ borderBottom: "1px solid #1c1c28" }}>
+                  {["Session", "Setups", "Exec'd", "Score"].map((h) => (
+                    <th key={h} style={{
+                      padding: "6px 8px",
+                      textAlign: h !== "Session" ? "right" : "left",
+                      fontSize: 8.5, letterSpacing: "0.12em", textTransform: "uppercase",
+                      color: "#2a3a4a", fontWeight: 600,
+                    }}>{h}</th>
+                  ))}
                 </tr>
               </thead>
-              <tbody className="text-matrix-dim">
+              <tbody>
                 {sessionStats.map((s) => (
-                  <tr key={s.session} className="border-b border-terminal-border/20">
-                    <td className="py-1.5 text-matrix font-bold capitalize">{s.session}</td>
-                    <td className="py-1.5 text-right">{s.total}</td>
-                    <td className="py-1.5 text-right">{s.executed}</td>
-                    <td className="py-1.5 text-right">
-                      <ConfBadge value={s.avg_confidence} />
+                  <tr key={s.session} style={{ borderBottom: "1px solid rgba(28,28,40,0.5)" }}>
+                    <td style={{ padding: "7px 8px", color: "#9aa8b8", fontWeight: 700, textTransform: "capitalize" }}>{s.session}</td>
+                    <td style={{ padding: "7px 8px", textAlign: "right", color: "#4a5568" }}>{s.total}</td>
+                    <td style={{ padding: "7px 8px", textAlign: "right", color: "#4a5568" }}>{s.executed}</td>
+                    <td style={{ padding: "7px 8px", textAlign: "right", fontWeight: 700, color: confColor(s.avg_confidence) }}>
+                      {Number(s.avg_confidence).toFixed(0)}
                     </td>
                   </tr>
                 ))}
@@ -234,139 +358,173 @@ export default function ICTPage() {
           )}
         </Card>
 
-        {/* ICT Strategy Explanation */}
-        <Card title="How the ICT Engine Works">
-          <div className="space-y-2 text-[11px] text-matrix-dim leading-relaxed">
-            <p>
-              The ICT engine runs a <span className="text-matrix font-bold">7-layer analysis</span> pipeline on every tick:
+        {/* How it works */}
+        <Card title="How the ICT Engine Works" accent="#4da6ff">
+          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, color: "#2a3a4a", lineHeight: 1.7 }}>
+            <p style={{ marginBottom: 10 }}>
+              Runs a <span style={{ color: "#00d4ff", fontWeight: 700 }}>7-layer analysis</span> pipeline on every tick:
             </p>
-            <ol className="list-decimal list-inside space-y-1 pl-2">
-              <li><span className="text-matrix">HTF Bias</span> — H4/D1 structure for directional filter</li>
-              <li><span className="text-matrix">Market Structure</span> — Swing points, BOS, MSS detection</li>
-              <li><span className="text-matrix">Liquidity</span> — BSL/SSL mapping + sweep detection</li>
-              <li><span className="text-matrix">Displacement</span> — Impulsive candle / intent confirmation</li>
-              <li><span className="text-matrix">FVG</span> — Fair Value Gap detection + fill tracking</li>
-              <li><span className="text-matrix">Order Blocks</span> — Supply/demand zones + high-probability validation</li>
-              <li><span className="text-matrix">Session/Time</span> — Killzone + macro window scoring</li>
-            </ol>
-            <p className="pt-2 border-t border-terminal-border/30">
-              After analysis, <span className="text-matrix font-bold">6 setup models</span> are tested for pattern match. Each produces a{" "}
-              <span className="text-matrix font-bold">confidence score (0-100)</span> from 10 weighted components.
-              Only setups scoring above the minimum threshold are forwarded to the execution pipeline.
+            {[
+              ["HTF Bias",        "H4/D1 structure for directional filter"],
+              ["Market Structure","Swing points, BOS, MSS detection"],
+              ["Liquidity",       "BSL/SSL mapping + sweep detection"],
+              ["Displacement",    "Impulsive candle / intent confirmation"],
+              ["FVG",             "Fair Value Gap detection + fill tracking"],
+              ["Order Blocks",    "Supply/demand zones + high-probability validation"],
+              ["Session/Time",    "Killzone + macro window scoring"],
+            ].map(([name, desc], i) => (
+              <div key={name} style={{ display: "flex", gap: 10, marginBottom: 4 }}>
+                <span style={{ color: "#1a2a3a", minWidth: 16, flexShrink: 0 }}>{i + 1}.</span>
+                <span><span style={{ color: "#f5c518", fontWeight: 700 }}>{name}</span> — {desc}</span>
+              </div>
+            ))}
+            <p style={{ marginTop: 12, paddingTop: 10, borderTop: "1px solid #1c1c28", color: "#1e2e1e" }}>
+              After analysis, <span style={{ color: "#ff9d00", fontWeight: 700 }}>6 setup models</span> are tested.
+              Each scores <span style={{ color: "#00ff88", fontWeight: 700 }}>0-100</span> from 10 weighted components.
+              Only setups above the threshold are forwarded to execution.
             </p>
           </div>
         </Card>
       </div>
 
-      {/* Recent Setups Table */}
-      <Card title="Recent Setups">
-        {filtered.length === 0 ? (
-          <p className="text-matrix-dim text-[11px]">No setups recorded yet. The bot will log setups when it detects ICT patterns.</p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-[10px]">
-              <thead className="text-matrix-dim uppercase border-b border-terminal-border text-[9px]">
-                <tr>
-                  <th className="text-left py-1 pr-2">Time</th>
-                  <th className="text-left py-1 pr-2">Symbol</th>
-                  <th className="text-left py-1 pr-2">Dir</th>
-                  <th className="text-left py-1 pr-2">Model</th>
-                  <th className="text-right py-1 pr-2">Entry</th>
-                  <th className="text-right py-1 pr-2">SL</th>
-                  <th className="text-right py-1 pr-2">Score</th>
-                  <th className="text-left py-1 pr-2">Zone</th>
-                  <th className="text-left py-1 pr-2">Bias</th>
-                  <th className="text-left py-1">Exec</th>
-                </tr>
-              </thead>
-              <tbody className="text-matrix-dim">
-                {filtered.slice(0, 50).map((s) => (
-                  <tr key={s.id} className="border-b border-terminal-border/20 hover:bg-terminal-border/10">
-                    <td className="py-1.5 pr-2 font-mono">{new Date(s.created_at).toLocaleString("en-GB", { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "short" })}</td>
-                    <td className="py-1.5 pr-2 text-matrix font-bold">{s.symbol}</td>
-                    <td className="py-1.5 pr-2">
-                      <span className={`${TAG} ${s.direction === "BUY" ? "bg-green-900/40 text-green-400" : "bg-red-900/40 text-red-400"}`}>
-                        {s.direction}
-                      </span>
-                    </td>
-                    <td className="py-1.5 pr-2">{MODEL_LABELS[s.model] || s.model}</td>
-                    <td className="py-1.5 pr-2 text-right font-mono">{Number(s.entry_price).toFixed(5)}</td>
-                    <td className="py-1.5 pr-2 text-right font-mono">{Number(s.stop_loss).toFixed(5)}</td>
-                    <td className="py-1.5 pr-2 text-right">
-                      <ConfBadge value={Number(s.confidence)} />
-                    </td>
-                    <td className="py-1.5 pr-2 capitalize">{s.entry_zone || "—"}</td>
-                    <td className="py-1.5 pr-2 capitalize">{s.htf_bias || "—"}</td>
-                    <td className="py-1.5">
-                      {s.executed ? (
-                        <span className="text-green-400 font-bold">✓</span>
-                      ) : (
-                        <span className="text-matrix-dim">—</span>
-                      )}
-                    </td>
-                  </tr>
+      {/* Recent setups table */}
+      <div>
+        <div style={{
+          fontSize: 9, fontFamily: "'JetBrains Mono', monospace",
+          color: "#2a3a4a", letterSpacing: "0.18em", textTransform: "uppercase",
+          marginBottom: 10,
+        }}>
+          Recent Setups
+        </div>
+        <div style={{
+          background: "#0e0e10", border: "1px solid #1c1c28",
+          borderRadius: 8, overflow: "auto",
+        }}>
+          <table style={{
+            width: "100%", borderCollapse: "collapse",
+            fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5,
+          }}>
+            <thead>
+              <tr style={{ borderBottom: "1px solid #1c1c28" }}>
+                {["Time","Symbol","Dir","Model","Entry","SL","Score","Zone","Bias","Exec"].map((h) => (
+                  <th key={h} style={{
+                    padding: "9px 10px",
+                    textAlign: h === "Entry" || h === "SL" || h === "Score" ? "right" : "left",
+                    fontSize: 8.5, letterSpacing: "0.12em", textTransform: "uppercase",
+                    color: "#2a3a4a", fontWeight: 600, whiteSpace: "nowrap",
+                  }}>{h}</th>
                 ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </Card>
-
-      {/* Scoring Breakdown Explanation */}
-      <Card title="Confidence Score Breakdown (0-100)">
-        <table className="w-full text-[11px]">
-          <thead className="text-matrix-dim uppercase border-b border-terminal-border text-[9px]">
-            <tr>
-              <th className="text-left py-1">Component</th>
-              <th className="text-right py-1">Max</th>
-              <th className="text-left py-1 pl-3">What It Measures</th>
-            </tr>
-          </thead>
-          <tbody className="text-matrix-dim">
-            {[
-              ["HTF Bias", "15", "H4/D1 directional alignment"],
-              ["Premium/Discount", "12", "Correct price zone for direction"],
-              ["Liquidity Sweep", "15", "Recent sweep quality & recency"],
-              ["MSS Quality", "15", "Market structure shift confirmation"],
-              ["Displacement", "10", "Impulsive candle intent confirmation"],
-              ["FVG Quality", "8", "Fair value gap presence & zone"],
-              ["OB Quality", "8", "Order block confluence"],
-              ["Session/Time", "7", "Killzone & macro window activity"],
-              ["Target Clarity", "5", "Clear opposing liquidity for TP"],
-              ["R:R Quality", "5", "Risk-reward ratio assessment"],
-            ].map(([name, max, desc]) => (
-              <tr key={name} className="border-b border-terminal-border/20">
-                <td className="py-1.5 text-matrix font-bold">{name}</td>
-                <td className="py-1.5 text-right">{max}</td>
-                <td className="py-1.5 pl-3">{desc}</td>
               </tr>
-            ))}
-            <tr className="border-t border-matrix/30">
-              <td className="py-1.5 text-matrix font-bold">Total</td>
-              <td className="py-1.5 text-right text-matrix font-bold">100</td>
-              <td className="py-1.5 pl-3">Minimum threshold: 55</td>
-            </tr>
-          </tbody>
-        </table>
-      </Card>
+            </thead>
+            <tbody>
+              {filtered.slice(0, 50).map((s) => (
+                <tr
+                  key={s.id}
+                  style={{ borderBottom: "1px solid rgba(28,28,40,0.5)", transition: "background 0.1s" }}
+                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(0,212,255,0.03)"; }}
+                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = ""; }}
+                >
+                  <td style={{ padding: "7px 10px", color: "#2a3a4a", fontSize: 9.5, whiteSpace: "nowrap" }}>
+                    {formatShort(s.created_at)}
+                  </td>
+                  <td style={{ padding: "7px 10px", color: "#00d4ff", fontWeight: 700 }}>{s.symbol}</td>
+                  <td style={{ padding: "7px 10px" }}>
+                    <span style={{
+                      display: "inline-block", padding: "1px 7px", borderRadius: 3,
+                      fontSize: 9, fontWeight: 700, letterSpacing: "0.06em",
+                      background: s.direction === "BUY" ? "rgba(0,255,136,0.12)" : "rgba(255,68,85,0.12)",
+                      color: s.direction === "BUY" ? "#00ff88" : "#ff4455",
+                      border: `1px solid ${s.direction === "BUY" ? "rgba(0,255,136,0.3)" : "rgba(255,68,85,0.3)"}`,
+                    }}>
+                      {s.direction}
+                    </span>
+                  </td>
+                  <td style={{ padding: "7px 10px", color: "#4a5568", fontSize: 9.5 }}>
+                    {MODEL_LABELS[s.model] || s.model}
+                  </td>
+                  <td style={{ padding: "7px 10px", textAlign: "right", color: "#9aa8b8", fontFamily: "monospace" }}>
+                    {Number(s.entry_price).toFixed(5)}
+                  </td>
+                  <td style={{ padding: "7px 10px", textAlign: "right", color: "#ff4455", fontFamily: "monospace" }}>
+                    {Number(s.stop_loss).toFixed(5)}
+                  </td>
+                  <td style={{ padding: "7px 10px", textAlign: "right", fontWeight: 700, color: confColor(Number(s.confidence)) }}>
+                    {Number(s.confidence).toFixed(0)}
+                  </td>
+                  <td style={{ padding: "7px 10px", color: "#4a5568", fontSize: 9.5, textTransform: "capitalize" }}>
+                    {s.entry_zone || "—"}
+                  </td>
+                  <td style={{ padding: "7px 10px", color: "#4a5568", fontSize: 9.5, textTransform: "capitalize" }}>
+                    {s.htf_bias || "—"}
+                  </td>
+                  <td style={{ padding: "7px 10px" }}>
+                    {s.executed
+                      ? <span style={{ color: "#00ff88", fontWeight: 700 }}>✓</span>
+                      : <span style={{ color: "#1c1c28" }}>—</span>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {filtered.length === 0 && (
+            <div style={{
+              padding: "40px 20px", textAlign: "center",
+              fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: "#1e2e1e",
+            }}>
+              {symbol ? `no setups for ${symbol}` : "no setups recorded yet"}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Score breakdown */}
+      <div>
+        <div style={{
+          fontSize: 9, fontFamily: "'JetBrains Mono', monospace",
+          color: "#2a3a4a", letterSpacing: "0.18em", textTransform: "uppercase",
+          marginBottom: 10,
+        }}>
+          Confidence Score Breakdown (0-100)
+        </div>
+        <div style={{
+          background: "#0e0e10", border: "1px solid #1c1c28",
+          borderRadius: 8, overflow: "auto",
+        }}>
+          <table style={{
+            width: "100%", borderCollapse: "collapse",
+            fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5,
+          }}>
+            <thead>
+              <tr style={{ borderBottom: "1px solid #1c1c28" }}>
+                {["Component", "Max", "What It Measures"].map((h) => (
+                  <th key={h} style={{
+                    padding: "9px 10px",
+                    textAlign: h === "Max" ? "right" : "left",
+                    fontSize: 8.5, letterSpacing: "0.12em", textTransform: "uppercase",
+                    color: "#2a3a4a", fontWeight: 600,
+                  }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {SCORE_ROWS.map(([name, max, desc]) => (
+                <tr key={name} style={{ borderBottom: "1px solid rgba(28,28,40,0.5)" }}>
+                  <td style={{ padding: "7px 10px", color: "#f5c518", fontWeight: 700 }}>{name}</td>
+                  <td style={{ padding: "7px 10px", textAlign: "right", color: "#00ff88", fontWeight: 700 }}>{max}</td>
+                  <td style={{ padding: "7px 10px", color: "#2a3a4a", fontSize: 10 }}>{desc}</td>
+                </tr>
+              ))}
+              <tr style={{ borderTop: "2px solid #1c1c28" }}>
+                <td style={{ padding: "8px 10px", color: "#9aa8b8", fontWeight: 700, fontSize: 11 }}>Total</td>
+                <td style={{ padding: "8px 10px", textAlign: "right", color: "#00ff88", fontWeight: 700, fontSize: 13 }}>100</td>
+                <td style={{ padding: "8px 10px", color: "#2a3a4a", fontSize: 10 }}>
+                  Minimum threshold for execution: <span style={{ color: "#f5c518", fontWeight: 700 }}>55</span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   );
-}
-
-function KPI({ label, value }: { label: string; value: string | number }) {
-  return (
-    <div className="border border-terminal-border rounded bg-terminal-surface p-4 text-center">
-      <div className="text-matrix text-lg font-bold">{value}</div>
-      <div className="text-matrix-dim text-[10px] uppercase tracking-wider mt-1">{label}</div>
-    </div>
-  );
-}
-
-function ConfBadge({ value }: { value: number }) {
-  const n = Number(value);
-  let color = "text-red-400";
-  if (n >= 70) color = "text-green-400";
-  else if (n >= 55) color = "text-yellow-400";
-  else if (n >= 40) color = "text-orange-400";
-  return <span className={`${color} font-bold`}>{n.toFixed(0)}</span>;
 }

@@ -17,6 +17,34 @@ interface BotStatus {
   leverage: number;
 }
 
+function Metric({ label, value, color = "#7a8a9a", glow }: {
+  label: string; value: string; color?: string; glow?: boolean;
+}) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+      <span style={{
+        fontSize: 8.5, fontFamily: "'JetBrains Mono', monospace",
+        color: "#2a3a4a", letterSpacing: "0.15em", textTransform: "uppercase",
+      }}>
+        {label}
+      </span>
+      <span style={{
+        fontSize: 13, fontFamily: "'JetBrains Mono', monospace",
+        fontWeight: 700, color,
+        textShadow: glow ? `0 0 10px ${color}88` : undefined,
+      }}>
+        {value}
+      </span>
+    </div>
+  );
+}
+
+function Divider() {
+  return (
+    <div style={{ width: 1, alignSelf: "stretch", background: "#1c1c28", flexShrink: 0, margin: "0 4px" }} />
+  );
+}
+
 export default function BotStatusBar() {
   const [status, setStatus] = useState<BotStatus | null>(null);
 
@@ -28,100 +56,156 @@ export default function BotStatusBar() {
         .then((data) => { if (active) setStatus(data); })
         .catch(() => {});
     load();
-    const id = setInterval(load, 10_000);
+    const id = setInterval(load, 8_000);
     return () => { active = false; clearInterval(id); };
   }, []);
 
-  if (!status)
+  if (!status) {
     return (
-      <div className="border border-terminal-border rounded p-3 bg-terminal-surface text-matrix-dim text-sm">
-        Loading status…
+      <div style={{
+        border: "1px solid #1c1c28", borderRadius: 8,
+        background: "#0e0e10", padding: "14px 18px",
+        fontFamily: "'JetBrains Mono', monospace",
+        fontSize: 11, color: "#2a3a4a",
+        display: "flex", alignItems: "center", gap: 8,
+      }}>
+        <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#1c2c1c", display: "inline-block" }} />
+        Loading system status…
       </div>
     );
+  }
 
-  const stateColor =
-    status.state === "running"
-      ? "text-matrix"
-      : status.state === "paused"
-        ? "text-yellow-400"
-        : "text-red-500";
-
-  const connected = !!status.broker_account;
+  const isRunning  = status.state === "running";
+  const isPaused   = status.state === "paused";
+  const stateColor = isRunning ? "#00ff41" : isPaused ? "#f5c518" : "#ff4455";
+  const stateLabel = status.state?.toUpperCase() ?? "UNKNOWN";
+  const connected  = !!status.broker_account;
+  const dailyPnl   = Number(status.daily_pnl);
+  const pnlColor   = dailyPnl >= 0 ? "#00ff88" : "#ff4455";
 
   return (
-    <div className="crt-scanline border border-terminal-border rounded bg-terminal-surface p-4 space-y-3 text-sm">
-      {/* Row 1: Broker connection */}
-      <div className="flex flex-wrap gap-6 items-center border-b border-terminal-border pb-3">
-        <div>
-          <span className="text-matrix-dim">BROKER </span>
-          {connected ? (
-            <span className="text-matrix font-bold">
-              {status.broker_server}
+    <div style={{
+      border: "1px solid #1c1c28",
+      borderRadius: 8,
+      background: "linear-gradient(135deg, #0c0c14 0%, #0e0e10 100%)",
+      overflow: "hidden",
+      position: "relative",
+    }}>
+      {/* Top accent line */}
+      <div style={{
+        height: 2,
+        background: `linear-gradient(90deg, transparent 0%, ${stateColor}44 20%, ${stateColor}88 50%, ${stateColor}44 80%, transparent 100%)`,
+      }} />
+
+      <div style={{ padding: "12px 20px", display: "flex", flexWrap: "wrap", gap: 0, alignItems: "center" }}>
+
+        {/* State indicator */}
+        <div style={{ display: "flex", alignItems: "center", gap: 10, paddingRight: 20 }}>
+          <div style={{
+            width: 8, height: 8, borderRadius: "50%",
+            background: stateColor,
+            boxShadow: `0 0 8px ${stateColor}, 0 0 16px ${stateColor}55`,
+            animation: isRunning ? "statusPulse 2s ease-in-out infinite" : undefined,
+          }} />
+          <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
+            <span style={{
+              fontSize: 7.5, color: "#2a3a4a",
+              fontFamily: "'JetBrains Mono', monospace",
+              letterSpacing: "0.15em", textTransform: "uppercase",
+            }}>State</span>
+            <span style={{
+              fontSize: 12, fontWeight: 700, color: stateColor,
+              fontFamily: "'JetBrains Mono', monospace",
+              textShadow: `0 0 8px ${stateColor}88`,
+              letterSpacing: "0.05em",
+            }}>
+              {stateLabel}
             </span>
-          ) : (
-            <span className="text-yellow-400">DISCONNECTED</span>
-          )}
+          </div>
         </div>
-        {connected && (
-          <>
-            <div>
-              <span className="text-matrix-dim">ACCOUNT </span>
-              <span className="text-matrix font-bold">{status.broker_account}</span>
+
+        <Divider />
+
+        {/* Broker */}
+        <div style={{ paddingLeft: 20, paddingRight: 20 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            {connected ? (
+              <>
+                <Metric label="Broker" value={status.broker_server} color="#9aa8b8" />
+                <Metric label="Account" value={status.broker_account} color="#00d4ff" glow />
+                {status.broker_name && <Metric label="Name" value={status.broker_name} color="#7a8a9a" />}
+                <Metric label="Leverage" value={`1:${status.leverage}`} color="#7a8a9a" />
+              </>
+            ) : (
+              <Metric label="Broker" value="DISCONNECTED" color="#ff4455" glow />
+            )}
+          </div>
+        </div>
+
+        <Divider />
+
+        {/* Financial metrics */}
+        <div style={{
+          paddingLeft: 20, paddingRight: 20,
+          display: "flex", gap: 20, alignItems: "center", flexWrap: "wrap",
+        }}>
+          <Metric label="Balance" value={`$${Number(status.balance || 0).toLocaleString("en", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} color="#00ff41" glow />
+          <Metric label="Equity"  value={`$${Number(status.equity).toLocaleString("en", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}  color="#00ff41" />
+          <Metric
+            label="Daily P&L"
+            value={`${dailyPnl >= 0 ? "+" : ""}${dailyPnl.toFixed(2)}`}
+            color={pnlColor}
+            glow
+          />
+          <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+            <span style={{ fontSize: 8.5, fontFamily: "'JetBrains Mono', monospace", color: "#2a3a4a", letterSpacing: "0.15em", textTransform: "uppercase" }}>
+              Open
+            </span>
+            <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+              <span style={{ fontSize: 13, fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, color: status.open_trades > 0 ? "#f5c518" : "#4a5568" }}>
+                {status.open_trades}
+              </span>
+              <span style={{ fontSize: 8.5, color: "#2a3a4a", fontFamily: "'JetBrains Mono', monospace" }}>trades</span>
             </div>
-            <div>
-              <span className="text-matrix-dim">NAME </span>
-              <span className="text-matrix">{status.broker_name || "—"}</span>
-            </div>
-            <div>
-              <span className="text-matrix-dim">LEVERAGE </span>
-              <span className="text-matrix">1:{status.leverage}</span>
-            </div>
-          </>
-        )}
+          </div>
+        </div>
+
+        <Divider />
+
+        {/* Time metrics */}
+        <div style={{
+          paddingLeft: 20,
+          display: "flex", gap: 20, alignItems: "center",
+        }}>
+          <Metric label="Uptime" value={timeSince(status.uptime_start)} color="#7a8a9a" />
+          <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+            <span style={{ fontSize: 8.5, fontFamily: "'JetBrains Mono', monospace", color: "#2a3a4a", letterSpacing: "0.15em", textTransform: "uppercase" }}>
+              Last Tick
+            </span>
+            <span style={{
+              fontSize: 13, fontFamily: "'JetBrains Mono', monospace", fontWeight: 700,
+              color: status.last_tick ? "#7a8a9a" : "#ff4455",
+            }}>
+              {timeAgo(status.last_tick)}
+            </span>
+          </div>
+        </div>
+
       </div>
 
-      {/* Row 2: Trading metrics */}
-      <div className="flex flex-wrap gap-6 items-center">
-        <div>
-          <span className="text-matrix-dim">STATE </span>
-          <span className={`font-bold uppercase ${stateColor}`}>
-            {status.state}
-          </span>
-        </div>
-        <div>
-          <span className="text-matrix-dim">BALANCE </span>
-          <span className="text-matrix font-bold">
-            ${Number(status.balance || 0).toFixed(2)}
-          </span>
-        </div>
-        <div>
-          <span className="text-matrix-dim">EQUITY </span>
-          <span className="text-matrix font-bold">
-            ${Number(status.equity).toFixed(2)}
-          </span>
-        </div>
-        <div>
-          <span className="text-matrix-dim">OPEN </span>
-          <span className="text-matrix font-bold">{status.open_trades}</span>
-        </div>
-        <div>
-          <span className="text-matrix-dim">DAILY P&L </span>
-          <span
-            className={`font-bold ${Number(status.daily_pnl) >= 0 ? "text-matrix" : "text-red-500"}`}
-          >
-            {Number(status.daily_pnl) >= 0 ? "+" : ""}
-            {Number(status.daily_pnl).toFixed(2)}
-          </span>
-        </div>
-        <div>
-          <span className="text-matrix-dim">UPTIME </span>
-          <span className="text-matrix">{timeSince(status.uptime_start)}</span>
-        </div>
-        <div>
-          <span className="text-matrix-dim">TICK </span>
-          <span className="text-matrix">{timeAgo(status.last_tick)}</span>
-        </div>
-      </div>
+      {/* Bottom scanline */}
+      <div style={{
+        height: 1,
+        background: "repeating-linear-gradient(90deg, transparent, transparent 4px, #1c1c28 4px, #1c1c28 5px)",
+        opacity: 0.5,
+      }} />
+
+      <style>{`
+        @keyframes statusPulse {
+          0%,100% { box-shadow: 0 0 8px #00ff41, 0 0 16px #00ff4155; }
+          50%      { box-shadow: 0 0 16px #00ff41, 0 0 32px #00ff4188; }
+        }
+      `}</style>
     </div>
   );
 }

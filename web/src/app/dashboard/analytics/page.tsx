@@ -8,43 +8,20 @@ import {
 import { formatChartDate } from "@/lib/time";
 import SymbolFilter from "@/components/SymbolFilter";
 
-// ── Types ───────────────────────────────────────────────────────────────
-
 interface Trade {
-  id: string;
-  symbol: string;
-  direction: string;
-  pnl: number;
-  close_time: string | null;
-  open_time: string;
-  status: string;
-  strategy: string;
+  id: string; symbol: string; direction: string; pnl: number;
+  close_time: string | null; open_time: string; status: string; strategy: string;
 }
-
 interface SymbolStat {
-  symbol: string;
-  total: number;
-  wins: number;
-  losses: number;
-  total_pnl: number;
-  avg_pnl: number;
-  avg_win: number;
-  avg_loss: number;
+  symbol: string; total: number; wins: number; losses: number;
+  total_pnl: number; avg_pnl: number; avg_win: number; avg_loss: number;
 }
-
 interface DirStat { direction: string; total: number; total_pnl: number; }
-interface DayPnl { day: string; trades: number; pnl: number; }
+interface DayPnl  { day: string; trades: number; pnl: number; }
 interface Kpis {
-  total_trades: number;
-  wins: number;
-  losses: number;
-  total_pnl: number;
-  avg_pnl: number;
-  best_trade: number;
-  worst_trade: number;
-  avg_duration_min: number;
+  total_trades: number; wins: number; losses: number; total_pnl: number;
+  avg_pnl: number; best_trade: number; worst_trade: number; avg_duration_min: number;
 }
-
 type Range = "24h" | "7d" | "30d" | "all";
 
 function sinceDate(r: Range): string | undefined {
@@ -52,42 +29,122 @@ function sinceDate(r: Range): string | undefined {
   const d = new Date();
   if (r === "24h") d.setHours(d.getHours() - 24);
   else if (r === "7d") d.setDate(d.getDate() - 7);
-  else if (r === "30d") d.setDate(d.getDate() - 30);
+  else d.setDate(d.getDate() - 30);
   return d.toISOString();
 }
 
-const COLORS = ["#00ff41", "#06b6d4", "#eab308", "#f97316", "#d946ef", "#3b82f6", "#ef4444", "#22c55e", "#a855f7", "#14b8a6"];
+const SYM_COLORS = ["#00ff41","#00d4ff","#f5c518","#ff9d00","#d500f9","#4da6ff","#ff4455","#76ff03","#bf7fff","#f0f0f0"];
 
-const chipCls = (active: boolean) =>
-  `px-3 py-1 rounded text-[10px] font-bold uppercase border transition-colors cursor-pointer ${
-    active
-      ? "border-matrix bg-matrix/20 text-matrix"
-      : "border-terminal-border text-matrix-dim hover:text-matrix"
-  }`;
+// ── KPI Card ────────────────────────────────────────────────────────────────
 
-// ── KPI Card ────────────────────────────────────────────────────────────
-
-function Kpi({ label, value, sub, color }: { label: string; value: string; sub?: string; color?: string }) {
+function KpiCard({
+  label, value, sub, color = "#00ff41", glowColor,
+}: {
+  label: string; value: string; sub?: string; color?: string; glowColor?: string;
+}) {
+  const glow = glowColor ?? color;
   return (
-    <div className="border border-terminal-border rounded bg-terminal-surface p-4">
-      <div className="text-matrix-dim text-[10px] uppercase tracking-widest">{label}</div>
-      <div className={`text-xl font-bold mt-1 ${color ?? "text-matrix"}`}>{value}</div>
-      {sub && <div className="text-matrix-dim text-[10px] mt-1">{sub}</div>}
+    <div style={{
+      background: "#0e0e10",
+      border: "1px solid #1c1c28",
+      borderRadius: 8,
+      padding: "14px 16px",
+      position: "relative",
+      overflow: "hidden",
+    }}>
+      <div style={{
+        position: "absolute", top: 0, left: 0, right: 0, height: 1,
+        background: `linear-gradient(90deg, transparent, ${glow}33, transparent)`,
+      }} />
+      <div style={{
+        fontSize: 8.5, fontFamily: "'JetBrains Mono', monospace",
+        color: "#2a3a4a", letterSpacing: "0.18em", textTransform: "uppercase",
+        marginBottom: 6,
+      }}>
+        {label}
+      </div>
+      <div style={{
+        fontSize: 20, fontFamily: "'JetBrains Mono', monospace",
+        fontWeight: 700, color,
+        textShadow: `0 0 12px ${glow}55`,
+        lineHeight: 1.1,
+      }}>
+        {value}
+      </div>
+      {sub && (
+        <div style={{
+          fontSize: 9, fontFamily: "'JetBrains Mono', monospace",
+          color: "#2a3a4a", marginTop: 4,
+        }}>
+          {sub}
+        </div>
+      )}
     </div>
   );
 }
 
-// ── Page ─────────────────────────────────────────────────────────────────
+// ── Chart card ──────────────────────────────────────────────────────────────
+
+function ChartCard({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div style={{
+      background: "#0e0e10", border: "1px solid #1c1c28",
+      borderRadius: 8, padding: "16px",
+    }}>
+      <div style={{
+        fontSize: 9, fontFamily: "'JetBrains Mono', monospace",
+        color: "#2a3a4a", letterSpacing: "0.2em", textTransform: "uppercase",
+        marginBottom: 14,
+      }}>
+        {title}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function NoData() {
+  return (
+    <div style={{
+      height: 180, display: "flex", alignItems: "center", justifyContent: "center",
+      color: "#1e2e1e", fontFamily: "'JetBrains Mono', monospace", fontSize: 11,
+    }}>
+      no data yet
+    </div>
+  );
+}
+
+const TOOLTIP_STYLE = { background: "#0e0e10", border: "1px solid #1c1c28", fontSize: 11, fontFamily: "'JetBrains Mono', monospace" };
+
+// ── Range chip ──────────────────────────────────────────────────────────────
+
+function RangeChip({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
+  return (
+    <button onClick={onClick} style={{
+      padding: "4px 12px", borderRadius: 4, fontSize: 10,
+      fontFamily: "'JetBrains Mono', monospace", fontWeight: 700,
+      letterSpacing: "0.08em", textTransform: "uppercase", cursor: "pointer",
+      border: active ? "1px solid rgba(0,255,65,0.5)" : "1px solid #1c1c28",
+      background: active ? "rgba(0,255,65,0.12)" : "transparent",
+      color: active ? "#00ff41" : "#3a4a5a",
+      transition: "all 0.15s",
+    }}>
+      {label === "all" ? "All Time" : label}
+    </button>
+  );
+}
+
+// ── Page ─────────────────────────────────────────────────────────────────────
 
 export default function AnalyticsPage() {
-  const [range, setRange] = useState<Range>("all");
-  const [symbol, setSymbol] = useState<string | null>(null);
-  const [kpis, setKpis] = useState<Kpis | null>(null);
-  const [dailyPnl, setDailyPnl] = useState<DayPnl[]>([]);
+  const [range, setRange]             = useState<Range>("all");
+  const [symbol, setSymbol]           = useState<string | null>(null);
+  const [kpis, setKpis]               = useState<Kpis | null>(null);
+  const [dailyPnl, setDailyPnl]       = useState<DayPnl[]>([]);
   const [symbolStats, setSymbolStats] = useState<SymbolStat[]>([]);
-  const [dirStats, setDirStats] = useState<DirStat[]>([]);
+  const [dirStats, setDirStats]       = useState<DirStat[]>([]);
   const [closedTrades, setClosedTrades] = useState<Trade[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading]         = useState(true);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -108,23 +165,27 @@ export default function AnalyticsPage() {
 
   useEffect(() => { load(); }, [load]);
 
-  // ── Derived data ──────────────────────────────────────────────────────
+  // Derived
+  const filteredTrades  = symbol ? closedTrades.filter((t) => t.symbol === symbol) : closedTrades;
+  const fWins           = filteredTrades.filter((t) => Number(t.pnl) > 0).length;
+  const fTotal          = filteredTrades.length;
+  const fTotalPnl       = filteredTrades.reduce((s, t) => s + Number(t.pnl), 0);
+  const fAvgPnl         = fTotal > 0 ? fTotalPnl / fTotal : 0;
+  const fBest           = fTotal > 0 ? Math.max(...filteredTrades.map((t) => Number(t.pnl))) : 0;
+  const fWorst          = fTotal > 0 ? Math.min(...filteredTrades.map((t) => Number(t.pnl))) : 0;
+  const winRate         = fTotal > 0 ? (fWins / fTotal) * 100 : 0;
+  const winRateColor    = winRate >= 55 ? "#00ff88" : winRate >= 45 ? "#f5c518" : "#ff4455";
 
-  // Apply symbol filter to closed trades
-  const filteredTrades = symbol
-    ? closedTrades.filter((t) => t.symbol === symbol)
-    : closedTrades;
+  const displayKpis: Kpis | null = symbol && kpis
+    ? { total_trades: fTotal, wins: fWins, losses: fTotal - fWins, total_pnl: fTotalPnl, avg_pnl: fAvgPnl, best_trade: fBest, worst_trade: fWorst, avg_duration_min: kpis.avg_duration_min }
+    : kpis;
 
-  // Cumulative PnL curve
-  const equityCurve = filteredTrades.reduce<{ date: string; cum: number }[]>(
-    (acc, t) => {
-      const prev = acc.length > 0 ? acc[acc.length - 1].cum : 0;
-      acc.push({ date: t.close_time ?? t.open_time, cum: prev + Number(t.pnl) });
-      return acc;
-    }, []
-  );
+  const equityCurve = filteredTrades.reduce<{ date: string; cum: number }[]>((acc, t) => {
+    const prev = acc.length > 0 ? acc[acc.length - 1].cum : 0;
+    acc.push({ date: t.close_time ?? t.open_time, cum: prev + Number(t.pnl) });
+    return acc;
+  }, []);
 
-  // Drawdown curve
   let peak = 0;
   const drawdownCurve = equityCurve.map((p) => {
     if (p.cum > peak) peak = p.cum;
@@ -132,64 +193,19 @@ export default function AnalyticsPage() {
     return { date: p.date, drawdown: Math.min(0, dd) };
   });
 
-  // Win rate
-  const fTrades = filteredTrades;
-  const fWins = fTrades.filter((t) => Number(t.pnl) > 0).length;
-  const fTotal = fTrades.length;
-  const fTotalPnl = fTrades.reduce((s, t) => s + Number(t.pnl), 0);
-  const fAvgPnl = fTotal > 0 ? fTotalPnl / fTotal : 0;
-  const fBest = fTotal > 0 ? Math.max(...fTrades.map((t) => Number(t.pnl))) : 0;
-  const fWorst = fTotal > 0 ? Math.min(...fTrades.map((t) => Number(t.pnl))) : 0;
-  const winRate = fTotal > 0 ? ((fWins / fTotal) * 100).toFixed(1) : "0";
+  const filteredSymbolStats = symbol ? symbolStats.filter((s) => s.symbol === symbol) : symbolStats;
+  const symbolPie  = filteredSymbolStats.map((s) => ({ name: s.symbol, value: Math.abs(Number(s.total_pnl)), pnl: Number(s.total_pnl) }));
+  const symbolBars = filteredSymbolStats.map((s) => ({ symbol: s.symbol, wins: Number(s.wins), losses: Number(s.losses) }));
 
-  // When symbol is selected, override KPIs with filtered values
-  const displayKpis: Kpis | null = symbol && kpis
-    ? {
-        total_trades: fTotal,
-        wins: fWins,
-        losses: fTotal - fWins,
-        total_pnl: fTotalPnl,
-        avg_pnl: fAvgPnl,
-        best_trade: fBest,
-        worst_trade: fWorst,
-        avg_duration_min: kpis.avg_duration_min,
-      }
-    : kpis;
-
-  // Symbol PnL for pie chart
-  const filteredSymbolStats = symbol
-    ? symbolStats.filter((s) => s.symbol === symbol)
-    : symbolStats;
-  const symbolPie = filteredSymbolStats.map((s) => ({
-    name: s.symbol,
-    value: Math.abs(Number(s.total_pnl)),
-    pnl: Number(s.total_pnl),
-  }));
-
-  // Trades by symbol for bar chart
-  const symbolBars = filteredSymbolStats.map((s) => ({
-    symbol: s.symbol,
-    wins: Number(s.wins),
-    losses: Number(s.losses),
-    pnl: Number(s.total_pnl),
-  }));
-
-  // Direction pie
   const filteredDirStats = symbol
     ? (() => {
-        const buys = filteredTrades.filter((t) => t.direction === "BUY");
+        const buys  = filteredTrades.filter((t) => t.direction === "BUY");
         const sells = filteredTrades.filter((t) => t.direction === "SELL");
-        return [
-          ...(buys.length > 0 ? [{ name: "BUY", value: buys.length }] : []),
-          ...(sells.length > 0 ? [{ name: "SELL", value: sells.length }] : []),
-        ];
+        return [...(buys.length  ? [{ name: "BUY",  value: buys.length }]  : []),
+                ...(sells.length ? [{ name: "SELL", value: sells.length }] : [])];
       })()
-    : dirStats.map((d) => ({
-        name: d.direction,
-        value: Number(d.total),
-      }));
+    : dirStats.map((d) => ({ name: d.direction, value: Number(d.total) }));
 
-  // Daily PnL (filtered)
   const filteredDailyPnl = symbol
     ? (() => {
         const byDay: Record<string, number> = {};
@@ -197,219 +213,207 @@ export default function AnalyticsPage() {
           const day = (t.close_time ?? t.open_time).slice(0, 10);
           byDay[day] = (byDay[day] ?? 0) + Number(t.pnl);
         }
-        return Object.entries(byDay)
-          .sort(([a], [b]) => a.localeCompare(b))
-          .map(([day, pnl]) => ({ day, pnl, trades: 0 }));
+        return Object.entries(byDay).sort(([a],[b]) => a.localeCompare(b)).map(([day, pnl]) => ({ day, pnl, trades: 0 }));
       })()
     : dailyPnl;
 
-  // ── Render ────────────────────────────────────────────────────────────
-
   return (
-    <div className="space-y-6">
+    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+
       {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <h1 className="text-matrix text-lg font-bold">Analytics</h1>
-        <div className="flex gap-2">
-          {(["24h", "7d", "30d", "all"] as Range[]).map((r) => (
-            <button key={r} className={chipCls(range === r)} onClick={() => setRange(r)}>
-              {r === "all" ? "All Time" : r}
-            </button>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
+        <div>
+          <div style={{
+            fontSize: 9, fontFamily: "'JetBrains Mono', monospace",
+            color: "#2a3a4a", letterSpacing: "0.2em", textTransform: "uppercase",
+          }}>
+            Performance
+          </div>
+          <h1 style={{
+            fontSize: 20, fontFamily: "'JetBrains Mono', monospace",
+            fontWeight: 700, color: "#00ff41",
+            textShadow: "0 0 20px rgba(0,255,65,0.3)",
+            marginTop: 2,
+          }}>
+            Analytics
+          </h1>
+        </div>
+        <div style={{ display: "flex", gap: 6 }}>
+          {(["24h","7d","30d","all"] as Range[]).map((r) => (
+            <RangeChip key={r} label={r} active={range === r} onClick={() => setRange(r)} />
           ))}
         </div>
       </div>
 
       <SymbolFilter value={symbol} onChange={setSymbol} />
 
-      {loading && <div className="text-matrix-dim text-sm">Loading analytics…</div>}
-
-      {/* KPI row */}
-      {displayKpis && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
-          <Kpi label="Total Trades" value={String(displayKpis.total_trades)} />
-          <Kpi label="Wins" value={String(displayKpis.wins)} color="text-green-400" />
-          <Kpi label="Losses" value={String(displayKpis.losses)} color="text-red-500" />
-          <Kpi label="Win Rate" value={`${winRate}%`} color={Number(winRate) >= 50 ? "text-green-400" : "text-red-500"} />
-          <Kpi
-            label="Total PnL"
-            value={`${Number(displayKpis.total_pnl) >= 0 ? "+" : ""}${Number(displayKpis.total_pnl).toFixed(2)}`}
-            color={Number(displayKpis.total_pnl) >= 0 ? "text-green-400" : "text-red-500"}
-          />
-          <Kpi label="Avg PnL" value={Number(displayKpis.avg_pnl).toFixed(2)} />
-          <Kpi label="Best Trade" value={`+${Number(displayKpis.best_trade).toFixed(2)}`} color="text-green-400" />
-          <Kpi label="Worst Trade" value={Number(displayKpis.worst_trade).toFixed(2)} color="text-red-500" />
+      {loading && (
+        <div style={{ fontSize: 11, color: "#2a3a4a", fontFamily: "'JetBrains Mono', monospace" }}>
+          loading analytics…
         </div>
       )}
 
-      {/* Charts row 1: Equity curve + Drawdown */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Cumulative PnL / Equity Curve */}
-        <div className="border border-terminal-border rounded bg-terminal-surface p-4">
-          <div className="text-matrix-dim text-[10px] uppercase tracking-widest mb-3">Cumulative PnL</div>
-          {equityCurve.length < 2 ? (
-            <div className="text-matrix-dim text-sm h-48 flex items-center justify-center">Not enough data</div>
-          ) : (
-            <ResponsiveContainer width="100%" height={200}>
+      {/* KPI row */}
+      {displayKpis && (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10 }}>
+          <KpiCard label="Total Trades" value={String(displayKpis.total_trades)} color="#9aa8b8" />
+          <KpiCard label="Win Rate"  value={`${winRate.toFixed(1)}%`} color={winRateColor} glowColor={winRateColor} />
+          <KpiCard
+            label="Total P&L"
+            value={`${Number(displayKpis.total_pnl) >= 0 ? "+" : ""}${Number(displayKpis.total_pnl).toFixed(2)}`}
+            color={Number(displayKpis.total_pnl) >= 0 ? "#00ff88" : "#ff4455"}
+            sub={`${displayKpis.wins}W / ${displayKpis.losses}L`}
+          />
+          <KpiCard label="Avg P&L" value={Number(displayKpis.avg_pnl).toFixed(2)} color={Number(displayKpis.avg_pnl) >= 0 ? "#00ff88" : "#ff4455"} />
+        </div>
+      )}
+
+      {/* Second KPI row */}
+      {displayKpis && (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10 }}>
+          <KpiCard label="Best Trade"  value={`+${Number(displayKpis.best_trade).toFixed(2)}`}  color="#00ff88" />
+          <KpiCard label="Worst Trade" value={Number(displayKpis.worst_trade).toFixed(2)} color="#ff4455" />
+          <KpiCard label="Avg Duration" value={`${Math.floor(Number(displayKpis.avg_duration_min))}m`} color="#7a8a9a" sub="per trade" />
+          <KpiCard label="Total Closed" value={String(filteredTrades.length)} color="#4da6ff" />
+        </div>
+      )}
+
+      {/* Charts row 1: Equity + Drawdown */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+        <ChartCard title="Cumulative P&L">
+          {equityCurve.length < 2 ? <NoData /> : (
+            <ResponsiveContainer width="100%" height={180}>
               <AreaChart data={equityCurve}>
-                <defs><linearGradient id="gCum" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#00ff41" stopOpacity={0.3} />
-                  <stop offset="95%" stopColor="#00ff41" stopOpacity={0} />
-                </linearGradient></defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#1a1a1a" />
-                <XAxis dataKey="date" tickFormatter={formatChartDate} tick={{ fill: "#555", fontSize: 10 }} />
-                <YAxis tick={{ fill: "#555", fontSize: 10 }} />
-                <Tooltip
-                  contentStyle={{ background: "#111", border: "1px solid #1a1a1a", fontSize: 11 }}
-                  labelFormatter={(label: any) => formatChartDate(String(label))}
-                  formatter={(v: any) => [`${Number(v).toFixed(2)}`, "Cum PnL"]}
-                />
+                <defs>
+                  <linearGradient id="gCum" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%"  stopColor="#00ff41" stopOpacity={0.25} />
+                    <stop offset="95%" stopColor="#00ff41" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#1c1c28" />
+                <XAxis dataKey="date" tickFormatter={formatChartDate} tick={{ fill: "#2a3a4a", fontSize: 9, fontFamily: "JetBrains Mono" }} />
+                <YAxis tick={{ fill: "#2a3a4a", fontSize: 9, fontFamily: "JetBrains Mono" }} />
+                <Tooltip contentStyle={TOOLTIP_STYLE} labelFormatter={(l) => formatChartDate(String(l))} formatter={(v) => [`${Number(v).toFixed(2)}`, "Cum PnL"]} />
                 <Area type="monotone" dataKey="cum" stroke="#00ff41" fill="url(#gCum)" strokeWidth={2} />
               </AreaChart>
             </ResponsiveContainer>
           )}
-        </div>
+        </ChartCard>
 
-        {/* Drawdown */}
-        <div className="border border-terminal-border rounded bg-terminal-surface p-4">
-          <div className="text-matrix-dim text-[10px] uppercase tracking-widest mb-3">Drawdown %</div>
-          {drawdownCurve.length < 2 ? (
-            <div className="text-matrix-dim text-sm h-48 flex items-center justify-center">Not enough data</div>
-          ) : (
-            <ResponsiveContainer width="100%" height={200}>
+        <ChartCard title="Drawdown %">
+          {drawdownCurve.length < 2 ? <NoData /> : (
+            <ResponsiveContainer width="100%" height={180}>
               <AreaChart data={drawdownCurve}>
-                <defs><linearGradient id="gDD" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#ef4444" stopOpacity={0.3} />
-                  <stop offset="95%" stopColor="#ef4444" stopOpacity={0} />
-                </linearGradient></defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#1a1a1a" />
-                <XAxis dataKey="date" tickFormatter={formatChartDate} tick={{ fill: "#555", fontSize: 10 }} />
-                <YAxis tick={{ fill: "#555", fontSize: 10 }} />
-                <Tooltip
-                  contentStyle={{ background: "#111", border: "1px solid #1a1a1a", fontSize: 11 }}
-                  labelFormatter={(label: any) => formatChartDate(String(label))}
-                  formatter={(v: any) => [`${Number(v).toFixed(2)}%`, "Drawdown"]}
-                />
-                <Area type="monotone" dataKey="drawdown" stroke="#ef4444" fill="url(#gDD)" strokeWidth={2} />
+                <defs>
+                  <linearGradient id="gDD" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%"  stopColor="#ff4455" stopOpacity={0.25} />
+                    <stop offset="95%" stopColor="#ff4455" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#1c1c28" />
+                <XAxis dataKey="date" tickFormatter={formatChartDate} tick={{ fill: "#2a3a4a", fontSize: 9, fontFamily: "JetBrains Mono" }} />
+                <YAxis tick={{ fill: "#2a3a4a", fontSize: 9, fontFamily: "JetBrains Mono" }} />
+                <Tooltip contentStyle={TOOLTIP_STYLE} labelFormatter={(l) => formatChartDate(String(l))} formatter={(v) => [`${Number(v).toFixed(2)}%`, "Drawdown"]} />
+                <Area type="monotone" dataKey="drawdown" stroke="#ff4455" fill="url(#gDD)" strokeWidth={2} />
               </AreaChart>
             </ResponsiveContainer>
           )}
-        </div>
+        </ChartCard>
       </div>
 
-      {/* Charts row 2: Daily PnL + Win/Loss by symbol */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Daily PnL bars */}
-        <div className="border border-terminal-border rounded bg-terminal-surface p-4">
-          <div className="text-matrix-dim text-[10px] uppercase tracking-widest mb-3">Daily PnL</div>
-          {filteredDailyPnl.length === 0 ? (
-            <div className="text-matrix-dim text-sm h-48 flex items-center justify-center">No daily data</div>
-          ) : (
-            <ResponsiveContainer width="100%" height={200}>
+      {/* Charts row 2: Daily PnL + Symbol bars */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+        <ChartCard title="Daily P&L">
+          {filteredDailyPnl.length === 0 ? <NoData /> : (
+            <ResponsiveContainer width="100%" height={180}>
               <BarChart data={filteredDailyPnl.map((d) => ({ ...d, pnl: Number(d.pnl) }))}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#1a1a1a" />
-                <XAxis dataKey="day" tickFormatter={formatChartDate} tick={{ fill: "#555", fontSize: 10 }} />
-                <YAxis tick={{ fill: "#555", fontSize: 10 }} />
-                <Tooltip
-                  contentStyle={{ background: "#111", border: "1px solid #1a1a1a", fontSize: 11 }}
-                  formatter={(v: any) => [`${Number(v).toFixed(2)}`, "PnL"]}
-                />
-                <Bar dataKey="pnl" fill="#00ff41">
+                <CartesianGrid strokeDasharray="3 3" stroke="#1c1c28" />
+                <XAxis dataKey="day" tickFormatter={formatChartDate} tick={{ fill: "#2a3a4a", fontSize: 9, fontFamily: "JetBrains Mono" }} />
+                <YAxis tick={{ fill: "#2a3a4a", fontSize: 9, fontFamily: "JetBrains Mono" }} />
+                <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v) => [`${Number(v).toFixed(2)}`, "PnL"]} />
+                <Bar dataKey="pnl">
                   {filteredDailyPnl.map((d, i) => (
-                    <Cell key={i} fill={Number(d.pnl) >= 0 ? "#22c55e" : "#ef4444"} />
+                    <Cell key={i} fill={Number(d.pnl) >= 0 ? "#00ff88" : "#ff4455"} />
                   ))}
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
           )}
-        </div>
+        </ChartCard>
 
-        {/* Win/Loss by symbol */}
-        <div className="border border-terminal-border rounded bg-terminal-surface p-4">
-          <div className="text-matrix-dim text-[10px] uppercase tracking-widest mb-3">Trades by Symbol</div>
-          {symbolBars.length === 0 ? (
-            <div className="text-matrix-dim text-sm h-48 flex items-center justify-center">No symbol data</div>
-          ) : (
-            <ResponsiveContainer width="100%" height={200}>
+        <ChartCard title="Trades by Symbol">
+          {symbolBars.length === 0 ? <NoData /> : (
+            <ResponsiveContainer width="100%" height={180}>
               <BarChart data={symbolBars} layout="vertical">
-                <CartesianGrid strokeDasharray="3 3" stroke="#1a1a1a" />
-                <XAxis type="number" tick={{ fill: "#555", fontSize: 10 }} />
-                <YAxis dataKey="symbol" type="category" tick={{ fill: "#aaa", fontSize: 10 }} width={70} />
-                <Tooltip contentStyle={{ background: "#111", border: "1px solid #1a1a1a", fontSize: 11 }} />
-                <Legend wrapperStyle={{ fontSize: 10 }} />
-                <Bar dataKey="wins" stackId="a" fill="#22c55e" name="Wins" />
-                <Bar dataKey="losses" stackId="a" fill="#ef4444" name="Losses" />
+                <CartesianGrid strokeDasharray="3 3" stroke="#1c1c28" />
+                <XAxis type="number" tick={{ fill: "#2a3a4a", fontSize: 9, fontFamily: "JetBrains Mono" }} />
+                <YAxis dataKey="symbol" type="category" tick={{ fill: "#9aa8b8", fontSize: 9, fontFamily: "JetBrains Mono" }} width={70} />
+                <Tooltip contentStyle={TOOLTIP_STYLE} />
+                <Legend wrapperStyle={{ fontSize: 9, fontFamily: "JetBrains Mono", color: "#4a5568" }} />
+                <Bar dataKey="wins"   stackId="a" fill="#00ff88" name="Wins" />
+                <Bar dataKey="losses" stackId="a" fill="#ff4455" name="Losses" />
               </BarChart>
             </ResponsiveContainer>
           )}
-        </div>
+        </ChartCard>
       </div>
 
-      {/* Charts row 3: Symbol PnL pie + Direction pie */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Symbol PnL pie */}
-        <div className="border border-terminal-border rounded bg-terminal-surface p-4">
-          <div className="text-matrix-dim text-[10px] uppercase tracking-widest mb-3">PnL by Symbol</div>
-          {symbolPie.length === 0 ? (
-            <div className="text-matrix-dim text-sm h-48 flex items-center justify-center">No data</div>
-          ) : (
-            <ResponsiveContainer width="100%" height={220}>
-              <PieChart>
-                <Pie data={symbolPie} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label={({ name }) => name}>
-                  {symbolPie.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-                </Pie>
-                <Tooltip contentStyle={{ background: "#111", border: "1px solid #1a1a1a", fontSize: 11 }}
-                  formatter={(v: any, _n: any, entry: any) =>
-                    [`${(entry.payload?.pnl ?? 0) >= 0 ? "+" : ""}${Number(entry.payload?.pnl ?? 0).toFixed(2)}`, "PnL"]
-                  }
-                />
-              </PieChart>
-            </ResponsiveContainer>
-          )}
-        </div>
+      {/* Charts row 3: Pie charts + Symbol ranking */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14 }}>
 
-        {/* Direction pie */}
-        <div className="border border-terminal-border rounded bg-terminal-surface p-4">
-          <div className="text-matrix-dim text-[10px] uppercase tracking-widest mb-3">Buy vs Sell</div>
-          {filteredDirStats.length === 0 ? (
-            <div className="text-matrix-dim text-sm h-48 flex items-center justify-center">No data</div>
-          ) : (
-            <ResponsiveContainer width="100%" height={220}>
+        <ChartCard title="P&L by Symbol">
+          {symbolPie.length === 0 ? <NoData /> : (
+            <ResponsiveContainer width="100%" height={200}>
               <PieChart>
-                <Pie data={filteredDirStats} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label={({ name, value }) => `${name}: ${value}`}>
-                  <Cell fill="#22c55e" />
-                  <Cell fill="#ef4444" />
+                <Pie data={symbolPie} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={72} label={({ name }) => name} labelLine={{ stroke: "#2a3a4a" }}>
+                  {symbolPie.map((_, i) => <Cell key={i} fill={SYM_COLORS[i % SYM_COLORS.length]} />)}
                 </Pie>
-                <Tooltip contentStyle={{ background: "#111", border: "1px solid #1a1a1a", fontSize: 11 }} />
+                <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(_v, _n, entry) => [`${(entry.payload?.pnl ?? 0) >= 0 ? "+" : ""}${Number(entry.payload?.pnl ?? 0).toFixed(2)}`, "PnL"]} />
               </PieChart>
             </ResponsiveContainer>
           )}
-        </div>
+        </ChartCard>
+
+        <ChartCard title="Buy vs Sell">
+          {filteredDirStats.length === 0 ? <NoData /> : (
+            <ResponsiveContainer width="100%" height={200}>
+              <PieChart>
+                <Pie data={filteredDirStats} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={72} label={({ name, value }) => `${name}: ${value}`} labelLine={{ stroke: "#2a3a4a" }}>
+                  <Cell fill="#00ff88" />
+                  <Cell fill="#ff4455" />
+                </Pie>
+                <Tooltip contentStyle={TOOLTIP_STYLE} />
+              </PieChart>
+            </ResponsiveContainer>
+          )}
+        </ChartCard>
 
         {/* Symbol ranking table */}
-        <div className="border border-terminal-border rounded bg-terminal-surface p-4 overflow-x-auto">
-          <div className="text-matrix-dim text-[10px] uppercase tracking-widest mb-3">Symbol Ranking</div>
+        <ChartCard title="Symbol Ranking">
           {filteredSymbolStats.length === 0 ? (
-            <div className="text-matrix-dim text-sm">No data</div>
+            <div style={{ color: "#1e2e1e", fontFamily: "'JetBrains Mono', monospace", fontSize: 11 }}>no data</div>
           ) : (
-            <table className="w-full text-[10px]">
-              <thead className="text-matrix-dim uppercase border-b border-terminal-border">
-                <tr>
-                  <th className="text-left p-1">Symbol</th>
-                  <th className="text-right p-1">Trades</th>
-                  <th className="text-right p-1">Win%</th>
-                  <th className="text-right p-1">PnL</th>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 10, fontFamily: "'JetBrains Mono', monospace" }}>
+              <thead>
+                <tr style={{ borderBottom: "1px solid #1c1c28" }}>
+                  {["Symbol","Trades","Win%","PnL"].map((h) => (
+                    <th key={h} style={{
+                      padding: "4px 6px", textAlign: h === "Symbol" ? "left" : "right",
+                      fontSize: 8.5, letterSpacing: "0.12em", textTransform: "uppercase", color: "#2a3a4a",
+                    }}>{h}</th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
                 {filteredSymbolStats.map((s) => {
-                  const wr = s.total > 0 ? ((Number(s.wins) / Number(s.total)) * 100).toFixed(0) : "0";
+                  const wr  = s.total > 0 ? ((Number(s.wins) / Number(s.total)) * 100).toFixed(0) : "0";
                   const pnl = Number(s.total_pnl);
                   return (
-                    <tr key={s.symbol} className="border-b border-terminal-border/30">
-                      <td className="p-1 text-matrix font-bold">{s.symbol}</td>
-                      <td className="p-1 text-right">{s.total}</td>
-                      <td className="p-1 text-right">{wr}%</td>
-                      <td className={`p-1 text-right font-bold ${pnl >= 0 ? "text-green-400" : "text-red-500"}`}>
+                    <tr key={s.symbol} style={{ borderBottom: "1px solid rgba(28,28,40,0.4)" }}>
+                      <td style={{ padding: "5px 6px", color: "#00d4ff", fontWeight: 700 }}>{s.symbol}</td>
+                      <td style={{ padding: "5px 6px", textAlign: "right", color: "#7a8a9a" }}>{s.total}</td>
+                      <td style={{ padding: "5px 6px", textAlign: "right", color: Number(wr) >= 50 ? "#00ff88" : "#ff4455" }}>{wr}%</td>
+                      <td style={{ padding: "5px 6px", textAlign: "right", fontWeight: 700, color: pnl >= 0 ? "#00ff88" : "#ff4455" }}>
                         {pnl >= 0 ? "+" : ""}{pnl.toFixed(2)}
                       </td>
                     </tr>
@@ -418,30 +422,9 @@ export default function AnalyticsPage() {
               </tbody>
             </table>
           )}
-        </div>
+        </ChartCard>
       </div>
 
-      {/* Avg duration KPI */}
-      {displayKpis && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <Kpi
-            label="Avg Duration"
-            value={`${Math.floor(Number(displayKpis.avg_duration_min))}m`}
-            sub="minutes per trade"
-          />
-          <Kpi label="Total Closed" value={String(filteredTrades.length)} />
-          <Kpi
-            label="Avg Win"
-            value={filteredSymbolStats.length > 0 ? `+${(filteredSymbolStats.reduce((s, x) => s + Number(x.avg_win), 0) / filteredSymbolStats.length).toFixed(2)}` : "—"}
-            color="text-green-400"
-          />
-          <Kpi
-            label="Avg Loss"
-            value={filteredSymbolStats.length > 0 ? (filteredSymbolStats.reduce((s, x) => s + Number(x.avg_loss), 0) / filteredSymbolStats.length).toFixed(2) : "—"}
-            color="text-red-500"
-          />
-        </div>
-      )}
     </div>
   );
 }

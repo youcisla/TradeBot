@@ -29,28 +29,98 @@ const EMPTY_FORM: FormData = {
   is_demo: true,
 };
 
+function Field({
+  label,
+  hint,
+  children,
+}: {
+  label: string;
+  hint?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 6 }}>
+        <span style={{
+          fontFamily: "'JetBrains Mono', monospace",
+          fontSize: 9, fontWeight: 700, letterSpacing: "0.14em",
+          textTransform: "uppercase", color: "#2a3a4a",
+        }}>
+          {label}
+        </span>
+        {hint && (
+          <span style={{
+            fontFamily: "'JetBrains Mono', monospace",
+            fontSize: 8.5, color: "#1a2a1a",
+          }}>
+            {hint}
+          </span>
+        )}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function TerminalInput({
+  type = "text",
+  value,
+  onChange,
+  placeholder,
+  accent = "#00ff88",
+}: {
+  type?: string;
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+  accent?: string;
+}) {
+  const [focused, setFocused] = useState(false);
+  return (
+    <input
+      type={type}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder={placeholder}
+      onFocus={() => setFocused(true)}
+      onBlur={() => setFocused(false)}
+      style={{
+        width: "100%",
+        background: "#06060c",
+        border: `1px solid ${focused ? accent : "#1c1c28"}`,
+        borderRadius: 4,
+        padding: "8px 12px",
+        fontFamily: "'JetBrains Mono', monospace",
+        fontSize: 11.5,
+        color: "#c0ccd8",
+        outline: "none",
+        boxShadow: focused ? `0 0 0 2px ${accent}18` : "none",
+        transition: "border-color 0.15s, box-shadow 0.15s",
+        boxSizing: "border-box",
+      }}
+    />
+  );
+}
+
 export default function SettingsPage() {
-  const [accounts, setAccounts] = useState<BrokerAccount[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [showForm, setShowForm] = useState(false);
-  const [editId, setEditId] = useState<number | null>(null);
-  const [form, setForm] = useState<FormData>(EMPTY_FORM);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
+  const [accounts, setAccounts]   = useState<BrokerAccount[]>([]);
+  const [loading, setLoading]     = useState(true);
+  const [showForm, setShowForm]   = useState(false);
+  const [editId, setEditId]       = useState<number | null>(null);
+  const [form, setForm]           = useState<FormData>(EMPTY_FORM);
+  const [saving, setSaving]       = useState(false);
+  const [error, setError]         = useState("");
+  const [deleting, setDeleting]   = useState<number | null>(null);
 
   const load = useCallback(() => {
     fetch("/api/broker/accounts")
       .then((r) => r.json())
-      .then((data) => {
-        if (Array.isArray(data)) setAccounts(data);
-      })
+      .then((data) => { if (Array.isArray(data)) setAccounts(data); })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  useEffect(() => { load(); }, [load]);
 
   const resetForm = () => {
     setForm(EMPTY_FORM);
@@ -68,22 +138,18 @@ export default function SettingsPage() {
       setError("Password is required for new accounts.");
       return;
     }
-
     setSaving(true);
     setError("");
     try {
-      const url = editId
-        ? `/api/broker/accounts/${editId}`
-        : "/api/broker/accounts";
+      const url    = editId ? `/api/broker/accounts/${editId}` : "/api/broker/accounts";
       const method = editId ? "PUT" : "POST";
       const body: Record<string, unknown> = {
-        name: form.name,
+        name:           form.name,
         account_number: form.account_number,
-        server: form.server,
-        is_demo: form.is_demo,
+        server:         form.server,
+        is_demo:        form.is_demo,
       };
       if (form.password) body.password = form.password;
-
       const r = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
@@ -109,102 +175,169 @@ export default function SettingsPage() {
 
   const handleDelete = async (id: number) => {
     if (!confirm("Delete this broker account?")) return;
+    setDeleting(id);
     await fetch(`/api/broker/accounts/${id}`, { method: "DELETE" });
+    setDeleting(null);
     load();
   };
 
   const handleEdit = (a: BrokerAccount) => {
     setEditId(a.id);
     setForm({
-      name: a.name,
+      name:           a.name,
       account_number: a.account_number,
-      password: "",
-      server: a.server,
-      is_demo: a.is_demo,
+      password:       "",
+      server:         a.server,
+      is_demo:        a.is_demo,
     });
     setShowForm(true);
   };
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-matrix text-xl font-bold">
-        &gt; BROKER ACCOUNTS
-      </h1>
-      <p className="text-matrix-dim text-sm">
-        Add your demo or live broker accounts. The <strong>active</strong>{" "}
-        account is used when the bot next starts. Restart the bot after
-        switching accounts.
-      </p>
+    <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+
+      {/* Header */}
+      <div>
+        <div style={{
+          fontSize: 9, fontFamily: "'JetBrains Mono', monospace",
+          color: "#2a3a4a", letterSpacing: "0.2em", textTransform: "uppercase",
+        }}>
+          Configuration
+        </div>
+        <h1 style={{
+          fontSize: 20, fontFamily: "'JetBrains Mono', monospace",
+          fontWeight: 700, color: "#00ff88",
+          textShadow: "0 0 20px rgba(0,255,136,0.3)", marginTop: 2,
+        }}>
+          Broker Accounts
+        </h1>
+        <p style={{
+          marginTop: 8, fontFamily: "'JetBrains Mono', monospace",
+          fontSize: 11, color: "#2a3a4a", lineHeight: 1.6,
+        }}>
+          The <span style={{ color: "#00ff88" }}>active</span> account is used when the bot next starts.
+          Restart the bot after switching accounts.
+        </p>
+      </div>
 
       {/* Account list */}
       {loading ? (
-        <p className="text-matrix-dim text-sm">Loading…</p>
+        <div style={{
+          fontFamily: "'JetBrains Mono', monospace", fontSize: 11,
+          color: "#2a3a4a", padding: "20px 0",
+        }}>
+          Connecting to broker database…
+        </div>
       ) : accounts.length === 0 ? (
-        <div className="border border-terminal-border rounded p-6 bg-terminal-surface text-center">
-          <p className="text-matrix-dim mb-4">No broker accounts configured.</p>
-          <p className="text-matrix-dim text-xs">
-            The bot is using credentials from .env as fallback.
-          </p>
+        <div style={{
+          background: "#0a0a12", border: "1px solid #1c1c28",
+          borderRadius: 8, padding: "32px 24px", textAlign: "center",
+        }}>
+          <div style={{
+            fontFamily: "'JetBrains Mono', monospace", fontSize: 11,
+            color: "#1e2e1e", marginBottom: 8,
+          }}>
+            No broker accounts configured.
+          </div>
+          <div style={{
+            fontFamily: "'JetBrains Mono', monospace", fontSize: 9.5,
+            color: "#1a2a1a",
+          }}>
+            Bot is using credentials from .env as fallback
+          </div>
         </div>
       ) : (
-        <div className="space-y-3">
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           {accounts.map((a) => (
             <div
               key={a.id}
-              className={`border rounded p-4 bg-terminal-surface flex flex-wrap items-center gap-4 text-sm ${
-                a.is_active
-                  ? "border-matrix"
-                  : "border-terminal-border"
-              }`}
+              style={{
+                background: "#0a0a12",
+                border: `1px solid ${a.is_active ? "#00ff8840" : "#1c1c28"}`,
+                borderLeft: `3px solid ${a.is_active ? "#00ff88" : "#1c1c28"}`,
+                borderRadius: 8,
+                padding: "14px 18px",
+                display: "flex",
+                flexWrap: "wrap",
+                alignItems: "center",
+                gap: 16,
+              }}
             >
-              <div className="flex-1 min-w-[200px]">
-                <div className="flex items-center gap-2">
-                  <span className="text-matrix font-bold">{a.name}</span>
+              {/* Info */}
+              <div style={{ flex: 1, minWidth: 220 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                  <span style={{
+                    fontFamily: "'JetBrains Mono', monospace",
+                    fontSize: 13, fontWeight: 700, color: "#c0ccd8",
+                  }}>
+                    {a.name}
+                  </span>
                   {a.is_active && (
-                    <span className="text-xs bg-matrix/20 text-matrix px-2 py-0.5 rounded">
+                    <span style={{
+                      display: "inline-block",
+                      padding: "1px 7px", borderRadius: 3,
+                      fontSize: 8.5, fontWeight: 700, letterSpacing: "0.1em",
+                      fontFamily: "'JetBrains Mono', monospace",
+                      background: "rgba(0,255,136,0.12)",
+                      color: "#00ff88",
+                      border: "1px solid rgba(0,255,136,0.25)",
+                    }}>
                       ACTIVE
                     </span>
                   )}
-                  <span
-                    className={`text-xs px-2 py-0.5 rounded ${
-                      a.is_demo
-                        ? "bg-yellow-500/20 text-yellow-400"
-                        : "bg-red-500/20 text-red-400"
-                    }`}
-                  >
+                  <span style={{
+                    display: "inline-block",
+                    padding: "1px 7px", borderRadius: 3,
+                    fontSize: 8.5, fontWeight: 700, letterSpacing: "0.08em",
+                    fontFamily: "'JetBrains Mono', monospace",
+                    background: a.is_demo ? "rgba(245,197,24,0.12)" : "rgba(255,68,85,0.12)",
+                    color: a.is_demo ? "#f5c518" : "#ff4455",
+                    border: `1px solid ${a.is_demo ? "rgba(245,197,24,0.25)" : "rgba(255,68,85,0.25)"}`,
+                  }}>
                     {a.is_demo ? "DEMO" : "LIVE"}
                   </span>
                 </div>
-                <div className="text-matrix-dim mt-1">
-                  Account: {a.account_number} · Server: {a.server}
+                <div style={{
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: 10, color: "#2a3a4a",
+                }}>
+                  Account: <span style={{ color: "#3a4a5a" }}>{a.account_number}</span>
+                  {" · "}
+                  Server: <span style={{ color: "#3a4a5a" }}>{a.server}</span>
                 </div>
                 {a.last_connected && (
-                  <div className="text-matrix-dim text-xs mt-0.5">
+                  <div style={{
+                    fontFamily: "'JetBrains Mono', monospace",
+                    fontSize: 9, color: "#1a2a1a", marginTop: 3,
+                  }}>
                     Last connected: {new Date(a.last_connected).toLocaleString()}
                   </div>
                 )}
               </div>
-              <div className="flex gap-2">
+
+              {/* Actions */}
+              <div style={{ display: "flex", gap: 8 }}>
                 {!a.is_active && (
-                  <button
+                  <ActionBtn
                     onClick={() => handleActivate(a.id)}
-                    className="px-3 py-1 border border-matrix text-matrix rounded hover:bg-matrix/20 text-xs"
+                    color="#00ff88"
                   >
                     ACTIVATE
-                  </button>
+                  </ActionBtn>
                 )}
-                <button
+                <ActionBtn
                   onClick={() => handleEdit(a)}
-                  className="px-3 py-1 border border-terminal-border text-matrix-dim rounded hover:bg-terminal-border text-xs"
+                  color="#4da6ff"
                 >
                   EDIT
-                </button>
-                <button
+                </ActionBtn>
+                <ActionBtn
                   onClick={() => handleDelete(a.id)}
-                  className="px-3 py-1 border border-red-500/50 text-red-400 rounded hover:bg-red-500/20 text-xs"
+                  color="#ff4455"
+                  disabled={deleting === a.id}
                 >
-                  DELETE
-                </button>
+                  {deleting === a.id ? "…" : "DELETE"}
+                </ActionBtn>
               </div>
             </div>
           ))}
@@ -213,105 +346,275 @@ export default function SettingsPage() {
 
       {/* Add / Edit form */}
       {!showForm ? (
-        <button
-          onClick={() => {
-            resetForm();
-            setShowForm(true);
-          }}
-          className="px-4 py-2 border border-matrix text-matrix rounded hover:bg-matrix/20 text-sm"
-        >
-          + ADD ACCOUNT
-        </button>
+        <div>
+          <button
+            onClick={() => { resetForm(); setShowForm(true); }}
+            style={{
+              padding: "9px 20px",
+              background: "rgba(0,255,136,0.08)",
+              border: "1px solid rgba(0,255,136,0.3)",
+              borderRadius: 5,
+              fontFamily: "'JetBrains Mono', monospace",
+              fontSize: 11, fontWeight: 700, letterSpacing: "0.08em",
+              color: "#00ff88",
+              cursor: "pointer",
+              transition: "background 0.15s, box-shadow 0.15s",
+            }}
+            onMouseEnter={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.background = "rgba(0,255,136,0.15)";
+              (e.currentTarget as HTMLButtonElement).style.boxShadow = "0 0 14px rgba(0,255,136,0.2)";
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.background = "rgba(0,255,136,0.08)";
+              (e.currentTarget as HTMLButtonElement).style.boxShadow = "none";
+            }}
+          >
+            + ADD ACCOUNT
+          </button>
+        </div>
       ) : (
-        <div className="border border-terminal-border rounded p-6 bg-terminal-surface space-y-4">
-          <h2 className="text-matrix font-bold text-sm">
-            {editId ? "EDIT ACCOUNT" : "NEW BROKER ACCOUNT"}
-          </h2>
-
-          {error && (
-            <p className="text-red-400 text-xs">{error}</p>
-          )}
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <label className="block">
-              <span className="text-matrix-dim text-xs">DISPLAY NAME</span>
-              <input
-                type="text"
-                value={form.name}
-                onChange={(e) => setForm({ ...form, name: e.target.value })}
-                placeholder="e.g. PUPrime Demo"
-                className="mt-1 w-full bg-terminal border border-terminal-border rounded px-3 py-2 text-matrix text-sm focus:border-matrix outline-none"
-              />
-            </label>
-            <label className="block">
-              <span className="text-matrix-dim text-xs">ACCOUNT NUMBER</span>
-              <input
-                type="text"
-                value={form.account_number}
-                onChange={(e) =>
-                  setForm({ ...form, account_number: e.target.value })
-                }
-                placeholder="e.g. 700074018"
-                className="mt-1 w-full bg-terminal border border-terminal-border rounded px-3 py-2 text-matrix text-sm focus:border-matrix outline-none"
-              />
-            </label>
-            <label className="block">
-              <span className="text-matrix-dim text-xs">
-                PASSWORD{editId ? " (leave blank to keep)" : ""}
-              </span>
-              <input
-                type="password"
-                value={form.password}
-                onChange={(e) =>
-                  setForm({ ...form, password: e.target.value })
-                }
-                placeholder="••••••••"
-                className="mt-1 w-full bg-terminal border border-terminal-border rounded px-3 py-2 text-matrix text-sm focus:border-matrix outline-none"
-              />
-            </label>
-            <label className="block">
-              <span className="text-matrix-dim text-xs">SERVER</span>
-              <input
-                type="text"
-                value={form.server}
-                onChange={(e) =>
-                  setForm({ ...form, server: e.target.value })
-                }
-                placeholder="e.g. PUPrime-Demo"
-                className="mt-1 w-full bg-terminal border border-terminal-border rounded px-3 py-2 text-matrix text-sm focus:border-matrix outline-none"
-              />
-            </label>
+        <div style={{
+          background: "#0a0a12",
+          border: "1px solid #1c1c28",
+          borderTop: "2px solid #00ff88",
+          borderRadius: 8,
+          padding: "20px 24px",
+        }}>
+          {/* Form header */}
+          <div style={{
+            fontFamily: "'JetBrains Mono', monospace",
+            fontSize: 9, fontWeight: 700, letterSpacing: "0.18em",
+            textTransform: "uppercase", color: "#00ff88",
+            marginBottom: 20,
+          }}>
+            {editId ? "Edit Broker Account" : "New Broker Account"}
           </div>
 
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={form.is_demo}
-              onChange={(e) =>
-                setForm({ ...form, is_demo: e.target.checked })
-              }
-              className="accent-[var(--matrix)]"
-            />
-            <span className="text-matrix-dim">Demo account</span>
-          </label>
+          {/* Error */}
+          {error && (
+            <div style={{
+              background: "rgba(255,68,85,0.08)",
+              border: "1px solid rgba(255,68,85,0.25)",
+              borderRadius: 4, padding: "8px 12px",
+              fontFamily: "'JetBrains Mono', monospace",
+              fontSize: 10.5, color: "#ff4455",
+              marginBottom: 16,
+            }}>
+              {error}
+            </div>
+          )}
 
-          <div className="flex gap-3">
+          {/* Fields grid */}
+          <div style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+            gap: 16,
+            marginBottom: 16,
+          }}>
+            <Field label="Display Name">
+              <TerminalInput
+                value={form.name}
+                onChange={(v) => setForm({ ...form, name: v })}
+                placeholder="e.g. PUPrime Demo"
+              />
+            </Field>
+
+            <Field label="Account Number">
+              <TerminalInput
+                value={form.account_number}
+                onChange={(v) => setForm({ ...form, account_number: v })}
+                placeholder="e.g. 700074018"
+              />
+            </Field>
+
+            <Field
+              label="Password"
+              hint={editId ? "(leave blank to keep current)" : undefined}
+            >
+              <TerminalInput
+                type="password"
+                value={form.password}
+                onChange={(v) => setForm({ ...form, password: v })}
+                placeholder="••••••••"
+              />
+            </Field>
+
+            <Field label="Server">
+              <TerminalInput
+                value={form.server}
+                onChange={(v) => setForm({ ...form, server: v })}
+                placeholder="e.g. PUPrime-Demo"
+              />
+            </Field>
+          </div>
+
+          {/* Demo toggle */}
+          <div
+            onClick={() => setForm({ ...form, is_demo: !form.is_demo })}
+            style={{
+              display: "inline-flex", alignItems: "center", gap: 10,
+              cursor: "pointer", marginBottom: 20, userSelect: "none",
+            }}
+          >
+            {/* Toggle track */}
+            <div style={{
+              width: 36, height: 20, borderRadius: 10,
+              background: form.is_demo ? "rgba(245,197,24,0.2)" : "#0e0e10",
+              border: `1px solid ${form.is_demo ? "rgba(245,197,24,0.4)" : "#1c1c28"}`,
+              position: "relative",
+              transition: "background 0.2s, border-color 0.2s",
+            }}>
+              <div style={{
+                width: 14, height: 14,
+                borderRadius: "50%",
+                background: form.is_demo ? "#f5c518" : "#2a3a4a",
+                position: "absolute",
+                top: 2,
+                left: form.is_demo ? 18 : 2,
+                transition: "left 0.2s, background 0.2s",
+                boxShadow: form.is_demo ? "0 0 6px rgba(245,197,24,0.6)" : "none",
+              }} />
+            </div>
+            <span style={{
+              fontFamily: "'JetBrains Mono', monospace",
+              fontSize: 10.5,
+              color: form.is_demo ? "#f5c518" : "#2a3a4a",
+              letterSpacing: "0.04em",
+            }}>
+              {form.is_demo ? "DEMO account" : "LIVE account"}
+            </span>
+          </div>
+
+          {/* Buttons */}
+          <div style={{ display: "flex", gap: 10 }}>
             <button
               onClick={handleSave}
               disabled={saving}
-              className="px-4 py-2 bg-matrix/20 border border-matrix text-matrix rounded hover:bg-matrix/30 text-sm disabled:opacity-50"
+              style={{
+                padding: "8px 20px",
+                background: saving ? "rgba(0,255,136,0.05)" : "rgba(0,255,136,0.1)",
+                border: "1px solid rgba(0,255,136,0.35)",
+                borderRadius: 4,
+                fontFamily: "'JetBrains Mono', monospace",
+                fontSize: 11, fontWeight: 700, letterSpacing: "0.08em",
+                color: saving ? "#2a5a2a" : "#00ff88",
+                cursor: saving ? "not-allowed" : "pointer",
+                opacity: saving ? 0.6 : 1,
+                transition: "background 0.15s",
+              }}
+              onMouseEnter={(e) => {
+                if (!saving) (e.currentTarget as HTMLButtonElement).style.background = "rgba(0,255,136,0.18)";
+              }}
+              onMouseLeave={(e) => {
+                (e.currentTarget as HTMLButtonElement).style.background = saving ? "rgba(0,255,136,0.05)" : "rgba(0,255,136,0.1)";
+              }}
             >
               {saving ? "SAVING…" : editId ? "UPDATE" : "ADD ACCOUNT"}
             </button>
             <button
               onClick={resetForm}
-              className="px-4 py-2 border border-terminal-border text-matrix-dim rounded hover:bg-terminal-border text-sm"
+              style={{
+                padding: "8px 20px",
+                background: "transparent",
+                border: "1px solid #1c1c28",
+                borderRadius: 4,
+                fontFamily: "'JetBrains Mono', monospace",
+                fontSize: 11, fontWeight: 700, letterSpacing: "0.08em",
+                color: "#2a3a4a",
+                cursor: "pointer",
+                transition: "border-color 0.15s, color 0.15s",
+              }}
+              onMouseEnter={(e) => {
+                const btn = e.currentTarget as HTMLButtonElement;
+                btn.style.borderColor = "#2a3a4a";
+                btn.style.color = "#4a5a6a";
+              }}
+              onMouseLeave={(e) => {
+                const btn = e.currentTarget as HTMLButtonElement;
+                btn.style.borderColor = "#1c1c28";
+                btn.style.color = "#2a3a4a";
+              }}
             >
               CANCEL
             </button>
           </div>
         </div>
       )}
+
+      {/* Info section */}
+      <div style={{
+        background: "#0a0a12", border: "1px solid #1c1c28",
+        borderLeft: "3px solid #4da6ff",
+        borderRadius: 8, padding: "14px 18px",
+      }}>
+        <div style={{
+          fontFamily: "'JetBrains Mono', monospace",
+          fontSize: 9, fontWeight: 700, letterSpacing: "0.14em",
+          textTransform: "uppercase", color: "#4da6ff",
+          marginBottom: 10,
+        }}>
+          Connection Notes
+        </div>
+        <div style={{
+          fontFamily: "'JetBrains Mono', monospace",
+          fontSize: 10.5, color: "#2a3a4a", lineHeight: 1.7,
+          display: "flex", flexDirection: "column", gap: 4,
+        }}>
+          {[
+            ["Activation",   "Switch accounts via ACTIVATE — takes effect on next bot restart"],
+            ["Password",     "Stored encrypted in the local database, never transmitted externally"],
+            ["Demo → Live",  "Always validate strategy on demo before enabling a live account"],
+            ["Fallback",     "If no account is active, the bot reads MT5_LOGIN / MT5_PASSWORD from .env"],
+          ].map(([label, text]) => (
+            <div key={label} style={{ display: "flex", gap: 10 }}>
+              <span style={{ color: "#1a3a5a", minWidth: 80 }}>{label}</span>
+              <span>{text}</span>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
+  );
+}
+
+function ActionBtn({
+  onClick,
+  color,
+  children,
+  disabled = false,
+}: {
+  onClick: () => void;
+  color: string;
+  children: React.ReactNode;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      style={{
+        padding: "5px 12px",
+        background: `${color}10`,
+        border: `1px solid ${color}40`,
+        borderRadius: 4,
+        fontFamily: "'JetBrains Mono', monospace",
+        fontSize: 9.5, fontWeight: 700, letterSpacing: "0.08em",
+        color: disabled ? `${color}40` : color,
+        cursor: disabled ? "not-allowed" : "pointer",
+        transition: "background 0.15s, box-shadow 0.15s",
+      }}
+      onMouseEnter={(e) => {
+        if (!disabled) {
+          (e.currentTarget as HTMLButtonElement).style.background = `${color}20`;
+          (e.currentTarget as HTMLButtonElement).style.boxShadow = `0 0 8px ${color}30`;
+        }
+      }}
+      onMouseLeave={(e) => {
+        (e.currentTarget as HTMLButtonElement).style.background = `${color}10`;
+        (e.currentTarget as HTMLButtonElement).style.boxShadow = "none";
+      }}
+    >
+      {children}
+    </button>
   );
 }

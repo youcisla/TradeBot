@@ -6,24 +6,29 @@ import { formatPrice } from "@/lib/formatPrice";
 import SymbolFilter from "@/components/SymbolFilter";
 
 interface Trade {
-  id: string;
-  symbol: string;
-  strategy: string;
-  direction: string;
-  entry_price: number;
-  lot_size: number;
-  stop_loss: number;
-  take_profit_1: number;
-  take_profit_2: number;
-  take_profit_3: number;
-  tp1_hit: boolean;
-  tp2_hit: boolean;
-  tp3_hit: boolean;
-  status: string;
-  open_time: string;
-  close_time: string | null;
-  pnl: number;
-  close_reason: string;
+  id: string; symbol: string; strategy: string; direction: string;
+  entry_price: number; lot_size: number; stop_loss: number;
+  take_profit_1: number; take_profit_2: number; take_profit_3: number;
+  tp1_hit: boolean; tp2_hit: boolean; tp3_hit: boolean;
+  status: string; open_time: string; close_time: string | null;
+  pnl: number; close_reason: string;
+}
+
+function TpDot({ hit, label }: { hit: boolean; label: string }) {
+  return (
+    <span style={{
+      display: "inline-flex", alignItems: "center", gap: 3,
+      fontSize: 9, fontFamily: "'JetBrains Mono', monospace",
+      color: hit ? "#00ff88" : "#2a3a4a",
+    }}>
+      <span style={{
+        width: 5, height: 5, borderRadius: "50%",
+        background: hit ? "#00ff88" : "#1c1c28",
+        boxShadow: hit ? "0 0 4px #00ff88" : undefined,
+      }} />
+      {label}
+    </span>
+  );
 }
 
 export default function TradesPage() {
@@ -40,92 +45,160 @@ export default function TradesPage() {
   const filtered = symbol ? trades.filter((t) => t.symbol === symbol) : trades;
 
   return (
-    <div className="space-y-4">
-      <h1 className="text-matrix text-lg font-bold">All Trades</h1>
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+
+      {/* Header */}
+      <div>
+        <div style={{
+          fontSize: 9, fontFamily: "'JetBrains Mono', monospace",
+          color: "#2a3a4a", letterSpacing: "0.2em", textTransform: "uppercase",
+        }}>
+          History
+        </div>
+        <h1 style={{
+          fontSize: 20, fontFamily: "'JetBrains Mono', monospace",
+          fontWeight: 700, color: "#00ff41",
+          textShadow: "0 0 20px rgba(0,255,65,0.3)", marginTop: 2,
+        }}>
+          All Trades
+        </h1>
+      </div>
+
       <SymbolFilter value={symbol} onChange={setSymbol} />
 
-      <div className="border border-terminal-border rounded bg-terminal-surface overflow-x-auto">
-        <table className="w-full text-xs">
-          <thead className="border-b border-terminal-border text-matrix-dim uppercase tracking-wider">
-            <tr>
-              <th className="text-left p-2">ID</th>
-              <th className="text-left p-2">Symbol</th>
-              <th className="text-left p-2">Dir</th>
-              <th className="text-left p-2">Strategy</th>
-              <th className="text-right p-2">Entry</th>
-              <th className="text-right p-2">Lots</th>
-              <th className="text-right p-2">PnL</th>
-              <th className="text-left p-2">Status</th>
-              <th className="text-left p-2">Reason</th>
-              <th className="text-left p-2">SL</th>
-              <th className="text-left p-2">TP1</th>
-              <th className="text-left p-2">TP2</th>
-              <th className="text-left p-2">TP3</th>
-              <th className="text-left p-2">Opened</th>
-              <th className="text-left p-2">Closed</th>
+      {/* Summary strip */}
+      {filtered.length > 0 && (() => {
+        const closed   = filtered.filter((t) => t.status === "CLOSED");
+        const wins     = closed.filter((t) => Number(t.pnl) > 0).length;
+        const totalPnl = closed.reduce((s, t) => s + Number(t.pnl), 0);
+        return (
+          <div style={{
+            display: "flex", gap: 20, padding: "10px 16px",
+            background: "#0a0a12", border: "1px solid #1c1c28", borderRadius: 6,
+            fontFamily: "'JetBrains Mono', monospace",
+          }}>
+            <span style={{ fontSize: 10, color: "#3a4a5a" }}>
+              {filtered.length} trades
+            </span>
+            <span style={{ fontSize: 10, color: "#3a4a5a" }}>
+              {closed.length} closed · {wins} wins
+            </span>
+            <span style={{
+              fontSize: 10, fontWeight: 700,
+              color: totalPnl >= 0 ? "#00ff88" : "#ff4455",
+            }}>
+              Net: {totalPnl >= 0 ? "+" : ""}{totalPnl.toFixed(2)}
+            </span>
+          </div>
+        );
+      })()}
+
+      {/* Table */}
+      <div style={{
+        background: "#0e0e10", border: "1px solid #1c1c28",
+        borderRadius: 8, overflow: "auto",
+      }}>
+        <table style={{
+          width: "100%", borderCollapse: "collapse",
+          fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5,
+        }}>
+          <thead>
+            <tr style={{ borderBottom: "1px solid #1c1c28" }}>
+              {["ID","Symbol","Dir","Strategy","Entry","Lots","P&L","Status","SL","TPs","Opened","Closed","Reason"].map((h) => (
+                <th key={h} style={{
+                  padding: "9px 10px",
+                  textAlign: h === "Entry" || h === "Lots" || h === "P&L" ? "right" : "left",
+                  fontSize: 8.5, letterSpacing: "0.12em", textTransform: "uppercase",
+                  color: "#2a3a4a", fontWeight: 600, whiteSpace: "nowrap",
+                }}>
+                  {h}
+                </th>
+              ))}
             </tr>
           </thead>
           <tbody>
-            {filtered.map((t) => (
-              <tr
-                key={t.id}
-                className="border-b border-terminal-border/50 hover:bg-terminal-border/30"
-              >
-                <td className="p-2 text-matrix-dim">{t.id.slice(0, 8)}</td>
-                <td className="p-2 text-matrix font-bold">{t.symbol}</td>
-                <td
-                  className={`p-2 font-bold ${t.direction === "BUY" ? "text-matrix" : "text-red-500"}`}
+            {filtered.map((t) => {
+              const pnl = Number(t.pnl);
+              return (
+                <tr
+                  key={t.id}
+                  style={{ borderBottom: "1px solid rgba(28,28,40,0.5)", transition: "background 0.1s" }}
+                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(0,212,255,0.03)"; }}
+                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = ""; }}
                 >
-                  {t.direction}
-                </td>
-                <td className="p-2 text-matrix-dim">{t.strategy}</td>
-                <td className="p-2 text-right">{Number(t.entry_price).toFixed(5)}</td>
-                <td className="p-2 text-right">{t.lot_size}</td>
-                <td
-                  className={`p-2 text-right font-bold ${Number(t.pnl) >= 0 ? "text-matrix" : "text-red-500"}`}
-                >
-                  {Number(t.pnl) >= 0 ? "+" : ""}
-                  {Number(t.pnl).toFixed(2)}
-                </td>
-                <td className="p-2">
-                  <span
-                    className={
-                      t.status === "CLOSED"
-                        ? "text-gray-500"
-                        : t.status === "OPEN"
-                          ? "text-matrix"
-                          : "text-yellow-400"
-                    }
-                  >
-                    {t.status}
-                  </span>
-                </td>
-                <td className="p-2 text-matrix-dim">{t.close_reason || "—"}</td>
-                <td className="p-2">{formatPrice(t.stop_loss)}</td>
-                <td className="p-2">{formatPrice(t.take_profit_1)}</td>
-                <td className="p-2">{formatPrice(t.take_profit_2)}</td>
-                <td className="p-2">{formatPrice(t.take_profit_3)}</td>
-                <td className="p-2 text-matrix-dim">{formatShort(t.open_time)}</td>
-                <td className="p-2 text-matrix-dim">{t.close_time ? formatShort(t.close_time) : "—"}</td>
-                <td className="p-2">
-                  <a
-                    href={`https://www.tradingview.com/chart/?symbol=${encodeURIComponent(t.symbol)}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-matrix underline hover:text-matrix-dim"
-                  >
-                    Chart
-                  </a>
-                </td>
-              </tr>
-            ))}
+                  <td style={{ padding: "7px 10px", color: "#2a3a4a", fontSize: 9.5 }}>
+                    {t.id.slice(0, 8)}
+                  </td>
+                  <td style={{ padding: "7px 10px", color: "#00d4ff", fontWeight: 700 }}>
+                    {t.symbol}
+                  </td>
+                  <td style={{ padding: "7px 10px" }}>
+                    <span style={{
+                      display: "inline-block",
+                      padding: "1px 7px", borderRadius: 3,
+                      fontSize: 9, fontWeight: 700, letterSpacing: "0.06em",
+                      background: t.direction === "BUY" ? "rgba(0,255,136,0.12)" : "rgba(255,68,85,0.12)",
+                      color: t.direction === "BUY" ? "#00ff88" : "#ff4455",
+                      border: `1px solid ${t.direction === "BUY" ? "rgba(0,255,136,0.3)" : "rgba(255,68,85,0.3)"}`,
+                    }}>
+                      {t.direction}
+                    </span>
+                  </td>
+                  <td style={{ padding: "7px 10px", color: "#4a5568", fontSize: 9.5 }}>
+                    {t.strategy}
+                  </td>
+                  <td style={{ padding: "7px 10px", textAlign: "right", color: "#9aa8b8" }}>
+                    {Number(t.entry_price).toFixed(5)}
+                  </td>
+                  <td style={{ padding: "7px 10px", textAlign: "right", color: "#7a8a9a" }}>
+                    {t.lot_size}
+                  </td>
+                  <td style={{ padding: "7px 10px", textAlign: "right", fontWeight: 700, color: pnl >= 0 ? "#00ff88" : "#ff4455" }}>
+                    {pnl >= 0 ? "+" : ""}{pnl.toFixed(2)}
+                  </td>
+                  <td style={{ padding: "7px 10px" }}>
+                    <span style={{
+                      fontSize: 9, fontFamily: "'JetBrains Mono', monospace",
+                      color: t.status === "CLOSED" ? "#3a4a5a" : t.status === "OPEN" ? "#00ff41" : "#f5c518",
+                    }}>
+                      {t.status}
+                    </span>
+                  </td>
+                  <td style={{ padding: "7px 10px", color: "#ff4455", fontSize: 9.5 }}>
+                    {formatPrice(t.stop_loss)}
+                  </td>
+                  <td style={{ padding: "7px 10px" }}>
+                    <div style={{ display: "flex", gap: 6 }}>
+                      <TpDot hit={t.tp1_hit} label="TP1" />
+                      <TpDot hit={t.tp2_hit} label="TP2" />
+                      <TpDot hit={t.tp3_hit} label="TP3" />
+                    </div>
+                  </td>
+                  <td style={{ padding: "7px 10px", color: "#3a4a5a", fontSize: 9.5, whiteSpace: "nowrap" }}>
+                    {formatShort(t.open_time)}
+                  </td>
+                  <td style={{ padding: "7px 10px", color: "#3a4a5a", fontSize: 9.5, whiteSpace: "nowrap" }}>
+                    {t.close_time ? formatShort(t.close_time) : "—"}
+                  </td>
+                  <td style={{ padding: "7px 10px", color: "#4a5568", fontSize: 9.5 }}>
+                    {t.close_reason || "—"}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
-      </div>
 
-      {filtered.length === 0 && (
-        <div className="text-matrix-dim text-sm">{symbol ? `No trades for ${symbol}.` : "No trades recorded yet."}</div>
-      )}
+        {filtered.length === 0 && (
+          <div style={{
+            padding: "40px 20px", textAlign: "center",
+            fontFamily: "'JetBrains Mono', monospace", fontSize: 11,
+            color: "#1e2e1e",
+          }}>
+            {symbol ? `no trades for ${symbol}` : "no trades recorded yet"}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

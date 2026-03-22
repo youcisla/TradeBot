@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { formatShort } from "@/lib/time";
 
 interface Trade {
   id: string;
@@ -41,56 +42,121 @@ export default function OpenTradesTable({ symbol }: { symbol?: string | null }) 
 
   const filtered = symbol ? trades.filter((t) => t.symbol === symbol) : trades;
 
-  if (filtered.length === 0)
+  if (filtered.length === 0) {
     return (
-      <div className="border border-terminal-border rounded bg-terminal-surface p-4 text-matrix-dim text-sm">
-        {symbol ? `No open trades for ${symbol}.` : "No open trades."}
+      <div style={{
+        background: "#0a0a12", border: "1px solid #1c1c28",
+        borderRadius: 8, padding: "20px 24px",
+        fontFamily: "'JetBrains Mono', monospace",
+        fontSize: 11, color: "#1e2e1e",
+        textAlign: "center",
+      }}>
+        {symbol ? `No open trades for ${symbol}.` : "No open positions."}
       </div>
     );
+  }
 
   return (
-    <div className="border border-terminal-border rounded bg-terminal-surface overflow-x-auto">
-      <table className="w-full text-xs">
-        <thead className="border-b border-terminal-border text-matrix-dim uppercase tracking-wider">
-          <tr>
-            <th className="text-left p-2">Symbol</th>
-            <th className="text-left p-2">Dir</th>
-            <th className="text-left p-2">Strategy</th>
-            <th className="text-right p-2">Entry</th>
-            <th className="text-right p-2">Lots</th>
-            <th className="text-right p-2">SL</th>
-            <th className="text-right p-2">TP1</th>
-            <th className="text-right p-2">PnL</th>
-            <th className="text-right p-2">Status</th>
-            <th className="p-2"></th>
+    <div style={{
+      background: "#0e0e10", border: "1px solid #1c1c28",
+      borderRadius: 8, overflow: "auto",
+    }}>
+      <table style={{
+        width: "100%", borderCollapse: "collapse",
+        fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5,
+      }}>
+        <thead>
+          <tr style={{ borderBottom: "1px solid #1c1c28" }}>
+            {["Symbol","Dir","Strategy","Entry","Lots","SL","TP1","PnL","Status","Opened",""].map((h) => (
+              <th key={h} style={{
+                padding: "9px 10px",
+                textAlign: h === "Entry" || h === "Lots" || h === "SL" || h === "TP1" || h === "PnL" ? "right" : "left",
+                fontSize: 8.5, letterSpacing: "0.12em", textTransform: "uppercase",
+                color: "#2a3a4a", fontWeight: 600, whiteSpace: "nowrap",
+              }}>{h}</th>
+            ))}
           </tr>
         </thead>
         <tbody>
-          {filtered.map((t) => (
-            <tr key={t.id} className="border-b border-terminal-border/50 hover:bg-terminal-border/30">
-              <td className="p-2 text-matrix font-bold">{t.symbol}</td>
-              <td className={`p-2 font-bold ${t.direction === "BUY" ? "text-matrix" : "text-red-500"}`}>
-                {t.direction}
-              </td>
-              <td className="p-2 text-matrix-dim">{t.strategy}</td>
-              <td className="p-2 text-right">{Number(t.entry_price).toFixed(5)}</td>
-              <td className="p-2 text-right">{t.lot_size}</td>
-              <td className="p-2 text-right text-red-400">{Number(t.stop_loss).toFixed(5)}</td>
-              <td className="p-2 text-right text-matrix-dim">{Number(t.take_profit_1).toFixed(5)}</td>
-              <td className={`p-2 text-right font-bold ${Number(t.pnl) >= 0 ? "text-matrix" : "text-red-500"}`}>
-                {Number(t.pnl) >= 0 ? "+" : ""}{Number(t.pnl).toFixed(2)}
-              </td>
-              <td className="p-2 text-right text-yellow-400">{t.status}</td>
-              <td className="p-2 text-right">
-                <button
-                  onClick={() => closeTrade(t.id)}
-                  className="px-2 py-0.5 border border-red-500 text-red-500 hover:bg-red-500 hover:text-black rounded text-[10px] uppercase"
-                >
-                  Close
-                </button>
-              </td>
-            </tr>
-          ))}
+          {filtered.map((t) => {
+            const pnl = Number(t.pnl);
+            return (
+              <tr
+                key={t.id}
+                style={{ borderBottom: "1px solid rgba(28,28,40,0.5)", transition: "background 0.1s" }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(0,255,65,0.02)"; }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = ""; }}
+              >
+                <td style={{ padding: "7px 10px", color: "#00d4ff", fontWeight: 700 }}>{t.symbol}</td>
+                <td style={{ padding: "7px 10px" }}>
+                  <span style={{
+                    display: "inline-block", padding: "1px 7px", borderRadius: 3,
+                    fontSize: 9, fontWeight: 700, letterSpacing: "0.06em",
+                    background: t.direction === "BUY" ? "rgba(0,255,136,0.12)" : "rgba(255,68,85,0.12)",
+                    color: t.direction === "BUY" ? "#00ff88" : "#ff4455",
+                    border: `1px solid ${t.direction === "BUY" ? "rgba(0,255,136,0.3)" : "rgba(255,68,85,0.3)"}`,
+                  }}>
+                    {t.direction}
+                  </span>
+                </td>
+                <td style={{ padding: "7px 10px", color: "#4a5568", fontSize: 9.5 }}>{t.strategy}</td>
+                <td style={{ padding: "7px 10px", textAlign: "right", color: "#9aa8b8", fontFamily: "monospace" }}>
+                  {Number(t.entry_price).toFixed(5)}
+                </td>
+                <td style={{ padding: "7px 10px", textAlign: "right", color: "#7a8a9a" }}>{t.lot_size}</td>
+                <td style={{ padding: "7px 10px", textAlign: "right", color: "#ff4455", fontFamily: "monospace" }}>
+                  {Number(t.stop_loss).toFixed(5)}
+                </td>
+                <td style={{ padding: "7px 10px", textAlign: "right", color: "#2a3a4a", fontFamily: "monospace" }}>
+                  {Number(t.take_profit_1).toFixed(5)}
+                </td>
+                <td style={{
+                  padding: "7px 10px", textAlign: "right",
+                  fontWeight: 700, color: pnl >= 0 ? "#00ff88" : "#ff4455",
+                  textShadow: pnl > 0 ? "0 0 8px rgba(0,255,136,0.4)" : pnl < 0 ? "0 0 8px rgba(255,68,85,0.4)" : "none",
+                }}>
+                  {pnl >= 0 ? "+" : ""}{pnl.toFixed(2)}
+                </td>
+                <td style={{ padding: "7px 10px" }}>
+                  <span style={{
+                    display: "inline-flex", alignItems: "center", gap: 4,
+                    fontSize: 9, fontFamily: "'JetBrains Mono', monospace",
+                    color: t.status === "OPEN" ? "#00ff41" : "#f5c518",
+                  }}>
+                    <span style={{
+                      width: 5, height: 5, borderRadius: "50%",
+                      background: t.status === "OPEN" ? "#00ff41" : "#f5c518",
+                      boxShadow: `0 0 4px ${t.status === "OPEN" ? "#00ff41" : "#f5c518"}`,
+                    }} />
+                    {t.status}
+                  </span>
+                </td>
+                <td style={{ padding: "7px 10px", color: "#2a3a4a", fontSize: 9.5, whiteSpace: "nowrap" }}>
+                  {formatShort(t.open_time)}
+                </td>
+                <td style={{ padding: "7px 10px", textAlign: "right" }}>
+                  <button
+                    onClick={() => closeTrade(t.id)}
+                    style={{
+                      padding: "3px 10px",
+                      background: "rgba(255,68,85,0.08)",
+                      border: "1px solid rgba(255,68,85,0.3)",
+                      borderRadius: 3,
+                      fontFamily: "'JetBrains Mono', monospace",
+                      fontSize: 9, fontWeight: 700, letterSpacing: "0.08em",
+                      color: "#ff4455",
+                      cursor: "pointer",
+                      transition: "background 0.15s",
+                    }}
+                    onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "rgba(255,68,85,0.2)"; }}
+                    onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "rgba(255,68,85,0.08)"; }}
+                  >
+                    CLOSE
+                  </button>
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>

@@ -9,12 +9,51 @@ const SYMBOLS = [
   "USDZAR", "USDTRY",
 ];
 
-const chip = (active: boolean) =>
-  `px-2 py-0.5 rounded text-[10px] font-bold uppercase border transition-colors cursor-pointer whitespace-nowrap ${
-    active
-      ? "border-matrix bg-matrix/20 text-matrix"
-      : "border-terminal-border text-matrix-dim hover:text-matrix"
-  }`;
+function Chip({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        padding: "3px 9px",
+        background: active ? "rgba(0,212,255,0.12)" : "transparent",
+        border: `1px solid ${active ? "rgba(0,212,255,0.4)" : "#1c1c28"}`,
+        borderRadius: 4,
+        fontFamily: "'JetBrains Mono', monospace",
+        fontSize: 9.5, fontWeight: 700, letterSpacing: "0.06em",
+        textTransform: "uppercase",
+        color: active ? "#00d4ff" : "#2a3a4a",
+        cursor: "pointer",
+        whiteSpace: "nowrap",
+        transition: "border-color 0.15s, color 0.15s, background 0.15s",
+        boxShadow: active ? "0 0 8px rgba(0,212,255,0.2)" : "none",
+      }}
+      onMouseEnter={(e) => {
+        if (!active) {
+          const btn = e.currentTarget as HTMLButtonElement;
+          btn.style.borderColor = "#2a3a4a";
+          btn.style.color = "#4a5a6a";
+        }
+      }}
+      onMouseLeave={(e) => {
+        if (!active) {
+          const btn = e.currentTarget as HTMLButtonElement;
+          btn.style.borderColor = "#1c1c28";
+          btn.style.color = "#2a3a4a";
+        }
+      }}
+    >
+      {children}
+    </button>
+  );
+}
 
 export default function SymbolFilter({
   value,
@@ -23,21 +62,19 @@ export default function SymbolFilter({
   value: string | null;
   onChange: (symbol: string | null) => void;
 }) {
-  // Derive which symbols to show: only those the user has data for
-  // For now, show all known symbols with an "All" reset button
   return (
-    <div className="flex flex-wrap gap-1.5 items-center">
-      <button className={chip(value === null)} onClick={() => onChange(null)}>
+    <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
+      <Chip active={value === null} onClick={() => onChange(null)}>
         All
-      </button>
+      </Chip>
       {SYMBOLS.map((s) => (
-        <button
+        <Chip
           key={s}
-          className={chip(value === s)}
+          active={value === s}
           onClick={() => onChange(value === s ? null : s)}
         >
           {s}
-        </button>
+        </Chip>
       ))}
     </div>
   );

@@ -121,12 +121,23 @@ export default function CommandPanel() {
     : "UNKNOWN";
 
   return (
-    <div className="border border-terminal-border rounded bg-terminal-surface p-4 flex flex-col gap-3">
+    <div style={{
+      background: "#0a0a12", border: "1px solid #1c1c28",
+      borderTop: "2px solid #1c1c28",
+      borderRadius: 8, padding: "14px 16px",
+      display: "flex", flexDirection: "column", gap: 12,
+    }}>
 
       {/* Header + status */}
-      <div className="flex items-center justify-between">
-        <span className="text-matrix-dim text-xs uppercase tracking-widest">Command Panel</span>
-        <div className="flex items-center gap-1.5">
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <span style={{
+          fontFamily: "'JetBrains Mono', monospace",
+          fontSize: 9, fontWeight: 700, letterSpacing: "0.18em",
+          textTransform: "uppercase", color: "#2a3a4a",
+        }}>
+          Command Panel
+        </span>
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
           <span
             style={{
               display: "inline-block",
@@ -145,7 +156,7 @@ export default function CommandPanel() {
       </div>
 
       {/* Buttons */}
-      <div className="flex gap-2 flex-wrap">
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
         {COMMANDS.map((b) => {
           const isLoading = loading === b.cmd;
           const isArmed   = b.cmd === "kill" && armKill;
