@@ -113,7 +113,7 @@ function KpiCard({ label, value, color = "#00d4ff" }: { label: string; value: st
       <div style={{
         fontFamily: "'JetBrains Mono', monospace",
         fontSize: 8.5, letterSpacing: "0.14em",
-        textTransform: "uppercase", color: "#2a3a4a", marginTop: 4,
+        textTransform: "uppercase", color: "#607888", marginTop: 4,
       }}>
         {label}
       </div>
@@ -137,7 +137,7 @@ function Card({ title, accent = "#1c1c28", children }: {
       <div style={{
         fontFamily: "'JetBrains Mono', monospace",
         fontSize: 9, fontWeight: 700, letterSpacing: "0.16em",
-        textTransform: "uppercase", color: "#2a3a4a",
+        textTransform: "uppercase", color: "#607888",
         marginBottom: 14,
         paddingBottom: 10,
         borderBottom: "1px solid #1c1c28",
@@ -185,7 +185,7 @@ export default function ICTPage() {
         display: "flex", alignItems: "center", justifyContent: "center",
         padding: "80px 0",
         fontFamily: "'JetBrains Mono', monospace", fontSize: 11,
-        color: "#2a3a4a",
+        color: "#607888",
       }}>
         Scanning ICT engine data…
       </div>
@@ -200,7 +200,7 @@ export default function ICTPage() {
         <div>
           <div style={{
             fontSize: 9, fontFamily: "'JetBrains Mono', monospace",
-            color: "#2a3a4a", letterSpacing: "0.2em", textTransform: "uppercase",
+            color: "#607888", letterSpacing: "0.2em", textTransform: "uppercase",
           }}>
             ICT / SMC Strategy Engine
           </div>
@@ -214,7 +214,7 @@ export default function ICTPage() {
             ICT Setup Detection
           </h1>
           <p style={{
-            fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: "#2a3a4a",
+            fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: "#607888",
             marginTop: 4,
           }}>
             Real-time ICT confluences · 30s refresh
@@ -237,7 +237,7 @@ export default function ICTPage() {
         {/* Model distribution */}
         <Card title="Setup Model Distribution" accent="#f5c518">
           {modelStats.length === 0 ? (
-            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: "#1e2e1e", padding: "10px 0" }}>
+            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: "#3a5248", padding: "10px 0" }}>
               No setups detected yet.
             </div>
           ) : (
@@ -249,7 +249,7 @@ export default function ICTPage() {
                       padding: "6px 8px",
                       textAlign: h === "Total" || h === "Exec'd" || h === "Score" ? "right" : "left",
                       fontSize: 8.5, letterSpacing: "0.12em", textTransform: "uppercase",
-                      color: "#2a3a4a", fontWeight: 600,
+                      color: "#607888", fontWeight: 600,
                     }}>{h}</th>
                   ))}
                 </tr>
@@ -260,8 +260,8 @@ export default function ICTPage() {
                     <td style={{ padding: "7px 8px", color: "#9aa8b8", fontWeight: 700, fontSize: 10 }}>
                       {MODEL_LABELS[m.model] || m.model}
                     </td>
-                    <td style={{ padding: "7px 8px", textAlign: "right", color: "#4a5568" }}>{m.total}</td>
-                    <td style={{ padding: "7px 8px", textAlign: "right", color: "#4a5568" }}>{m.executed}</td>
+                    <td style={{ padding: "7px 8px", textAlign: "right", color: "#7a8a9a" }}>{m.total}</td>
+                    <td style={{ padding: "7px 8px", textAlign: "right", color: "#7a8a9a" }}>{m.executed}</td>
                     <td style={{ padding: "7px 8px", textAlign: "right", fontWeight: 700, color: confColor(m.avg_confidence) }}>
                       {Number(m.avg_confidence).toFixed(0)}
                     </td>
@@ -275,7 +275,7 @@ export default function ICTPage() {
         {/* Confluence frequency */}
         <Card title="Confluence Frequency" accent="#00d4ff">
           {!confluenceStats || confluenceStats.total_setups === 0 ? (
-            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: "#1e2e1e", padding: "10px 0" }}>
+            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: "#3a5248", padding: "10px 0" }}>
               No data yet.
             </div>
           ) : (
@@ -290,7 +290,7 @@ export default function ICTPage() {
                   <div key={key} style={{ display: "flex", alignItems: "center", gap: 10 }}>
                     <span style={{
                       fontFamily: "'JetBrains Mono', monospace",
-                      fontSize: 10, color: "#2a3a4a",
+                      fontSize: 10, color: "#607888",
                       width: 120, flexShrink: 0,
                     }}>
                       {label}
@@ -325,7 +325,7 @@ export default function ICTPage() {
         {/* Session distribution */}
         <Card title="Session Distribution" accent="#ff9d00">
           {sessionStats.length === 0 ? (
-            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: "#1e2e1e", padding: "10px 0" }}>
+            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: "#3a5248", padding: "10px 0" }}>
               No session data.
             </div>
           ) : (
@@ -337,7 +337,7 @@ export default function ICTPage() {
                       padding: "6px 8px",
                       textAlign: h !== "Session" ? "right" : "left",
                       fontSize: 8.5, letterSpacing: "0.12em", textTransform: "uppercase",
-                      color: "#2a3a4a", fontWeight: 600,
+                      color: "#607888", fontWeight: 600,
                     }}>{h}</th>
                   ))}
                 </tr>
@@ -346,8 +346,8 @@ export default function ICTPage() {
                 {sessionStats.map((s) => (
                   <tr key={s.session} style={{ borderBottom: "1px solid rgba(28,28,40,0.5)" }}>
                     <td style={{ padding: "7px 8px", color: "#9aa8b8", fontWeight: 700, textTransform: "capitalize" }}>{s.session}</td>
-                    <td style={{ padding: "7px 8px", textAlign: "right", color: "#4a5568" }}>{s.total}</td>
-                    <td style={{ padding: "7px 8px", textAlign: "right", color: "#4a5568" }}>{s.executed}</td>
+                    <td style={{ padding: "7px 8px", textAlign: "right", color: "#7a8a9a" }}>{s.total}</td>
+                    <td style={{ padding: "7px 8px", textAlign: "right", color: "#7a8a9a" }}>{s.executed}</td>
                     <td style={{ padding: "7px 8px", textAlign: "right", fontWeight: 700, color: confColor(s.avg_confidence) }}>
                       {Number(s.avg_confidence).toFixed(0)}
                     </td>
@@ -360,7 +360,7 @@ export default function ICTPage() {
 
         {/* How it works */}
         <Card title="How the ICT Engine Works" accent="#4da6ff">
-          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, color: "#2a3a4a", lineHeight: 1.7 }}>
+          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, color: "#607888", lineHeight: 1.7 }}>
             <p style={{ marginBottom: 10 }}>
               Runs a <span style={{ color: "#00d4ff", fontWeight: 700 }}>7-layer analysis</span> pipeline on every tick:
             </p>
@@ -374,11 +374,11 @@ export default function ICTPage() {
               ["Session/Time",    "Killzone + macro window scoring"],
             ].map(([name, desc], i) => (
               <div key={name} style={{ display: "flex", gap: 10, marginBottom: 4 }}>
-                <span style={{ color: "#1a2a3a", minWidth: 16, flexShrink: 0 }}>{i + 1}.</span>
+                <span style={{ color: "#506070", minWidth: 16, flexShrink: 0 }}>{i + 1}.</span>
                 <span><span style={{ color: "#f5c518", fontWeight: 700 }}>{name}</span> — {desc}</span>
               </div>
             ))}
-            <p style={{ marginTop: 12, paddingTop: 10, borderTop: "1px solid #1c1c28", color: "#1e2e1e" }}>
+            <p style={{ marginTop: 12, paddingTop: 10, borderTop: "1px solid #1c1c28", color: "#3a5248" }}>
               After analysis, <span style={{ color: "#ff9d00", fontWeight: 700 }}>6 setup models</span> are tested.
               Each scores <span style={{ color: "#00ff88", fontWeight: 700 }}>0-100</span> from 10 weighted components.
               Only setups above the threshold are forwarded to execution.
@@ -391,7 +391,7 @@ export default function ICTPage() {
       <div>
         <div style={{
           fontSize: 9, fontFamily: "'JetBrains Mono', monospace",
-          color: "#2a3a4a", letterSpacing: "0.18em", textTransform: "uppercase",
+          color: "#607888", letterSpacing: "0.18em", textTransform: "uppercase",
           marginBottom: 10,
         }}>
           Recent Setups
@@ -411,7 +411,7 @@ export default function ICTPage() {
                     padding: "9px 10px",
                     textAlign: h === "Entry" || h === "SL" || h === "Score" ? "right" : "left",
                     fontSize: 8.5, letterSpacing: "0.12em", textTransform: "uppercase",
-                    color: "#2a3a4a", fontWeight: 600, whiteSpace: "nowrap",
+                    color: "#607888", fontWeight: 600, whiteSpace: "nowrap",
                   }}>{h}</th>
                 ))}
               </tr>
@@ -424,7 +424,7 @@ export default function ICTPage() {
                   onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(0,212,255,0.03)"; }}
                   onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = ""; }}
                 >
-                  <td style={{ padding: "7px 10px", color: "#2a3a4a", fontSize: 9.5, whiteSpace: "nowrap" }}>
+                  <td style={{ padding: "7px 10px", color: "#607888", fontSize: 9.5, whiteSpace: "nowrap" }}>
                     {formatShort(s.created_at)}
                   </td>
                   <td style={{ padding: "7px 10px", color: "#00d4ff", fontWeight: 700 }}>{s.symbol}</td>
@@ -439,7 +439,7 @@ export default function ICTPage() {
                       {s.direction}
                     </span>
                   </td>
-                  <td style={{ padding: "7px 10px", color: "#4a5568", fontSize: 9.5 }}>
+                  <td style={{ padding: "7px 10px", color: "#7a8a9a", fontSize: 9.5 }}>
                     {MODEL_LABELS[s.model] || s.model}
                   </td>
                   <td style={{ padding: "7px 10px", textAlign: "right", color: "#9aa8b8", fontFamily: "monospace" }}>
@@ -451,10 +451,10 @@ export default function ICTPage() {
                   <td style={{ padding: "7px 10px", textAlign: "right", fontWeight: 700, color: confColor(Number(s.confidence)) }}>
                     {Number(s.confidence).toFixed(0)}
                   </td>
-                  <td style={{ padding: "7px 10px", color: "#4a5568", fontSize: 9.5, textTransform: "capitalize" }}>
+                  <td style={{ padding: "7px 10px", color: "#7a8a9a", fontSize: 9.5, textTransform: "capitalize" }}>
                     {s.entry_zone || "—"}
                   </td>
-                  <td style={{ padding: "7px 10px", color: "#4a5568", fontSize: 9.5, textTransform: "capitalize" }}>
+                  <td style={{ padding: "7px 10px", color: "#7a8a9a", fontSize: 9.5, textTransform: "capitalize" }}>
                     {s.htf_bias || "—"}
                   </td>
                   <td style={{ padding: "7px 10px" }}>
@@ -469,7 +469,7 @@ export default function ICTPage() {
           {filtered.length === 0 && (
             <div style={{
               padding: "40px 20px", textAlign: "center",
-              fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: "#1e2e1e",
+              fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: "#3a5248",
             }}>
               {symbol ? `no setups for ${symbol}` : "no setups recorded yet"}
             </div>
@@ -481,7 +481,7 @@ export default function ICTPage() {
       <div>
         <div style={{
           fontSize: 9, fontFamily: "'JetBrains Mono', monospace",
-          color: "#2a3a4a", letterSpacing: "0.18em", textTransform: "uppercase",
+          color: "#607888", letterSpacing: "0.18em", textTransform: "uppercase",
           marginBottom: 10,
         }}>
           Confidence Score Breakdown (0-100)
@@ -501,7 +501,7 @@ export default function ICTPage() {
                     padding: "9px 10px",
                     textAlign: h === "Max" ? "right" : "left",
                     fontSize: 8.5, letterSpacing: "0.12em", textTransform: "uppercase",
-                    color: "#2a3a4a", fontWeight: 600,
+                    color: "#607888", fontWeight: 600,
                   }}>{h}</th>
                 ))}
               </tr>
@@ -511,13 +511,13 @@ export default function ICTPage() {
                 <tr key={name} style={{ borderBottom: "1px solid rgba(28,28,40,0.5)" }}>
                   <td style={{ padding: "7px 10px", color: "#f5c518", fontWeight: 700 }}>{name}</td>
                   <td style={{ padding: "7px 10px", textAlign: "right", color: "#00ff88", fontWeight: 700 }}>{max}</td>
-                  <td style={{ padding: "7px 10px", color: "#2a3a4a", fontSize: 10 }}>{desc}</td>
+                  <td style={{ padding: "7px 10px", color: "#607888", fontSize: 10 }}>{desc}</td>
                 </tr>
               ))}
               <tr style={{ borderTop: "2px solid #1c1c28" }}>
                 <td style={{ padding: "8px 10px", color: "#9aa8b8", fontWeight: 700, fontSize: 11 }}>Total</td>
                 <td style={{ padding: "8px 10px", textAlign: "right", color: "#00ff88", fontWeight: 700, fontSize: 13 }}>100</td>
-                <td style={{ padding: "8px 10px", color: "#2a3a4a", fontSize: 10 }}>
+                <td style={{ padding: "8px 10px", color: "#607888", fontSize: 10 }}>
                   Minimum threshold for execution: <span style={{ color: "#f5c518", fontWeight: 700 }}>55</span>
                 </td>
               </tr>

@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import collections
 import logging
+import math
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -284,8 +285,6 @@ class ModelManager:
         batch_size = 32
         n_batches  = math.ceil(len(X_tr_t) / batch_size)
 
-        import math
-
         for epoch in range(settings.NEURAL_TRAIN_EPOCHS):
             model.train()
             total_loss = 0.0
@@ -433,12 +432,12 @@ class ModelManager:
                     for row in reader:
                         try:
                             candles.append(Candle(
-                                timestamp=datetime.fromisoformat(row["timestamp"]),
+                                timestamp=datetime.fromtimestamp(int(row["time"]), tz=UTC),
                                 open=float(row["open"]),
                                 high=float(row["high"]),
                                 low=float(row["low"]),
                                 close=float(row["close"]),
-                                volume=float(row["volume"]),
+                                volume=float(row["tick_volume"]),
                             ))
                         except Exception:
                             continue

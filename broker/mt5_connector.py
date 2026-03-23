@@ -177,10 +177,20 @@ class MT5Connector(BrokerConnector):
         info = mt5.account_info()
         if info is not None:
             val = float(info.balance)
+            # Only trust and cache non-zero live values.
+            # A zero value when the terminal had a recent -18004 IPC error means
+            # the account data is stale — prefer the cached value in that case.
+            if val > 0.0:
+                if self.account_info_cache is not None:
+                    self.account_info_cache["balance"] = val
+                return val
+            # info returned but balance is 0 — possibly stale; use cache if available
             if self.account_info_cache is not None:
-                self.account_info_cache["balance"] = val
-            return val
-        # MT5 called from wrong thread (ThreadPoolExecutor) — use cache
+                cached = float(self.account_info_cache.get("balance", 0.0))
+                if cached > 0.0:
+                    return cached
+            return val  # genuinely 0 or cache also 0
+        # info is None — MT5 called from wrong thread OR IPC broken; use cache
         if self.account_info_cache is not None:
             return float(self.account_info_cache.get("balance", 0.0))
         return 0.0
@@ -189,10 +199,15 @@ class MT5Connector(BrokerConnector):
         info = mt5.account_info()
         if info is not None:
             val = float(info.equity)
+            if val > 0.0:
+                if self.account_info_cache is not None:
+                    self.account_info_cache["equity"] = val
+                return val
             if self.account_info_cache is not None:
-                self.account_info_cache["equity"] = val
+                cached = float(self.account_info_cache.get("equity", 0.0))
+                if cached > 0.0:
+                    return cached
             return val
-        # MT5 called from wrong thread (ThreadPoolExecutor) — use cache
         if self.account_info_cache is not None:
             return float(self.account_info_cache.get("equity", 0.0))
         return 0.0

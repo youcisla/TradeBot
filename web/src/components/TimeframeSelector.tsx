@@ -23,7 +23,7 @@ export default function TimeframeSelector({ value, onChange }: Props) {
               background: active ? "rgba(0,255,136,0.15)" : "transparent",
               border: `1px solid ${active ? "rgba(0,255,136,0.4)" : "#1c1c28"}`,
               borderRadius: 4,
-              color: active ? "#00ff88" : "#2a3a4a",
+              color: active ? "#00ff88" : "#607888",
               cursor: "pointer",
               boxShadow: active ? "0 0 8px rgba(0,255,136,0.25)" : "none",
               transition: "background 0.12s, color 0.12s, border-color 0.12s, box-shadow 0.12s",
@@ -32,13 +32,13 @@ export default function TimeframeSelector({ value, onChange }: Props) {
               if (!active) {
                 const btn = e.currentTarget as HTMLButtonElement;
                 btn.style.color = "#c0ccd8";
-                btn.style.borderColor = "#2a3a4a";
+                btn.style.borderColor = "#607888";
               }
             }}
             onMouseLeave={(e) => {
               if (!active) {
                 const btn = e.currentTarget as HTMLButtonElement;
-                btn.style.color = "#2a3a4a";
+                btn.style.color = "#607888";
                 btn.style.borderColor = "#1c1c28";
               }
             }}

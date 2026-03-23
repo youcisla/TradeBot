@@ -64,7 +64,7 @@ function ConfidenceBar({ strategy, confidence, totalTrades, totalScore }: {
           </div>
           <div style={{
             fontFamily: "'JetBrains Mono', monospace", fontSize: 8.5,
-            color: "#2a3a4a", marginTop: 2, letterSpacing: "0.06em",
+            color: "#607888", marginTop: 2, letterSpacing: "0.06em",
           }}>
             {totalTrades} trades · score {totalScore >= 0 ? "+" : ""}{totalScore}
           </div>
@@ -159,7 +159,7 @@ export default function LearningPage() {
       <div>
         <div style={{
           fontSize: 9, fontFamily: "'JetBrains Mono', monospace",
-          color: "#2a3a4a", letterSpacing: "0.2em", textTransform: "uppercase",
+          color: "#607888", letterSpacing: "0.2em", textTransform: "uppercase",
         }}>
           Adaptive System
         </div>
@@ -182,19 +182,19 @@ export default function LearningPage() {
           fontFamily: "'JetBrains Mono', monospace",
         }}>
           <div>
-            <div style={{ fontSize: 8.5, color: "#2a3a4a", letterSpacing: "0.15em", textTransform: "uppercase" }}>Scored</div>
+            <div style={{ fontSize: 8.5, color: "#607888", letterSpacing: "0.15em", textTransform: "uppercase" }}>Scored</div>
             <div style={{ fontSize: 14, fontWeight: 700, color: "#9aa8b8", marginTop: 2 }}>{filtered.length}</div>
           </div>
           <div>
-            <div style={{ fontSize: 8.5, color: "#2a3a4a", letterSpacing: "0.15em", textTransform: "uppercase" }}>Wins</div>
+            <div style={{ fontSize: 8.5, color: "#607888", letterSpacing: "0.15em", textTransform: "uppercase" }}>Wins</div>
             <div style={{ fontSize: 14, fontWeight: 700, color: "#00ff88", marginTop: 2 }}>{totalWins}</div>
           </div>
           <div>
-            <div style={{ fontSize: 8.5, color: "#2a3a4a", letterSpacing: "0.15em", textTransform: "uppercase" }}>Losses</div>
+            <div style={{ fontSize: 8.5, color: "#607888", letterSpacing: "0.15em", textTransform: "uppercase" }}>Losses</div>
             <div style={{ fontSize: 14, fontWeight: 700, color: "#ff4455", marginTop: 2 }}>{totalLosses}</div>
           </div>
           <div>
-            <div style={{ fontSize: 8.5, color: "#2a3a4a", letterSpacing: "0.15em", textTransform: "uppercase" }}>Avg Score</div>
+            <div style={{ fontSize: 8.5, color: "#607888", letterSpacing: "0.15em", textTransform: "uppercase" }}>Avg Score</div>
             <div style={{ fontSize: 14, fontWeight: 700, color: avgScore >= 0 ? "#00ff88" : "#ff4455", marginTop: 2 }}>
               {avgScore >= 0 ? "+" : ""}{avgScore.toFixed(1)}
             </div>
@@ -206,7 +206,7 @@ export default function LearningPage() {
       <div>
         <div style={{
           fontSize: 9, fontFamily: "'JetBrains Mono', monospace",
-          color: "#2a3a4a", letterSpacing: "0.18em", textTransform: "uppercase",
+          color: "#607888", letterSpacing: "0.18em", textTransform: "uppercase",
           marginBottom: 10,
         }}>
           Strategy Confidence
@@ -215,7 +215,7 @@ export default function LearningPage() {
           </span>
         </div>
         {confidences.length === 0 ? (
-          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: "#1e2e1e", padding: "20px 0" }}>
+          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: "#3a5248", padding: "20px 0" }}>
             No strategies tracked yet.
           </div>
         ) : (
@@ -237,7 +237,7 @@ export default function LearningPage() {
       <div>
         <div style={{
           fontSize: 9, fontFamily: "'JetBrains Mono', monospace",
-          color: "#2a3a4a", letterSpacing: "0.18em", textTransform: "uppercase",
+          color: "#607888", letterSpacing: "0.18em", textTransform: "uppercase",
           marginBottom: 10,
         }}>
           Recent Scores
@@ -257,7 +257,7 @@ export default function LearningPage() {
                     padding: "9px 10px",
                     textAlign: h === "Score" || h === "P&L" ? "right" : "left",
                     fontSize: 8.5, letterSpacing: "0.12em", textTransform: "uppercase",
-                    color: "#2a3a4a", fontWeight: 600,
+                    color: "#607888", fontWeight: 600,
                   }}>{h}</th>
                 ))}
               </tr>
@@ -270,20 +270,20 @@ export default function LearningPage() {
                   onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(0,212,255,0.03)"; }}
                   onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = ""; }}
                 >
-                  <td style={{ padding: "7px 10px", color: "#2a3a4a", fontSize: 9.5 }}>{s.trade_id.slice(0, 8)}</td>
+                  <td style={{ padding: "7px 10px", color: "#607888", fontSize: 9.5 }}>{s.trade_id.slice(0, 8)}</td>
                   <td style={{ padding: "7px 10px", color: "#9aa8b8", fontSize: 9.5 }} title={s.strategy}>
                     {formatStrategy(s.strategy)}
                   </td>
                   <td style={{ padding: "7px 10px", color: "#00d4ff", fontWeight: 700 }}>{s.symbol}</td>
-                  <td style={{ padding: "7px 10px", color: "#4a5568", fontSize: 9.5 }}>{s.session || "—"}</td>
-                  <td style={{ padding: "7px 10px", color: "#4a5568", fontSize: 9.5 }}>{s.market_condition || "—"}</td>
+                  <td style={{ padding: "7px 10px", color: "#7a8a9a", fontSize: 9.5 }}>{s.session || "—"}</td>
+                  <td style={{ padding: "7px 10px", color: "#7a8a9a", fontSize: 9.5 }}>{s.market_condition || "—"}</td>
                   <td style={{ padding: "7px 10px", textAlign: "right", fontWeight: 700, color: scoreColor(Number(s.score)) }}>
                     {Number(s.score) >= 0 ? "+" : ""}{s.score}
                   </td>
                   <td style={{ padding: "7px 10px", textAlign: "right", color: Number(s.pnl) >= 0 ? "#00ff88" : "#ff4455" }}>
                     {Number(s.pnl) >= 0 ? "+" : ""}{Number(s.pnl).toFixed(2)}
                   </td>
-                  <td style={{ padding: "7px 10px", color: "#2a3a4a", fontSize: 9.5, whiteSpace: "nowrap" }}>
+                  <td style={{ padding: "7px 10px", color: "#607888", fontSize: 9.5, whiteSpace: "nowrap" }}>
                     {formatShort(s.created_at)}
                   </td>
                 </tr>
@@ -291,7 +291,7 @@ export default function LearningPage() {
             </tbody>
           </table>
           {filtered.length === 0 && (
-            <div style={{ padding: "40px 20px", textAlign: "center", fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: "#1e2e1e" }}>
+            <div style={{ padding: "40px 20px", textAlign: "center", fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: "#3a5248" }}>
               {symbol ? `no scores for ${symbol}` : "no scores recorded yet"}
             </div>
           )}

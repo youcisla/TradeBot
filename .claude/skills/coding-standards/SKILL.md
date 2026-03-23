@@ -32,11 +32,13 @@ Borders:
   Subtle:       rgba(28,28,40,0.5)
 
 Text:
-  Primary:      #c0ccd8
-  Secondary:    #9aa8b8
-  Muted:        #4a5568
-  Dim:          #2a3a4a
-  Ghost:        #1e2e1e
+  Primary:      #c0ccd8   ← main readable text
+  Secondary:    #9aa8b8   ← secondary readable text
+  Subdued:      #7a8a9a   ← table cell secondary data, descriptions (was #4a5568)
+  Dim:          #607888   ← section titles, table headers, KPI labels (was #2a3a4a)
+  Ghost:        #3a5248   ← empty state messages (was #1e2e1e)
+
+NOTE: #2a3a4a, #1e2e1e, #4a5568 are BANNED — too dark to read on #0a0a12 bg.
 
 Accent / action colors:
   Green (profit, active, buy): #00ff88
@@ -270,7 +272,7 @@ function TerminalInput({ value, onChange }: { value: string; onChange: (v: strin
 <div style={{
   padding: "40px 20px", textAlign: "center",
   fontFamily: "'JetBrains Mono', monospace",
-  fontSize: 11, color: "#1e2e1e",
+  fontSize: 11, color: "#3a5248",
 }}>
   no data recorded yet
 </div>

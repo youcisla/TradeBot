@@ -19,7 +19,7 @@ function TpDot({ hit, label }: { hit: boolean; label: string }) {
     <span style={{
       display: "inline-flex", alignItems: "center", gap: 3,
       fontSize: 9, fontFamily: "'JetBrains Mono', monospace",
-      color: hit ? "#00ff88" : "#2a3a4a",
+      color: hit ? "#00ff88" : "#607888",
     }}>
       <span style={{
         width: 5, height: 5, borderRadius: "50%",
@@ -51,7 +51,7 @@ export default function TradesPage() {
       <div>
         <div style={{
           fontSize: 9, fontFamily: "'JetBrains Mono', monospace",
-          color: "#2a3a4a", letterSpacing: "0.2em", textTransform: "uppercase",
+          color: "#607888", letterSpacing: "0.2em", textTransform: "uppercase",
         }}>
           History
         </div>
@@ -109,7 +109,7 @@ export default function TradesPage() {
                   padding: "9px 10px",
                   textAlign: h === "Entry" || h === "Lots" || h === "P&L" ? "right" : "left",
                   fontSize: 8.5, letterSpacing: "0.12em", textTransform: "uppercase",
-                  color: "#2a3a4a", fontWeight: 600, whiteSpace: "nowrap",
+                  color: "#607888", fontWeight: 600, whiteSpace: "nowrap",
                 }}>
                   {h}
                 </th>
@@ -126,7 +126,7 @@ export default function TradesPage() {
                   onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(0,212,255,0.03)"; }}
                   onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = ""; }}
                 >
-                  <td style={{ padding: "7px 10px", color: "#2a3a4a", fontSize: 9.5 }}>
+                  <td style={{ padding: "7px 10px", color: "#607888", fontSize: 9.5 }}>
                     {t.id.slice(0, 8)}
                   </td>
                   <td style={{ padding: "7px 10px", color: "#00d4ff", fontWeight: 700 }}>
@@ -144,7 +144,7 @@ export default function TradesPage() {
                       {t.direction}
                     </span>
                   </td>
-                  <td style={{ padding: "7px 10px", color: "#4a5568", fontSize: 9.5 }}>
+                  <td style={{ padding: "7px 10px", color: "#7a8a9a", fontSize: 9.5 }}>
                     {t.strategy}
                   </td>
                   <td style={{ padding: "7px 10px", textAlign: "right", color: "#9aa8b8" }}>
@@ -180,7 +180,7 @@ export default function TradesPage() {
                   <td style={{ padding: "7px 10px", color: "#3a4a5a", fontSize: 9.5, whiteSpace: "nowrap" }}>
                     {t.close_time ? formatShort(t.close_time) : "—"}
                   </td>
-                  <td style={{ padding: "7px 10px", color: "#4a5568", fontSize: 9.5 }}>
+                  <td style={{ padding: "7px 10px", color: "#7a8a9a", fontSize: 9.5 }}>
                     {t.close_reason || "—"}
                   </td>
                 </tr>
@@ -193,7 +193,7 @@ export default function TradesPage() {
           <div style={{
             padding: "40px 20px", textAlign: "center",
             fontFamily: "'JetBrains Mono', monospace", fontSize: 11,
-            color: "#1e2e1e",
+            color: "#3a5248",
           }}>
             {symbol ? `no trades for ${symbol}` : "no trades recorded yet"}
           </div>

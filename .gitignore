@@ -2,6 +2,8 @@
 .env
 .env.local
 .env*.local
+web/.env
+web/.env.local
 
 # Python
 __pycache__/
@@ -11,6 +13,7 @@ dist/
 build/
 .venv/
 .pytest_cache/
+*.log
 
 # Node / Web
 node_modules/
@@ -20,6 +23,11 @@ web/.next/
 # Data & logs
 data/
 logs/
+
+# Trained LSTM models (large binary files — regenerated at startup)
+models/neural/
+*.pt
+*.pth
 
 # IDE
 .vscode/

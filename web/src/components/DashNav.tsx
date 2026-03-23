@@ -121,7 +121,7 @@ export default function DashNav() {
         marginLeft: 8,
       }}>
         <span style={{
-          fontSize: 9, color: "#2a3a4a",
+          fontSize: 9, color: "#607888",
           fontFamily: "'JetBrains Mono', monospace",
           letterSpacing: "0.1em",
           textTransform: "uppercase",

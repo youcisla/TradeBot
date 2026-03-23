@@ -263,7 +263,7 @@ export default function AgentFeed({ symbol }: { symbol?: string | null }) {
             Agent Orchestration
           </span>
           <span style={{
-            fontSize: 9, color: "#2a3a4a",
+            fontSize: 9, color: "#607888",
             fontFamily: "'JetBrains Mono', monospace",
             letterSpacing: "0.08em",
           }}>
@@ -460,7 +460,7 @@ export default function AgentFeed({ symbol }: { symbol?: string | null }) {
           </div>
         )}
         {filtered.map((e, i) => {
-          const agentColor = ALL_AGENTS.find((a) => a.key === e.agent)?.color ?? "#4a5568";
+          const agentColor = ALL_AGENTS.find((a) => a.key === e.agent)?.color ?? "#7a8a9a";
           const msgColor   = e.level === "error" ? "#ff4455" : e.level === "warn" ? "#f5c518" : "#7a8a9a";
           const dot        = e.level === "error" ? "#ff4455" : e.level === "warn" ? "#f5c518" : "#1e2e3e";
 

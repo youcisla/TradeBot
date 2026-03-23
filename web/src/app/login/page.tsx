@@ -104,7 +104,7 @@ export default function LoginPage() {
           <div style={{
             fontFamily: "'JetBrains Mono', monospace",
             fontSize: 9, fontWeight: 700, letterSpacing: "0.2em",
-            textTransform: "uppercase", color: "#2a3a4a",
+            textTransform: "uppercase", color: "#607888",
             marginBottom: 4,
           }}>
             NeuralFX
@@ -119,7 +119,7 @@ export default function LoginPage() {
           </div>
           <div style={{
             fontFamily: "'JetBrains Mono', monospace",
-            fontSize: 10, color: "#2a3a4a",
+            fontSize: 10, color: "#607888",
             marginTop: 6, lineHeight: 1.5,
           }}>
             {isFirstLogin

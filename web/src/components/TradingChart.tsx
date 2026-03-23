@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef, useCallback, useState } from "react";
 import {
   createChart,
   type IChartApi,
@@ -73,6 +73,14 @@ export default function TradingChart({ symbol, timeframe, count = 500 }: Props) 
   const volumeSeriesRef = useRef<ISeriesApi<"Histogram"> | null>(null);
   const lastTimeRef = useRef<number>(0);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [status, setStatus] = useState<"loading" | "ok" | "error">("loading");
+  // Ref mirrors state so interval callbacks can read current value (closures capture stale state)
+  const statusRef = useRef<"loading" | "ok" | "error">("loading");
+  const errorReasonRef = useRef<"server_down" | "no_data">("server_down");
+  const setStatusSync = (s: "loading" | "ok" | "error") => {
+    statusRef.current = s;
+    setStatus(s);
+  };
 
   // Fetch candles from API
   const fetchCandles = useCallback(async () => {
@@ -209,32 +217,60 @@ export default function TradingChart({ symbol, timeframe, count = 500 }: Props) 
       intervalRef.current = null;
     }
 
+    const loadCandles = async (candles: CandleRaw[]) => {
+      try {
+        // Sort ascending + deduplicate — LWC throws if timestamps are not strictly ascending
+        const sorted = candles
+          .filter((c) => c.time > 0)
+          .sort((a, b) => a.time - b.time)
+          .filter((c, i, arr) => i === 0 || c.time !== arr[i - 1].time);
+
+        if (sorted.length === 0) {
+          errorReasonRef.current = "no_data";
+          setStatusSync("error");
+          return;
+        }
+
+        const candleData: CandlestickData<Time>[] = sorted.map((c) => ({
+          time: c.time as Time,
+          open: c.open,
+          high: c.high,
+          low: c.low,
+          close: c.close,
+        }));
+        const volumeData: HistogramData<Time>[] = sorted.map((c) => ({
+          time: c.time as Time,
+          value: c.volume,
+          color: c.close >= c.open ? "#00ff4130" : "#ff444430",
+        }));
+        candleSeries.setData(candleData);
+        volumeSeries.setData(volumeData);
+        lastTimeRef.current = sorted[sorted.length - 1].time;
+        chart.timeScale().fitContent();
+        setStatusSync("ok");
+      } catch (err) {
+        console.error("[TradingChart] setData failed:", err);
+        errorReasonRef.current = "no_data";
+        setStatusSync("error");
+      }
+    };
+
     const loadInitial = async () => {
+      setStatusSync("loading");
       const candles = await fetchCandles();
-      if (!candles || !active) return;
-
-      const candleData: CandlestickData<Time>[] = candles.map((c) => ({
-        time: c.time as Time,
-        open: c.open,
-        high: c.high,
-        low: c.low,
-        close: c.close,
-      }));
-
-      const volumeData: HistogramData<Time>[] = candles.map((c) => ({
-        time: c.time as Time,
-        value: c.volume,
-        color: c.close >= c.open ? "#00ff4130" : "#ff444430",
-      }));
-
-      candleSeries.setData(candleData);
-      volumeSeries.setData(volumeData);
-
-      if (candles.length > 0) {
-        lastTimeRef.current = candles[candles.length - 1].time;
+      if (!active) return;
+      if (!candles) {
+        errorReasonRef.current = "server_down";
+        setStatusSync("error");
+        return;
+      }
+      if (candles.length === 0) {
+        errorReasonRef.current = "no_data";
+        setStatusSync("error");
+        return;
       }
 
-      chart.timeScale().fitContent();
+      await loadCandles(candles);
 
       // Load trade overlays
       const overlays = await fetchOverlays();
@@ -316,7 +352,13 @@ export default function TradingChart({ symbol, timeframe, count = 500 }: Props) 
       const candles = await fetchCandles();
       if (!candles || candles.length === 0) return;
 
-      // Only update the last candle (live bar) or append new ones
+      // Auto-recover: if chart is in error/loading state but candles are now available, full reload
+      if (statusRef.current !== "ok") {
+        await loadCandles(candles);
+        return;
+      }
+
+      // Normal live update — append/update the latest bar only
       const latest = candles[candles.length - 1];
       if (latest.time >= lastTimeRef.current) {
         candleSeries.update({
@@ -345,9 +387,40 @@ export default function TradingChart({ symbol, timeframe, count = 500 }: Props) 
   }, [symbol, timeframe, count, fetchCandles, fetchOverlays, fetchFibonacci]);
 
   return (
-    <div
-      ref={containerRef}
-      style={{ width: "100%", height: "100%", minHeight: 400, borderRadius: 6, border: "1px solid #1c1c28" }}
-    />
+    <div style={{ position: "relative", width: "100%", height: "100%", minHeight: 400 }}>
+      <div
+        ref={containerRef}
+        style={{ width: "100%", height: "100%", minHeight: 400, borderRadius: 6, border: "1px solid #1c1c28" }}
+      />
+      {status !== "ok" && (
+        <div style={{
+          position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
+          zIndex: 10,
+          display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+          background: "#0a0a0a",
+          borderRadius: 6,
+          border: "1px solid #1c1c28",
+          gap: 10,
+        }}>
+          {status === "loading" ? (
+            <>
+              <div style={{ width: 32, height: 32, border: "2px solid #1c1c28", borderTop: "2px solid #00ff41", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
+              <span style={{ color: "#607888", fontSize: 12, fontFamily: "'JetBrains Mono', monospace", letterSpacing: "0.06em" }}>Loading chart data…</span>
+            </>
+          ) : (
+            <>
+              <span style={{ color: "#ff4455", fontSize: 20 }}>⚠</span>
+              <span style={{ color: "#ff4455", fontSize: 13, fontFamily: "'JetBrains Mono', monospace", fontWeight: 700 }}>Chart unavailable</span>
+              <span style={{ color: "#607888", fontSize: 11, fontFamily: "'JetBrains Mono', monospace" }}>
+                {errorReasonRef.current === "no_data"
+                  ? "No candle data for this symbol / timeframe"
+                  : "Bot candle server not reachable"}
+              </span>
+            </>
+          )}
+        </div>
+      )}
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+    </div>
   );
 }

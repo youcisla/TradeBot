@@ -18,7 +18,7 @@ import time
 # Enable ANSI colour codes on Windows CMD / PowerShell
 if sys.platform == "win32":
     os.system("")  # activates VT100 processing for the current console
-from datetime import UTC, date, datetime
+from datetime import UTC, datetime
 
 from broker.connector import BrokerConnector
 from broker.mock_connector import MockConnector
@@ -218,10 +218,16 @@ def main() -> None:
 
     _market_closed_logged = False
     # Minimum wall-clock seconds between re-scanning the same symbol.
-    # Set to 15 min so the ICT engine (which internally uses M15 candles)
-    # gets fresh data every bar rather than being blocked until the next H1 close.
     _SCAN_COOLDOWN_S: float = 15 * 60  # 15 minutes
     _last_scan_ts: dict[str, float] = {}  # symbol → monotonic time of last analysis
+
+    # ── Symbol fault tracking ────────────────────────────────────────────
+    # Symbols with repeated IPC / data errors are temporarily disabled to
+    # avoid wasting time on each loop iteration.
+    _symbol_fail_count:     dict[str, int]   = {}   # consecutive failures
+    _symbol_disabled_until: dict[str, float] = {}   # monotonic re-enable time
+    _SYMBOL_MAX_FAILS      = 3                       # disable after this many consecutive IPC failures
+    _SYMBOL_DISABLE_SECS   = 3600.0                 # re-enable after 1 hour
 
     while not _shutdown:
         loop_start = time.monotonic()
@@ -262,6 +268,10 @@ def main() -> None:
                 council=council,
                 last_scan_ts=_last_scan_ts,
                 scan_cooldown=_SCAN_COOLDOWN_S,
+                symbol_fail_count=_symbol_fail_count,
+                symbol_disabled_until=_symbol_disabled_until,
+                symbol_max_fails=_SYMBOL_MAX_FAILS,
+                symbol_disable_secs=_SYMBOL_DISABLE_SECS,
             )
         except Exception:
             logger.exception("Unhandled error in main loop iteration %d", loop_count)
@@ -449,6 +459,10 @@ def _run_iteration(
     council: CouncilAgent | None,
     last_scan_ts: dict[str, float],
     scan_cooldown: float,
+    symbol_fail_count: dict[str, int],
+    symbol_disabled_until: dict[str, float],
+    symbol_max_fails: int,
+    symbol_disable_secs: float,
 ) -> None:
     """Single iteration of the trading loop.
 
@@ -486,13 +500,6 @@ def _run_iteration(
             log_agent.log_trade(closed_trade.id, "CLOSED",
                                 f"{closed_trade.close_reason} PnL={closed_trade.pnl:.2f}")
 
-    # ── Review any just-closed trades ────────────────────────────────────
-    today_str = date.today().isoformat()
-    all_closed_today = learning._db.get_trades_closed_today()
-    # We only score trades that haven't been scored yet (score check in DB)
-    # For simplicity, just score any closed trades from this iteration
-    # The learning agent is idempotent per trade_id via DB constraint
-
     # ── Skip new signals if paused ───────────────────────────────────────
     if telegram_bot.is_paused():
         logger.warning("Bot is PAUSED — skipping signal detection (loop %d). "
@@ -520,6 +527,16 @@ def _run_iteration(
         if symbol in open_symbols:
             continue
 
+        # ── Auto-disable: skip symbols with repeated IPC / data failures ─
+        disabled_until = symbol_disabled_until.get(symbol, 0.0)
+        if now_mono < disabled_until:
+            continue
+        elif disabled_until > 0.0:
+            # Re-enable: cooldown expired — reset failure counter and retry
+            logger.info("Re-enabling %s after IPC cooldown (was disabled for 1h)", symbol)
+            symbol_fail_count[symbol] = 0
+            symbol_disabled_until[symbol] = 0.0
+
         # Per-symbol cooldown — re-scan every 15 min (aligns with M15 bar)
         if now_mono - last_scan_ts.get(symbol, 0.0) < scan_cooldown:
             skipped_cooldown.append(symbol)
@@ -531,8 +548,27 @@ def _run_iteration(
                 _tui.set_agent_status("market", f"fetching {symbol}")
             data = market_agent.get_data(symbol)
         except DataValidationError as e:
+            err_str = str(e)
+            # Count consecutive IPC failures and auto-disable after threshold
+            if "IPC" in err_str or "-18004" in err_str or "No tick data" in err_str:
+                count = symbol_fail_count.get(symbol, 0) + 1
+                symbol_fail_count[symbol] = count
+                if count >= symbol_max_fails:
+                    symbol_disabled_until[symbol] = now_mono + symbol_disable_secs
+                    logger.warning(
+                        "Auto-disabling %s for 1h after %d consecutive IPC failures",
+                        symbol, count,
+                    )
+                    log_agent.record(
+                        "market",
+                        f"{symbol} auto-disabled for 1h — {count} consecutive IPC failures",
+                    )
+            else:
+                symbol_fail_count[symbol] = 0  # non-IPC error: don't count toward disable
             logger.warning("Data validation failed for %s: %s — skipping", symbol, e)
             continue
+        # Successful fetch — reset failure counter
+        symbol_fail_count[symbol] = 0
 
         if data.candles:
             symbol_event_tracker.update(symbol, "last_candle",

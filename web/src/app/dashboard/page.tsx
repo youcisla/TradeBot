@@ -13,7 +13,7 @@ function SectionHeader({ title, sub }: { title: string; sub?: string }) {
     <div style={{ marginBottom: 10, display: "flex", alignItems: "baseline", gap: 10 }}>
       <span style={{
         fontSize: 9, fontFamily: "'JetBrains Mono', monospace",
-        color: "#2a3a4a", letterSpacing: "0.2em", textTransform: "uppercase", fontWeight: 600,
+        color: "#607888", letterSpacing: "0.2em", textTransform: "uppercase", fontWeight: 600,
       }}>
         {title}
       </span>

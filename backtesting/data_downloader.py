@@ -63,7 +63,12 @@ def download_history(
         # Note: MT5 python API is sometimes picky about timezones, 
         # it usually treats naive datetimes as local time.
         rates = mt5.copy_rates_range(broker_sym, tf, start_date, end_date)
-        
+
+        # Fallback: copy_rates_from_pos doesn't require pre-loaded date range history
+        if rates is None or len(rates) == 0:
+            max_bars = int((end_date - start_date).total_seconds() / 3600)
+            rates = mt5.copy_rates_from_pos(broker_sym, tf, 0, min(max_bars, 50_000))
+
         if rates is None or len(rates) == 0:
             logger.error("No data returned for %s (%s). Check MT5 history availability.", symbol, broker_sym)
             return None

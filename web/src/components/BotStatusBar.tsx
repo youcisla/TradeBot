@@ -24,7 +24,7 @@ function Metric({ label, value, color = "#7a8a9a", glow }: {
     <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
       <span style={{
         fontSize: 8.5, fontFamily: "'JetBrains Mono', monospace",
-        color: "#2a3a4a", letterSpacing: "0.15em", textTransform: "uppercase",
+        color: "#607888", letterSpacing: "0.15em", textTransform: "uppercase",
       }}>
         {label}
       </span>
@@ -66,7 +66,7 @@ export default function BotStatusBar() {
         border: "1px solid #1c1c28", borderRadius: 8,
         background: "#0e0e10", padding: "14px 18px",
         fontFamily: "'JetBrains Mono', monospace",
-        fontSize: 11, color: "#2a3a4a",
+        fontSize: 11, color: "#607888",
         display: "flex", alignItems: "center", gap: 8,
       }}>
         <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#1c2c1c", display: "inline-block" }} />
@@ -109,7 +109,7 @@ export default function BotStatusBar() {
           }} />
           <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
             <span style={{
-              fontSize: 7.5, color: "#2a3a4a",
+              fontSize: 7.5, color: "#607888",
               fontFamily: "'JetBrains Mono', monospace",
               letterSpacing: "0.15em", textTransform: "uppercase",
             }}>State</span>
@@ -158,14 +158,14 @@ export default function BotStatusBar() {
             glow
           />
           <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-            <span style={{ fontSize: 8.5, fontFamily: "'JetBrains Mono', monospace", color: "#2a3a4a", letterSpacing: "0.15em", textTransform: "uppercase" }}>
+            <span style={{ fontSize: 8.5, fontFamily: "'JetBrains Mono', monospace", color: "#607888", letterSpacing: "0.15em", textTransform: "uppercase" }}>
               Open
             </span>
             <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-              <span style={{ fontSize: 13, fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, color: status.open_trades > 0 ? "#f5c518" : "#4a5568" }}>
+              <span style={{ fontSize: 13, fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, color: status.open_trades > 0 ? "#f5c518" : "#7a8a9a" }}>
                 {status.open_trades}
               </span>
-              <span style={{ fontSize: 8.5, color: "#2a3a4a", fontFamily: "'JetBrains Mono', monospace" }}>trades</span>
+              <span style={{ fontSize: 8.5, color: "#607888", fontFamily: "'JetBrains Mono', monospace" }}>trades</span>
             </div>
           </div>
         </div>
@@ -179,7 +179,7 @@ export default function BotStatusBar() {
         }}>
           <Metric label="Uptime" value={timeSince(status.uptime_start)} color="#7a8a9a" />
           <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-            <span style={{ fontSize: 8.5, fontFamily: "'JetBrains Mono', monospace", color: "#2a3a4a", letterSpacing: "0.15em", textTransform: "uppercase" }}>
+            <span style={{ fontSize: 8.5, fontFamily: "'JetBrains Mono', monospace", color: "#607888", letterSpacing: "0.15em", textTransform: "uppercase" }}>
               Last Tick
             </span>
             <span style={{

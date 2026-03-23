@@ -13,7 +13,7 @@ const TradingChart = dynamic(() => import("@/components/TradingChart"), {
       display: "flex", alignItems: "center", justifyContent: "center",
       background: "#0a0a12", border: "1px solid #1c1c28", borderRadius: 8,
       fontFamily: "'JetBrains Mono', monospace", fontSize: 11,
-      color: "#2a3a4a", letterSpacing: "0.06em",
+      color: "#607888", letterSpacing: "0.06em",
     }}>
       Initializing chart engine…
     </div>
@@ -21,7 +21,7 @@ const TradingChart = dynamic(() => import("@/components/TradingChart"), {
 });
 
 export default function ChartPage() {
-  const [symbol, setSymbol]       = useState("BTCUSD");
+  const [symbol, setSymbol]       = useState("EURUSD");
   const [timeframe, setTimeframe] = useState("H1");
 
   return (
@@ -43,7 +43,7 @@ export default function ChartPage() {
           display: "flex", alignItems: "center", gap: 8,
           fontFamily: "'JetBrains Mono', monospace",
           fontSize: 9, letterSpacing: "0.2em",
-          textTransform: "uppercase", color: "#2a3a4a",
+          textTransform: "uppercase", color: "#607888",
         }}>
           <span style={{
             width: 6, height: 6, borderRadius: "50%",

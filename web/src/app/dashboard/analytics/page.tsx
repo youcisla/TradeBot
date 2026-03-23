@@ -58,7 +58,7 @@ function KpiCard({
       }} />
       <div style={{
         fontSize: 8.5, fontFamily: "'JetBrains Mono', monospace",
-        color: "#2a3a4a", letterSpacing: "0.18em", textTransform: "uppercase",
+        color: "#607888", letterSpacing: "0.18em", textTransform: "uppercase",
         marginBottom: 6,
       }}>
         {label}
@@ -74,7 +74,7 @@ function KpiCard({
       {sub && (
         <div style={{
           fontSize: 9, fontFamily: "'JetBrains Mono', monospace",
-          color: "#2a3a4a", marginTop: 4,
+          color: "#607888", marginTop: 4,
         }}>
           {sub}
         </div>
@@ -93,7 +93,7 @@ function ChartCard({ title, children }: { title: string; children: React.ReactNo
     }}>
       <div style={{
         fontSize: 9, fontFamily: "'JetBrains Mono', monospace",
-        color: "#2a3a4a", letterSpacing: "0.2em", textTransform: "uppercase",
+        color: "#607888", letterSpacing: "0.2em", textTransform: "uppercase",
         marginBottom: 14,
       }}>
         {title}
@@ -107,7 +107,7 @@ function NoData() {
   return (
     <div style={{
       height: 180, display: "flex", alignItems: "center", justifyContent: "center",
-      color: "#1e2e1e", fontFamily: "'JetBrains Mono', monospace", fontSize: 11,
+      color: "#3a5a3a", fontFamily: "'JetBrains Mono', monospace", fontSize: 11,
     }}>
       no data yet
     </div>
@@ -225,7 +225,7 @@ export default function AnalyticsPage() {
         <div>
           <div style={{
             fontSize: 9, fontFamily: "'JetBrains Mono', monospace",
-            color: "#2a3a4a", letterSpacing: "0.2em", textTransform: "uppercase",
+            color: "#607888", letterSpacing: "0.2em", textTransform: "uppercase",
           }}>
             Performance
           </div>
@@ -248,7 +248,7 @@ export default function AnalyticsPage() {
       <SymbolFilter value={symbol} onChange={setSymbol} />
 
       {loading && (
-        <div style={{ fontSize: 11, color: "#2a3a4a", fontFamily: "'JetBrains Mono', monospace" }}>
+        <div style={{ fontSize: 11, color: "#607888", fontFamily: "'JetBrains Mono', monospace" }}>
           loading analytics…
         </div>
       )}
@@ -291,8 +291,8 @@ export default function AnalyticsPage() {
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="#1c1c28" />
-                <XAxis dataKey="date" tickFormatter={formatChartDate} tick={{ fill: "#2a3a4a", fontSize: 9, fontFamily: "JetBrains Mono" }} />
-                <YAxis tick={{ fill: "#2a3a4a", fontSize: 9, fontFamily: "JetBrains Mono" }} />
+                <XAxis dataKey="date" tickFormatter={formatChartDate} tick={{ fill: "#607888", fontSize: 9, fontFamily: "JetBrains Mono" }} />
+                <YAxis tick={{ fill: "#607888", fontSize: 9, fontFamily: "JetBrains Mono" }} />
                 <Tooltip contentStyle={TOOLTIP_STYLE} labelFormatter={(l) => formatChartDate(String(l))} formatter={(v) => [`${Number(v).toFixed(2)}`, "Cum PnL"]} />
                 <Area type="monotone" dataKey="cum" stroke="#00ff41" fill="url(#gCum)" strokeWidth={2} />
               </AreaChart>
@@ -311,8 +311,8 @@ export default function AnalyticsPage() {
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="#1c1c28" />
-                <XAxis dataKey="date" tickFormatter={formatChartDate} tick={{ fill: "#2a3a4a", fontSize: 9, fontFamily: "JetBrains Mono" }} />
-                <YAxis tick={{ fill: "#2a3a4a", fontSize: 9, fontFamily: "JetBrains Mono" }} />
+                <XAxis dataKey="date" tickFormatter={formatChartDate} tick={{ fill: "#607888", fontSize: 9, fontFamily: "JetBrains Mono" }} />
+                <YAxis tick={{ fill: "#607888", fontSize: 9, fontFamily: "JetBrains Mono" }} />
                 <Tooltip contentStyle={TOOLTIP_STYLE} labelFormatter={(l) => formatChartDate(String(l))} formatter={(v) => [`${Number(v).toFixed(2)}%`, "Drawdown"]} />
                 <Area type="monotone" dataKey="drawdown" stroke="#ff4455" fill="url(#gDD)" strokeWidth={2} />
               </AreaChart>
@@ -328,8 +328,8 @@ export default function AnalyticsPage() {
             <ResponsiveContainer width="100%" height={180}>
               <BarChart data={filteredDailyPnl.map((d) => ({ ...d, pnl: Number(d.pnl) }))}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#1c1c28" />
-                <XAxis dataKey="day" tickFormatter={formatChartDate} tick={{ fill: "#2a3a4a", fontSize: 9, fontFamily: "JetBrains Mono" }} />
-                <YAxis tick={{ fill: "#2a3a4a", fontSize: 9, fontFamily: "JetBrains Mono" }} />
+                <XAxis dataKey="day" tickFormatter={formatChartDate} tick={{ fill: "#607888", fontSize: 9, fontFamily: "JetBrains Mono" }} />
+                <YAxis tick={{ fill: "#607888", fontSize: 9, fontFamily: "JetBrains Mono" }} />
                 <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v) => [`${Number(v).toFixed(2)}`, "PnL"]} />
                 <Bar dataKey="pnl">
                   {filteredDailyPnl.map((d, i) => (
@@ -346,10 +346,10 @@ export default function AnalyticsPage() {
             <ResponsiveContainer width="100%" height={180}>
               <BarChart data={symbolBars} layout="vertical">
                 <CartesianGrid strokeDasharray="3 3" stroke="#1c1c28" />
-                <XAxis type="number" tick={{ fill: "#2a3a4a", fontSize: 9, fontFamily: "JetBrains Mono" }} />
+                <XAxis type="number" tick={{ fill: "#607888", fontSize: 9, fontFamily: "JetBrains Mono" }} />
                 <YAxis dataKey="symbol" type="category" tick={{ fill: "#9aa8b8", fontSize: 9, fontFamily: "JetBrains Mono" }} width={70} />
                 <Tooltip contentStyle={TOOLTIP_STYLE} />
-                <Legend wrapperStyle={{ fontSize: 9, fontFamily: "JetBrains Mono", color: "#4a5568" }} />
+                <Legend wrapperStyle={{ fontSize: 9, fontFamily: "JetBrains Mono", color: "#7a8a9a" }} />
                 <Bar dataKey="wins"   stackId="a" fill="#00ff88" name="Wins" />
                 <Bar dataKey="losses" stackId="a" fill="#ff4455" name="Losses" />
               </BarChart>
@@ -365,7 +365,7 @@ export default function AnalyticsPage() {
           {symbolPie.length === 0 ? <NoData /> : (
             <ResponsiveContainer width="100%" height={200}>
               <PieChart>
-                <Pie data={symbolPie} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={72} label={({ name }) => name} labelLine={{ stroke: "#2a3a4a" }}>
+                <Pie data={symbolPie} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={72} label={({ name }) => name} labelLine={{ stroke: "#607888" }}>
                   {symbolPie.map((_, i) => <Cell key={i} fill={SYM_COLORS[i % SYM_COLORS.length]} />)}
                 </Pie>
                 <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(_v, _n, entry) => [`${(entry.payload?.pnl ?? 0) >= 0 ? "+" : ""}${Number(entry.payload?.pnl ?? 0).toFixed(2)}`, "PnL"]} />
@@ -378,7 +378,7 @@ export default function AnalyticsPage() {
           {filteredDirStats.length === 0 ? <NoData /> : (
             <ResponsiveContainer width="100%" height={200}>
               <PieChart>
-                <Pie data={filteredDirStats} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={72} label={({ name, value }) => `${name}: ${value}`} labelLine={{ stroke: "#2a3a4a" }}>
+                <Pie data={filteredDirStats} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={72} label={({ name, value }) => `${name}: ${value}`} labelLine={{ stroke: "#607888" }}>
                   <Cell fill="#00ff88" />
                   <Cell fill="#ff4455" />
                 </Pie>
@@ -391,7 +391,7 @@ export default function AnalyticsPage() {
         {/* Symbol ranking table */}
         <ChartCard title="Symbol Ranking">
           {filteredSymbolStats.length === 0 ? (
-            <div style={{ color: "#1e2e1e", fontFamily: "'JetBrains Mono', monospace", fontSize: 11 }}>no data</div>
+            <div style={{ color: "#3a5a3a", fontFamily: "'JetBrains Mono', monospace", fontSize: 11, padding: "20px 0" }}>no data</div>
           ) : (
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 10, fontFamily: "'JetBrains Mono', monospace" }}>
               <thead>
@@ -399,7 +399,7 @@ export default function AnalyticsPage() {
                   {["Symbol","Trades","Win%","PnL"].map((h) => (
                     <th key={h} style={{
                       padding: "4px 6px", textAlign: h === "Symbol" ? "left" : "right",
-                      fontSize: 8.5, letterSpacing: "0.12em", textTransform: "uppercase", color: "#2a3a4a",
+                      fontSize: 8.5, letterSpacing: "0.12em", textTransform: "uppercase", color: "#607888",
                     }}>{h}</th>
                   ))}
                 </tr>

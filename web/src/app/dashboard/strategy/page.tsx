@@ -12,7 +12,7 @@ const S = {
   heading: {
     fontSize: 9,
     fontFamily: "'JetBrains Mono', monospace",
-    color: "#2a3a4a",
+    color: "#607888",
     letterSpacing: "0.18em",
     textTransform: "uppercase" as const,
     fontWeight: 600,
@@ -59,7 +59,7 @@ function Row({ label, value, hint, color }: { label: string; value: string; hint
       <span style={S.label}>{label}</span>
       <span style={{ textAlign: "right" }}>
         <span style={{ ...S.value, color: color ?? "#9aa8b8" }}>{value}</span>
-        {hint && <span style={{ display: "block", fontSize: 8.5, color: "#2a3a4a", ...S.mono }}>{hint}</span>}
+        {hint && <span style={{ display: "block", fontSize: 8.5, color: "#607888", ...S.mono }}>{hint}</span>}
       </span>
     </div>
   );
@@ -108,7 +108,7 @@ export default function StrategyPage() {
       <div>
         <div style={{
           fontSize: 9, fontFamily: "'JetBrains Mono', monospace",
-          color: "#2a3a4a", letterSpacing: "0.2em", textTransform: "uppercase",
+          color: "#607888", letterSpacing: "0.2em", textTransform: "uppercase",
         }}>
           Architecture
         </div>
@@ -140,9 +140,9 @@ export default function StrategyPage() {
               borderRadius: 5, padding: "12px 14px",
             }}>
               <div style={{ color: "#d500f9" }}>LSTMTradingModel</div>
-              <div style={{ paddingLeft: 14, color: "#4a5568" }}>Input  : (batch, <span style={{ color: "#f5c518" }}>50</span>, <span style={{ color: "#f5c518" }}>9</span>)   — 50 H1 bars × 9 features</div>
-              <div style={{ paddingLeft: 14, color: "#4a5568" }}>LSTM   : hidden=<span style={{ color: "#00ff88" }}>64</span>, layers=<span style={{ color: "#00ff88" }}>2</span>, dropout=0.2</div>
-              <div style={{ paddingLeft: 14, color: "#4a5568" }}>Output : (batch, <span style={{ color: "#f5c518" }}>3</span>)       — [BUY, SELL, HOLD]</div>
+              <div style={{ paddingLeft: 14, color: "#7a8a9a" }}>Input  : (batch, <span style={{ color: "#f5c518" }}>50</span>, <span style={{ color: "#f5c518" }}>9</span>)   — 50 H1 bars × 9 features</div>
+              <div style={{ paddingLeft: 14, color: "#7a8a9a" }}>LSTM   : hidden=<span style={{ color: "#00ff88" }}>64</span>, layers=<span style={{ color: "#00ff88" }}>2</span>, dropout=0.2</div>
+              <div style={{ paddingLeft: 14, color: "#7a8a9a" }}>Output : (batch, <span style={{ color: "#f5c518" }}>3</span>)       — [BUY, SELL, HOLD]</div>
             </div>
             <Row label="Sequence length" value="50 bars" hint="last 50 H1 candles" />
             <Row label="Input features" value="9" hint="per timestep" />
@@ -161,19 +161,19 @@ export default function StrategyPage() {
           }}>
             <thead>
               <tr style={{ borderBottom: "1px solid #1c1c28" }}>
-                <th style={{ padding: "4px 6px", textAlign: "left", fontSize: 8.5, color: "#2a3a4a", letterSpacing: "0.12em", textTransform: "uppercase" }}>#</th>
-                <th style={{ padding: "4px 6px", textAlign: "left", fontSize: 8.5, color: "#2a3a4a", letterSpacing: "0.12em", textTransform: "uppercase" }}>Name</th>
-                <th style={{ padding: "4px 6px", textAlign: "left", fontSize: 8.5, color: "#2a3a4a", letterSpacing: "0.12em", textTransform: "uppercase" }}>Formula / Notes</th>
+                <th style={{ padding: "4px 6px", textAlign: "left", fontSize: 8.5, color: "#607888", letterSpacing: "0.12em", textTransform: "uppercase" }}>#</th>
+                <th style={{ padding: "4px 6px", textAlign: "left", fontSize: 8.5, color: "#607888", letterSpacing: "0.12em", textTransform: "uppercase" }}>Name</th>
+                <th style={{ padding: "4px 6px", textAlign: "left", fontSize: 8.5, color: "#607888", letterSpacing: "0.12em", textTransform: "uppercase" }}>Formula / Notes</th>
               </tr>
             </thead>
             <tbody>
               {FEATURES.map((f, i) => (
                 <tr key={f.name} style={{ borderBottom: "1px solid rgba(28,28,40,0.4)" }}>
-                  <td style={{ padding: "5px 6px", color: "#2a3a4a" }}>{i}</td>
+                  <td style={{ padding: "5px 6px", color: "#607888" }}>{i}</td>
                   <td style={{ padding: "5px 6px", color: "#f5c518", fontWeight: 700 }}>{f.name}</td>
-                  <td style={{ padding: "5px 6px", color: "#4a5568" }}>
+                  <td style={{ padding: "5px 6px", color: "#7a8a9a" }}>
                     <div>{f.desc}</div>
-                    <div style={{ fontSize: 8.5, color: "#2a3a4a" }}>{f.note}</div>
+                    <div style={{ fontSize: 8.5, color: "#607888" }}>{f.note}</div>
                   </td>
                 </tr>
               ))}
@@ -184,14 +184,14 @@ export default function StrategyPage() {
         {/* Auto-Labeling */}
         <Card title="Auto-Labeling (Training Data)" accent="#00ff88">
           <div style={{ ...S.mono, fontSize: 10.5, color: "#7a8a9a", lineHeight: 1.7 }}>
-            <p style={{ marginBottom: 10, color: "#4a5568" }}>
+            <p style={{ marginBottom: 10, color: "#7a8a9a" }}>
               For each bar <span style={{ color: "#00ff88" }}>i</span>, look forward <span style={{ color: "#f5c518" }}>20</span> bars.
               The first direction to move ≥ <span style={{ color: "#f5c518" }}>1.5 × ATR</span> from entry wins:
             </p>
             <div style={{ paddingLeft: 12 }}>
-              <div><Tag color="green">BUY</Tag><span style={{ color: "#4a5568" }}>Up first → label = 0</span></div>
-              <div style={{ marginTop: 6 }}><Tag color="red">SELL</Tag><span style={{ color: "#4a5568" }}>Down first → label = 1</span></div>
-              <div style={{ marginTop: 6 }}><Tag color="yellow">HOLD</Tag><span style={{ color: "#4a5568" }}>Neither in 20 bars → label = 2</span></div>
+              <div><Tag color="green">BUY</Tag><span style={{ color: "#7a8a9a" }}>Up first → label = 0</span></div>
+              <div style={{ marginTop: 6 }}><Tag color="red">SELL</Tag><span style={{ color: "#7a8a9a" }}>Down first → label = 1</span></div>
+              <div style={{ marginTop: 6 }}><Tag color="yellow">HOLD</Tag><span style={{ color: "#7a8a9a" }}>Neither in 20 bars → label = 2</span></div>
             </div>
           </div>
           <div style={{ marginTop: 14 }}>
@@ -219,7 +219,7 @@ export default function StrategyPage() {
             marginTop: 14, fontFamily: "'JetBrains Mono', monospace", fontSize: 9.5,
             background: "#0a0a12", border: "1px solid #1c1c28",
             borderRadius: 5, padding: "10px 14px",
-            color: "#4a5568", lineHeight: 2,
+            color: "#7a8a9a", lineHeight: 2,
           }}>
             <div style={{ color: "#00d4ff" }}>Startup:</div>
             <div style={{ paddingLeft: 10 }}>→ check models/neural/ (skip if &lt; 7 days old)</div>
@@ -243,7 +243,7 @@ export default function StrategyPage() {
             marginTop: 14, fontFamily: "'JetBrains Mono', monospace", fontSize: 9.5,
             background: "#0a0a12", border: "1px solid #1c1c28",
             borderRadius: 5, padding: "10px 14px",
-            color: "#4a5568", lineHeight: 2,
+            color: "#7a8a9a", lineHeight: 2,
           }}>
             <div style={{ color: "#76ff03" }}>Trade closes:</div>
             <div style={{ paddingLeft: 10 }}>learning_agent.review_trade()</div>
@@ -257,16 +257,16 @@ export default function StrategyPage() {
         <Card title="Signal Pipeline (Main Loop)" accent="#ff9d00">
           <div style={{
             fontFamily: "'JetBrains Mono', monospace", fontSize: 9.5,
-            color: "#4a5568", lineHeight: 2,
+            color: "#7a8a9a", lineHeight: 2,
             background: "#0a0a12", border: "1px solid #1c1c28",
             borderRadius: 5, padding: "10px 14px",
           }}>
             <div><span style={{ color: "#00d4ff" }}>Market</span> → get H1 candles + context</div>
             <div><span style={{ color: "#f5c518" }}>Analysis</span> → RSI, ATR, trend, regime</div>
             <div><span style={{ color: "#d500f9" }}>Neural</span> → LSTM.predict() → (direction, p%)</div>
-            <div style={{ paddingLeft: 14, color: "#2a3a4a" }}>if p &lt; 60% → skip</div>
+            <div style={{ paddingLeft: 14, color: "#607888" }}>if p &lt; 60% → skip</div>
             <div><span style={{ color: "#ff9d00" }}>Council</span> → ICT + DanialFX + Traditional confirm</div>
-            <div style={{ paddingLeft: 14, color: "#2a3a4a" }}>majority vote required to proceed</div>
+            <div style={{ paddingLeft: 14, color: "#607888" }}>majority vote required to proceed</div>
             <div><span style={{ color: "#ff4455" }}>Risk</span> → position size, daily limits, spread</div>
             <div><span style={{ color: "#f0f0f0" }}>Exec</span> → open MT5 order (SL=2×ATR, TP×3)</div>
             <div><span style={{ color: "#bf7fff" }}>TradeMgr</span> → partial close, breakeven, trailing</div>
@@ -292,9 +292,9 @@ export default function StrategyPage() {
           <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: "'JetBrains Mono', monospace", fontSize: 10 }}>
             <thead>
               <tr style={{ borderBottom: "1px solid #1c1c28" }}>
-                <th style={{ padding: "4px 6px", textAlign: "left", fontSize: 8.5, color: "#2a3a4a", letterSpacing: "0.1em", textTransform: "uppercase" }}>Outcome</th>
-                <th style={{ padding: "4px 6px", textAlign: "right", fontSize: 8.5, color: "#2a3a4a", letterSpacing: "0.1em", textTransform: "uppercase" }}>Score</th>
-                <th style={{ padding: "4px 6px", textAlign: "left", fontSize: 8.5, color: "#2a3a4a", letterSpacing: "0.1em", textTransform: "uppercase" }}>Rule</th>
+                <th style={{ padding: "4px 6px", textAlign: "left", fontSize: 8.5, color: "#607888", letterSpacing: "0.1em", textTransform: "uppercase" }}>Outcome</th>
+                <th style={{ padding: "4px 6px", textAlign: "right", fontSize: 8.5, color: "#607888", letterSpacing: "0.1em", textTransform: "uppercase" }}>Score</th>
+                <th style={{ padding: "4px 6px", textAlign: "left", fontSize: 8.5, color: "#607888", letterSpacing: "0.1em", textTransform: "uppercase" }}>Rule</th>
               </tr>
             </thead>
             <tbody>
@@ -307,12 +307,12 @@ export default function StrategyPage() {
                 <tr key={r.label} style={{ borderBottom: "1px solid rgba(28,28,40,0.4)" }}>
                   <td style={{ padding: "5px 6px", color: r.color }}>{r.label}</td>
                   <td style={{ padding: "5px 6px", textAlign: "right", fontWeight: 700, color: r.color }}>{r.score}</td>
-                  <td style={{ padding: "5px 6px", color: "#4a5568" }}>{r.rule}</td>
+                  <td style={{ padding: "5px 6px", color: "#7a8a9a" }}>{r.rule}</td>
                 </tr>
               ))}
             </tbody>
           </table>
-          <div style={{ marginTop: 12, fontSize: 9.5, color: "#2a3a4a", fontFamily: "'JetBrains Mono', monospace", lineHeight: 1.6 }}>
+          <div style={{ marginTop: 12, fontSize: 9.5, color: "#607888", fontFamily: "'JetBrains Mono', monospace", lineHeight: 1.6 }}>
             Bonus: +0.5 each for RSI aligned, trend aligned, volume sufficient, no news event.
             Confidence step: 0.02 per score point · min 10% · max 100%.
           </div>

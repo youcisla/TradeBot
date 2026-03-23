@@ -44,7 +44,7 @@ function Field({
         <span style={{
           fontFamily: "'JetBrains Mono', monospace",
           fontSize: 9, fontWeight: 700, letterSpacing: "0.14em",
-          textTransform: "uppercase", color: "#2a3a4a",
+          textTransform: "uppercase", color: "#607888",
         }}>
           {label}
         </span>
@@ -200,7 +200,7 @@ export default function SettingsPage() {
       <div>
         <div style={{
           fontSize: 9, fontFamily: "'JetBrains Mono', monospace",
-          color: "#2a3a4a", letterSpacing: "0.2em", textTransform: "uppercase",
+          color: "#607888", letterSpacing: "0.2em", textTransform: "uppercase",
         }}>
           Configuration
         </div>
@@ -213,7 +213,7 @@ export default function SettingsPage() {
         </h1>
         <p style={{
           marginTop: 8, fontFamily: "'JetBrains Mono', monospace",
-          fontSize: 11, color: "#2a3a4a", lineHeight: 1.6,
+          fontSize: 11, color: "#607888", lineHeight: 1.6,
         }}>
           The <span style={{ color: "#00ff88" }}>active</span> account is used when the bot next starts.
           Restart the bot after switching accounts.
@@ -224,7 +224,7 @@ export default function SettingsPage() {
       {loading ? (
         <div style={{
           fontFamily: "'JetBrains Mono', monospace", fontSize: 11,
-          color: "#2a3a4a", padding: "20px 0",
+          color: "#607888", padding: "20px 0",
         }}>
           Connecting to broker database…
         </div>
@@ -235,7 +235,7 @@ export default function SettingsPage() {
         }}>
           <div style={{
             fontFamily: "'JetBrains Mono', monospace", fontSize: 11,
-            color: "#1e2e1e", marginBottom: 8,
+            color: "#3a5248", marginBottom: 8,
           }}>
             No broker accounts configured.
           </div>
@@ -299,7 +299,7 @@ export default function SettingsPage() {
                 </div>
                 <div style={{
                   fontFamily: "'JetBrains Mono', monospace",
-                  fontSize: 10, color: "#2a3a4a",
+                  fontSize: 10, color: "#607888",
                 }}>
                   Account: <span style={{ color: "#3a4a5a" }}>{a.account_number}</span>
                   {" · "}
@@ -467,7 +467,7 @@ export default function SettingsPage() {
               <div style={{
                 width: 14, height: 14,
                 borderRadius: "50%",
-                background: form.is_demo ? "#f5c518" : "#2a3a4a",
+                background: form.is_demo ? "#f5c518" : "#607888",
                 position: "absolute",
                 top: 2,
                 left: form.is_demo ? 18 : 2,
@@ -478,7 +478,7 @@ export default function SettingsPage() {
             <span style={{
               fontFamily: "'JetBrains Mono', monospace",
               fontSize: 10.5,
-              color: form.is_demo ? "#f5c518" : "#2a3a4a",
+              color: form.is_demo ? "#f5c518" : "#607888",
               letterSpacing: "0.04em",
             }}>
               {form.is_demo ? "DEMO account" : "LIVE account"}
@@ -520,19 +520,19 @@ export default function SettingsPage() {
                 borderRadius: 4,
                 fontFamily: "'JetBrains Mono', monospace",
                 fontSize: 11, fontWeight: 700, letterSpacing: "0.08em",
-                color: "#2a3a4a",
+                color: "#607888",
                 cursor: "pointer",
                 transition: "border-color 0.15s, color 0.15s",
               }}
               onMouseEnter={(e) => {
                 const btn = e.currentTarget as HTMLButtonElement;
-                btn.style.borderColor = "#2a3a4a";
+                btn.style.borderColor = "#607888";
                 btn.style.color = "#4a5a6a";
               }}
               onMouseLeave={(e) => {
                 const btn = e.currentTarget as HTMLButtonElement;
                 btn.style.borderColor = "#1c1c28";
-                btn.style.color = "#2a3a4a";
+                btn.style.color = "#607888";
               }}
             >
               CANCEL
@@ -557,7 +557,7 @@ export default function SettingsPage() {
         </div>
         <div style={{
           fontFamily: "'JetBrains Mono', monospace",
-          fontSize: 10.5, color: "#2a3a4a", lineHeight: 1.7,
+          fontSize: 10.5, color: "#607888", lineHeight: 1.7,
           display: "flex", flexDirection: "column", gap: 4,
         }}>
           {[

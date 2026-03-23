@@ -48,7 +48,7 @@ export default function OpenTradesTable({ symbol }: { symbol?: string | null }) 
         background: "#0a0a12", border: "1px solid #1c1c28",
         borderRadius: 8, padding: "20px 24px",
         fontFamily: "'JetBrains Mono', monospace",
-        fontSize: 11, color: "#1e2e1e",
+        fontSize: 11, color: "#3a5248",
         textAlign: "center",
       }}>
         {symbol ? `No open trades for ${symbol}.` : "No open positions."}
@@ -72,7 +72,7 @@ export default function OpenTradesTable({ symbol }: { symbol?: string | null }) 
                 padding: "9px 10px",
                 textAlign: h === "Entry" || h === "Lots" || h === "SL" || h === "TP1" || h === "PnL" ? "right" : "left",
                 fontSize: 8.5, letterSpacing: "0.12em", textTransform: "uppercase",
-                color: "#2a3a4a", fontWeight: 600, whiteSpace: "nowrap",
+                color: "#607888", fontWeight: 600, whiteSpace: "nowrap",
               }}>{h}</th>
             ))}
           </tr>
@@ -99,7 +99,7 @@ export default function OpenTradesTable({ symbol }: { symbol?: string | null }) 
                     {t.direction}
                   </span>
                 </td>
-                <td style={{ padding: "7px 10px", color: "#4a5568", fontSize: 9.5 }}>{t.strategy}</td>
+                <td style={{ padding: "7px 10px", color: "#7a8a9a", fontSize: 9.5 }}>{t.strategy}</td>
                 <td style={{ padding: "7px 10px", textAlign: "right", color: "#9aa8b8", fontFamily: "monospace" }}>
                   {Number(t.entry_price).toFixed(5)}
                 </td>
@@ -107,7 +107,7 @@ export default function OpenTradesTable({ symbol }: { symbol?: string | null }) 
                 <td style={{ padding: "7px 10px", textAlign: "right", color: "#ff4455", fontFamily: "monospace" }}>
                   {Number(t.stop_loss).toFixed(5)}
                 </td>
-                <td style={{ padding: "7px 10px", textAlign: "right", color: "#2a3a4a", fontFamily: "monospace" }}>
+                <td style={{ padding: "7px 10px", textAlign: "right", color: "#607888", fontFamily: "monospace" }}>
                   {Number(t.take_profit_1).toFixed(5)}
                 </td>
                 <td style={{
@@ -131,7 +131,7 @@ export default function OpenTradesTable({ symbol }: { symbol?: string | null }) 
                     {t.status}
                   </span>
                 </td>
-                <td style={{ padding: "7px 10px", color: "#2a3a4a", fontSize: 9.5, whiteSpace: "nowrap" }}>
+                <td style={{ padding: "7px 10px", color: "#607888", fontSize: 9.5, whiteSpace: "nowrap" }}>
                   {formatShort(t.open_time)}
                 </td>
                 <td style={{ padding: "7px 10px", textAlign: "right" }}>

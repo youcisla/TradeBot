@@ -133,7 +133,7 @@ export default function CommandPanel() {
         <span style={{
           fontFamily: "'JetBrains Mono', monospace",
           fontSize: 9, fontWeight: 700, letterSpacing: "0.18em",
-          textTransform: "uppercase", color: "#2a3a4a",
+          textTransform: "uppercase", color: "#607888",
         }}>
           Command Panel
         </span>

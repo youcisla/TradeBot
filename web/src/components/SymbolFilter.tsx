@@ -29,7 +29,7 @@ function Chip({
         fontFamily: "'JetBrains Mono', monospace",
         fontSize: 9.5, fontWeight: 700, letterSpacing: "0.06em",
         textTransform: "uppercase",
-        color: active ? "#00d4ff" : "#2a3a4a",
+        color: active ? "#00d4ff" : "#607888",
         cursor: "pointer",
         whiteSpace: "nowrap",
         transition: "border-color 0.15s, color 0.15s, background 0.15s",
@@ -38,7 +38,7 @@ function Chip({
       onMouseEnter={(e) => {
         if (!active) {
           const btn = e.currentTarget as HTMLButtonElement;
-          btn.style.borderColor = "#2a3a4a";
+          btn.style.borderColor = "#607888";
           btn.style.color = "#4a5a6a";
         }
       }}
@@ -46,7 +46,7 @@ function Chip({
         if (!active) {
           const btn = e.currentTarget as HTMLButtonElement;
           btn.style.borderColor = "#1c1c28";
-          btn.style.color = "#2a3a4a";
+          btn.style.color = "#607888";
         }
       }}
     >

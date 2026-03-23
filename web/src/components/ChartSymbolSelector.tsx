@@ -30,7 +30,7 @@ function SymBtn({ sym, active, onClick }: { sym: string; active: boolean; onClic
         background: active ? "rgba(0,255,136,0.15)" : "transparent",
         border: `1px solid ${active ? "rgba(0,255,136,0.4)" : "#1c1c28"}`,
         borderRadius: 3,
-        color: active ? "#00ff88" : "#2a3a4a",
+        color: active ? "#00ff88" : "#607888",
         cursor: "pointer",
         width: "100%",
         textAlign: "center",
@@ -40,13 +40,13 @@ function SymBtn({ sym, active, onClick }: { sym: string; active: boolean; onClic
         if (!active) {
           const btn = e.currentTarget as HTMLButtonElement;
           btn.style.color = "#c0ccd8";
-          btn.style.borderColor = "#2a3a4a";
+          btn.style.borderColor = "#607888";
         }
       }}
       onMouseLeave={(e) => {
         if (!active) {
           const btn = e.currentTarget as HTMLButtonElement;
-          btn.style.color = "#2a3a4a";
+          btn.style.color = "#607888";
           btn.style.borderColor = "#1c1c28";
         }
       }}
@@ -88,7 +88,7 @@ export default function ChartSymbolSelector({ value, onChange }: Props) {
         {value}
         <svg
           width="10" height="10" viewBox="0 0 24 24"
-          fill="none" stroke="#2a3a4a" strokeWidth={2.5}
+          fill="none" stroke="#607888" strokeWidth={2.5}
           strokeLinecap="round" strokeLinejoin="round"
           style={{ transform: open ? "rotate(180deg)" : "none", transition: "transform 0.15s" }}
         >
@@ -143,7 +143,7 @@ export default function ChartSymbolSelector({ value, onChange }: Props) {
                 <div style={{
                   gridColumn: "1 / -1", textAlign: "center",
                   fontFamily: "'JetBrains Mono', monospace",
-                  fontSize: 9.5, color: "#1e2e1e", padding: "12px 0",
+                  fontSize: 9.5, color: "#3a5248", padding: "12px 0",
                 }}>
                   No symbols found
                 </div>

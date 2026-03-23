@@ -13,7 +13,7 @@ function getPool(): Pool {
       connectionString: connStr,
       ssl: { rejectUnauthorized: false },
       max: 3,
-      idleTimeoutMillis: 30_000,
+      idleTimeoutMillis: 15_000,
       connectionTimeoutMillis: 10_000,
     });
     // Prevent unhandled errors from crashing the process

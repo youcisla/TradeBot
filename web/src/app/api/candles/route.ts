@@ -18,7 +18,7 @@ export async function GET(request: Request) {
 
   try {
     const url = `${CANDLE_SERVER}/candles?symbol=${encodeURIComponent(symbol)}&timeframe=${encodeURIComponent(timeframe)}&count=${encodeURIComponent(count)}`;
-    const res = await fetch(url, { signal: AbortSignal.timeout(10_000) });
+    const res = await fetch(url, { signal: AbortSignal.timeout(30_000) });
 
     if (!res.ok) {
       const body = await res.text();

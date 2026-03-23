@@ -25,7 +25,9 @@
       "Bash(mkdir -p \"c:/Users/Y.chehboub/Downloads/TradingBot/.claude/skills/prompt-guide\")",
       "Bash(npx next:*)",
       "Bash(.venv/Scripts/python.exe -m py_compile broker/mt5_connector.py)",
-      "Bash(.venv/Scripts/python.exe -m py_compile main.py)"
+      "Bash(.venv/Scripts/python.exe -m py_compile main.py)",
+      "Bash(powershell -Command \":*)",
+      "Bash(find /c/Users/Y.chehboub/Downloads/TradingBot -type f -name *.log -o -name *error*)"
     ]
   }
 }
