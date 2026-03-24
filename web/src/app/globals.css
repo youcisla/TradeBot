@@ -6,7 +6,7 @@
 
 /* ── Design tokens ─────────────────────────────────────────────────────────── */
 :root {
-  --matrix:          #00ff41;
+  --matrix:          #00ff88;
   --matrix-dim:      #00cc33;
   --terminal:        #080808;
   --terminal-surface:#0e0e10;
@@ -23,7 +23,7 @@
   --agent-trade-manager: #bf7fff;
   --agent-learning:      #4da6ff;
   --agent-model-manager: #76ff03;
-  --agent-logging:       #4a5568;
+  --agent-logging:       #607888;
 }
 
 * {
@@ -39,7 +39,7 @@ body {
 /* ── Scrollbar ──────────────────────────────────────────────────────────────── */
 ::-webkit-scrollbar       { width: 4px; height: 4px; }
 ::-webkit-scrollbar-track { background: var(--terminal); }
-::-webkit-scrollbar-thumb { background: #1e2e1e; border-radius: 2px; }
+::-webkit-scrollbar-thumb { background: #1c1c28; border-radius: 2px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--matrix-dim); }
 
 /* ── CRT scanline ────────────────────────────────────────────────────────────── */
@@ -47,8 +47,8 @@ body {
   background: repeating-linear-gradient(
     0deg,
     transparent, transparent 2px,
-    rgba(0,255,65,0.025) 2px,
-    rgba(0,255,65,0.025) 4px
+    rgba(0,255,136,0.025) 2px,
+    rgba(0,255,136,0.025) 4px
   );
 }
 
@@ -90,8 +90,8 @@ body {
 }
 
 .card-glass-glow-green {
-  border-color: rgba(0,255,65,0.25);
-  box-shadow: 0 0 20px rgba(0,255,65,0.05), inset 0 0 20px rgba(0,255,65,0.02);
+  border-color: rgba(0,255,136,0.25);
+  box-shadow: 0 0 20px rgba(0,255,136,0.05), inset 0 0 20px rgba(0,255,136,0.02);
 }
 
 .card-glass-glow-cyan {
@@ -105,7 +105,7 @@ body {
   font-family: 'JetBrains Mono', monospace;
   text-transform: uppercase;
   letter-spacing: 0.2em;
-  color: #3a4a5a;
+  color: #607888;
   font-weight: 600;
 }
 
@@ -125,7 +125,7 @@ body {
   font-size: 9px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: #3a4a5a;
+  color: #607888;
   font-weight: 600;
 }
 .data-table tbody tr {
@@ -153,7 +153,7 @@ body {
   font-family: 'JetBrains Mono', monospace;
 }
 
-.chip-green  { background: rgba(0,255,65,0.12);  color: #00ff41; border: 1px solid rgba(0,255,65,0.25); }
+.chip-green  { background: rgba(0,255,136,0.12);  color: #00ff88; border: 1px solid rgba(0,255,136,0.25); }
 .chip-red    { background: rgba(255,68,85,0.12);  color: #ff4455; border: 1px solid rgba(255,68,85,0.25); }
 .chip-yellow { background: rgba(245,197,24,0.12); color: #f5c518; border: 1px solid rgba(245,197,24,0.25); }
 .chip-cyan   { background: rgba(0,212,255,0.12);  color: #00d4ff; border: 1px solid rgba(0,212,255,0.25); }
@@ -165,7 +165,7 @@ body {
   border: 1px solid #1c1c28;
   border-radius: 4px;
   padding: 8px 12px;
-  color: #00ff41;
+  color: #00ff88;
   font-family: 'JetBrains Mono', monospace;
   font-size: 12px;
   outline: none;
@@ -173,15 +173,15 @@ body {
   transition: border-color 0.15s, box-shadow 0.15s;
 }
 .terminal-input:focus {
-  border-color: rgba(0,255,65,0.4);
-  box-shadow: 0 0 0 2px rgba(0,255,65,0.08);
+  border-color: rgba(0,255,136,0.4);
+  box-shadow: 0 0 0 2px rgba(0,255,136,0.08);
 }
 
 /* ── Button styles ──────────────────────────────────────────────────────────── */
 .btn-primary {
-  background: rgba(0,255,65,0.1);
-  border: 1px solid rgba(0,255,65,0.35);
-  color: #00ff41;
+  background: rgba(0,255,136,0.1);
+  border: 1px solid rgba(0,255,136,0.35);
+  color: #00ff88;
   border-radius: 4px;
   padding: 7px 16px;
   font-family: 'JetBrains Mono', monospace;
@@ -193,8 +193,8 @@ body {
   transition: background 0.15s, box-shadow 0.15s;
 }
 .btn-primary:hover {
-  background: rgba(0,255,65,0.18);
-  box-shadow: 0 0 12px rgba(0,255,65,0.15);
+  background: rgba(0,255,136,0.18);
+  box-shadow: 0 0 12px rgba(0,255,136,0.15);
 }
 .btn-primary:disabled {
   opacity: 0.4;
@@ -204,7 +204,7 @@ body {
 .btn-ghost {
   background: transparent;
   border: 1px solid #1c1c28;
-  color: #4a5568;
+  color: #607888;
   border-radius: 4px;
   padding: 7px 16px;
   font-family: 'JetBrains Mono', monospace;
@@ -251,6 +251,6 @@ body {
   content: "";
   position: absolute;
   inset: 0;
-  background: linear-gradient(135deg, rgba(0,255,65,0.02) 0%, transparent 60%);
+  background: linear-gradient(135deg, rgba(0,255,136,0.02) 0%, transparent 60%);
   pointer-events: none;
 }

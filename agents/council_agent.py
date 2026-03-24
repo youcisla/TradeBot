@@ -448,6 +448,20 @@ class CouncilAgent:
 
     def _run_council(self, signal: Signal,
                      context: "MarketContext") -> CouncilVerdict:
+        # Guard: insufficient candle data to run expert analysis
+        if not context.candles or len(context.candles) < 20:
+            logger.warning(
+                "Council: only %d candles for %s — insufficient for review",
+                len(context.candles) if context.candles else 0,
+                signal.symbol,
+            )
+            return CouncilVerdict(
+                approved=False,
+                confidence=0.0,
+                direction=signal.direction,
+                reasoning="Insufficient candle data for Council review",
+            )
+
         ict = self._ict.analyse(signal, context)
         danial = self._danial.analyse(signal, context)
         traditional = self._traditional.analyse(signal, context)

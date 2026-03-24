@@ -11,6 +11,7 @@ const NAV_ITEMS = [
   { href: "/dashboard/learning",  label: "Learning",   icon: "◆" },
   { href: "/dashboard/strategy",  label: "Strategy",   icon: "◉" },
   { href: "/dashboard/ict",       label: "ICT Engine", icon: "⊕" },
+  { href: "/dashboard/skills",    label: "Skills",     icon: "⚡" },
   { href: "/dashboard/settings",  label: "Settings",   icon: "⚙" },
 ];
 
@@ -46,14 +47,14 @@ export default function DashNav() {
       }}>
         <div style={{
           width: 8, height: 8, borderRadius: "50%",
-          background: "#00ff41",
-          boxShadow: "0 0 10px #00ff41, 0 0 20px #00ff4155",
+          background: "#00ff88",
+          boxShadow: "0 0 10px #00ff88, 0 0 20px #00ff8855",
           animation: "navPulse 2.5s ease-in-out infinite",
         }} />
         <span style={{
           fontFamily: "'JetBrains Mono', monospace",
           fontSize: 13, fontWeight: 700,
-          color: "#00ff41",
+          color: "#00ff88",
           letterSpacing: "0.15em",
           textTransform: "uppercase",
           textShadow: "0 0 12px rgba(0,255,65,0.5)",
@@ -79,28 +80,28 @@ export default function DashNav() {
                 fontSize: 11,
                 fontFamily: "'JetBrains Mono', monospace",
                 fontWeight: active ? 700 : 400,
-                color: active ? "#00ff41" : "#3a4a5a",
+                color: active ? "#00ff88" : "#607888",
                 textDecoration: "none",
                 letterSpacing: "0.06em",
                 textTransform: "uppercase",
                 position: "relative",
                 transition: "color 0.15s",
                 whiteSpace: "nowrap",
-                borderBottom: active ? "2px solid #00ff41" : "2px solid transparent",
+                borderBottom: active ? "2px solid #00ff88" : "2px solid transparent",
                 boxShadow: active ? "0 2px 0 rgba(0,255,65,0.3)" : undefined,
               }}
               onMouseEnter={(e) => {
                 if (!active) (e.currentTarget as HTMLElement).style.color = "#9aa8b8";
               }}
               onMouseLeave={(e) => {
-                if (!active) (e.currentTarget as HTMLElement).style.color = "#3a4a5a";
+                if (!active) (e.currentTarget as HTMLElement).style.color = "#607888";
               }}
             >
               {active && (
                 <span style={{
                   width: 4, height: 4, borderRadius: "50%",
-                  background: "#00ff41",
-                  boxShadow: "0 0 6px #00ff41",
+                  background: "#00ff88",
+                  boxShadow: "0 0 6px #00ff88",
                   flexShrink: 0,
                 }} />
               )}
@@ -130,8 +131,8 @@ export default function DashNav() {
         </span>
         <div style={{
           width: 6, height: 6, borderRadius: "50%",
-          background: "#00ff41",
-          boxShadow: "0 0 8px #00ff41",
+          background: "#00ff88",
+          boxShadow: "0 0 8px #00ff88",
           animation: "navPulse 1.8s ease-in-out infinite",
         }} />
       </div>

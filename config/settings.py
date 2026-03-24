@@ -43,8 +43,8 @@ ENCRYPTION_KEY: str = os.getenv("ENCRYPTION_KEY", "")
 # Set COUNCIL_ENABLED=true to activate the three-expert algorithmic debate.
 # Signals must score >= COUNCIL_MIN_CONFIDENCE (default 80%) to proceed.
 # On unexpected errors the council fails open — trading is never blocked.
-COUNCIL_ENABLED: bool = os.getenv("COUNCIL_ENABLED", "false").lower() == "true"
-COUNCIL_MIN_CONFIDENCE: float = float(os.getenv("COUNCIL_MIN_CONFIDENCE", "0.80"))
+COUNCIL_ENABLED: bool = os.getenv("COUNCIL_ENABLED", "true").lower() == "true"
+COUNCIL_MIN_CONFIDENCE: float = float(os.getenv("COUNCIL_MIN_CONFIDENCE", "0.65"))
 
 # ── Risk ─────────────────────────────────────────────────────────────────
 MAX_RISK_PER_TRADE: float = float(os.getenv("MAX_RISK_PER_TRADE", "0.02"))

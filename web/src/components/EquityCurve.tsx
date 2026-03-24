@@ -140,7 +140,7 @@ export default function EquityCurve() {
       <div style={{
         display: "flex", justifyContent: "space-between",
         fontFamily: "'JetBrains Mono', monospace",
-        fontSize: 9, color: "#1a2a1a", marginTop: 6,
+        fontSize: 9, color: "#607888", marginTop: 6,
       }}>
         <span>{points[0].date}</span>
         <span>{points[points.length - 1].date}</span>

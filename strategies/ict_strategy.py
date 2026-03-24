@@ -93,6 +93,11 @@ class ICTStrategy(BaseStrategy):
     # ── Internal ─────────────────────────────────────────────────────
 
     def _detect_inner(self, ctx: MarketContext) -> Optional[Signal]:
+        # Guard: broker is required for HTF candle fetching
+        if self._broker is None:
+            logger.warning("ICTStrategy: broker is None — cannot fetch HTF candles, skipping %s", ctx.symbol)
+            return None
+
         candles = ctx.candles
         if len(candles) < 30:
             self._emit("warn", f"ICT {ctx.symbol}: only {len(candles)} candles (need 30+) — skipping")

@@ -89,13 +89,13 @@ function PipeArrow({ color, active, id }: { color: string; active: boolean; id: 
     <div style={{ position: "relative", width: 26, height: 14, flexShrink: 0, marginBottom: 28 }}>
       <svg width="26" height="14" viewBox="0 0 26 14" style={{ display: "block" }}>
         <line x1="0" y1="7" x2="18" y2="7"
-          stroke={active ? color : "#1a2a1a"}
+          stroke={active ? color : "#1c1c28"}
           strokeWidth={active ? 2 : 1}
           strokeDasharray={active ? "none" : "3 2"}
           style={{ transition: "stroke 0.2s" }}
         />
         <polygon points="18,2 25,7 18,12"
-          fill={active ? color : "#1a2a1a"}
+          fill={active ? color : "#1c1c28"}
           style={{ transition: "fill 0.2s" }}
         />
       </svg>
@@ -122,7 +122,7 @@ function StatusDot({ color, state }: { color: string; state: AgentState }) {
   return (
     <span style={{
       display: "inline-block", width: 6, height: 6, borderRadius: "50%",
-      background: state === "idle" ? "#1a2a1a" : color,
+      background: state === "idle" ? "#1c1c28" : color,
       boxShadow: state !== "idle" ? `0 0 8px ${color}, 0 0 16px ${color}55` : undefined,
       transition: "background 0.25s, box-shadow 0.25s",
       marginBottom: 3,
@@ -250,8 +250,8 @@ export default function AgentFeed({ symbol }: { symbol?: string | null }) {
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <span style={{
             width: 6, height: 6, borderRadius: "50%",
-            background: "#00ff41",
-            boxShadow: "0 0 8px #00ff4188",
+            background: "#00ff88",
+            boxShadow: "0 0 8px #00ff8888",
             flexShrink: 0,
             animation: "pulseGlow 2s ease-in-out infinite",
           }} />
@@ -271,9 +271,9 @@ export default function AgentFeed({ symbol }: { symbol?: string | null }) {
           </span>
         </div>
         <button onClick={copyLog} title="Copy log"
-          style={{ color: "#3a4a5a", background: "none", border: "none", cursor: "pointer", padding: 4 }}
+          style={{ color: "#607888", background: "none", border: "none", cursor: "pointer", padding: 4 }}
           onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = "#00d4ff"; }}
-          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = "#3a4a5a"; }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = "#607888"; }}
         >
           {copied ? (
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#00ff88" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -398,7 +398,7 @@ export default function AgentFeed({ symbol }: { symbol?: string | null }) {
           flexWrap: "wrap", padding: "0 12px",
         }}>
           <span style={{
-            fontSize: 7.5, color: "#1a2a1a",
+            fontSize: 7.5, color: "#1c1c28",
             fontFamily: "'JetBrains Mono', monospace",
             letterSpacing: 1.8, textTransform: "uppercase",
           }}>
@@ -526,14 +526,14 @@ export default function AgentFeed({ symbol }: { symbol?: string | null }) {
         }
 
         @keyframes pulseGlow {
-          0%,100% { opacity: 1; box-shadow: 0 0 8px #00ff4188; }
-          50%     { opacity: 0.7; box-shadow: 0 0 16px #00ff41cc; }
+          0%,100% { opacity: 1; box-shadow: 0 0 8px #00ff8888; }
+          50%     { opacity: 0.7; box-shadow: 0 0 16px #00ff88cc; }
         }
 
         /* Hide scrollbar on theater pipeline */
         div::-webkit-scrollbar { height: 0; width: 6px; }
         div::-webkit-scrollbar-track { background: transparent; }
-        div::-webkit-scrollbar-thumb { background: #1a2a2a; border-radius: 3px; }
+        div::-webkit-scrollbar-thumb { background: #1c1c28; border-radius: 3px; }
       `}</style>
     </div>
   );

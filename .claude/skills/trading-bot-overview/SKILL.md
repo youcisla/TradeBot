@@ -112,11 +112,12 @@ SL = 2×ATR from entry; TP1/2/3 = 1R/2R/3R (risk-based).
 ### NeuralStrategy (Primary — Active)
 
 `agents/neural_strategy.py` wrapping `agents/model_manager.py`.
-- Registered in `main.py` as the primary/only strategy
+- Registered in `main.py` as the primary strategy
 - Returns `None` if model not yet trained for that symbol
 - Symbols train in background; bot skips them until ready
+- Confidence output is [0.5, 1.0], naturally ranking higher than rule-based strategies
 
-### ICT/SMC Strategy (Reference — NOT active in main loop)
+### ICT/SMC Strategy (Secondary — Active)
 
 Full ICT engine in `strategies/ict/` with 10 modules:
 - `structure.py` — Swing points, BOS/MSS, dealing ranges
@@ -132,9 +133,9 @@ Full ICT engine in `strategies/ict/` with 10 modules:
 
 Minimum ICT confidence: 55/100. Uses 200 H4 candles for HTF.
 
-### SMA Crossover (Legacy — NOT active in main loop)
+### SMA Crossover (Tertiary — Active)
 
-Simple moving average crossover in `strategies/sma_crossover.py`. Kept for reference.
+Simple moving average crossover in `strategies/sma_crossover.py`. ATR-based SL, 1R/2R/3R TPs.
 
 ---
 
@@ -296,6 +297,29 @@ NEURAL_MODELS_DIR     = "models/neural"
 
 ---
 
+## Trading Council
+
+The **3-expert algorithmic quality gate** runs on every signal when `COUNCIL_ENABLED=true` (default).
+
+- **ICT Expert** — FVGs, Order Blocks, liquidity sweeps, killzones
+- **DanialFX Expert** — Fibonacci golden zone, S/D zones, AO momentum, BBMA
+- **Traditional Expert** — RSI, SMA alignment, HH/HL structure, volume
+
+Signals must score ≥ `COUNCIL_MIN_CONFIDENCE` (default 0.65 = 65%) to proceed.
+On unexpected errors, the council fails open — trading is never blocked.
+
+---
+
+## Skill CRUD System
+
+`utils/skill_manager.py` provides a `SkillManager` class with:
+- `list_skills()`, `read_skill(name)`, `create_skill(name, desc, content)`, `update_skill(name, content)`, `delete_skill(name)`, `apply_skill(name, argument)`
+- Core skills (`trading-bot-overview`, `coding-standards`, `implement-agent`, `add-strategy`) are protected from deletion
+- Bot command queue supports `skill` command (`list`, `read`, `apply` actions)
+- REST API at `/api/skills` and dashboard page at `/dashboard/skills`
+
+---
+
 ## Development Status
 
 1. ✅ Core structure (agents, main loop, config, state persistence)
@@ -313,4 +337,7 @@ NEURAL_MODELS_DIR     = "models/neural"
 13. ✅ Scan-rank-execute pipeline
 14. ✅ Web dashboard (cyberpunk terminal aesthetic)
 15. ✅ Commission tracking + lot size limits
-16. 🔄 LSTM Neural Model (architecture complete, integration in progress)
+16. ✅ LSTM Neural Model (architecture complete, integrated)
+17. ✅ Multi-strategy execution (NeuralLSTM + ICT + SMA)
+18. ✅ Trading Council enabled by default (65% threshold)
+19. ✅ Skill CRUD system (SkillManager + dashboard + API)

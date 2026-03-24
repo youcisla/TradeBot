@@ -425,3 +425,14 @@ models/neural/
 5. Every agent must handle its own errors gracefully and log them
 6. Use type hints throughout
 7. Database is PostgreSQL via Supabase (7 tables: trades, trade_scores, strategy_confidence, agent_events, bot_commands, bot_status, ict_setups)
+
+---
+
+## How to Add a New Agent to the Pipeline
+
+1. Create `agents/<new_agent>.py` inheriting no base class (just follow the pattern of existing agents)
+2. Accept `(broker, db)` in `__init__` — standard constructor pattern
+3. Instantiate in `main()` after existing agents (step 6 area)
+4. Wire it into `_run_iteration()` — pass as a keyword argument
+5. Add its agent key to `CLAUDE.md` Agent event keys list
+6. Log its startup in the STARTUP `log_agent.record()` call

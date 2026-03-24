@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { formatShort } from "@/lib/time";
 import { formatPrice } from "@/lib/formatPrice";
 import SymbolFilter from "@/components/SymbolFilter";
+import PageHeader from "@/components/PageHeader";
 
 interface Trade {
   id: string; symbol: string; strategy: string; direction: string;
@@ -47,22 +48,7 @@ export default function TradesPage() {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
 
-      {/* Header */}
-      <div>
-        <div style={{
-          fontSize: 9, fontFamily: "'JetBrains Mono', monospace",
-          color: "#607888", letterSpacing: "0.2em", textTransform: "uppercase",
-        }}>
-          History
-        </div>
-        <h1 style={{
-          fontSize: 20, fontFamily: "'JetBrains Mono', monospace",
-          fontWeight: 700, color: "#00ff41",
-          textShadow: "0 0 20px rgba(0,255,65,0.3)", marginTop: 2,
-        }}>
-          All Trades
-        </h1>
-      </div>
+      <PageHeader subsystem="History" title="All Trades" accent="#00ff88" />
 
       <SymbolFilter value={symbol} onChange={setSymbol} />
 
@@ -77,10 +63,10 @@ export default function TradesPage() {
             background: "#0a0a12", border: "1px solid #1c1c28", borderRadius: 6,
             fontFamily: "'JetBrains Mono', monospace",
           }}>
-            <span style={{ fontSize: 10, color: "#3a4a5a" }}>
+            <span style={{ fontSize: 10, color: "#607888" }}>
               {filtered.length} trades
             </span>
-            <span style={{ fontSize: 10, color: "#3a4a5a" }}>
+            <span style={{ fontSize: 10, color: "#607888" }}>
               {closed.length} closed · {wins} wins
             </span>
             <span style={{
@@ -159,7 +145,7 @@ export default function TradesPage() {
                   <td style={{ padding: "7px 10px" }}>
                     <span style={{
                       fontSize: 9, fontFamily: "'JetBrains Mono', monospace",
-                      color: t.status === "CLOSED" ? "#3a4a5a" : t.status === "OPEN" ? "#00ff41" : "#f5c518",
+                      color: t.status === "CLOSED" ? "#607888" : t.status === "OPEN" ? "#00ff88" : "#f5c518",
                     }}>
                       {t.status}
                     </span>
@@ -174,10 +160,10 @@ export default function TradesPage() {
                       <TpDot hit={t.tp3_hit} label="TP3" />
                     </div>
                   </td>
-                  <td style={{ padding: "7px 10px", color: "#3a4a5a", fontSize: 9.5, whiteSpace: "nowrap" }}>
+                  <td style={{ padding: "7px 10px", color: "#607888", fontSize: 9.5, whiteSpace: "nowrap" }}>
                     {formatShort(t.open_time)}
                   </td>
-                  <td style={{ padding: "7px 10px", color: "#3a4a5a", fontSize: 9.5, whiteSpace: "nowrap" }}>
+                  <td style={{ padding: "7px 10px", color: "#607888", fontSize: 9.5, whiteSpace: "nowrap" }}>
                     {t.close_time ? formatShort(t.close_time) : "—"}
                   </td>
                   <td style={{ padding: "7px 10px", color: "#7a8a9a", fontSize: 9.5 }}>

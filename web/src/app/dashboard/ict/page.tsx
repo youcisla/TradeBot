@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { formatShort } from "@/lib/time";
 import SymbolFilter from "@/components/SymbolFilter";
+import PageHeader from "@/components/PageHeader";
 
 interface Setup {
   id: number;
@@ -104,7 +105,7 @@ function KpiCard({ label, value, color = "#00d4ff" }: { label: string; value: st
     }}>
       <div style={{
         fontFamily: "'JetBrains Mono', monospace",
-        fontSize: 22, fontWeight: 700,
+        fontSize: 20, fontWeight: 700,
         color,
         textShadow: `0 0 14px ${color}55`,
       }}>
@@ -182,12 +183,19 @@ export default function ICTPage() {
   if (loading) {
     return (
       <div style={{
-        display: "flex", alignItems: "center", justifyContent: "center",
-        padding: "80px 0",
-        fontFamily: "'JetBrains Mono', monospace", fontSize: 11,
+        padding: "48px 20px", textAlign: "center",
+        fontFamily: "'JetBrains Mono', monospace",
+        fontSize: 9, letterSpacing: "0.2em", textTransform: "uppercase",
         color: "#607888",
       }}>
-        Scanning ICT engine data…
+        <div style={{
+          width: 20, height: 20, border: "1.5px solid #1c1c28",
+          borderTop: "1.5px solid #00ff88", borderRadius: "50%",
+          animation: "spin 0.8s linear infinite",
+          margin: "0 auto 12px",
+        }} />
+        loading…
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       </div>
     );
   }
@@ -197,29 +205,7 @@ export default function ICTPage() {
 
       {/* Header */}
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
-        <div>
-          <div style={{
-            fontSize: 9, fontFamily: "'JetBrains Mono', monospace",
-            color: "#607888", letterSpacing: "0.2em", textTransform: "uppercase",
-          }}>
-            ICT / SMC Strategy Engine
-          </div>
-          <h1 style={{
-            fontSize: 20, fontFamily: "'JetBrains Mono', monospace",
-            fontWeight: 700,
-            background: "linear-gradient(90deg, #f5c518, #ff9d00)",
-            WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
-            marginTop: 2,
-          }}>
-            ICT Setup Detection
-          </h1>
-          <p style={{
-            fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: "#607888",
-            marginTop: 4,
-          }}>
-            Real-time ICT confluences · 30s refresh
-          </p>
-        </div>
+        <PageHeader subsystem="Smart Money" title="ICT Engine" accent="#ff9d00" />
         <SymbolFilter value={symbol} onChange={setSymbol} />
       </div>
 

@@ -1,53 +1,10 @@
 "use client";
 
 import { signIn } from "next-auth/react";
-import { FormEvent, useState } from "react";
+import { FormEvent, useState, useEffect } from "react";
+import TerminalInput from "@/components/TerminalInput";
 
-function LoginInput({
-  type,
-  value,
-  onChange,
-  placeholder,
-  autoFocus,
-  autoComplete,
-}: {
-  type: string;
-  value: string;
-  onChange: (v: string) => void;
-  placeholder: string;
-  autoFocus?: boolean;
-  autoComplete?: string;
-}) {
-  const [focused, setFocused] = useState(false);
-  return (
-    <input
-      type={type}
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      placeholder={placeholder}
-      autoFocus={autoFocus}
-      autoComplete={autoComplete}
-      onFocus={() => setFocused(true)}
-      onBlur={() => setFocused(false)}
-      style={{
-        display: "block",
-        width: "100%",
-        background: "#06060c",
-        border: `1px solid ${focused ? "#00ff88" : "#1c1c28"}`,
-        borderRadius: 4,
-        padding: "9px 12px",
-        fontFamily: "'JetBrains Mono', monospace",
-        fontSize: 12,
-        color: "#c0ccd8",
-        outline: "none",
-        boxShadow: focused ? "0 0 0 2px rgba(0,255,136,0.15)" : "none",
-        transition: "border-color 0.15s, box-shadow 0.15s",
-        boxSizing: "border-box",
-        marginBottom: 10,
-      }}
-    />
-  );
-}
+/* LoginInput replaced by shared TerminalInput component */
 
 export default function LoginPage() {
   const [username, setUsername] = useState("");
@@ -56,12 +13,12 @@ export default function LoginPage() {
   const [loading, setLoading]   = useState(false);
   const [isFirstLogin, setIsFirstLogin] = useState<boolean | null>(null);
 
-  useState(() => {
+  useEffect(() => {
     fetch("/api/auth/check")
       .then((r) => r.json())
       .then((data) => setIsFirstLogin(data.firstLogin))
       .catch(() => {});
-  });
+  }, []);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -111,7 +68,7 @@ export default function LoginPage() {
           </div>
           <div style={{
             fontFamily: "'JetBrains Mono', monospace",
-            fontSize: 18, fontWeight: 700,
+            fontSize: 20, fontWeight: 700,
             color: "#00ff88",
             textShadow: "0 0 18px rgba(0,255,136,0.35)",
           }}>
@@ -128,21 +85,25 @@ export default function LoginPage() {
           </div>
         </div>
 
-        <LoginInput
-          type="text"
-          value={username}
-          onChange={setUsername}
-          placeholder="username"
-          autoFocus
-          autoComplete="username"
-        />
-        <LoginInput
-          type="password"
-          value={password}
-          onChange={setPassword}
-          placeholder="password"
-          autoComplete="current-password"
-        />
+        <div style={{ marginBottom: 10 }}>
+          <TerminalInput
+            type="text"
+            value={username}
+            onChange={setUsername}
+            placeholder="username"
+            autoFocus
+            autoComplete="username"
+          />
+        </div>
+        <div style={{ marginBottom: 10 }}>
+          <TerminalInput
+            type="password"
+            value={password}
+            onChange={setPassword}
+            placeholder="password"
+            autoComplete="current-password"
+          />
+        </div>
 
         {error && (
           <div style={{
@@ -171,7 +132,7 @@ export default function LoginPage() {
             fontFamily: "'JetBrains Mono', monospace",
             fontSize: 11, fontWeight: 700, letterSpacing: "0.1em",
             textTransform: "uppercase",
-            color: disabled ? "#1a3a1a" : "#00ff88",
+            color: disabled ? "rgba(0,255,136,0.25)" : "#00ff88",
             cursor: disabled ? "not-allowed" : "pointer",
             marginTop: 4,
             transition: "background 0.15s, box-shadow 0.15s",

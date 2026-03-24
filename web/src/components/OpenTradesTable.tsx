@@ -121,12 +121,12 @@ export default function OpenTradesTable({ symbol }: { symbol?: string | null }) 
                   <span style={{
                     display: "inline-flex", alignItems: "center", gap: 4,
                     fontSize: 9, fontFamily: "'JetBrains Mono', monospace",
-                    color: t.status === "OPEN" ? "#00ff41" : "#f5c518",
+                    color: t.status === "OPEN" ? "#00ff88" : "#f5c518",
                   }}>
                     <span style={{
                       width: 5, height: 5, borderRadius: "50%",
-                      background: t.status === "OPEN" ? "#00ff41" : "#f5c518",
-                      boxShadow: `0 0 4px ${t.status === "OPEN" ? "#00ff41" : "#f5c518"}`,
+                      background: t.status === "OPEN" ? "#00ff88" : "#f5c518",
+                      boxShadow: `0 0 4px ${t.status === "OPEN" ? "#00ff88" : "#f5c518"}`,
                     }} />
                     {t.status}
                   </span>

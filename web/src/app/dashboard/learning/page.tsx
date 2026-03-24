@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { formatShort } from "@/lib/time";
 import SymbolFilter from "@/components/SymbolFilter";
+import PageHeader from "@/components/PageHeader";
 
 interface StrategyConfidence {
   strategy: string; confidence: number;
@@ -155,22 +156,7 @@ export default function LearningPage() {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
 
-      {/* Header */}
-      <div>
-        <div style={{
-          fontSize: 9, fontFamily: "'JetBrains Mono', monospace",
-          color: "#607888", letterSpacing: "0.2em", textTransform: "uppercase",
-        }}>
-          Adaptive System
-        </div>
-        <h1 style={{
-          fontSize: 20, fontFamily: "'JetBrains Mono', monospace",
-          fontWeight: 700, color: "#4da6ff",
-          textShadow: "0 0 20px rgba(77,166,255,0.3)", marginTop: 2,
-        }}>
-          Learning System
-        </h1>
-      </div>
+      <PageHeader subsystem="Feedback Loop" title="Learning System" accent="#4da6ff" />
 
       <SymbolFilter value={symbol} onChange={setSymbol} />
 
@@ -183,19 +169,19 @@ export default function LearningPage() {
         }}>
           <div>
             <div style={{ fontSize: 8.5, color: "#607888", letterSpacing: "0.15em", textTransform: "uppercase" }}>Scored</div>
-            <div style={{ fontSize: 14, fontWeight: 700, color: "#9aa8b8", marginTop: 2 }}>{filtered.length}</div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "#9aa8b8", marginTop: 2 }}>{filtered.length}</div>
           </div>
           <div>
             <div style={{ fontSize: 8.5, color: "#607888", letterSpacing: "0.15em", textTransform: "uppercase" }}>Wins</div>
-            <div style={{ fontSize: 14, fontWeight: 700, color: "#00ff88", marginTop: 2 }}>{totalWins}</div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "#00ff88", marginTop: 2 }}>{totalWins}</div>
           </div>
           <div>
             <div style={{ fontSize: 8.5, color: "#607888", letterSpacing: "0.15em", textTransform: "uppercase" }}>Losses</div>
-            <div style={{ fontSize: 14, fontWeight: 700, color: "#ff4455", marginTop: 2 }}>{totalLosses}</div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "#ff4455", marginTop: 2 }}>{totalLosses}</div>
           </div>
           <div>
             <div style={{ fontSize: 8.5, color: "#607888", letterSpacing: "0.15em", textTransform: "uppercase" }}>Avg Score</div>
-            <div style={{ fontSize: 14, fontWeight: 700, color: avgScore >= 0 ? "#00ff88" : "#ff4455", marginTop: 2 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: avgScore >= 0 ? "#00ff88" : "#ff4455", marginTop: 2 }}>
               {avgScore >= 0 ? "+" : ""}{avgScore.toFixed(1)}
             </div>
           </div>

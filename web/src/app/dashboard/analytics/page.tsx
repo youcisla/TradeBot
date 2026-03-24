@@ -7,6 +7,7 @@ import {
 } from "recharts";
 import { formatChartDate } from "@/lib/time";
 import SymbolFilter from "@/components/SymbolFilter";
+import PageHeader from "@/components/PageHeader";
 
 interface Trade {
   id: string; symbol: string; direction: string; pnl: number;
@@ -33,12 +34,12 @@ function sinceDate(r: Range): string | undefined {
   return d.toISOString();
 }
 
-const SYM_COLORS = ["#00ff41","#00d4ff","#f5c518","#ff9d00","#d500f9","#4da6ff","#ff4455","#76ff03","#bf7fff","#f0f0f0"];
+const SYM_COLORS = ["#00ff88","#00d4ff","#f5c518","#ff9d00","#d500f9","#4da6ff","#ff4455","#76ff03","#bf7fff","#f0f0f0"];
 
 // ── KPI Card ────────────────────────────────────────────────────────────────
 
 function KpiCard({
-  label, value, sub, color = "#00ff41", glowColor,
+  label, value, sub, color = "#00ff88", glowColor,
 }: {
   label: string; value: string; sub?: string; color?: string; glowColor?: string;
 }) {
@@ -124,9 +125,9 @@ function RangeChip({ label, active, onClick }: { label: string; active: boolean;
       padding: "4px 12px", borderRadius: 4, fontSize: 10,
       fontFamily: "'JetBrains Mono', monospace", fontWeight: 700,
       letterSpacing: "0.08em", textTransform: "uppercase", cursor: "pointer",
-      border: active ? "1px solid rgba(0,255,65,0.5)" : "1px solid #1c1c28",
-      background: active ? "rgba(0,255,65,0.12)" : "transparent",
-      color: active ? "#00ff41" : "#3a4a5a",
+      border: active ? "1px solid rgba(0,212,255,0.5)" : "1px solid #1c1c28",
+      background: active ? "rgba(0,212,255,0.12)" : "transparent",
+      color: active ? "#00d4ff" : "#607888",
       transition: "all 0.15s",
     }}>
       {label === "all" ? "All Time" : label}
@@ -222,22 +223,7 @@ export default function AnalyticsPage() {
 
       {/* Header */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
-        <div>
-          <div style={{
-            fontSize: 9, fontFamily: "'JetBrains Mono', monospace",
-            color: "#607888", letterSpacing: "0.2em", textTransform: "uppercase",
-          }}>
-            Performance
-          </div>
-          <h1 style={{
-            fontSize: 20, fontFamily: "'JetBrains Mono', monospace",
-            fontWeight: 700, color: "#00ff41",
-            textShadow: "0 0 20px rgba(0,255,65,0.3)",
-            marginTop: 2,
-          }}>
-            Analytics
-          </h1>
-        </div>
+        <PageHeader subsystem="Performance" title="Analytics" accent="#00d4ff" />
         <div style={{ display: "flex", gap: 6 }}>
           {(["24h","7d","30d","all"] as Range[]).map((r) => (
             <RangeChip key={r} label={r} active={range === r} onClick={() => setRange(r)} />
@@ -248,8 +234,20 @@ export default function AnalyticsPage() {
       <SymbolFilter value={symbol} onChange={setSymbol} />
 
       {loading && (
-        <div style={{ fontSize: 11, color: "#607888", fontFamily: "'JetBrains Mono', monospace" }}>
-          loading analytics…
+        <div style={{
+          padding: "48px 20px", textAlign: "center",
+          fontFamily: "'JetBrains Mono', monospace",
+          fontSize: 9, letterSpacing: "0.2em", textTransform: "uppercase",
+          color: "#607888",
+        }}>
+          <div style={{
+            width: 20, height: 20, border: "1.5px solid #1c1c28",
+            borderTop: "1.5px solid #00ff88", borderRadius: "50%",
+            animation: "spin 0.8s linear infinite",
+            margin: "0 auto 12px",
+          }} />
+          loading…
+          <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
         </div>
       )}
 
@@ -286,15 +284,15 @@ export default function AnalyticsPage() {
               <AreaChart data={equityCurve}>
                 <defs>
                   <linearGradient id="gCum" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%"  stopColor="#00ff41" stopOpacity={0.25} />
-                    <stop offset="95%" stopColor="#00ff41" stopOpacity={0} />
+                    <stop offset="5%"  stopColor="#00ff88" stopOpacity={0.25} />
+                    <stop offset="95%" stopColor="#00ff88" stopOpacity={0} />
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="#1c1c28" />
                 <XAxis dataKey="date" tickFormatter={formatChartDate} tick={{ fill: "#607888", fontSize: 9, fontFamily: "JetBrains Mono" }} />
                 <YAxis tick={{ fill: "#607888", fontSize: 9, fontFamily: "JetBrains Mono" }} />
                 <Tooltip contentStyle={TOOLTIP_STYLE} labelFormatter={(l) => formatChartDate(String(l))} formatter={(v) => [`${Number(v).toFixed(2)}`, "Cum PnL"]} />
-                <Area type="monotone" dataKey="cum" stroke="#00ff41" fill="url(#gCum)" strokeWidth={2} />
+                <Area type="monotone" dataKey="cum" stroke="#00ff88" fill="url(#gCum)" strokeWidth={2} />
               </AreaChart>
             </ResponsiveContainer>
           )}

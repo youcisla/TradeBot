@@ -69,7 +69,7 @@ export default function BotStatusBar() {
         fontSize: 11, color: "#607888",
         display: "flex", alignItems: "center", gap: 8,
       }}>
-        <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#1c2c1c", display: "inline-block" }} />
+        <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#607888", display: "inline-block" }} />
         Loading system status…
       </div>
     );
@@ -77,7 +77,7 @@ export default function BotStatusBar() {
 
   const isRunning  = status.state === "running";
   const isPaused   = status.state === "paused";
-  const stateColor = isRunning ? "#00ff41" : isPaused ? "#f5c518" : "#ff4455";
+  const stateColor = isRunning ? "#00ff88" : isPaused ? "#f5c518" : "#ff4455";
   const stateLabel = status.state?.toUpperCase() ?? "UNKNOWN";
   const connected  = !!status.broker_account;
   const dailyPnl   = Number(status.daily_pnl);
@@ -149,8 +149,8 @@ export default function BotStatusBar() {
           paddingLeft: 20, paddingRight: 20,
           display: "flex", gap: 20, alignItems: "center", flexWrap: "wrap",
         }}>
-          <Metric label="Balance" value={`$${Number(status.balance || 0).toLocaleString("en", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} color="#00ff41" glow />
-          <Metric label="Equity"  value={`$${Number(status.equity).toLocaleString("en", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}  color="#00ff41" />
+          <Metric label="Balance" value={`$${Number(status.balance || 0).toLocaleString("en", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} color="#00ff88" glow />
+          <Metric label="Equity"  value={`$${Number(status.equity).toLocaleString("en", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}  color="#00ff88" />
           <Metric
             label="Daily P&L"
             value={`${dailyPnl >= 0 ? "+" : ""}${dailyPnl.toFixed(2)}`}
@@ -202,8 +202,8 @@ export default function BotStatusBar() {
 
       <style>{`
         @keyframes statusPulse {
-          0%,100% { box-shadow: 0 0 8px #00ff41, 0 0 16px #00ff4155; }
-          50%      { box-shadow: 0 0 16px #00ff41, 0 0 32px #00ff4188; }
+          0%,100% { box-shadow: 0 0 8px #00ff88, 0 0 16px #00ff8855; }
+          50%      { box-shadow: 0 0 16px #00ff88, 0 0 32px #00ff8888; }
         }
       `}</style>
     </div>

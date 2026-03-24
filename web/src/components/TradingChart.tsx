@@ -149,8 +149,8 @@ export default function TradingChart({ symbol, timeframe, count = 500 }: Props) 
       },
       crosshair: {
         mode: CrosshairMode.Normal,
-        vertLine: { color: "#00ff4180", labelBackgroundColor: "#111111" },
-        horzLine: { color: "#00ff4180", labelBackgroundColor: "#111111" },
+        vertLine: { color: "#00ff8880", labelBackgroundColor: "#111111" },
+        horzLine: { color: "#00ff8880", labelBackgroundColor: "#111111" },
       },
       rightPriceScale: {
         borderColor: "#1a1a1a",
@@ -164,9 +164,9 @@ export default function TradingChart({ symbol, timeframe, count = 500 }: Props) 
     });
 
     const candleSeries = chart.addCandlestickSeries({
-      upColor: "#00ff41",
+      upColor: "#00ff88",
       downColor: "#ff4444",
-      borderUpColor: "#00ff41",
+      borderUpColor: "#00ff88",
       borderDownColor: "#ff4444",
       wickUpColor: "#00cc33",
       wickDownColor: "#cc3333",
@@ -241,7 +241,7 @@ export default function TradingChart({ symbol, timeframe, count = 500 }: Props) 
         const volumeData: HistogramData<Time>[] = sorted.map((c) => ({
           time: c.time as Time,
           value: c.volume,
-          color: c.close >= c.open ? "#00ff4130" : "#ff444430",
+          color: c.close >= c.open ? "#00ff8830" : "#ff444430",
         }));
         candleSeries.setData(candleData);
         volumeSeries.setData(volumeData);
@@ -371,7 +371,7 @@ export default function TradingChart({ symbol, timeframe, count = 500 }: Props) 
         volumeSeries.update({
           time: latest.time as Time,
           value: latest.volume,
-          color: latest.close >= latest.open ? "#00ff4130" : "#ff444430",
+          color: latest.close >= latest.open ? "#00ff8830" : "#ff444430",
         });
         lastTimeRef.current = latest.time;
       }
@@ -404,7 +404,7 @@ export default function TradingChart({ symbol, timeframe, count = 500 }: Props) 
         }}>
           {status === "loading" ? (
             <>
-              <div style={{ width: 32, height: 32, border: "2px solid #1c1c28", borderTop: "2px solid #00ff41", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
+              <div style={{ width: 32, height: 32, border: "2px solid #1c1c28", borderTop: "2px solid #00ff88", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
               <span style={{ color: "#607888", fontSize: 12, fontFamily: "'JetBrains Mono', monospace", letterSpacing: "0.06em" }}>Loading chart data…</span>
             </>
           ) : (

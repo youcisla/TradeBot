@@ -19,7 +19,7 @@ const COMMANDS = [
         <rect x="14" y="4" width="4" height="16" rx="1" />
       </svg>
     ),
-    color:   "#facc15",
+    color:   "#f5c518",
     danger:  false,
   },
   {
@@ -30,7 +30,7 @@ const COMMANDS = [
         <polygon points="5,3 19,12 5,21" />
       </svg>
     ),
-    color:   "#22c55e",
+    color:   "#00ff88",
     danger:  false,
   },
   {
@@ -42,7 +42,7 @@ const COMMANDS = [
         <line x1="6" y1="6" x2="18" y2="18" />
       </svg>
     ),
-    color:   "#f87171",
+    color:   "#ff4455",
     danger:  true,
   },
 ] as const;
@@ -111,9 +111,9 @@ export default function CommandPanel() {
   }
 
   const statusColor =
-    botStatus === "running" ? "#22c55e"
-    : botStatus === "paused" ? "#facc15"
-    : "#475569";
+    botStatus === "running" ? "#00ff88"
+    : botStatus === "paused" ? "#f5c518"
+    : "#607888";
 
   const statusLabel =
     botStatus === "running" ? "RUNNING"
@@ -205,7 +205,7 @@ export default function CommandPanel() {
 
       {/* Arm countdown hint */}
       {armKill && (
-        <div style={{ fontSize: 10, color: "#f87171", fontFamily: "'JetBrains Mono', monospace", letterSpacing: 0.5 }}>
+        <div style={{ fontSize: 10, color: "#ff4455", fontFamily: "'JetBrains Mono', monospace", letterSpacing: 0.5 }}>
           ⚠ Click CONFIRM? again to close all trades — arms for 3.5 s
         </div>
       )}
@@ -216,8 +216,8 @@ export default function CommandPanel() {
           style={{
             fontSize:    11,
             fontFamily:  "'JetBrains Mono', monospace",
-            color:       feedback.ok ? "#22c55e" : "#f87171",
-            borderLeft:  `2px solid ${feedback.ok ? "#22c55e" : "#f87171"}`,
+            color:       feedback.ok ? "#00ff88" : "#ff4455",
+            borderLeft:  `2px solid ${feedback.ok ? "#00ff88" : "#ff4455"}`,
             paddingLeft: 8,
             transition:  "opacity 0.3s",
             letterSpacing: 0.3,

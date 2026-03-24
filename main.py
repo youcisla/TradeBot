@@ -33,9 +33,9 @@ from filters.news_filter import NewsFilter
 from state.persistence import StatePersistence
 from models.market_data import MarketContext
 from models.signal import Signal
-# Rule-based strategies kept for Council confirmation logic (not used as primary generators)
-# from strategies.sma_crossover import SmaCrossoverStrategy
-# from strategies.ict_strategy import ICTStrategy
+# Secondary strategies — run alongside NeuralLSTM for multi-strategy signals
+from strategies.sma_crossover import SmaCrossoverStrategy
+from strategies.ict_strategy import ICTStrategy
 
 from agents.market_agent import MarketAgent
 from agents.analysis_agent import AnalysisAgent
@@ -128,12 +128,13 @@ def main() -> None:
         _active_symbols = SYMBOLS[:]
     logger.info("Active symbols: %s", ", ".join(_active_symbols))
 
-    # ── 1b. Candle HTTP server for dashboard charts ──────────────────────
-    candle_server.start(broker, db)
-
     # ── 2. Logging agent first (sets up Python logging) ─────────────────
     log_agent = LoggingAgent(db)
     log_agent.record("STARTUP", f"Bot started — DEMO_MODE={settings.DEMO_MODE}")
+
+    # ── 1b. Candle HTTP server for dashboard charts ──────────────────────
+    # (moved after log_agent so startup errors can be logged)
+    candle_server.start(broker, db)
 
     # ── 3. Neural model manager (trains per-symbol LSTMs in background) ─
     model_manager = ModelManager(broker=broker)
@@ -141,11 +142,15 @@ def main() -> None:
     # ── 4. Learning agent ───────────────────────────────────────────────
     learning = LearningAgent(db, model_manager=model_manager)
 
-    # ── 5. Strategies — Neural LSTM is the sole primary signal generator.
-    #       ICT / SMA crossover are kept as files; the Council (below) still
-    #       uses their logic via ICTExpert / TraditionalExpert for confirmation.
+    # ── 5. Strategies — Multi-strategy: NeuralLSTM (primary) + ICT + SMA
+    #       NeuralLSTM signals will naturally rank higher because the LSTM
+    #       outputs confidence in [0.5, 1.0] while ICT/SMA use rule-based
+    #       confidence which tends to be lower.
     neural_strategy = NeuralStrategy(model_manager)
-    strategies = [neural_strategy]
+    ict_strategy = ICTStrategy(broker=broker, db=db, min_confidence=55.0)
+    sma_strategy = SmaCrossoverStrategy()
+    strategies = [neural_strategy, ict_strategy, sma_strategy]
+    logger.info("Multi-strategy mode: NeuralLSTM + ICT/SMC + SMAcrossover")
 
     # ── 6. Agents (db passed for persona events) ────────────────────────
     market_agent = MarketAgent(broker, db=db)
@@ -155,18 +160,22 @@ def main() -> None:
     strategy_agent = StrategyAgent(strategies, learning.get_confidence, db=db)
     execution_agent = ExecutionAgent(broker, state, risk_agent.calculate_position_size, db=db)
 
-    # ── Trading Council (optional algorithmic quality gate) ──────────────
+    # ── Trading Council (algorithmic quality gate) ────────────────────────
     council: CouncilAgent | None = None
     if settings.COUNCIL_ENABLED:
         council = CouncilAgent()
-        logger.info(
-            "Trading Council ENABLED (min confidence: %.0f%%)",
-            settings.COUNCIL_MIN_CONFIDENCE * 100,
-        )
-        log_agent.record(
-            "STARTUP",
-            "Trading Council is active — 3-expert algorithmic gate ON",
-        )
+    # Always log the Council state regardless of the flag
+    council_state = "ENABLED" if settings.COUNCIL_ENABLED else "DISABLED"
+    logger.info(
+        "Trading Council %s (min confidence: %.0f%%)",
+        council_state,
+        settings.COUNCIL_MIN_CONFIDENCE * 100,
+    )
+    log_agent.record(
+        "STARTUP",
+        f"Trading Council {council_state} — 3-expert algorithmic gate "
+        f"(min conf {settings.COUNCIL_MIN_CONFIDENCE:.0%})",
+    )
 
     # ── 7. Startup reconciliation ───────────────────────────────────────
     trade_manager.load_open_trades()
@@ -257,6 +266,7 @@ def main() -> None:
         try:
             _run_iteration(
                 loop_count=loop_count,
+                db=db,
                 market_agent=market_agent,
                 analysis_agent=analysis_agent,
                 strategy_agent=strategy_agent,
@@ -266,6 +276,7 @@ def main() -> None:
                 learning=learning,
                 log_agent=log_agent,
                 council=council,
+                symbol_event_tracker=symbol_event_tracker,
                 last_scan_ts=_last_scan_ts,
                 scan_cooldown=_SCAN_COOLDOWN_S,
                 symbol_fail_count=_symbol_fail_count,
@@ -367,6 +378,31 @@ def _process_commands(
                 trade_manager.close_trade(trade_id, "UI_CLOSE")
                 db.update_command(cmd["id"], "done", f"Trade {trade_id} closed")
                 telegram_bot.send_message(f"📤 Trade {trade_id} closed (from dashboard)")
+            elif cmd_name == "skill":
+                from utils.skill_manager import SkillManager
+                payload = cmd.get("payload") or {}
+                action = payload.get("action", "")
+                skill_name = payload.get("skill", "")
+                sm = SkillManager(db=db)
+                if action == "list":
+                    result = sm.list_skills()
+                    db.log_agent_event("skill_manager", "info",
+                                       f"Skills listed: {len(result)} found",
+                                       {"skills": result})
+                    db.update_command(cmd["id"], "done", str(result))
+                elif action == "read" and skill_name:
+                    content = sm.read_skill(skill_name)
+                    db.log_agent_event("skill_manager", "info",
+                                       f"Skill read: {skill_name}",
+                                       {"content": content[:500]})
+                    db.update_command(cmd["id"], "done", content[:2000])
+                elif action == "apply" and skill_name:
+                    argument = payload.get("argument", "")
+                    rendered = sm.apply_skill(skill_name, argument)
+                    db.update_command(cmd["id"], "done", rendered[:2000])
+                else:
+                    db.update_command(cmd["id"], "failed",
+                                     f"Unknown skill action: {action}")
             else:
                 db.update_command(cmd["id"], "failed", f"Unknown command: {cmd_name}")
         except Exception as exc:
@@ -448,6 +484,7 @@ def _update_heartbeat(
 def _run_iteration(
     *,
     loop_count: int,
+    db: Database,
     market_agent: MarketAgent,
     analysis_agent: AnalysisAgent,
     strategy_agent: StrategyAgent,
@@ -457,6 +494,7 @@ def _run_iteration(
     learning: LearningAgent,
     log_agent: LoggingAgent,
     council: CouncilAgent | None,
+    symbol_event_tracker: SymbolEventTracker,
     last_scan_ts: dict[str, float],
     scan_cooldown: float,
     symbol_fail_count: dict[str, int],
@@ -490,7 +528,7 @@ def _run_iteration(
         symbol_event_tracker.update(t.symbol, "last_trade_open", ts)
     just_closed_ids = open_before - open_after
     for trade_id in just_closed_ids:
-        closed_trade = learning._db.get_trade(trade_id)
+        closed_trade = db.get_trade(trade_id)
         if closed_trade:
             close_time = getattr(closed_trade, 'close_time', None)
             ts = close_time.timestamp() if close_time and hasattr(close_time, 'timestamp') else time.time()

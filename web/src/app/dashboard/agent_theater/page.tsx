@@ -10,14 +10,17 @@ type AgentEvent = {
 };
 
 const AGENTS = [
-  { key: "market",       label: "Market",       color: "#00ccff" },
-  { key: "analysis",     label: "Analysis",     color: "#ffcc00" },
-  { key: "strategy",     label: "Strategy",     color: "#ff9900" },
-  { key: "risk",         label: "Risk",         color: "#ff4444" },
-  { key: "execution",    label: "Execution",    color: "#00ff88" },
-  { key: "trademanager", label: "TradeManager", color: "#ff44ff" },
-  { key: "learning",     label: "Learning",     color: "#aa44ff" },
-  { key: "logging",      label: "Logging",      color: "#0904ff" },
+  { key: "market",        label: "Market",      color: "#00d4ff" },
+  { key: "analysis",      label: "Analysis",    color: "#f5c518" },
+  { key: "strategy",      label: "Strategy",    color: "#00ff88" },
+  { key: "neural",        label: "Neural",      color: "#d500f9" },
+  { key: "council",       label: "Council",     color: "#ff9d00" },
+  { key: "risk",          label: "Risk",        color: "#ff4455" },
+  { key: "execution",     label: "Execution",   color: "#f0f0f0" },
+  { key: "trade_manager", label: "TradeMgr",    color: "#bf7fff" },
+  { key: "learning",      label: "Learning",    color: "#4da6ff" },
+  { key: "model_manager", label: "ModelMgr",    color: "#76ff03" },
+  { key: "logging",       label: "Logging",     color: "#5c6a78" },
 ];
 
 function timeAgo(ts: string | number | null | undefined): string {
@@ -122,9 +125,18 @@ export default function AgentTheater() {
   }, [lastEventTimestamps]);
 
   return (
-    <div style={{ minHeight: "100vh", background: "#0a0f0a", color: "#00ff88", fontFamily: "'Courier New', monospace" }}>
-      <h1 style={{ marginTop: 32, color: "#00ff88", fontSize: "2rem", textAlign: "center" }}>Agent Theater</h1>
-      <div className="theater" style={{ display: "flex", justifyContent: "center", alignItems: "flex-end", gap: 56, marginTop: 72, marginBottom: 48 }}>
+    <div style={{ minHeight: "100vh", background: "#080808", color: "#c0ccd8", fontFamily: "'JetBrains Mono', monospace" }}>
+      {/* Page header */}
+      <div style={{ marginTop: 32, textAlign: "center" }}>
+        <div style={{ fontSize: 9, fontFamily: "'JetBrains Mono', monospace", color: "#607888", letterSpacing: "0.2em", textTransform: "uppercase" }}>
+          Visualisation
+        </div>
+        <h1 style={{ fontSize: 20, fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, color: "#00ff88", textShadow: "0 0 20px rgba(0,255,65,0.3)", marginTop: 2 }}>
+          Agent Theater
+        </h1>
+      </div>
+
+      <div className="theater" style={{ display: "flex", justifyContent: "center", alignItems: "flex-end", gap: 56, marginTop: 72, marginBottom: 48, flexWrap: "wrap" }}>
         {AGENTS.map((agent) => {
           const state = agentStates[agent.key] || "idle";
           return (
@@ -136,32 +148,58 @@ export default function AgentTheater() {
             >
               <div
                 className={`speech-bubble${speechBubbles[agent.key] ? " active" : ""}`}
-                style={{ position: "absolute", top: -56, left: "50%", transform: "translateX(-50%)", background: "#111", color: "#00ff88", border: "2px solid #00ff88", borderRadius: 8, padding: "6px 14px", fontSize: 12, fontFamily: "'Courier New', monospace", whiteSpace: "nowrap", opacity: speechBubbles[agent.key] ? 1 : 0, pointerEvents: "none", transition: "opacity 0.3s", zIndex: 2, maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis" }}
+                style={{
+                  position: "absolute", top: -56, left: "50%", transform: "translateX(-50%)",
+                  background: "#0a0a12", color: agent.color,
+                  border: `1px solid rgba(${hexToRgb(agent.color)},0.4)`,
+                  borderRadius: 8, padding: "6px 14px",
+                  fontSize: 11, fontFamily: "'JetBrains Mono', monospace",
+                  whiteSpace: "nowrap",
+                  opacity: speechBubbles[agent.key] ? 1 : 0,
+                  pointerEvents: "none", transition: "opacity 0.3s",
+                  zIndex: 2, maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis",
+                }}
               >
                 {speechBubbles[agent.key]}
               </div>
               {crewmateSVG()}
-              <div className="agent-label" style={{ marginTop: 10, fontSize: 13, color: "#00ff88", textAlign: "center", textShadow: "0 0 2px #000", letterSpacing: 1 }}>{agent.label}</div>
+              <div style={{ marginTop: 10, fontSize: 11, color: agent.color, textAlign: "center", textShadow: "0 0 2px #000", letterSpacing: 1 }}>{agent.label}</div>
             </div>
           );
         })}
       </div>
-      <div className="status-bar" style={{ width: "100vw", background: "#111", color: "#00ff88", fontFamily: "'Courier New', monospace", fontSize: 14, padding: "10px 0 8px 0", display: "flex", justifyContent: "center", gap: 32, borderTop: "2px solid #00ff88", position: "fixed", bottom: 0, left: 0, zIndex: 10 }}>
+
+      {/* Status bar */}
+      <div style={{
+        width: "100%", background: "#0a0a12",
+        borderTop: "1px solid #1c1c28",
+        fontFamily: "'JetBrains Mono', monospace", fontSize: 9,
+        padding: "10px 24px", display: "flex", justifyContent: "center",
+        gap: 24, flexWrap: "wrap",
+        position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 10,
+      }}>
         {AGENTS.map((agent) => {
           const lastTs = lastEventTimestamps[agent.key];
           const lastLevel = lastEventsRef.current[agent.key]?.level ?? "idle";
-          let dotClass = "idle";
-          if (lastLevel === "warn") dotClass = "warn";
-          else if (lastLevel === "error") dotClass = "error";
-          else if (lastLevel === "info") dotClass = "";
+          let dotBg = "#00ff88";
+          let dotShadow = "#00ff88";
+          if (lastLevel === "warn") { dotBg = "#f5c518"; dotShadow = "#f5c518"; }
+          else if (lastLevel === "error") { dotBg = "#ff4455"; dotShadow = "#ff4455"; }
+          else if (lastLevel === "idle" || !lastTs) { dotBg = "#1c1c28"; dotShadow = "rgba(28,28,40,0)"; }
           return (
             <span key={agent.key}>
-              <span className={`status-dot ${dotClass}`} style={{ display: "inline-block", width: 10, height: 10, borderRadius: "50%", marginRight: 6, verticalAlign: "middle", background: dotClass === "warn" ? "#ffcc00" : dotClass === "error" ? "#ff4444" : dotClass === "idle" ? "#444" : "#00ff88", boxShadow: `0 0 4px ${dotClass === "warn" ? "#ffcc00" : dotClass === "error" ? "#ff4444" : dotClass === "idle" ? "#222" : "#00ff88"}` }} />
-              <span className="status-label" style={{ color: "#00ff88", fontSize: 13, marginLeft: 2 }}>{agent.label}: {timeAgo(lastTs)}</span>
+              <span style={{
+                display: "inline-block", width: 10, height: 10, borderRadius: "50%",
+                marginRight: 6, verticalAlign: "middle",
+                background: dotBg,
+                boxShadow: `0 0 4px ${dotShadow}`,
+              }} />
+              <span style={{ color: agent.color, fontSize: 9, marginLeft: 2 }}>{agent.label}: {timeAgo(lastTs)}</span>
             </span>
           );
         })}
       </div>
+
       <style>{`
         .crewmate-body { transition: filter 0.2s; }
         .agent.idle .crewmate { animation: float 2s ease-in-out infinite; }
@@ -174,4 +212,11 @@ export default function AgentTheater() {
       `}</style>
     </div>
   );
+}
+
+function hexToRgb(hex: string): string {
+  const r = parseInt(hex.slice(1,3),16);
+  const g = parseInt(hex.slice(3,5),16);
+  const b = parseInt(hex.slice(5,7),16);
+  return `${r},${g},${b}`;
 }

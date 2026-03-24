@@ -222,3 +222,19 @@ Before activating any strategy:
 - [ ] **Backtested on historical CSV data** before even touching demo
 - [ ] Tested on demo account before live
 - [ ] Does NOT implement its own duplicate guard (Risk Agent handles this)
+
+---
+
+## How to Register a Strategy to Run in Production
+
+1. Implement `strategies/<name>.py` inheriting `BaseStrategy`
+2. Implement `detect()`, `calculate_sl()`, `calculate_tps()` — **all 3 required**
+3. In `main.py`: import and instantiate with `(broker=broker, db=db)` if needed
+4. Append to the `strategies` list before `StrategyAgent` is created
+5. Run backtest skill first: `/backtest <strategy-name>`
+6. Confirm signals appear in StrategyAgent logs with the correct strategy name tag
+
+**Current registered strategies (active in production):**
+- **NeuralLSTM** (`agents/neural_strategy.py`) — Primary strategy, LSTM neural network
+- **ICT/SMC** (`strategies/ict_strategy.py`) — Secondary strategy, 10-module ICT engine
+- **SMA Crossover** (`strategies/sma_crossover.py`) — Tertiary strategy, simple crossover

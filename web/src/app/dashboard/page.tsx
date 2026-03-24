@@ -18,7 +18,7 @@ function SectionHeader({ title, sub }: { title: string; sub?: string }) {
         {title}
       </span>
       {sub && (
-        <span style={{ fontSize: 8.5, color: "#1a2a2a", fontFamily: "'JetBrains Mono', monospace" }}>
+        <span style={{ fontSize: 8.5, color: "#607888", fontFamily: "'JetBrains Mono', monospace" }}>
           {sub}
         </span>
       )}

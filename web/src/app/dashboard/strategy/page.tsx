@@ -22,7 +22,7 @@ const S = {
   },
   label: {
     fontSize: 9.5,
-    color: "#3a4a5a",
+    color: "#607888",
     fontFamily: "'JetBrains Mono', monospace",
   },
   value: {
@@ -37,7 +37,7 @@ const S = {
 };
 
 function Card({ title, accent, children }: { title: string; accent?: string; children: React.ReactNode }) {
-  const accentColor = accent ?? "#00ff41";
+  const accentColor = accent ?? "#00ff88";
   return (
     <div style={S.card}>
       <div style={{
@@ -121,7 +121,7 @@ export default function StrategyPage() {
           Neural LSTM Strategy
         </h1>
         <p style={{
-          fontSize: 11, ...S.mono, color: "#3a4a5a", marginTop: 8, lineHeight: 1.6,
+          fontSize: 11, ...S.mono, color: "#607888", marginTop: 8, lineHeight: 1.6,
         }}>
           A 2-layer LSTM trained on 2 years of H1 OHLCV data per symbol. The Council (ICT + DanialFX + Traditional experts)
           acts as a confirmation gate for every neural signal. Models train automatically at startup and fine-tune continuously as real trades close.

@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import PageHeader from "@/components/PageHeader";
+import TerminalInput from "@/components/TerminalInput";
 
 interface BrokerAccount {
   id: number;
@@ -51,7 +53,7 @@ function Field({
         {hint && (
           <span style={{
             fontFamily: "'JetBrains Mono', monospace",
-            fontSize: 8.5, color: "#1a2a1a",
+            fontSize: 8.5, color: "#607888",
           }}>
             {hint}
           </span>
@@ -62,45 +64,7 @@ function Field({
   );
 }
 
-function TerminalInput({
-  type = "text",
-  value,
-  onChange,
-  placeholder,
-  accent = "#00ff88",
-}: {
-  type?: string;
-  value: string;
-  onChange: (v: string) => void;
-  placeholder?: string;
-  accent?: string;
-}) {
-  const [focused, setFocused] = useState(false);
-  return (
-    <input
-      type={type}
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      placeholder={placeholder}
-      onFocus={() => setFocused(true)}
-      onBlur={() => setFocused(false)}
-      style={{
-        width: "100%",
-        background: "#06060c",
-        border: `1px solid ${focused ? accent : "#1c1c28"}`,
-        borderRadius: 4,
-        padding: "8px 12px",
-        fontFamily: "'JetBrains Mono', monospace",
-        fontSize: 11.5,
-        color: "#c0ccd8",
-        outline: "none",
-        boxShadow: focused ? `0 0 0 2px ${accent}18` : "none",
-        transition: "border-color 0.15s, box-shadow 0.15s",
-        boxSizing: "border-box",
-      }}
-    />
-  );
-}
+/* TerminalInput now imported from @/components/TerminalInput */
 
 export default function SettingsPage() {
   const [accounts, setAccounts]   = useState<BrokerAccount[]>([]);
@@ -197,28 +161,14 @@ export default function SettingsPage() {
     <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
 
       {/* Header */}
-      <div>
-        <div style={{
-          fontSize: 9, fontFamily: "'JetBrains Mono', monospace",
-          color: "#607888", letterSpacing: "0.2em", textTransform: "uppercase",
-        }}>
-          Configuration
-        </div>
-        <h1 style={{
-          fontSize: 20, fontFamily: "'JetBrains Mono', monospace",
-          fontWeight: 700, color: "#00ff88",
-          textShadow: "0 0 20px rgba(0,255,136,0.3)", marginTop: 2,
-        }}>
-          Broker Accounts
-        </h1>
+      <PageHeader subsystem="Configuration" title="Settings" accent="#00ff88" />
         <p style={{
-          marginTop: 8, fontFamily: "'JetBrains Mono', monospace",
+          marginTop: -12, fontFamily: "'JetBrains Mono', monospace",
           fontSize: 11, color: "#607888", lineHeight: 1.6,
         }}>
           The <span style={{ color: "#00ff88" }}>active</span> account is used when the bot next starts.
           Restart the bot after switching accounts.
         </p>
-      </div>
 
       {/* Account list */}
       {loading ? (
@@ -241,7 +191,7 @@ export default function SettingsPage() {
           </div>
           <div style={{
             fontFamily: "'JetBrains Mono', monospace", fontSize: 9.5,
-            color: "#1a2a1a",
+            color: "#607888",
           }}>
             Bot is using credentials from .env as fallback
           </div>
@@ -301,14 +251,14 @@ export default function SettingsPage() {
                   fontFamily: "'JetBrains Mono', monospace",
                   fontSize: 10, color: "#607888",
                 }}>
-                  Account: <span style={{ color: "#3a4a5a" }}>{a.account_number}</span>
+                  Account: <span style={{ color: "#9aa8b8" }}>{a.account_number}</span>
                   {" · "}
-                  Server: <span style={{ color: "#3a4a5a" }}>{a.server}</span>
+                  Server: <span style={{ color: "#9aa8b8" }}>{a.server}</span>
                 </div>
                 {a.last_connected && (
                   <div style={{
                     fontFamily: "'JetBrains Mono', monospace",
-                    fontSize: 9, color: "#1a2a1a", marginTop: 3,
+                    fontSize: 9, color: "#607888", marginTop: 3,
                   }}>
                     Last connected: {new Date(a.last_connected).toLocaleString()}
                   </div>
@@ -497,7 +447,7 @@ export default function SettingsPage() {
                 borderRadius: 4,
                 fontFamily: "'JetBrains Mono', monospace",
                 fontSize: 11, fontWeight: 700, letterSpacing: "0.08em",
-                color: saving ? "#2a5a2a" : "#00ff88",
+                color: saving ? "rgba(0,255,136,0.3)" : "#00ff88",
                 cursor: saving ? "not-allowed" : "pointer",
                 opacity: saving ? 0.6 : 1,
                 transition: "background 0.15s",
@@ -567,7 +517,7 @@ export default function SettingsPage() {
             ["Fallback",     "If no account is active, the bot reads MT5_LOGIN / MT5_PASSWORD from .env"],
           ].map(([label, text]) => (
             <div key={label} style={{ display: "flex", gap: 10 }}>
-              <span style={{ color: "#1a3a5a", minWidth: 80 }}>{label}</span>
+              <span style={{ color: "#607888", minWidth: 80 }}>{label}</span>
               <span>{text}</span>
             </div>
           ))}

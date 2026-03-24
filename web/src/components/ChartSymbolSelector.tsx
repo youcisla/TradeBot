@@ -156,7 +156,7 @@ export default function ChartSymbolSelector({ value, onChange }: Props) {
                   padding: "6px 12px 2px",
                   fontFamily: "'JetBrains Mono', monospace",
                   fontSize: 8, fontWeight: 700, letterSpacing: "0.18em",
-                  textTransform: "uppercase", color: "#1a2a1a",
+                  textTransform: "uppercase", color: "#607888",
                 }}>
                   {group}
                 </div>
