@@ -196,12 +196,12 @@ export default function LearningPage() {
           marginBottom: 10,
         }}>
           Strategy Confidence
-          <span style={{ marginLeft: 10, color: "#1c2c1c" }}>
+          <span style={{ marginLeft: 10, color: "#607888" }}>
             20% = disabled · 50% = reduced · 70% = full
           </span>
         </div>
         {confidences.length === 0 ? (
-          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: "#3a5248", padding: "20px 0" }}>
+          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: "#607888", padding: "20px 0" }}>
             No strategies tracked yet.
           </div>
         ) : (
@@ -277,7 +277,7 @@ export default function LearningPage() {
             </tbody>
           </table>
           {filtered.length === 0 && (
-            <div style={{ padding: "40px 20px", textAlign: "center", fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: "#3a5248" }}>
+            <div style={{ padding: "40px 20px", textAlign: "center", fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: "#607888" }}>
               {symbol ? `no scores for ${symbol}` : "no scores recorded yet"}
             </div>
           )}

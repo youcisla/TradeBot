@@ -39,7 +39,7 @@ function Chip({
         if (!active) {
           const btn = e.currentTarget as HTMLButtonElement;
           btn.style.borderColor = "#607888";
-          btn.style.color = "#4a5a6a";
+          btn.style.color = "#9aa8b8";
         }
       }}
       onMouseLeave={(e) => {

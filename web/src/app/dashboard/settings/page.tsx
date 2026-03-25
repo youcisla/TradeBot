@@ -185,7 +185,7 @@ export default function SettingsPage() {
         }}>
           <div style={{
             fontFamily: "'JetBrains Mono', monospace", fontSize: 11,
-            color: "#3a5248", marginBottom: 8,
+            color: "#607888", marginBottom: 8,
           }}>
             No broker accounts configured.
           </div>
@@ -477,7 +477,7 @@ export default function SettingsPage() {
               onMouseEnter={(e) => {
                 const btn = e.currentTarget as HTMLButtonElement;
                 btn.style.borderColor = "#607888";
-                btn.style.color = "#4a5a6a";
+                btn.style.color = "#9aa8b8";
               }}
               onMouseLeave={(e) => {
                 const btn = e.currentTarget as HTMLButtonElement;

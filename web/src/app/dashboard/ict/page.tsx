@@ -223,7 +223,7 @@ export default function ICTPage() {
         {/* Model distribution */}
         <Card title="Setup Model Distribution" accent="#f5c518">
           {modelStats.length === 0 ? (
-            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: "#3a5248", padding: "10px 0" }}>
+            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: "#607888", padding: "10px 0" }}>
               No setups detected yet.
             </div>
           ) : (
@@ -261,7 +261,7 @@ export default function ICTPage() {
         {/* Confluence frequency */}
         <Card title="Confluence Frequency" accent="#00d4ff">
           {!confluenceStats || confluenceStats.total_setups === 0 ? (
-            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: "#3a5248", padding: "10px 0" }}>
+            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: "#607888", padding: "10px 0" }}>
               No data yet.
             </div>
           ) : (
@@ -311,7 +311,7 @@ export default function ICTPage() {
         {/* Session distribution */}
         <Card title="Session Distribution" accent="#ff9d00">
           {sessionStats.length === 0 ? (
-            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: "#3a5248", padding: "10px 0" }}>
+            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: "#607888", padding: "10px 0" }}>
               No session data.
             </div>
           ) : (
@@ -364,7 +364,7 @@ export default function ICTPage() {
                 <span><span style={{ color: "#f5c518", fontWeight: 700 }}>{name}</span> — {desc}</span>
               </div>
             ))}
-            <p style={{ marginTop: 12, paddingTop: 10, borderTop: "1px solid #1c1c28", color: "#3a5248" }}>
+            <p style={{ marginTop: 12, paddingTop: 10, borderTop: "1px solid #1c1c28", color: "#607888" }}>
               After analysis, <span style={{ color: "#ff9d00", fontWeight: 700 }}>6 setup models</span> are tested.
               Each scores <span style={{ color: "#00ff88", fontWeight: 700 }}>0-100</span> from 10 weighted components.
               Only setups above the threshold are forwarded to execution.
@@ -455,7 +455,7 @@ export default function ICTPage() {
           {filtered.length === 0 && (
             <div style={{
               padding: "40px 20px", textAlign: "center",
-              fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: "#3a5248",
+              fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: "#607888",
             }}>
               {symbol ? `no setups for ${symbol}` : "no setups recorded yet"}
             </div>

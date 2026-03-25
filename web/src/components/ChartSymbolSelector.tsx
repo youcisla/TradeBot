@@ -143,7 +143,7 @@ export default function ChartSymbolSelector({ value, onChange }: Props) {
                 <div style={{
                   gridColumn: "1 / -1", textAlign: "center",
                   fontFamily: "'JetBrains Mono', monospace",
-                  fontSize: 9.5, color: "#3a5248", padding: "12px 0",
+                  fontSize: 9.5, color: "#607888", padding: "12px 0",
                 }}>
                   No symbols found
                 </div>

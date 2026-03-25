@@ -398,7 +398,7 @@ export default function AgentFeed({ symbol }: { symbol?: string | null }) {
           flexWrap: "wrap", padding: "0 12px",
         }}>
           <span style={{
-            fontSize: 7.5, color: "#1c1c28",
+            fontSize: 7.5, color: "#607888",
             fontFamily: "'JetBrains Mono', monospace",
             letterSpacing: 1.8, textTransform: "uppercase",
           }}>
@@ -462,7 +462,7 @@ export default function AgentFeed({ symbol }: { symbol?: string | null }) {
         {filtered.map((e, i) => {
           const agentColor = ALL_AGENTS.find((a) => a.key === e.agent)?.color ?? "#7a8a9a";
           const msgColor   = e.level === "error" ? "#ff4455" : e.level === "warn" ? "#f5c518" : "#7a8a9a";
-          const dot        = e.level === "error" ? "#ff4455" : e.level === "warn" ? "#f5c518" : "#1e2e3e";
+          const dot        = e.level === "error" ? "#ff4455" : e.level === "warn" ? "#f5c518" : "#2a4a5a";
 
           return (
             <div key={e.id ?? i}
@@ -470,7 +470,7 @@ export default function AgentFeed({ symbol }: { symbol?: string | null }) {
               onMouseEnter={(el) => { (el.currentTarget as HTMLElement).style.background = "rgba(0,212,255,0.04)"; }}
               onMouseLeave={(el) => { (el.currentTarget as HTMLElement).style.background = ""; }}
             >
-              <span style={{ fontSize: 9.5, color: "#253545", flexShrink: 0, marginTop: 1.5, letterSpacing: 0.3 }}>
+              <span style={{ fontSize: 9.5, color: "#607888", flexShrink: 0, marginTop: 1.5, letterSpacing: 0.3 }}>
                 {e.ts ? formatTime(e.ts) : "--:--:--"}
               </span>
               <span style={{ fontSize: 8.5, color: dot, flexShrink: 0, marginTop: 3 }}>●</span>

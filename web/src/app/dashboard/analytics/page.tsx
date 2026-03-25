@@ -108,7 +108,7 @@ function NoData() {
   return (
     <div style={{
       height: 180, display: "flex", alignItems: "center", justifyContent: "center",
-      color: "#3a5a3a", fontFamily: "'JetBrains Mono', monospace", fontSize: 11,
+      color: "#607888", fontFamily: "'JetBrains Mono', monospace", fontSize: 11,
     }}>
       no data yet
     </div>
@@ -389,7 +389,7 @@ export default function AnalyticsPage() {
         {/* Symbol ranking table */}
         <ChartCard title="Symbol Ranking">
           {filteredSymbolStats.length === 0 ? (
-            <div style={{ color: "#3a5a3a", fontFamily: "'JetBrains Mono', monospace", fontSize: 11, padding: "20px 0" }}>no data</div>
+            <div style={{ color: "#607888", fontFamily: "'JetBrains Mono', monospace", fontSize: 11, padding: "20px 0" }}>no data</div>
           ) : (
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 10, fontFamily: "'JetBrains Mono', monospace" }}>
               <thead>

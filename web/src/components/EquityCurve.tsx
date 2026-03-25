@@ -35,7 +35,7 @@ export default function EquityCurve() {
         background: "#0a0a12", border: "1px solid #1c1c28",
         borderRadius: 8, padding: "20px 16px",
         fontFamily: "'JetBrains Mono', monospace",
-        fontSize: 11, color: "#3a5248",
+        fontSize: 11, color: "#607888",
         textAlign: "center",
       }}>
         Not enough closed trades for equity curve.

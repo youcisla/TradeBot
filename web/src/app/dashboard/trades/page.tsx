@@ -179,7 +179,7 @@ export default function TradesPage() {
           <div style={{
             padding: "40px 20px", textAlign: "center",
             fontFamily: "'JetBrains Mono', monospace", fontSize: 11,
-            color: "#3a5248",
+            color: "#607888",
           }}>
             {symbol ? `no trades for ${symbol}` : "no trades recorded yet"}
           </div>

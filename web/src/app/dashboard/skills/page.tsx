@@ -205,7 +205,7 @@ export default function SkillsPage() {
                 )}
               </div>
             </div>
-            <div style={{ ...MONO, fontSize: 10, color: "#4a5a6a", marginTop: 4, lineHeight: 1.4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            <div style={{ ...MONO, fontSize: 10, color: "#9aa8b8", marginTop: 4, lineHeight: 1.4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
               {skill.description}
             </div>
           </div>
