@@ -2,6 +2,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from typing import Optional, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from filters.crucix_client import MacroContext
 
 
 @dataclass
@@ -59,5 +63,8 @@ class MarketContext:
     session: str = "unknown"  # London / NY / Asian / overlap
     day_of_week: str = ""
     near_news_event: bool = False
+
+    # Macro world context from Crucix (None if Crucix not running)
+    macro: "Optional[MacroContext]" = None
 
     candles: list[Candle] = field(default_factory=list)

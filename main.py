@@ -132,6 +132,24 @@ def main() -> None:
     log_agent = LoggingAgent(db)
     log_agent.record("STARTUP", f"Bot started — DEMO_MODE={settings.DEMO_MODE}")
 
+    # ── Crucix intelligence layer ────────────────────────────────────────
+    from filters.crucix_client import get_client as get_crucix_client
+    _crucix = get_crucix_client()
+    if _crucix.is_available():
+        _macro = _crucix.get_context()
+        log_agent.record(
+            "STARTUP",
+            f"Crucix connected — tier={_macro.risk_tier} vix={_macro.vix:.1f} "
+            f"sweep_age={_macro.last_sweep_age_minutes:.0f}min"
+        )
+        logger.info(
+            "Crucix intelligence: CONNECTED — tier=%s vix=%.1f",
+            _macro.risk_tier, _macro.vix,
+        )
+    else:
+        log_agent.record("STARTUP", "Crucix intelligence: NOT RUNNING — macro context disabled (bot continues normally)")
+        logger.info("Crucix intelligence: NOT RUNNING — starting without macro context")
+
     # ── 1b. Candle HTTP server for dashboard charts ──────────────────────
     # (moved after log_agent so startup errors can be logged)
     candle_server.start(broker, db)

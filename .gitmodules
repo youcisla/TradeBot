@@ -1,0 +1,3 @@
+[submodule "crucix"]
+	path = crucix
+	url = https://github.com/youcisla/crucix.git

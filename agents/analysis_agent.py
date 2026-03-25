@@ -9,6 +9,7 @@ import logging
 from datetime import datetime
 from typing import TYPE_CHECKING
 
+from filters.crucix_client import get_macro_context
 from filters.news_filter import NewsFilter
 from models.market_data import MarketContext, MarketData
 from utils.helpers import current_session, day_of_week
@@ -84,7 +85,7 @@ class AnalysisAgent:
 
         near_news = self._news.is_blackout(data.symbol)
 
-        return MarketContext(
+        ctx = MarketContext(
             symbol=data.symbol,
             current_price=data.mid_price,
             bid=data.bid,
@@ -105,6 +106,22 @@ class AnalysisAgent:
             near_news_event=near_news,
             candles=data.candles,
         )
+
+        # Enrich with world context from Crucix (fails safely if not running)
+        try:
+            ctx.macro = get_macro_context()
+            if ctx.macro.crucix_available:
+                self._emit("info",
+                           f"Crucix: tier={ctx.macro.risk_tier} vix={ctx.macro.vix:.1f} "
+                           f"yield_inv={ctx.macro.yield_curve_inverted} "
+                           f"sentiment={ctx.macro.osint_sentiment}",
+                           {"tier": ctx.macro.risk_tier, "vix": ctx.macro.vix,
+                            "flash_alerts": ctx.macro.active_flash_alerts})
+        except Exception as exc:
+            logger.debug("Crucix context unavailable: %s", exc)
+            ctx.macro = None
+
+        return ctx
 
     # ── indicator helpers ────────────────────────────────────────────────
 

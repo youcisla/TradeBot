@@ -48,6 +48,7 @@ class CouncilVerdict:
     ict_score: float = 0.0
     danial_score: float = 0.0
     traditional_score: float = 0.0
+    world_score: float = 0.0
     reasons_for: list[str] = field(default_factory=list)
     reasons_against: list[str] = field(default_factory=list)
     reasoning: str = ""
@@ -419,16 +420,124 @@ class TraditionalExpert:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# Council Agent — synthesises all three expert verdicts
+# Expert 4 — World Context (Crucix OSINT + Macro Intelligence)
+# Methodology: macro risk tier, VIX regime, geopolitical events,
+#              yield curve, OSINT sentiment alignment with signal direction
+# ══════════════════════════════════════════════════════════════════════════════
+
+class WorldContextExpert:
+    """Crucix-powered macro expert for the Trading Council.
+
+    Votes based on the alignment between the proposed trade direction
+    and the current world macro state.  Reduces confidence when macro
+    conditions oppose the trade, boosts when they align.
+    """
+
+    def analyse(self, signal: Signal, context: "MarketContext") -> ExpertVerdict:
+        verdict = ExpertVerdict(score=0.5)  # default: neutral
+
+        # No Crucix data → return neutral so the 3-expert score is unaffected
+        macro = getattr(context, "macro", None)
+        if macro is None or not macro.crucix_available:
+            verdict.reasons_for.append("World context unavailable — neutral vote")
+            return verdict
+
+        # FLASH alert = zero score regardless of anything else
+        if macro.is_blackout:
+            verdict.score = 0.0
+            verdict.reasons_against.append(
+                f"FLASH macro alert active: {', '.join(macro.active_flash_alerts[:2]) or 'unspecified'}"
+            )
+            return verdict
+
+        passed = 0
+        total = 0
+
+        # ── VIX regime check ─────────────────────────────────────────────
+        if macro.vix > 0:
+            total += 1
+            if macro.vix > 30:
+                # High fear — SELL signals are more aligned with fear regime
+                if signal.direction == "SELL":
+                    passed += 1
+                    verdict.reasons_for.append(f"VIX={macro.vix:.0f} (fear regime) aligns with SELL")
+                else:
+                    verdict.reasons_against.append(f"VIX={macro.vix:.0f} (fear regime) opposes BUY")
+            elif macro.vix < 15:
+                # Low fear — risk-on, BUY signals more aligned
+                if signal.direction == "BUY":
+                    passed += 1
+                    verdict.reasons_for.append(f"VIX={macro.vix:.0f} (calm/risk-on) aligns with BUY")
+                else:
+                    verdict.reasons_against.append(f"VIX={macro.vix:.0f} (calm) opposes SELL")
+            else:
+                # Neutral VIX range — pass by default
+                passed += 1
+                verdict.reasons_for.append(f"VIX={macro.vix:.0f} — neutral range")
+
+        # ── Yield curve ──────────────────────────────────────────────────
+        if macro.yield_curve_inverted:
+            total += 1
+            if signal.direction == "SELL":
+                passed += 1
+                verdict.reasons_for.append("Inverted yield curve — bearish macro aligns with SELL")
+            else:
+                verdict.reasons_against.append("Inverted yield curve — bearish macro opposes BUY")
+
+        # ── OSINT sentiment ──────────────────────────────────────────────
+        if macro.osint_sentiment not in ("neutral", ""):
+            total += 1
+            sentiment_map = {
+                "bullish": "BUY", "fearful": "SELL",
+                "bearish": "SELL", "risk-off": "SELL",
+            }
+            aligned_dir = sentiment_map.get(macro.osint_sentiment)
+            if aligned_dir and aligned_dir == signal.direction:
+                passed += 1
+                verdict.reasons_for.append(
+                    f"OSINT sentiment '{macro.osint_sentiment}' aligns with {signal.direction}"
+                )
+            elif aligned_dir and aligned_dir != signal.direction:
+                verdict.reasons_against.append(
+                    f"OSINT sentiment '{macro.osint_sentiment}' opposes {signal.direction}"
+                )
+
+        # ── PRIORITY tier penalty ─────────────────────────────────────────
+        if macro.risk_tier == "PRIORITY":
+            verdict.reasons_against.append("PRIORITY macro alert — elevated caution")
+            # Don't block, just reduce score slightly by adding an unfailed check
+            total += 1  # passed stays same → lower ratio
+
+        # ── Economic stress ──────────────────────────────────────────────
+        if macro.economic_stress:
+            total += 1
+            if signal.direction == "SELL":
+                passed += 1
+                verdict.reasons_for.append("Multiple FRED stress indicators — aligns with SELL")
+            else:
+                verdict.reasons_against.append("Multiple FRED stress indicators — caution on BUY")
+
+        # Score = ratio of passed checks (floor at 0.2 so it's never a veto alone)
+        if total > 0:
+            verdict.score = max(0.2, min(1.0, passed / total))
+        else:
+            verdict.score = 0.5  # no data → neutral
+
+        return verdict
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Council Agent — synthesises all four expert verdicts
 # ══════════════════════════════════════════════════════════════════════════════
 
 class CouncilAgent:
-    """Runs three algorithmic trading experts and returns a combined verdict."""
+    """Runs four algorithmic trading experts and returns a combined verdict."""
 
     def __init__(self) -> None:
         self._ict = ICTExpert()
         self._danial = DanialFXExpert()
         self._traditional = TraditionalExpert()
+        self._world = WorldContextExpert()
 
     def review(self, signal: Signal, context: "MarketContext") -> CouncilVerdict:
         """Debate a signal and return a council verdict.
@@ -465,15 +574,23 @@ class CouncilAgent:
         ict = self._ict.analyse(signal, context)
         danial = self._danial.analyse(signal, context)
         traditional = self._traditional.analyse(signal, context)
+        world = self._world.analyse(signal, context)
 
-        confidence = (ict.score + danial.score + traditional.score) / 3
+        # Weight: world context has 25% weight, others split remaining 75%
+        confidence = (
+            ict.score         * 0.25 +
+            danial.score      * 0.25 +
+            traditional.score * 0.25 +
+            world.score       * 0.25
+        )
 
         reasons_for = (
-            ict.reasons_for + danial.reasons_for + traditional.reasons_for
+            ict.reasons_for + danial.reasons_for +
+            traditional.reasons_for + world.reasons_for
         )
         reasons_against = (
-            ict.reasons_against + danial.reasons_against
-            + traditional.reasons_against
+            ict.reasons_against + danial.reasons_against +
+            traditional.reasons_against + world.reasons_against
         )
 
         approved = confidence >= settings.COUNCIL_MIN_CONFIDENCE
@@ -482,22 +599,25 @@ class CouncilAgent:
             top_reasons = "; ".join(reasons_for[:3]) or "multiple confluences"
             reasoning = (
                 f"ICT={ict.score:.0%} DanialFX={danial.score:.0%} "
-                f"Traditional={traditional.score:.0%} → {confidence:.0%} — "
+                f"Traditional={traditional.score:.0%} World={world.score:.0%} "
+                f"→ {confidence:.0%} — "
                 f"APPROVED. Key confluences: {top_reasons}."
             )
         else:
             top_issues = "; ".join(reasons_against[:3]) or "insufficient confluences"
             reasoning = (
                 f"ICT={ict.score:.0%} DanialFX={danial.score:.0%} "
-                f"Traditional={traditional.score:.0%} → {confidence:.0%} — "
+                f"Traditional={traditional.score:.0%} World={world.score:.0%} "
+                f"→ {confidence:.0%} — "
                 f"REJECTED. Main issues: {top_issues}."
             )
 
         logger.info(
             "Council verdict for %s %s: ICT=%.0f%% DanialFX=%.0f%% "
-            "Traditional=%.0f%% → %.0f%% → %s",
+            "Traditional=%.0f%% World=%.0f%% → %.0f%% → %s",
             signal.symbol, signal.direction,
-            ict.score * 100, danial.score * 100, traditional.score * 100,
+            ict.score * 100, danial.score * 100,
+            traditional.score * 100, world.score * 100,
             confidence * 100,
             "APPROVED" if approved else "REJECTED",
         )
@@ -509,6 +629,7 @@ class CouncilAgent:
             ict_score=ict.score,
             danial_score=danial.score,
             traditional_score=traditional.score,
+            world_score=world.score,
             reasons_for=reasons_for,
             reasons_against=reasons_against,
             reasoning=reasoning,

@@ -36,3 +36,8 @@ models/neural/
 # OS
 Thumbs.db
 .DS_Store
+
+# Crucix submodule runtime data
+crucix/runs/
+crucix/.env
+crucix/node_modules/

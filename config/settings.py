@@ -112,3 +112,6 @@ NEURAL_NUM_LAYERS: int       = int(os.getenv("NEURAL_NUM_LAYERS", "2"))
 # ── Database ─────────────────────────────────────────────────────────────
 DATABASE_URL: str = os.getenv("DATABASE_URL", "")
 DB_PATH: str = os.getenv("DB_PATH", str(Path(__file__).resolve().parent.parent / "data" / "trading_bot.db"))
+
+# ── Crucix World Intelligence (optional) ─────────────────────────────
+CRUCIX_URL: str = os.getenv("CRUCIX_URL", "http://localhost:3117")

@@ -40,7 +40,24 @@ if (-not (Test-Path $envFile)) {
     exit 1
 }
 
-# ── 2. Launch Python bot ────────────────────────────────────────────
+# ── 2. Launch Crucix intelligence server (optional) ─────────────────
+$crucixDir = Join-Path $Root "crucix"
+$crucixServer = Join-Path $crucixDir "server.mjs"
+$crucixJob = $null
+if (Test-Path $crucixServer) {
+    Write-Host "[*] Starting Crucix intelligence server on http://localhost:3117 ..." -ForegroundColor Magenta
+    $crucixJob = Start-Process -FilePath "node" `
+        -ArgumentList $crucixServer `
+        -WorkingDirectory $crucixDir `
+        -PassThru `
+        -NoNewWindow
+    Write-Host "    PID: $($crucixJob.Id)" -ForegroundColor DarkGray
+    Start-Sleep -Seconds 5   # give it time to bind port 3117
+} else {
+    Write-Host "[*] Crucix not found at crucix/server.mjs — skipping (bot continues without it)" -ForegroundColor DarkGray
+}
+
+# ── 3. Launch Python bot ────────────────────────────────────────────
 Write-Host "[*] Starting Python trading bot..." -ForegroundColor Green
 $botJob = Start-Process -FilePath $venvPython `
     -ArgumentList (Join-Path $Root "main.py") `
@@ -60,9 +77,12 @@ $webJob  = Start-Process -FilePath "cmd.exe" `
 
 Write-Host "    PID: $($webJob.Id)" -ForegroundColor DarkGray
 
-# ── 4. Wait & cleanup ──────────────────────────────────────────────
+# ── 5. Wait & cleanup ──────────────────────────────────────────────
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Cyan
+if ($crucixJob -ne $null) {
+    Write-Host "  Crucix PID : $($crucixJob.Id)" -ForegroundColor White
+}
 Write-Host "  Bot PID : $($botJob.Id)"                -ForegroundColor White
 Write-Host "  Web PID : $($webJob.Id)"                -ForegroundColor White
 Write-Host "  Dashboard : http://localhost:3000"       -ForegroundColor Green
@@ -83,6 +103,10 @@ try {
     if (-not $botJob.HasExited) {
         Stop-Process -Id $botJob.Id -Force -ErrorAction SilentlyContinue
         Write-Host "    Stopped bot (PID $($botJob.Id))" -ForegroundColor DarkGray
+    }
+    if ($crucixJob -ne $null -and -not $crucixJob.HasExited) {
+        Stop-Process -Id $crucixJob.Id -Force -ErrorAction SilentlyContinue
+        Write-Host "    Stopped Crucix (PID $($crucixJob.Id))" -ForegroundColor DarkGray
     }
     if (-not $webJob.HasExited) {
         Stop-Process -Id $webJob.Id -Force -ErrorAction SilentlyContinue

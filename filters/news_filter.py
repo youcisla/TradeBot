@@ -157,6 +157,23 @@ class NewsFilter:
 
             {"currency": "USD", "time": "2026-03-13T13:30:00", "impact": "high", "title": "CPI"}
         """
+        # Check Crucix FLASH alerts first (highest priority blackout)
+        try:
+            from filters.crucix_client import get_macro_context
+            macro = get_macro_context()
+            if macro.is_blackout and not macro.is_stale:
+                logger.info(
+                    "CRUCIX FLASH BLACKOUT on %s — %s",
+                    symbol,
+                    ", ".join(macro.active_flash_alerts[:2]) or "unspecified alerts",
+                )
+                self._emit("warn",
+                           f"CRUCIX FLASH blackout: {symbol} blocked by macro alert",
+                           {"symbol": symbol, "alerts": macro.active_flash_alerts})
+                return True
+        except Exception:
+            pass  # Crucix unavailable — fall through to calendar check
+
         # Auto-refresh every 6 hours (respects failure cooldown internally)
         if (
             self._last_fetch is None

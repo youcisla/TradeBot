@@ -10,6 +10,7 @@ const NAV_ITEMS = [
   { href: "/dashboard/trades",    label: "Trades",     icon: "◇" },
   { href: "/dashboard/learning",  label: "Learning",   icon: "◆" },
   { href: "/dashboard/strategy",  label: "Strategy",   icon: "◉" },
+  { href: "/dashboard/world",     label: "World Intel", icon: "⊛" },
   { href: "/dashboard/ict",       label: "ICT Engine", icon: "⊕" },
   { href: "/dashboard/skills",    label: "Skills",     icon: "⚡" },
   { href: "/dashboard/settings",  label: "Settings",   icon: "⚙" },

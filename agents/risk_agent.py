@@ -98,6 +98,20 @@ class RiskAgent:
         elif signal.confidence < settings.CONFIDENCE_FULL:
             lot_size = round(lot_size * 0.7, 2)
 
+        # Macro risk scaling from Crucix
+        from filters.crucix_client import get_macro_context
+        try:
+            macro = get_macro_context()
+            scale = macro.lot_scale_factor
+            if scale != 1.0:
+                lot_size = round(lot_size * scale, 2)
+                logger.info(
+                    "MACRO LOT SCALE applied: tier=%s scale=%.2f → lot=%.2f",
+                    macro.risk_tier, scale, lot_size,
+                )
+        except Exception:
+            pass  # Crucix unavailable — use unscaled lot
+
         return max(settings.MIN_LOT_SIZE, min(settings.MAX_LOT_SIZE, lot_size))
 
     # ── internal checks (ordered fail-fast) ──────────────────────────────
@@ -108,6 +122,19 @@ class RiskAgent:
             logger.warning("RISK REJECT [DRAWDOWN]: circuit breaker active")
             self._emit("warn", "Drawdown breaker is ON — no trades allowed!")
             return False
+
+        # 1b. Crucix macro blackout check
+        from filters.crucix_client import get_macro_context
+        try:
+            macro = get_macro_context()
+            if macro.is_blackout:
+                self._emit("warn",
+                           f"MACRO BLACKOUT: FLASH alert active — {', '.join(macro.active_flash_alerts[:2])}",
+                           {"symbol": signal.symbol, "tier": macro.risk_tier,
+                            "alerts": macro.active_flash_alerts})
+                return False
+        except Exception:
+            pass  # Crucix unavailable — no macro blackout applied
 
         open_trades = self._get_open_trades()
 
