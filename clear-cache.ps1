@@ -28,10 +28,10 @@ function Remove-Dir($path, $label) {
     }
 }
 
-# ── Next.js build cache ─────────────────────────────────────────────
+# - Next.js build cache -
 Remove-Dir (Join-Path $Root "web\.next") "Next.js build cache  (web/.next)"
 
-# ── Python __pycache__ (all nested) ─────────────────────────────────
+# - Python __pycache__ (all nested) -
 $pycaches = Get-ChildItem -Path $Root -Recurse -Directory -Filter "__pycache__" -ErrorAction SilentlyContinue |
     Where-Object { $_.FullName -notmatch "\\.venv\\" }
 foreach ($dir in $pycaches) {
@@ -43,13 +43,13 @@ if ($pycaches.Count -gt 0) {
     Write-Host "  [skip]    Python __pycache__ (none found)" -ForegroundColor DarkGray
 }
 
-# ── Python .pytest_cache ─────────────────────────────────────────────
+# - Python .pytest_cache -
 Remove-Dir (Join-Path $Root ".pytest_cache") "pytest cache"
 
-# ── Downloaded history CSVs ──────────────────────────────────────────
+# - Downloaded history CSVs -
 Remove-Dir (Join-Path $Root "data\history") "History CSVs       (data/history)"
 
-# ── Bot log files ─────────────────────────────────────────────────────
+# - Bot log files -
 Remove-Dir (Join-Path $Root "logs") "Bot logs            (logs/)"
 
 Write-Host ""

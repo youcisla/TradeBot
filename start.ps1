@@ -1,10 +1,11 @@
 <#
 .SYNOPSIS
-    Launches the Trading Bot (Python) and Web Dashboard (Next.js) side by side.
+    Launches the Trading Bot (Python), Web Dashboard (Next.js), and Crucix (Node.js).
 .DESCRIPTION
+    - Starts Crucix intelligence server if present (port 3117)
     - Activates the Python venv and runs main.py
-    - Installs npm deps if needed and runs next dev
-    - Press Ctrl+C to stop both processes
+    - Installs npm deps if needed and runs next dev (port 3000)
+    - Press Ctrl+C to stop all processes cleanly
 #>
 
 $ErrorActionPreference = "Stop"
@@ -12,15 +13,17 @@ $Root = $PSScriptRoot
 
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Cyan
-Write-Host "   TRADING BOT  -  LOCAL LAUNCHER"       -ForegroundColor Cyan
+Write-Host "   NEURAL FX  -  LOCAL LAUNCHER"        -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 
-# ── 1. Preflight checks ─────────────────────────────────────────────
+# 1. Preflight checks
+
 $venvPython = Join-Path $Root ".venv\Scripts\python.exe"
 if (-not (Test-Path $venvPython)) {
     Write-Host "[ERROR] Python venv not found at .venv\Scripts\python.exe" -ForegroundColor Red
-    Write-Host "        Run:  python -m venv .venv ; .venv\Scripts\pip install -r requirements.txt" -ForegroundColor Yellow
+    Write-Host "        Run: python -m venv .venv" -ForegroundColor Yellow
+    Write-Host "        Then: .venv\Scripts\pip install -r requirements.txt" -ForegroundColor Yellow
     exit 1
 }
 
@@ -36,30 +39,35 @@ if (-not (Test-Path $nodeModules)) {
 
 $envFile = Join-Path $Root ".env"
 if (-not (Test-Path $envFile)) {
-    Write-Host "[ERROR] .env not found. Copy .env.example and fill in values." -ForegroundColor Red
+    Write-Host "[ERROR] .env not found. Copy .env.example and fill in your values." -ForegroundColor Red
     exit 1
 }
 
-# ── 2. Launch Crucix intelligence server (optional) ─────────────────
-$crucixDir = Join-Path $Root "crucix"
+# 2. Launch Crucix intelligence server (optional)
+
+$crucixDir    = Join-Path $Root "crucix"
 $crucixServer = Join-Path $crucixDir "server.mjs"
-$crucixJob = $null
+$crucixJob    = $null
+
 if (Test-Path $crucixServer) {
-    Write-Host "[*] Starting Crucix intelligence server on http://localhost:3117 ..." -ForegroundColor Magenta
-    $crucixJob = Start-Process -FilePath "node" `
+    Write-Host "[*] Starting Crucix on http://localhost:3117 ..." -ForegroundColor Magenta
+    $crucixJob = Start-Process `
+        -FilePath "node" `
         -ArgumentList $crucixServer `
         -WorkingDirectory $crucixDir `
         -PassThru `
         -NoNewWindow
     Write-Host "    PID: $($crucixJob.Id)" -ForegroundColor DarkGray
-    Start-Sleep -Seconds 5   # give it time to bind port 3117
+    Start-Sleep -Seconds 5
 } else {
-    Write-Host "[*] Crucix not found at crucix/server.mjs — skipping (bot continues without it)" -ForegroundColor DarkGray
+    Write-Host "[*] crucix/server.mjs not found - skipping (bot runs without it)" -ForegroundColor DarkGray
 }
 
-# ── 3. Launch Python bot ────────────────────────────────────────────
+# 3. Launch Python trading bot
+
 Write-Host "[*] Starting Python trading bot..." -ForegroundColor Green
-$botJob = Start-Process -FilePath $venvPython `
+$botJob = Start-Process `
+    -FilePath $venvPython `
     -ArgumentList (Join-Path $Root "main.py") `
     -WorkingDirectory $Root `
     -PassThru `
@@ -67,32 +75,35 @@ $botJob = Start-Process -FilePath $venvPython `
 
 Write-Host "    PID: $($botJob.Id)" -ForegroundColor DarkGray
 
-# ── 3. Launch Next.js dev server ────────────────────────────────────
+# 4. Launch Next.js dashboard
+
 Write-Host "[*] Starting Next.js dashboard on http://localhost:3000 ..." -ForegroundColor Green
-$webJob  = Start-Process -FilePath "cmd.exe" `
-    -ArgumentList "/c","npm","run","dev" `
+$webJob = Start-Process `
+    -FilePath "cmd.exe" `
+    -ArgumentList "/c", "npm", "run", "dev" `
     -WorkingDirectory $webDir `
     -PassThru `
     -NoNewWindow
 
 Write-Host "    PID: $($webJob.Id)" -ForegroundColor DarkGray
 
-# ── 5. Wait & cleanup ──────────────────────────────────────────────
+# 5. Status summary
+
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Cyan
-if ($crucixJob -ne $null) {
-    Write-Host "  Crucix PID : $($crucixJob.Id)" -ForegroundColor White
+if ($null -ne $crucixJob) {
+    Write-Host "  Crucix PID  : $($crucixJob.Id)  (http://localhost:3117)" -ForegroundColor White
 }
-Write-Host "  Bot PID : $($botJob.Id)"                -ForegroundColor White
-Write-Host "  Web PID : $($webJob.Id)"                -ForegroundColor White
-Write-Host "  Dashboard : http://localhost:3000"       -ForegroundColor Green
+Write-Host "  Bot PID     : $($botJob.Id)" -ForegroundColor White
+Write-Host "  Web PID     : $($webJob.Id)  (http://localhost:3000)" -ForegroundColor White
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "Press Ctrl+C to stop everything." -ForegroundColor Yellow
 Write-Host ""
 
+# 6. Wait and clean up on exit
+
 try {
-    # Block until either process exits
     while (-not $botJob.HasExited -and -not $webJob.HasExited) {
         Start-Sleep -Seconds 1
     }
@@ -102,20 +113,22 @@ try {
 
     if (-not $botJob.HasExited) {
         Stop-Process -Id $botJob.Id -Force -ErrorAction SilentlyContinue
-        Write-Host "    Stopped bot (PID $($botJob.Id))" -ForegroundColor DarkGray
+        Write-Host "    Stopped bot     (PID $($botJob.Id))" -ForegroundColor DarkGray
     }
-    if ($crucixJob -ne $null -and -not $crucixJob.HasExited) {
+
+    if ($null -ne $crucixJob -and -not $crucixJob.HasExited) {
         Stop-Process -Id $crucixJob.Id -Force -ErrorAction SilentlyContinue
-        Write-Host "    Stopped Crucix (PID $($crucixJob.Id))" -ForegroundColor DarkGray
+        Write-Host "    Stopped Crucix  (PID $($crucixJob.Id))" -ForegroundColor DarkGray
     }
+
     if (-not $webJob.HasExited) {
         Stop-Process -Id $webJob.Id -Force -ErrorAction SilentlyContinue
-        # Also kill any orphaned node processes from next dev
         Get-Process -Name "node" -ErrorAction SilentlyContinue |
             Where-Object { $_.MainWindowTitle -eq "" } |
             Stop-Process -Force -ErrorAction SilentlyContinue
-        Write-Host "    Stopped web (PID $($webJob.Id))" -ForegroundColor DarkGray
+        Write-Host "    Stopped web     (PID $($webJob.Id))" -ForegroundColor DarkGray
     }
 
+    Write-Host ""
     Write-Host "[OK] All processes stopped." -ForegroundColor Green
 }
