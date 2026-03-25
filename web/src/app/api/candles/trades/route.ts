@@ -36,7 +36,7 @@ export async function GET(request: Request) {
         items.push({
           time: Math.floor(new Date(t.open_time).getTime() / 1000),
           position: t.direction === "BUY" ? "belowBar" : "aboveBar",
-          color: t.direction === "BUY" ? "#00ff41" : "#ff4444",
+          color: t.direction === "BUY" ? "#00ff88" : "#ff4444",
           shape: t.direction === "BUY" ? "arrowUp" : "arrowDown",
           text: `${t.direction} ${Number(t.entry_price).toFixed(5)}`,
           type: "entry",
@@ -48,7 +48,7 @@ export async function GET(request: Request) {
         items.push({
           time: Math.floor(new Date(t.close_time).getTime() / 1000),
           position: t.direction === "BUY" ? "aboveBar" : "belowBar",
-          color: Number(t.pnl) >= 0 ? "#00ff41" : "#ff4444",
+          color: Number(t.pnl) >= 0 ? "#00ff88" : "#ff4444",
           shape: "circle",
           text: `${t.close_reason || "CLOSE"} ${Number(t.pnl) >= 0 ? "+" : ""}${Number(t.pnl).toFixed(2)}`,
           type: "exit",
@@ -82,7 +82,7 @@ export async function GET(request: Request) {
         if (Number(t.take_profit_1)) {
           lines.push({
             price: Number(t.take_profit_1),
-            color: "#00ff41",
+            color: "#00ff88",
             lineWidth: 1,
             lineStyle: 2,
             title: "TP1",

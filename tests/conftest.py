@@ -1,20 +1,60 @@
 """Shared test fixtures.
 
-Every test gets an in-memory SQLite DB and a MockConnector so no
+Every test gets an in-memory mock DB and a MockConnector so no
 external dependencies or files are needed.
 """
 
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
 
 from broker.mock_connector import MockConnector
-from database.db import Database
 from filters.news_filter import NewsFilter
 from models.market_data import Candle, MarketContext, MarketData
 from models.signal import EntrySnapshot, Signal
 from models.trade import Trade
 from state.persistence import StatePersistence
+
+
+class _MockDatabase:
+    """In-memory shim that satisfies the Database interface used by tests."""
+
+    def __init__(self) -> None:
+        self._trades: dict[str, Trade] = {}
+        self._events: list[dict[str, Any]] = []
+
+    def upsert_trade(self, trade: Trade) -> None:
+        self._trades[trade.id] = trade
+
+    def get_open_trades(self) -> list[Trade]:
+        return [t for t in self._trades.values() if t.status != "CLOSED"]
+
+    def get_trade(self, trade_id: str) -> Trade | None:
+        return self._trades.get(trade_id)
+
+    def log_agent_event(self, agent: str, level: str, message: str, data: Any = None) -> None:
+        self._events.append({"agent": agent, "level": level, "message": message, "data": data})
+
+    # Stubs for any other methods that might be called
+    def get_strategy_confidence(self, strategy: str, symbol: str) -> float:
+        return 0.5
+
+    def upsert_strategy_confidence(self, strategy: str, symbol: str, confidence: float) -> None:
+        pass
+
+    def save_trade_score(self, *args: Any, **kwargs: Any) -> None:
+        pass
+
+    def get_pending_command(self) -> dict[str, Any] | None:
+        return None
+
+    def mark_command_done(self, command_id: int) -> None:
+        pass
+
+    def update_bot_status(self, *args: Any, **kwargs: Any) -> None:
+        pass
 
 
 @pytest.fixture
@@ -25,8 +65,8 @@ def broker() -> MockConnector:
 
 
 @pytest.fixture
-def db(tmp_path) -> Database:
-    return Database(db_path=str(tmp_path / "test.db"))
+def db() -> _MockDatabase:
+    return _MockDatabase()
 
 
 @pytest.fixture

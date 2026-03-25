@@ -72,8 +72,7 @@ def main() -> None:
     # ── 1. Core infrastructure ──────────────────────────────────────────
     db = Database()
 
-    # ── 1a. Symbol event tracker (global) ───────────────────────────────
-    global symbol_event_tracker
+    # ── 1a. Symbol event tracker ─────────────────────────────────────────
     symbol_event_tracker = SymbolEventTracker()
 
     # Resolve broker credentials: DB active account → .env fallback
@@ -245,7 +244,7 @@ def main() -> None:
 
     _market_closed_logged = False
     # Minimum wall-clock seconds between re-scanning the same symbol.
-    _SCAN_COOLDOWN_S: float = 15 * 60  # 15 minutes
+    _SCAN_COOLDOWN_S: float = 5 * 60  # 5 minutes
     _last_scan_ts: dict[str, float] = {}  # symbol → monotonic time of last analysis
 
     # ── Symbol fault tracking ────────────────────────────────────────────

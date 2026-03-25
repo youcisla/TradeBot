@@ -4,7 +4,9 @@ import { authOptions } from "@/lib/auth";
 import fs from "fs/promises";
 import path from "path";
 
-const SKILLS_DIR = path.resolve(process.cwd(), "..", ".claude", "skills");
+const SKILLS_DIR = process.env.SKILLS_DIR
+  ? path.resolve(process.env.SKILLS_DIR)
+  : path.resolve(process.cwd(), "..", ".claude", "skills");
 
 const CORE_SKILLS = new Set([
   "trading-bot-overview",
@@ -59,12 +61,14 @@ export async function GET(request: Request) {
       try {
         const content = await fs.readFile(skillFile, "utf-8");
         const meta = parseFrontmatter(content);
+        const stat = await fs.stat(skillFile);
         skills.push({
           name: meta.name || entry.name,
           description: meta.description || "",
           location: skillFile,
           user_invocable: (meta["user-invocable"] || "true").toLowerCase() !== "false",
           is_core: CORE_SKILLS.has(entry.name),
+          last_modified: stat.mtime.toISOString(),
         });
       } catch {
         // skip directories without SKILL.md
@@ -105,26 +109,46 @@ export async function POST(request: Request) {
   return NextResponse.json({ ok: true, name });
 }
 
-// PUT /api/skills  → update an existing skill
+// PUT /api/skills  → update an existing skill's content and/or description
 export async function PUT(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await request.json();
-  const { name, content } = body;
+  const { name, content, description } = body;
   if (!name || !content) {
     return NextResponse.json({ error: "name and content are required" }, { status: 400 });
   }
 
   const skillFile = path.join(SKILLS_DIR, name, "SKILL.md");
+  let existing = "";
   try {
-    await fs.access(skillFile);
+    existing = await fs.readFile(skillFile, "utf-8");
   } catch {
     return NextResponse.json({ error: `Skill '${name}' not found` }, { status: 404 });
   }
 
-  await fs.writeFile(skillFile, content, "utf-8");
-  return NextResponse.json({ ok: true, name });
+  // If description supplied, update the frontmatter; otherwise preserve it
+  let finalContent = content;
+  if (description !== undefined) {
+    const meta = parseFrontmatter(existing);
+    const updatedMeta = { ...meta, description };
+    // Strip body from content (in case caller sent full SKILL.md with frontmatter)
+    const bodyStart = content.startsWith("---")
+      ? content.indexOf("---", 3) + 3
+      : -1;
+    const bodyText = bodyStart > 0 ? content.slice(bodyStart).trim() : content;
+    const fmLines = Object.entries(updatedMeta)
+      .map(([k, v]) => `${k}: ${v}`)
+      .join("\n");
+    finalContent = `---\n${fmLines}\n---\n\n${bodyText}\n`;
+  }
+
+  await fs.writeFile(skillFile, finalContent, "utf-8");
+
+  // Return last_modified so the UI can display it
+  const stat = await fs.stat(skillFile);
+  return NextResponse.json({ ok: true, name, last_modified: stat.mtime.toISOString() });
 }
 
 // DELETE /api/skills?name=<skill>  → delete a skill

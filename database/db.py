@@ -245,6 +245,19 @@ BEGIN
 END $$;
 """
 
+_CREATE_INDEXES = """
+CREATE INDEX IF NOT EXISTS idx_agent_events_created_at   ON agent_events (created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_agent_events_agent         ON agent_events (agent);
+CREATE INDEX IF NOT EXISTS idx_trades_status              ON trades (status);
+CREATE INDEX IF NOT EXISTS idx_trades_open_time           ON trades (open_time DESC);
+CREATE INDEX IF NOT EXISTS idx_trades_symbol              ON trades (symbol);
+CREATE INDEX IF NOT EXISTS idx_trades_close_time          ON trades (close_time DESC);
+CREATE INDEX IF NOT EXISTS idx_ict_setups_created_at      ON ict_setups (created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_ict_setups_symbol          ON ict_setups (symbol);
+CREATE INDEX IF NOT EXISTS idx_bot_commands_status        ON bot_commands (status);
+CREATE INDEX IF NOT EXISTS idx_trade_scores_created_at    ON trade_scores (created_at DESC);
+"""
+
 _ALL_TABLES = [
     _CREATE_TRADES,
     _CREATE_TRADE_SCORES,
@@ -348,6 +361,7 @@ class Database:
                     cur.execute(_ALTER_BOT_STATUS_BROKER)
                     cur.execute(_ALTER_TRADES_COMMISSION)
                     cur.execute(_ALTER_STRATEGY_CONFIDENCE_STREAK)
+                    cur.execute(_CREATE_INDEXES)
             logger.info("Database tables verified")
         finally:
             self._put_conn(conn)

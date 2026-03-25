@@ -12,7 +12,7 @@ function getPool(): Pool {
     globalForPg.__pgPool = new Pool({
       connectionString: connStr,
       ssl: { rejectUnauthorized: false },
-      max: 3,
+      max: 10,
       idleTimeoutMillis: 15_000,
       connectionTimeoutMillis: 10_000,
     });

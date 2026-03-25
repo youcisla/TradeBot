@@ -27,7 +27,7 @@ export default function ChartPage() {
   return (
     <div style={{
       display: "flex", flexDirection: "column",
-      height: "calc(100vh - 65px)", gap: 12,
+      height: "calc(100vh - 94px)", gap: 12,
     }}>
       {/* Header bar */}
       <div style={{

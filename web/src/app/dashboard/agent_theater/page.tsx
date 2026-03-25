@@ -131,7 +131,7 @@ export default function AgentTheater() {
         <div style={{ fontSize: 9, fontFamily: "'JetBrains Mono', monospace", color: "#607888", letterSpacing: "0.2em", textTransform: "uppercase" }}>
           Visualisation
         </div>
-        <h1 style={{ fontSize: 20, fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, color: "#00ff88", textShadow: "0 0 20px rgba(0,255,65,0.3)", marginTop: 2 }}>
+        <h1 style={{ fontSize: 20, fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, color: "#00ff88", textShadow: "0 0 20px rgba(0,255,136,0.3)", marginTop: 2 }}>
           Agent Theater
         </h1>
       </div>

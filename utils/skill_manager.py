@@ -33,8 +33,10 @@ class SkillManager:
 
     SKILLS_DIR = Path(".claude/skills")
 
-    def __init__(self, db: "Database | None" = None) -> None:
+    def __init__(self, db: "Database | None" = None, skills_dir: "Path | None" = None) -> None:
         self._db = db
+        if skills_dir is not None:
+            self.SKILLS_DIR = skills_dir
 
     # ── helpers ───────────────────────────────────────────────────────────
 
@@ -119,13 +121,31 @@ class SkillManager:
         logger.info("Skill created: %s", name)
         return skill_file
 
-    def update_skill(self, name: str, content: str) -> None:
-        """Overwrite the content of an existing skill. Raise if not found."""
+    def update_skill(self, name: str, content: str, description: str | None = None) -> None:
+        """Overwrite the content of an existing skill. Raise if not found.
+
+        If *description* is provided, the frontmatter description field is
+        updated (or added) while preserving all other frontmatter keys.
+        """
         skill_file = self.SKILLS_DIR / name / "SKILL.md"
         if not skill_file.is_file():
             raise FileNotFoundError(f"Skill '{name}' not found")
-        skill_file.write_text(content, encoding="utf-8")
 
+        if description is not None:
+            # Re-build frontmatter with updated description
+            existing = skill_file.read_text(encoding="utf-8")
+            meta = self._parse_frontmatter(existing)
+            meta["description"] = description
+            # Strip existing frontmatter from the supplied content if present
+            body = content
+            if content.startswith("---"):
+                end = content.find("---", 3)
+                if end != -1:
+                    body = content[end + 3:].lstrip("\n")
+            fm_lines = "\n".join(f"{k}: {v}" for k, v in meta.items())
+            content = f"---\n{fm_lines}\n---\n\n{body}\n"
+
+        skill_file.write_text(content, encoding="utf-8")
         self._log(f"Updated skill '{name}'")
         logger.info("Skill updated: %s", name)
 

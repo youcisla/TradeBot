@@ -4,16 +4,17 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const NAV_ITEMS = [
-  { href: "/dashboard",           label: "Dashboard",  icon: "⬛" },
-  { href: "/dashboard/chart",     label: "Chart",      icon: "📈" },
-  { href: "/dashboard/analytics", label: "Analytics",  icon: "◈" },
-  { href: "/dashboard/trades",    label: "Trades",     icon: "◇" },
-  { href: "/dashboard/learning",  label: "Learning",   icon: "◆" },
-  { href: "/dashboard/strategy",  label: "Strategy",   icon: "◉" },
-  { href: "/dashboard/world",     label: "World Intel", icon: "⊛" },
-  { href: "/dashboard/ict",       label: "ICT Engine", icon: "⊕" },
-  { href: "/dashboard/skills",    label: "Skills",     icon: "⚡" },
-  { href: "/dashboard/settings",  label: "Settings",   icon: "⚙" },
+  { href: "/dashboard",                label: "Dashboard",     icon: "⬛" },
+  { href: "/dashboard/chart",          label: "Chart",         icon: "◈" },
+  { href: "/dashboard/analytics",      label: "Analytics",     icon: "◇" },
+  { href: "/dashboard/trades",         label: "Trades",        icon: "◆" },
+  { href: "/dashboard/learning",       label: "Learning",      icon: "◉" },
+  { href: "/dashboard/strategy",       label: "Strategy",      icon: "⊕" },
+  { href: "/dashboard/world",          label: "World Intel",   icon: "⊛" },
+  { href: "/dashboard/ict",            label: "ICT Engine",    icon: "⊞" },
+  { href: "/dashboard/agent_theater",  label: "Theater",       icon: "⊟" },
+  { href: "/dashboard/skills",         label: "Skills",        icon: "⊡" },
+  { href: "/dashboard/settings",       label: "Settings",      icon: "⊠" },
 ];
 
 export default function DashNav() {
@@ -58,7 +59,7 @@ export default function DashNav() {
           color: "#00ff88",
           letterSpacing: "0.15em",
           textTransform: "uppercase",
-          textShadow: "0 0 12px rgba(0,255,65,0.5)",
+          textShadow: "0 0 12px rgba(0,255,136,0.5)",
         }}>
           NeuralFX
         </span>
@@ -89,7 +90,7 @@ export default function DashNav() {
                 transition: "color 0.15s",
                 whiteSpace: "nowrap",
                 borderBottom: active ? "2px solid #00ff88" : "2px solid transparent",
-                boxShadow: active ? "0 2px 0 rgba(0,255,65,0.3)" : undefined,
+                boxShadow: active ? "0 2px 0 rgba(0,255,136,0.3)" : undefined,
               }}
               onMouseEnter={(e) => {
                 if (!active) (e.currentTarget as HTMLElement).style.color = "#9aa8b8";

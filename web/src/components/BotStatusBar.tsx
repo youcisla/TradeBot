@@ -77,8 +77,11 @@ export default function BotStatusBar() {
 
   const isRunning  = status.state === "running";
   const isPaused   = status.state === "paused";
-  const stateColor = isRunning ? "#00ff88" : isPaused ? "#f5c518" : "#ff4455";
-  const stateLabel = status.state?.toUpperCase() ?? "UNKNOWN";
+  // Show STALE if last_tick is older than 2 minutes while state claims running
+  const lastTickMs = status.last_tick ? new Date(status.last_tick).getTime() : 0;
+  const isStale    = isRunning && lastTickMs > 0 && Date.now() - lastTickMs > 2 * 60 * 1000;
+  const stateColor = isStale ? "#f5c518" : isRunning ? "#00ff88" : isPaused ? "#f5c518" : "#ff4455";
+  const stateLabel = isStale ? "STALE" : status.state?.toUpperCase() ?? "UNKNOWN";
   const connected  = !!status.broker_account;
   const dailyPnl   = Number(status.daily_pnl);
   const pnlColor   = dailyPnl >= 0 ? "#00ff88" : "#ff4455";
