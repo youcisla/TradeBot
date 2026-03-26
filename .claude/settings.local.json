@@ -27,7 +27,9 @@
       "Bash(.venv/Scripts/python.exe -m py_compile broker/mt5_connector.py)",
       "Bash(.venv/Scripts/python.exe -m py_compile main.py)",
       "Bash(powershell -Command \":*)",
-      "Bash(find /c/Users/Y.chehboub/Downloads/TradingBot -type f -name *.log -o -name *error*)"
+      "Bash(find /c/Users/Y.chehboub/Downloads/TradingBot -type f -name *.log -o -name *error*)",
+      "Bash(pip show:*)",
+      "Bash(python -c \"from agents.deepseek_strategy import DeepSeekStrategy; s = DeepSeekStrategy\\(\\); print\\(''OK''\\)\")"
     ]
   }
 }

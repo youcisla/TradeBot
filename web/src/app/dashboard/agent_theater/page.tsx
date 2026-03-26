@@ -13,13 +13,12 @@ const AGENTS = [
   { key: "market",        label: "Market",      color: "#00d4ff" },
   { key: "analysis",      label: "Analysis",    color: "#f5c518" },
   { key: "strategy",      label: "Strategy",    color: "#00ff88" },
-  { key: "neural",        label: "Neural",      color: "#d500f9" },
+  { key: "deepseek",      label: "DeepSeek",    color: "#d500f9" },
   { key: "council",       label: "Council",     color: "#ff9d00" },
   { key: "risk",          label: "Risk",        color: "#ff4455" },
   { key: "execution",     label: "Execution",   color: "#f0f0f0" },
   { key: "trade_manager", label: "TradeMgr",    color: "#bf7fff" },
   { key: "learning",      label: "Learning",    color: "#4da6ff" },
-  { key: "model_manager", label: "ModelMgr",    color: "#76ff03" },
   { key: "logging",       label: "Logging",     color: "#5c6a78" },
 ];
 

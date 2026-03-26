@@ -13,9 +13,8 @@ rich>=13.0
 # ── Dashboard user reset script ──────────────────────────────────────────
 bcrypt>=4.0
 
-# ── Neural network (LSTM trading model) ─────────────────────────────────
-torch>=2.0
-numpy>=1.24
+# ── DeepSeek / OpenAI-compatible API client ──────────────────────────────
+openai>=1.0
 
 # ── Testing ──────────────────────────────────────────────────────────────
 pytest>=7.0

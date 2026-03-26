@@ -60,9 +60,8 @@ class LearningAgent:
     CONFIDENCE_MIN   = 0.10
     CONFIDENCE_MAX   = 1.00
 
-    def __init__(self, db: Database, model_manager=None) -> None:
+    def __init__(self, db: Database) -> None:
         self._db = db
-        self._model_manager = model_manager  # ModelManager | None
 
     # ── public API ───────────────────────────────────────────────────────
 
@@ -119,24 +118,6 @@ class LearningAgent:
             trade.id, score, multiplier, streak,
             trade.strategy, current, new_conf,
         )
-
-        # ── Neural model fine-tuning feedback ────────────────────────────
-        if self._model_manager is not None:
-            try:
-                from models.neural_model import BUY, SELL, HOLD
-                # Profitable trade → reinforce the direction; loss → HOLD (be cautious)
-                if (trade.pnl or 0.0) > 0:
-                    label = BUY if trade.direction == "BUY" else SELL
-                else:
-                    label = HOLD
-                # ModelManager fetches candles from broker if none passed
-                self._model_manager.record_outcome(
-                    symbol=trade.symbol,
-                    candles=[],
-                    label=label,
-                )
-            except Exception:
-                logger.debug("Neural fine-tune record failed — skipping")
 
         return score
 

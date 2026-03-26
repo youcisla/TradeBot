@@ -32,7 +32,6 @@ from filters.data_validator import DataValidationError
 from state.persistence import StatePersistence
 from models.market_data import MarketContext
 from models.signal import Signal
-# Secondary strategies — run alongside NeuralLSTM for multi-strategy signals
 from strategies.sma_crossover import SmaCrossoverStrategy
 from strategies.ict_strategy import ICTStrategy
 
@@ -44,10 +43,9 @@ from agents.execution_agent import ExecutionAgent
 from agents.trade_manager import TradeManagerAgent
 from agents.learning_agent import LearningAgent
 from agents.logging_agent import LoggingAgent
-from agents.council_agent import CouncilAgent   # stays: confirms neural signals
+from agents.council_agent import CouncilAgent
 from agents.crucix_agent import CrucixAgent
-from agents.model_manager import ModelManager
-from agents.neural_strategy import NeuralStrategy
+from agents.deepseek_strategy import DeepSeekStrategy
 
 from utils import telegram_bot
 from utils import candle_server
@@ -153,21 +151,15 @@ def main() -> None:
     # (moved after log_agent so startup errors can be logged)
     candle_server.start(broker, db)
 
-    # ── 3. Neural model manager (trains per-symbol LSTMs in background) ─
-    model_manager = ModelManager(broker=broker)
+    # ── 3. Learning agent ────────────────────────────────────────────────
+    learning = LearningAgent(db)
 
-    # ── 4. Learning agent ───────────────────────────────────────────────
-    learning = LearningAgent(db, model_manager=model_manager)
-
-    # ── 5. Strategies — Multi-strategy: NeuralLSTM (primary) + ICT + SMA
-    #       NeuralLSTM signals will naturally rank higher because the LSTM
-    #       outputs confidence in [0.5, 1.0] while ICT/SMA use rule-based
-    #       confidence which tends to be lower.
-    neural_strategy = NeuralStrategy(model_manager)
+    # ── 4. Strategies — DeepSeek (primary LLM) + ICT/SMC + SMA crossover
+    deepseek_strategy = DeepSeekStrategy()
     ict_strategy = ICTStrategy(broker=broker, db=db, min_confidence=55.0)
     sma_strategy = SmaCrossoverStrategy()
-    strategies = [neural_strategy, ict_strategy, sma_strategy]
-    logger.info("Multi-strategy mode: NeuralLSTM + ICT/SMC + SMAcrossover")
+    strategies = [deepseek_strategy, ict_strategy, sma_strategy]
+    logger.info("Multi-strategy mode: DeepSeek LLM + ICT/SMC + SMAcrossover")
 
     # ── 6. Agents (db passed for persona events) ────────────────────────
     market_agent = MarketAgent(broker, db=db)
@@ -200,15 +192,7 @@ def main() -> None:
     log_agent.record("STARTUP", f"Reconciliation done — {len(trade_manager.get_open_trades())} open trades")
     db.set_bot_uptime_start()
 
-    # ── 7b. Kick off neural model training / loading (background) ────────
-    model_manager.initialize(_active_symbols)
-    log_agent.record(
-        "STARTUP",
-        f"Neural LSTM training started for {len(_active_symbols)} symbols "
-        f"(existing models load instantly; new ones train in background)",
-    )
-
-    # ── 7c. Terminal UI (Rich live dashboard) ───────────────────────────
+    # ── 7b. Terminal UI (Rich live dashboard) ───────────────────────────
     _ui = tui.init(refresh_per_second=4)
     _ui.set_bot_status("STARTING", open_trades=len(trade_manager.get_open_trades()))
 
@@ -350,7 +334,6 @@ def main() -> None:
     candle_server.stop()
     telegram_bot.stop_polling()
     telegram_bot.send_message("🛑 Bot shutting down.")
-    model_manager.shutdown()
     db.set_bot_stopped()
     broker.disconnect()
     db.close()

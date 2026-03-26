@@ -99,15 +99,18 @@ SPIKE_PERCENT_THRESHOLD: float = float(os.getenv("SPIKE_PERCENT_THRESHOLD", "2.0
 DEFAULT_SYMBOL: str = os.getenv("DEFAULT_SYMBOL", "EURUSD")
 DEFAULT_TIMEFRAME: str = os.getenv("DEFAULT_TIMEFRAME", "H1")
 
-# ── Neural LSTM Strategy ─────────────────────────────────────────────────
-NEURAL_MIN_CONFIDENCE: float = float(os.getenv("NEURAL_MIN_CONFIDENCE", "0.60"))
-NEURAL_SEQ_LEN: int          = int(os.getenv("NEURAL_SEQ_LEN", "50"))
-NEURAL_TRAIN_YEARS: int      = int(os.getenv("NEURAL_TRAIN_YEARS", "2"))
-NEURAL_RETRAIN_EVERY: int    = int(os.getenv("NEURAL_RETRAIN_EVERY", "20"))  # trades
-NEURAL_MODELS_DIR: str       = os.getenv("NEURAL_MODELS_DIR", str(Path(__file__).resolve().parent.parent / "models" / "neural"))
-NEURAL_TRAIN_EPOCHS: int     = int(os.getenv("NEURAL_TRAIN_EPOCHS", "20"))
-NEURAL_HIDDEN_SIZE: int      = int(os.getenv("NEURAL_HIDDEN_SIZE", "64"))
-NEURAL_NUM_LAYERS: int       = int(os.getenv("NEURAL_NUM_LAYERS", "2"))
+# ── DeepSeek LLM Strategy ────────────────────────────────────────────────
+DEEPSEEK_API_KEY:        str   = os.getenv("DEEPSEEK_API_KEY", "")
+DEEPSEEK_MODEL:          str   = os.getenv("DEEPSEEK_MODEL", "deepseek-chat")
+DEEPSEEK_MIN_CONFIDENCE: float = float(os.getenv("DEEPSEEK_MIN_CONFIDENCE", "0.65"))
+# How long (minutes) to reuse a cached signal before re-querying the API.
+# One H1 bar = 60 min; default 30 min re-queries twice per bar if the loop
+# runs every 5 min but the symbol cooldown is also 5 min.
+DEEPSEEK_CACHE_MINUTES:  int   = int(os.getenv("DEEPSEEK_CACHE_MINUTES", "30"))
+
+# ── Analysis Agent indicator periods ────────────────────────────────────
+SMA_FAST_PERIOD: int = int(os.getenv("SMA_FAST_PERIOD", "10"))
+SMA_SLOW_PERIOD: int = int(os.getenv("SMA_SLOW_PERIOD", "50"))
 
 # ── Database ─────────────────────────────────────────────────────────────
 DATABASE_URL: str = os.getenv("DATABASE_URL", "")
