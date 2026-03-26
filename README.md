@@ -1,6 +1,6 @@
 # Trading Bot
 
-Autonomous Python trading bot with a Next.js web dashboard. Connects to MetaTrader 5 for live/demo trading, stores everything in PostgreSQL (Supabase), and shows real-time status on a Vercel-hosted UI. Features an ICT/SMC strategy engine and a smart scan-rank-execute pipeline that never misses the best opportunity.
+Autonomous Python trading bot with a Next.js web dashboard. Connects to MetaTrader 5 for live/demo trading, stores everything in PostgreSQL (Supabase), and shows real-time status on a Vercel-hosted UI. Features a per-symbol LSTM neural network as the primary strategy, an ICT/SMC engine, and a scan-rank-execute pipeline — all gated by a Crucix macro intelligence layer that monitors 27 global data sources in real time.
 
 ## Architecture
 
@@ -25,11 +25,15 @@ Autonomous Python trading bot with a Next.js web dashboard. Connects to MetaTrad
 ## Project Structure
 
 ```
-├── agents/                  # 8 autonomous agents
+├── agents/                  # 9 autonomous agents
+│   ├── crucix_agent.py      # Macro intelligence — world state, blackout, lot scaling
 │   ├── market_agent.py      # Fetches & validates live market data (250 candles)
 │   ├── analysis_agent.py    # SMA, RSI, ATR, regime detection
 │   ├── strategy_agent.py    # Runs ALL strategies, collects ALL signals
-│   ├── risk_agent.py        # 7-step risk validation gate
+│   ├── neural_strategy.py   # LSTM strategy wrapper (primary)
+│   ├── model_manager.py     # Trains/fine-tunes per-symbol LSTM models
+│   ├── council_agent.py     # 3-expert algorithmic quality gate
+│   ├── risk_agent.py        # 6-step risk validation gate
 │   ├── execution_agent.py   # Places orders via broker
 │   ├── trade_manager.py     # TP/SL, breakeven, trailing, partial close
 │   ├── learning_agent.py    # Scores trades, adjusts confidence
@@ -45,8 +49,8 @@ Autonomous Python trading bot with a Next.js web dashboard. Connects to MetaTrad
 │   ├── db.py                # PostgreSQL (psycopg2) — 7 tables
 │   └── cleanup_mock_data.sql # SQL to purge mock/demo data
 ├── filters/
-│   ├── data_validator.py    # Stuck quote / spike detection
-│   └── news_filter.py       # Economic calendar blackout
+│   ├── crucix_client.py     # CrucixClient + MacroContext (used by CrucixAgent)
+│   └── data_validator.py    # Stuck quote / spike detection
 ├── models/
 │   ├── trade.py             # Trade dataclass
 │   ├── signal.py            # Signal + EntrySnapshot
@@ -100,7 +104,12 @@ Autonomous Python trading bot with a Next.js web dashboard. Connects to MetaTrad
 
 ## Strategies
 
-### ICT/SMC Strategy (Primary)
+### LSTM Neural Network (Primary)
+Per-symbol LSTM model trained on 2 years of H1 OHLCV history. 9 input features, 50-bar sequence length, 3-class output (BUY/SELL/HOLD). Models train in the background at startup and fine-tune automatically after every 20 trade closures. Minimum confidence threshold: 60%.
+
+SL = 2×ATR; TP1/2/3 = 1R/2R/3R.
+
+### ICT/SMC Strategy (Secondary)
 Full Inner Circle Trader / Smart Money Concepts engine with 10 analysis modules:
 
 - **Market Structure** — Swing highs/lows, Break of Structure (BOS), Market Structure Shift (MSS), dealing ranges
@@ -115,8 +124,8 @@ Full Inner Circle Trader / Smart Money Concepts engine with 10 analysis modules:
 
 Ships with 200 H4 candles for HTF analysis. Minimum confidence threshold: 55/100.
 
-### SMA Crossover (Fallback)
-Simple moving average crossover with ATR-based stops. Used as a secondary strategy when ICT conditions aren't met.
+### SMA Crossover (Tertiary)
+Simple moving average crossover with ATR-based stops. Used when ICT conditions aren't met and neural model isn't yet trained for the symbol.
 
 ## Signal Pipeline
 
@@ -124,6 +133,12 @@ The bot uses a **scan-all → rank → execute-best** pipeline to never miss the
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
+│  PRE-SCAN: CrucixAgent.run()                                    │
+│  Fetch macro state — VIX, yield curve, geopolitics, OSINT       │
+│  FLASH alert? → full blackout. PRIORITY? → 50% lot size         │
+└──────────────────────────┬──────────────────────────────────────┘
+                           │
+┌──────────────────────────▼──────────────────────────────────────┐
 │  PHASE 1: SCAN                                                  │
 │  For each symbol (30 symbols, 5 asset classes):                 │
 │    MarketAgent → AnalysisAgent → StrategyAgent.detect_all()     │
@@ -211,6 +226,7 @@ Create a Supabase project (or any Postgres). Tables are created automatically on
 | `BROKER_SERVER` | No* | MT5 server (e.g. `PUPrime-Demo`) |
 | `TELEGRAM_BOT_TOKEN` | No | Telegram bot token from @BotFather |
 | `TELEGRAM_CHAT_ID` | No | Your Telegram chat ID |
+| `CRUCIX_URL` | No | Crucix server URL (default: `http://localhost:3117`) |
 | `NEXTAUTH_SECRET` | Web | Random secret for session encryption |
 | `NEXTAUTH_URL` | Web | Dashboard URL (e.g. `https://trade-bot.vercel.app`) |
 | `DASHBOARD_PASSWORD` | Web | Password to access the web UI |
@@ -248,14 +264,15 @@ Everything is logged for future analysis across multiple layers:
 
 ## Risk Management
 
-7-step validation (all must pass):
+6-step validation (all must pass):
 1. **Drawdown circuit breaker** — halts trading if daily loss > 5%
-2. **Duplicate guard** — no same symbol+direction+strategy twice
-3. **Correlation guard** — no same symbol+direction from different strategies
-4. **News blackout** — no trades near high-impact news events
-5. **Spread check** — rejects if spread > 3 pips
-6. **Max open trades** — default 3 maximum
-7. **Position sizing** — risk-based lot calculation with confidence scaling
+2. **Macro blackout** — Crucix FLASH alert active → no new trades
+3. **Duplicate guard** — no same symbol+direction+strategy twice
+4. **Correlation guard** — no same symbol+direction from different strategies
+5. **Spread check** — rejects if spread > 3 pips (asset-class aware)
+6. **Position sizing** — risk-based lot calculation with confidence + macro (Crucix) scaling
+
+Max open trades: 3 (configurable). Macro lot scaling: PRIORITY → 50%, ROUTINE → 75%, CLEAR → 100%.
 
 ## Tests
 

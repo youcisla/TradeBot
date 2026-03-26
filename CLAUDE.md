@@ -44,12 +44,12 @@ Never skip step 1-3. Never write code based on memory alone. Always read → the
 ## Agent Pipeline (current)
 
 ```
-PIPELINE:  market → analysis → strategy → neural → council → risk → execution → trade_manager
+PIPELINE:  crucix → market → analysis → strategy → neural → council → risk → execution → trade_manager
 SUPPORT:   learning · model_manager · logging
 ```
 
 Agent event keys in DB (for `AgentFeed.tsx`):
-- `market`, `analysis`, `strategy`, `neural`, `council`, `risk`, `execution`, `trade_manager`
+- `crucix`, `market`, `analysis`, `strategy`, `neural`, `council`, `risk`, `execution`, `trade_manager`
 - `learning`, `model_manager`, `logging`
 
 ---
@@ -59,11 +59,13 @@ Agent event keys in DB (for `AgentFeed.tsx`):
 ```
 main.py                          ← Bot entry point
 agents/                          ← All agent implementations
+  crucix_agent.py                ← Macro intelligence (wraps CrucixClient, replaces NewsFilter)
   market_agent.py, analysis_agent.py, strategy_agent.py
   neural_strategy.py             ← NeuralStrategy wrapping ModelManager
   model_manager.py               ← LSTM training/inference/fine-tuning
   risk_agent.py, execution_agent.py
   trade_manager.py, learning_agent.py, logging_agent.py
+filters/crucix_client.py         ← CrucixClient + MacroContext (used by CrucixAgent)
 strategies/                      ← Strategy implementations
   ict_strategy.py, ict/          ← ICT/SMC engine (10 modules)
   sma_crossover.py               ← Legacy fallback

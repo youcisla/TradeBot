@@ -44,12 +44,13 @@ Use this for initial development and demo testing:
   - `/resume` → resume normal operation
 - Uses `python-telegram-bot` package with webhook or polling
 
-**Economic Calendar (for news blackout filter):**
-- **Forex Factory scraper** — Free, but fragile (HTML scraping)
-- **Finnhub calendar** — Free tier available, JSON API
-- **Static weekly JSON** — Manually maintained fallback (download weekly from Forex Factory)
-- Add to `.env`: `NEWS_CALENDAR_SOURCE=finnhub` (or `forexfactory` or `static`)
-- The bot must block new trades within N minutes of high-impact events on relevant currencies
+**Crucix Intelligence Server (for macro blackout + lot scaling):**
+- Local Next.js server aggregating 27 macro data sources (VIX, yield curve, OSINT, etc.)
+- Located in `crucix/` git submodule — run with `npm run dev` inside that folder
+- Listens on `http://localhost:3117` by default
+- Add to `.env`: `CRUCIX_URL=http://localhost:3117` (optional — defaults to localhost:3117)
+- Fully optional: bot continues normally without it, with `lot_scale_factor=1.0` and no blackouts
+- FLASH alerts (major geopolitical events) block all new trades; PRIORITY → 50% lot size
 
 ### Limitations of Free Stack
 - Slow data (not real-time)
@@ -128,10 +129,8 @@ DEMO_MODE=true
 ALPHA_VANTAGE_KEY=
 TWELVE_DATA_KEY=
 
-# Economic Calendar (news filter)
-NEWS_CALENDAR_SOURCE=finnhub
-FINNHUB_API_KEY=
-NEWS_BLACKOUT_MINUTES=15
+# Crucix macro intelligence (optional — defaults to localhost:3117)
+CRUCIX_URL=http://localhost:3117
 
 # Telegram (two-way: alerts + remote commands)
 TELEGRAM_BOT_TOKEN=

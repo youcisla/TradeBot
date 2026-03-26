@@ -21,15 +21,52 @@ from typing import TYPE_CHECKING, Callable
 from broker.connector import BrokerConnector
 from config import settings
 from config.symbols import pip_value, contract_size, asset_class
-from filters.news_filter import NewsFilter
 from models.signal import Signal
 from models.trade import Trade
 from utils import telegram_bot
 
 if TYPE_CHECKING:
+    from agents.crucix_agent import CrucixAgent
     from database.db import Database
 
 logger = logging.getLogger(__name__)
+
+
+# ── Cross-pair correlation table ─────────────────────────────────────────
+# Maps each symbol to a set of symbols that are *positively* correlated
+# with it in the same direction (e.g. all USD-short vs USD-long pairs).
+# Holding a signal's symbol AND any of these in the SAME direction means
+# overlapping exposure — the second trade is blocked.
+_CORRELATED_PAIRS: dict[str, frozenset[str]] = {
+    # USD-short pairs (BUY = short USD)
+    "EURUSD": frozenset({"GBPUSD", "AUDUSD", "NZDUSD", "EURJPY", "GBPJPY",
+                          "EURCAD", "EURAUD", "EURCHF"}),
+    "GBPUSD": frozenset({"EURUSD", "AUDUSD", "NZDUSD", "GBPJPY", "GBPAUD",
+                          "GBPCHF"}),
+    "AUDUSD": frozenset({"EURUSD", "GBPUSD", "NZDUSD", "AUDJPY", "EURAUD",
+                          "GBPAUD", "AUDNZD"}),
+    "NZDUSD": frozenset({"EURUSD", "GBPUSD", "AUDUSD", "AUDNZD"}),
+    # USD-long pairs (BUY = long USD)
+    "USDJPY": frozenset({"USDCAD", "USDCHF", "USDZAR", "USDMXN", "CADJPY",
+                          "CHFJPY"}),
+    "USDCAD": frozenset({"USDJPY", "USDCHF", "CADJPY"}),
+    "USDCHF": frozenset({"USDJPY", "USDCAD", "CHFJPY"}),
+    # JPY crosses
+    "EURJPY": frozenset({"GBPJPY", "AUDJPY", "CADJPY", "CHFJPY"}),
+    "GBPJPY": frozenset({"EURJPY", "AUDJPY", "CADJPY"}),
+    "AUDJPY": frozenset({"EURJPY", "GBPJPY", "CADJPY"}),
+    # Precious metals / safe-haven
+    "XAUUSD": frozenset({"XAGUSD"}),
+    "XAGUSD": frozenset({"XAUUSD"}),
+    # Crypto cluster
+    "BTCUSD": frozenset({"ETHUSD", "LTCUSD", "XRPUSD", "SOLUSD"}),
+    "ETHUSD": frozenset({"BTCUSD", "LTCUSD", "XRPUSD"}),
+    "LTCUSD": frozenset({"BTCUSD", "ETHUSD"}),
+    "XRPUSD": frozenset({"BTCUSD", "ETHUSD"}),
+    # Oil
+    "USOIL":  frozenset({"UKOIL"}),
+    "UKOIL":  frozenset({"USOIL"}),
+}
 
 
 class RiskAgent:
@@ -39,12 +76,12 @@ class RiskAgent:
         self,
         broker: BrokerConnector,
         get_open_trades: Callable[[], list[Trade]],
-        news_filter: NewsFilter | None = None,
-        db: Database | None = None,
+        crucix_agent: "CrucixAgent | None" = None,
+        db: "Database | None" = None,
     ) -> None:
         self._broker = broker
         self._get_open_trades = get_open_trades
-        self._news = news_filter or NewsFilter()
+        self._crucix = crucix_agent
         self._db = db
 
         # Drawdown tracking
@@ -99,18 +136,18 @@ class RiskAgent:
             lot_size = round(lot_size * 0.7, 2)
 
         # Macro risk scaling from Crucix
-        from filters.crucix_client import get_macro_context
-        try:
-            macro = get_macro_context()
-            scale = macro.lot_scale_factor
-            if scale != 1.0:
-                lot_size = round(lot_size * scale, 2)
-                logger.info(
-                    "MACRO LOT SCALE applied: tier=%s scale=%.2f → lot=%.2f",
-                    macro.risk_tier, scale, lot_size,
-                )
-        except Exception:
-            pass  # Crucix unavailable — use unscaled lot
+        if self._crucix:
+            try:
+                macro = self._crucix.get_context()
+                scale = macro.lot_scale_factor
+                if scale != 1.0:
+                    lot_size = round(lot_size * scale, 2)
+                    logger.info(
+                        "MACRO LOT SCALE applied: tier=%s scale=%.2f → lot=%.2f",
+                        macro.risk_tier, scale, lot_size,
+                    )
+            except Exception:
+                pass  # Crucix unavailable — use unscaled lot
 
         return max(settings.MIN_LOT_SIZE, min(settings.MAX_LOT_SIZE, lot_size))
 
@@ -124,17 +161,11 @@ class RiskAgent:
             return False
 
         # 1b. Crucix macro blackout check
-        from filters.crucix_client import get_macro_context
-        try:
-            macro = get_macro_context()
-            if macro.is_blackout:
-                self._emit("warn",
-                           f"MACRO BLACKOUT: FLASH alert active — {', '.join(macro.active_flash_alerts[:2])}",
-                           {"symbol": signal.symbol, "tier": macro.risk_tier,
-                            "alerts": macro.active_flash_alerts})
-                return False
-        except Exception:
-            pass  # Crucix unavailable — no macro blackout applied
+        if self._crucix and self._crucix.is_blackout(signal.symbol):
+            self._emit("warn",
+                       f"MACRO BLACKOUT: FLASH alert active on {signal.symbol}",
+                       {"symbol": signal.symbol, "check": "crucix_blackout"})
+            return False
 
         open_trades = self._get_open_trades()
 
@@ -149,23 +180,15 @@ class RiskAgent:
                        {"symbol": signal.symbol, "check": "duplicate"})
             return False
 
-        # 3. Correlation guard
+        # 3. Correlation guard (same symbol or correlated pair, same direction)
         if self._check_correlation(signal, open_trades):
             logger.warning(
-                "RISK REJECT [CORRELATION]: %s %s already open from another strategy",
+                "RISK REJECT [CORRELATION]: %s %s blocked by existing exposure",
                 signal.symbol, signal.direction,
             )
             self._emit("warn",
-                       f"CORRELATION — {signal.symbol} already open from another strategy",
+                       f"CORRELATION — {signal.symbol} {signal.direction} blocked by correlated open position",
                        {"symbol": signal.symbol, "check": "correlation"})
-            return False
-
-        # 4. News blackout
-        if self._news.is_blackout(signal.symbol):
-            logger.warning("RISK REJECT [NEWS]: blackout for %s", signal.symbol)
-            self._emit("warn",
-                       f"NEWS BLACKOUT — {signal.symbol} blocked by upcoming event",
-                       {"symbol": signal.symbol, "check": "news"})
             return False
 
         # 5. Live spread check (per-asset-class limits)
@@ -284,9 +307,20 @@ class RiskAgent:
 
     @staticmethod
     def _check_correlation(signal: Signal, open_trades: list[Trade]) -> bool:
+        """Block if already holding the same symbol+direction from any strategy,
+        OR if holding a highly-correlated pair in the same direction."""
+        correlated = _CORRELATED_PAIRS.get(signal.symbol, frozenset())
         for t in open_trades:
-            if (t.symbol == signal.symbol
-                    and t.direction == signal.direction
-                    and t.is_open()):
+            if not t.is_open():
+                continue
+            # Same symbol, any strategy (catches cross-strategy duplicates)
+            if t.symbol == signal.symbol and t.direction == signal.direction:
+                return True
+            # Correlated pair, same direction → overlapping exposure
+            if t.symbol in correlated and t.direction == signal.direction:
+                logger.debug(
+                    "Correlation block: %s %s blocked by open %s %s",
+                    signal.direction, signal.symbol, t.direction, t.symbol,
+                )
                 return True
         return False

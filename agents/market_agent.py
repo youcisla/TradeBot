@@ -38,12 +38,14 @@ class MarketAgent:
         Raises ``DataValidationError`` if the data fails sanity checks —
         the main loop should catch this and skip the iteration.
         """
-        self._emit("info", f"Scanning {symbol} — pulling live tick data...")
+        logger.debug("Scanning %s — pulling live tick data...", symbol)
         try:
             tick = self._broker.get_tick(symbol)
         except Exception as exc:
-            self._emit("error", f"Lost connection to {symbol} feed: {exc}")
-            raise DataValidationError(f"Failed to fetch tick for {symbol}: {exc}") from exc
+            # Log to file only — main loop emits a single consolidated DB event
+            # when it detects a full IPC loss, avoiding agent-feed spam.
+            logger.warning("No tick data for %s: %s", symbol, exc)
+            raise DataValidationError(f"No tick data for {symbol}: {exc}") from exc
 
         bid = tick["bid"]
         ask = tick["ask"]
@@ -57,8 +59,8 @@ class MarketAgent:
         candles = self._get_candles(symbol)
 
         self._emit("info",
-                   f"{symbol} feed healthy — bid={bid:.5f} ask={ask:.5f} spread={spread:.5f} "
-                   f"vol={volume:.0f} candles={len(candles)}",
+                   f"{symbol} — bid={bid:.5f} spread={spread:.5f} "
+                   f"candles={len(candles)} vol={volume:.0f}",
                    {"bid": bid, "ask": ask, "spread": spread,
                     "volume": volume, "candles": len(candles),
                     "last_close": candles[-1].close if candles else None})
@@ -83,14 +85,6 @@ class MarketAgent:
             )
             validator = self._validator(symbol)
             validator.validate_candles(candles)
-            if candles:
-                hi = max(c.high for c in candles[-14:])
-                lo = min(c.low for c in candles[-14:])
-                self._emit("info",
-                           f"{symbol} {settings.DEFAULT_TIMEFRAME} candles OK — "
-                           f"count={len(candles)} 14-bar range={hi:.5f}/{lo:.5f}",
-                           {"count": len(candles), "high_14": hi, "low_14": lo,
-                            "open": candles[-1].open, "close": candles[-1].close})
             return candles
         except DataValidationError:
             raise

@@ -15,7 +15,7 @@ Features a **scan-all → rank → execute-best** pipeline across **30 symbols**
 ## Agent Pipeline
 
 ```
-PIPELINE:  market → analysis → strategy → neural → council → risk → execution → trade_manager
+PIPELINE:  crucix → market → analysis → strategy → neural → council → risk → execution → trade_manager
 SUPPORT:   learning · model_manager · logging
 ```
 
@@ -23,12 +23,13 @@ SUPPORT:   learning · model_manager · logging
 
 | Agent | Key | Question | Responsibility |
 |---|---|---|---|
+| **Crucix Agent** | `crucix` | Is the world safe? | Macro intelligence: risk tier, VIX, yield curve, OSINT. Blackout on FLASH alerts |
 | Market Agent | `market` | What is the market doing? | 250 H1 candles, spread, volume, data validation |
 | Analysis Agent | `analysis` | What does it mean? | SMA, RSI, ATR, regime, session detection |
 | Strategy Agent | `strategy` | Is there a signal? | Orchestrates registered strategies, calls detect_all() |
 | **Neural Strategy** | `neural` | LSTM prediction? | Wraps ModelManager, returns BUY/SELL/HOLD signal |
 | Council Agent | `council` | Consensus check? | 3-expert vote (ICT, DanialFX, Traditional) for confirmation |
-| Risk Agent | `risk` | Is it safe? | 7-step validation gate |
+| Risk Agent | `risk` | Is it safe? | 6-step validation gate (macro blackout via CrucixAgent) |
 | Execution Agent | `execution` | Can we execute it? | Places trade with SL + 3 TPs |
 | Trade Manager | `trade_manager` | What do we do with it? | Partial closes, breakeven, trailing stops, reconciliation |
 | Learning Agent | `learning` | What did we learn? | Reviews results, adjusts confidence |
@@ -149,6 +150,8 @@ TradeManager.reconcile()  # startup reconciliation
 while True:
     loop_start = time.monotonic()
 
+    CrucixAgent.run()       # fetch macro context, log to DB, check FLASH blackout
+
     TradeManager.monitor()  # monitor existing trades
 
     # PHASE 1: SCAN
@@ -156,8 +159,8 @@ while True:
     for symbol in active_symbols:
         if not is_market_open(symbol): continue
         data    = MarketAgent.get_data(symbol)
-        context = AnalysisAgent.analyze(data)
-        signals = StrategyAgent.detect_all(context)  # NeuralStrategy.detect()
+        context = AnalysisAgent.analyze(data)   # enriches with CrucixAgent.get_context()
+        signals = StrategyAgent.detect_all(context)
         all_signals.extend(signals)
 
     # PHASE 2: RANK
@@ -166,7 +169,7 @@ while True:
 
     # PHASE 3: EXECUTE
     for signal in ranked:
-        if RiskAgent.validate(signal):
+        if RiskAgent.validate(signal):          # checks CrucixAgent.is_blackout() at step 1b
             trade = ExecutionAgent.open_trade(signal)
 
     elapsed = time.monotonic() - loop_start
@@ -218,11 +221,12 @@ Also triggers LSTM fine-tuning: every 20 trade closures per symbol → 5 fine-tu
 | State persistence | Trade Manager → DB on every state change |
 | Position reconciliation | Trade Manager on startup + periodic |
 | Duplicate signal guard | Risk Agent |
-| News blackout filter | Risk Agent + `filters/news_filter.py` |
+| **Macro blackout (FLASH)** | **CrucixAgent** → Risk Agent step 1b |
 | Spread spike detection | Risk Agent (live check at signal time) |
 | Drawdown circuit breaker | Risk Agent |
 | Data feed validation | Market Agent + `filters/data_validator.py` |
 | Remote kill switch | Telegram `/kill` → Trade Manager |
+| Macro lot scaling | Risk Agent reads `CrucixAgent.get_context().lot_scale_factor` |
 
 ---
 
@@ -341,3 +345,4 @@ On unexpected errors, the council fails open — trading is never blocked.
 17. ✅ Multi-strategy execution (NeuralLSTM + ICT + SMA)
 18. ✅ Trading Council enabled by default (65% threshold)
 19. ✅ Skill CRUD system (SkillManager + dashboard + API)
+20. ✅ CrucixAgent — macro intelligence as a first-class pipeline agent (replaces NewsFilter)

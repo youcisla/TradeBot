@@ -11,7 +11,6 @@ from typing import Any
 import pytest
 
 from broker.mock_connector import MockConnector
-from filters.news_filter import NewsFilter
 from models.market_data import Candle, MarketContext, MarketData
 from models.signal import EntrySnapshot, Signal
 from models.trade import Trade
@@ -75,8 +74,9 @@ def state(db, broker) -> StatePersistence:
 
 
 @pytest.fixture
-def news_filter() -> NewsFilter:
-    return NewsFilter()
+def crucix_agent():
+    from agents.crucix_agent import CrucixAgent
+    return CrucixAgent()
 
 
 def make_candles(count: int = 60, base: float = 1.1050,

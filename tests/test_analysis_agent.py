@@ -1,14 +1,13 @@
 """Tests for AnalysisAgent."""
 
 from agents.analysis_agent import AnalysisAgent
-from filters.news_filter import NewsFilter
 from models.market_data import MarketData
 from tests.conftest import make_candles
 
 
 class TestAnalysisAgent:
-    def test_analyze_returns_context(self, news_filter):
-        agent = AnalysisAgent(news_filter)
+    def test_analyze_returns_context(self, crucix_agent):
+        agent = AnalysisAgent(crucix_agent)
         candles = make_candles(60, base=1.1000, trend=0.0001)
         data = MarketData(
             symbol="EURUSD", bid=1.1060, ask=1.1062,
@@ -18,8 +17,8 @@ class TestAnalysisAgent:
         assert ctx.symbol == "EURUSD"
         assert ctx.current_price == data.mid_price
 
-    def test_sma_values_computed(self, news_filter):
-        agent = AnalysisAgent(news_filter)
+    def test_sma_values_computed(self, crucix_agent):
+        agent = AnalysisAgent(crucix_agent)
         candles = make_candles(60, base=1.1000, trend=0.0001)
         data = MarketData(
             symbol="EURUSD", bid=1.1060, ask=1.1062,
@@ -29,8 +28,8 @@ class TestAnalysisAgent:
         assert ctx.sma_fast > 0
         assert ctx.sma_slow > 0
 
-    def test_rsi_in_range(self, news_filter):
-        agent = AnalysisAgent(news_filter)
+    def test_rsi_in_range(self, crucix_agent):
+        agent = AnalysisAgent(crucix_agent)
         candles = make_candles(60, base=1.1000, trend=0.0001)
         data = MarketData(
             symbol="EURUSD", bid=1.1060, ask=1.1062,
@@ -39,8 +38,8 @@ class TestAnalysisAgent:
         ctx = agent.analyze(data)
         assert 0 <= ctx.rsi <= 100
 
-    def test_atr_positive(self, news_filter):
-        agent = AnalysisAgent(news_filter)
+    def test_atr_positive(self, crucix_agent):
+        agent = AnalysisAgent(crucix_agent)
         candles = make_candles(60, base=1.1000, trend=0.0001)
         data = MarketData(
             symbol="EURUSD", bid=1.1060, ask=1.1062,
@@ -49,8 +48,8 @@ class TestAnalysisAgent:
         ctx = agent.analyze(data)
         assert ctx.atr > 0
 
-    def test_trend_direction_bullish_on_uptrend(self, news_filter):
-        agent = AnalysisAgent(news_filter)
+    def test_trend_direction_bullish_on_uptrend(self, crucix_agent):
+        agent = AnalysisAgent(crucix_agent)
         # Strong uptrend: sma_fast (last 10) >> sma_slow (last 50)
         candles = make_candles(60, base=1.0800, trend=0.0005)
         data = MarketData(
@@ -61,8 +60,8 @@ class TestAnalysisAgent:
         assert ctx.trend_direction == "bullish"
         assert ctx.sma_fast > ctx.sma_slow
 
-    def test_empty_candles_returns_safe_defaults(self, news_filter):
-        agent = AnalysisAgent(news_filter)
+    def test_empty_candles_returns_safe_defaults(self, crucix_agent):
+        agent = AnalysisAgent(crucix_agent)
         data = MarketData(
             symbol="EURUSD", bid=1.1060, ask=1.1062,
             spread=0.0002, volume=100, candles=[],

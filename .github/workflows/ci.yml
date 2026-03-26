@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    env:
+      # Use mock/demo mode — no real broker or DB needed in CI
+      DEMO_MODE: "true"
+      DATABASE_URL: ""
+      LOG_LEVEL: WARNING
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          # MetaTrader5 is Windows-only — skip in CI
+          grep -v "^MetaTrader5" requirements.txt | grep -v "^#" | grep -v "^$" | pip install -r /dev/stdin
+
+      - name: Run tests
+        run: python -m pytest tests/ -v --tb=short
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install ruff
+        run: pip install ruff
+      - name: Lint
+        run: ruff check . --select E,F,W --ignore E501 --exclude web/,crucix/

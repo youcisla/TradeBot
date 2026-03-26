@@ -9,12 +9,11 @@ import logging
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from filters.crucix_client import get_macro_context
-from filters.news_filter import NewsFilter
 from models.market_data import MarketContext, MarketData
 from utils.helpers import current_session, day_of_week
 
 if TYPE_CHECKING:
+    from agents.crucix_agent import CrucixAgent
     from database.db import Database
 
 logger = logging.getLogger(__name__)
@@ -23,8 +22,8 @@ logger = logging.getLogger(__name__)
 class AnalysisAgent:
     """Computes technical indicators and market regime from raw data."""
 
-    def __init__(self, news_filter: NewsFilter | None = None, db: Database | None = None) -> None:
-        self._news = news_filter or NewsFilter()
+    def __init__(self, crucix_agent: "CrucixAgent | None" = None, db: "Database | None" = None) -> None:
+        self._crucix = crucix_agent
         self._db = db
 
     def analyze(self, data: MarketData) -> MarketContext:
@@ -83,7 +82,7 @@ class AnalysisAgent:
         else:
             trend = "neutral"
 
-        near_news = self._news.is_blackout(data.symbol)
+        near_news = self._crucix.is_blackout(data.symbol) if self._crucix else False
 
         ctx = MarketContext(
             symbol=data.symbol,
@@ -108,18 +107,8 @@ class AnalysisAgent:
         )
 
         # Enrich with world context from Crucix (fails safely if not running)
-        try:
-            ctx.macro = get_macro_context()
-            if ctx.macro.crucix_available:
-                self._emit("info",
-                           f"Crucix: tier={ctx.macro.risk_tier} vix={ctx.macro.vix:.1f} "
-                           f"yield_inv={ctx.macro.yield_curve_inverted} "
-                           f"sentiment={ctx.macro.osint_sentiment}",
-                           {"tier": ctx.macro.risk_tier, "vix": ctx.macro.vix,
-                            "flash_alerts": ctx.macro.active_flash_alerts})
-        except Exception as exc:
-            logger.debug("Crucix context unavailable: %s", exc)
-            ctx.macro = None
+        if self._crucix:
+            ctx.macro = self._crucix.get_context()
 
         return ctx
 

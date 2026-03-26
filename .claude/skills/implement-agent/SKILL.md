@@ -1,12 +1,74 @@
 ---
 name: implement-agent
-description: Implement or modify one of the trading bot agents (Market, Analysis, Strategy, Neural, ModelManager, Risk, Execution, Trade Manager, Learning, Logging). Provides the specification and contract for each agent. Use when building, extending, or debugging any agent module.
-argument-hint: <agent-name> (market|analysis|strategy|neural|model-manager|risk|execution|trade-manager|learning|logging)
+description: Implement or modify one of the trading bot agents (Crucix, Market, Analysis, Strategy, Neural, ModelManager, Risk, Execution, Trade Manager, Learning, Logging). Provides the specification and contract for each agent. Use when building, extending, or debugging any agent module.
+argument-hint: <agent-name> (crucix|market|analysis|strategy|neural|model-manager|risk|execution|trade-manager|learning|logging)
 ---
 
 # Implement Agent: $ARGUMENTS
 
 Implement the specified agent following its contract below. Each agent has a **single responsibility** and communicates through well-defined inputs/outputs.
+
+---
+
+## Crucix Agent (`agents/crucix_agent.py`)
+
+**Question:** Is the world safe to trade?
+
+**Responsibilities:**
+- Wrap `CrucixClient` (`filters/crucix_client.py`) in a proper agent interface
+- Call `run()` once per bot iteration — fetches latest macro context, logs to DB under key `crucix`
+- Expose `is_blackout(symbol)` — returns True on FLASH-tier alerts (blocks all trading)
+- Expose `get_context()` — returns `MacroContext` for lot scaling and macro enrichment
+- Never raises — always returns safe defaults if Crucix server is offline
+
+**Interface:**
+```python
+class CrucixAgent:
+    def __init__(self, db: Database | None = None) -> None: ...
+
+    def run(self) -> MacroContext:
+        """Fetch + log macro state each iteration. Never raises."""
+
+    def is_blackout(self, symbol: str) -> bool:
+        """True if FLASH alert is active and data is fresh. False on any error."""
+
+    def get_context(self) -> MacroContext:
+        """Return latest MacroContext. Never raises."""
+```
+
+**MacroContext fields (from `filters/crucix_client.py`):**
+```python
+risk_tier: str              # CLEAR / ROUTINE / PRIORITY / FLASH
+vix: float                  # VIX fear index
+yield_curve_inverted: bool
+usd_index: float
+oil_price: float
+active_flash_alerts: list[str]
+conflict_regions: list[str]
+osint_sentiment: str        # bullish / bearish / neutral / fearful
+supply_chain_stress: float
+economic_stress: bool
+last_sweep_age_minutes: float
+crucix_available: bool
+
+# Derived properties:
+is_stale: bool              # sweep_age > 20 min
+is_blackout: bool           # risk_tier == FLASH
+lot_scale_factor: float     # FLASH=0.0, PRIORITY=0.5, ROUTINE=0.75, CLEAR=1.0
+confidence_modifier(direction): float   # VIX + tier + yield curve modifier
+```
+
+**Wiring in `main.py`:**
+```python
+crucix_agent = CrucixAgent(db=db)
+analysis_agent = AnalysisAgent(crucix_agent, db=db)
+risk_agent = RiskAgent(broker, trade_manager.get_open_trades, crucix_agent, db=db)
+
+# In _run_iteration():
+crucix_agent.run()  # called first, before market scan
+```
+
+**Design rule:** Crucix is always optional — if it's not running, the bot continues normally with `lot_scale_factor=1.0` and no blackouts.
 
 ---
 
@@ -54,12 +116,16 @@ The Market Agent must never silently return bad data. If validation fails, it ra
 - Determine market regime (trending, ranging, volatile)
 - Identify key support/resistance levels
 - Assess current session (London, NY, Asian)
+- Enrich `MarketContext.macro` via `CrucixAgent.get_context()`
+- Set `near_news_event` via `CrucixAgent.is_blackout(symbol)`
 
 **Interface:**
 ```python
 class AnalysisAgent:
+    def __init__(self, crucix_agent: CrucixAgent | None = None, db: Database | None = None) -> None: ...
+
     def analyze(self, market_data: MarketData) -> MarketContext:
-        """Returns interpreted market context."""
+        """Returns interpreted market context (with macro enrichment from Crucix)."""
 ```
 
 ---
@@ -111,32 +177,29 @@ Registered strategies: ICT/SMC (primary), SMA Crossover (fallback).
 - **Duplicate signal guard** — reject if already holding same symbol + direction + strategy
 - **Correlation guard** — reject if already holding same symbol + direction from ANY strategy
 - **Drawdown circuit breaker** — halt all trading if daily equity drawdown exceeds limit
-- **News blackout filter** — reject signals within N minutes of high-impact events on the symbol
+- **Macro blackout** — reject if `CrucixAgent.is_blackout(symbol)` returns True (FLASH tier)
+- **Macro lot scaling** — multiply lot size by `CrucixAgent.get_context().lot_scale_factor`
 
 **Interface:**
 ```python
 class RiskAgent:
+    def __init__(self, broker, get_open_trades, crucix_agent: CrucixAgent | None = None, db=None): ...
+
     def validate(self, signal: Signal) -> bool:
         """Returns True if the trade is safe to execute. Runs ALL checks below."""
-    
-    def calculate_position_size(self, signal: Signal, balance: float) -> float:
-        """Returns the lot size based on risk parameters."""
-    
-    def check_drawdown(self) -> bool:
-        """Returns True if daily drawdown limit hit. Halts all trading for 24h."""
-    
-    def check_duplicate(self, signal: Signal) -> bool:
-        """Returns True if a duplicate position already exists."""
-    
-    def check_news_blackout(self, symbol: str) -> bool:
-        """Returns True if within blackout window of high-impact event."""
+
+    def calculate_position_size(self, signal: Signal) -> float:
+        """Returns the lot size based on risk parameters (with macro lot scaling)."""
+
+    def _check_drawdown(self) -> bool:
+        """Returns True if daily drawdown limit hit. Halts all trading."""
 ```
 
 **Validation order (fail fast):**
-1. `check_drawdown()` — if True, reject immediately
-2. `check_duplicate()` — is this trade already open?
-3. Correlation guard — same symbol+direction from another strategy?
-4. `check_news_blackout()` — is a high-impact event imminent?
+1. `_check_drawdown()` — if True, reject immediately
+2. `crucix_agent.is_blackout(symbol)` — macro FLASH alert active?
+3. `_check_duplicate()` — is this trade already open?
+4. `_check_correlation()` — same symbol+direction from another strategy?
 5. Live spread check — is current spread > `MAX_SPREAD`?
 6. Max open trades check
 7. Position size vs. balance check
@@ -146,13 +209,12 @@ class RiskAgent:
 - `MAX_OPEN_TRADES` (e.g., 3-5)
 - `MAX_DAILY_LOSS` (e.g., 5% of account)
 - `MAX_SPREAD` (in pips) — checked LIVE at signal time
-- `NEWS_BLACKOUT_MINUTES` (e.g., 15 min before/after)
 - `DRAWDOWN_COOLDOWN_HOURS` (e.g., 24h after circuit breaker triggers)
 
-**News filter integration:**
-- Use `filters/news_filter.py` which queries an economic calendar
-- Sources: Forex Factory scraper, Finnhub calendar API, or a static weekly JSON file
-- Filter applies per-currency (e.g., USD events block EURUSD, XAUUSD, etc.)
+**Macro integration (via CrucixAgent):**
+- Blackout: FLASH alerts block all new trades
+- Lot scaling: PRIORITY → 0.5×, ROUTINE → 0.75×, CLEAR → 1.0× (FLASH → 0.0 but blocked first)
+- No hard dependency — if Crucix is not running, all signals are allowed and lot size is unscaled
 
 ---
 
@@ -430,9 +492,10 @@ models/neural/
 
 ## How to Add a New Agent to the Pipeline
 
-1. Create `agents/<new_agent>.py` inheriting no base class (just follow the pattern of existing agents)
-2. Accept `(broker, db)` in `__init__` — standard constructor pattern
-3. Instantiate in `main()` after existing agents (step 6 area)
-4. Wire it into `_run_iteration()` — pass as a keyword argument
-5. Add its agent key to `CLAUDE.md` Agent event keys list
-6. Log its startup in the STARTUP `log_agent.record()` call
+1. Create `agents/<new_agent>.py` inheriting no base class (follow the pattern of existing agents)
+2. Accept `(db: Database | None = None)` or `(broker, db)` in `__init__` as appropriate
+3. Instantiate in `main()` before the agents it feeds into
+4. Add it as a keyword argument to `_run_iteration()` signature and call site
+5. Call it inside `_run_iteration()` at the appropriate pipeline step
+6. Add its agent key to `CLAUDE.md` Agent event keys list
+7. Log its startup state in the STARTUP `log_agent.record()` call

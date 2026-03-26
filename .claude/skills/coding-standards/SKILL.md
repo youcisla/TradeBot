@@ -56,16 +56,17 @@ Accent / action colors:
 ### Agent Colors (exact, consistent across all files)
 
 ```
+crucix:        #00ffcc   ← Macro intelligence layer (Crucix)
 market:        #00d4ff
 analysis:      #f5c518
 strategy:      #00ff88
-neural:        #d500f9   ← New LSTM strategy agent
+neural:        #d500f9   ← LSTM strategy agent
 council:       #ff9d00
 risk:          #ff4455
 execution:     #f0f0f0
 trade_manager: #bf7fff
 learning:      #4da6ff
-model_manager: #76ff03   ← New LSTM model trainer
+model_manager: #76ff03   ← LSTM model trainer
 logging:       #5c6a78
 ```
 
@@ -327,7 +328,7 @@ import { usePathname } from "next/navigation";
 The `AgentFeed.tsx` component shows the pipeline and support agents. The `key` must exactly match the `agent` field value stored in the `agent_events` DB table.
 
 ```
-PIPELINE: market, analysis, strategy, neural, council, risk, execution, trade_manager
+PIPELINE: crucix, market, analysis, strategy, neural, council, risk, execution, trade_manager
 SUPPORT:  learning, model_manager, logging
 ```
 

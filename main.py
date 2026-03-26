@@ -29,7 +29,6 @@ from config.symbols import SYMBOLS
 _active_symbols = SYMBOLS[:]
 from database.db import Database
 from filters.data_validator import DataValidationError
-from filters.news_filter import NewsFilter
 from state.persistence import StatePersistence
 from models.market_data import MarketContext
 from models.signal import Signal
@@ -46,6 +45,7 @@ from agents.trade_manager import TradeManagerAgent
 from agents.learning_agent import LearningAgent
 from agents.logging_agent import LoggingAgent
 from agents.council_agent import CouncilAgent   # stays: confirms neural signals
+from agents.crucix_agent import CrucixAgent
 from agents.model_manager import ModelManager
 from agents.neural_strategy import NeuralStrategy
 
@@ -114,7 +114,7 @@ def main() -> None:
         broker.connect()
 
     state = StatePersistence(db, broker)
-    news_filter = NewsFilter(db=db)
+    crucix_agent = CrucixAgent(db=db)
 
     # ── Filter symbols to those available on the broker ─────────────────
     global _active_symbols
@@ -132,18 +132,18 @@ def main() -> None:
     log_agent.record("STARTUP", f"Bot started — DEMO_MODE={settings.DEMO_MODE}")
 
     # ── Crucix intelligence layer ────────────────────────────────────────
-    from filters.crucix_client import get_client as get_crucix_client
-    _crucix = get_crucix_client()
-    if _crucix.is_available():
-        _macro = _crucix.get_context()
+    _startup_macro = crucix_agent.get_context()
+    if _startup_macro.crucix_available:
+        _age = _startup_macro.last_sweep_age_minutes
+        _age_str = f"{_age:.0f}min" if _age < 999 else "no sweep yet"
         log_agent.record(
             "STARTUP",
-            f"Crucix connected — tier={_macro.risk_tier} vix={_macro.vix:.1f} "
-            f"sweep_age={_macro.last_sweep_age_minutes:.0f}min"
+            f"Crucix connected — tier={_startup_macro.risk_tier} vix={_startup_macro.vix:.1f} "
+            f"sweep_age={_age_str}",
         )
         logger.info(
             "Crucix intelligence: CONNECTED — tier=%s vix=%.1f",
-            _macro.risk_tier, _macro.vix,
+            _startup_macro.risk_tier, _startup_macro.vix,
         )
     else:
         log_agent.record("STARTUP", "Crucix intelligence: NOT RUNNING — macro context disabled (bot continues normally)")
@@ -171,9 +171,9 @@ def main() -> None:
 
     # ── 6. Agents (db passed for persona events) ────────────────────────
     market_agent = MarketAgent(broker, db=db)
-    analysis_agent = AnalysisAgent(news_filter, db=db)
+    analysis_agent = AnalysisAgent(crucix_agent, db=db)
     trade_manager = TradeManagerAgent(broker, state, db)
-    risk_agent = RiskAgent(broker, trade_manager.get_open_trades, news_filter, db=db)
+    risk_agent = RiskAgent(broker, trade_manager.get_open_trades, crucix_agent, db=db)
     strategy_agent = StrategyAgent(strategies, learning.get_confidence, db=db)
     execution_agent = ExecutionAgent(broker, state, risk_agent.calculate_position_size, db=db)
 
@@ -284,6 +284,8 @@ def main() -> None:
             _run_iteration(
                 loop_count=loop_count,
                 db=db,
+                broker=broker,
+                crucix_agent=crucix_agent,
                 market_agent=market_agent,
                 analysis_agent=analysis_agent,
                 strategy_agent=strategy_agent,
@@ -502,6 +504,8 @@ def _run_iteration(
     *,
     loop_count: int,
     db: Database,
+    broker: BrokerConnector,
+    crucix_agent: CrucixAgent,
     market_agent: MarketAgent,
     analysis_agent: AnalysisAgent,
     strategy_agent: StrategyAgent,
@@ -529,6 +533,9 @@ def _run_iteration(
     This ensures we never miss a high-confidence setup just because another
     symbol happened to be checked first in the list.
     """
+
+    # ── Crucix macro sweep (once per iteration, logs to DB) ──────────────
+    crucix_agent.run()
 
     # ── Monitor existing trades first ────────────────────────────────────
     _tui = tui.get_ui()
@@ -575,6 +582,7 @@ def _run_iteration(
     now_mono = time.monotonic()
     scanned: list[str] = []
     skipped_cooldown: list[str] = []
+    ipc_fail_symbols: list[str] = []   # IPC failures in this iteration only
 
     for symbol in _active_symbols:
         if not is_market_open(symbol):
@@ -605,7 +613,8 @@ def _run_iteration(
         except DataValidationError as e:
             err_str = str(e)
             # Count consecutive IPC failures and auto-disable after threshold
-            if "IPC" in err_str or "-18004" in err_str or "No tick data" in err_str:
+            if "IPC" in err_str or "No tick data" in err_str or "-10004" in err_str:
+                ipc_fail_symbols.append(symbol)
                 count = symbol_fail_count.get(symbol, 0) + 1
                 symbol_fail_count[symbol] = count
                 if count >= symbol_max_fails:
@@ -650,6 +659,31 @@ def _run_iteration(
 
     if skipped_cooldown:
         logger.debug("Cooldown active for: %s", ", ".join(skipped_cooldown))
+
+    # ── MT5 connection-loss detection & auto-reconnect ────────────────────
+    if ipc_fail_symbols and not scanned:
+        # All attempted symbols failed IPC — emit ONE event (not one per symbol)
+        db.log_agent_event(
+            "market", "error",
+            f"MT5 disconnected — {len(ipc_fail_symbols)} symbols unreachable. Attempting reconnect...",
+            {"symbols": ipc_fail_symbols[:8]},
+        )
+        logger.warning("MT5 IPC loss on all %d symbols — attempting reconnect", len(ipc_fail_symbols))
+        try:
+            if broker.connect():
+                db.log_agent_event("market", "info", "MT5 reconnected — resuming normal operation")
+                logger.info("MT5 reconnected successfully")
+                # Reset all per-symbol fail counts so they retry immediately
+                for sym in ipc_fail_symbols:
+                    symbol_fail_count[sym] = 0
+                    symbol_disabled_until[sym] = 0.0
+                    last_scan_ts.pop(sym, None)
+            else:
+                logger.warning("MT5 reconnect failed — will retry next iteration")
+        except Exception as _re:
+            logger.warning("MT5 reconnect error: %s", _re)
+        return
+
     if not scanned:
         logger.debug("Loop %d: all symbols on cooldown or skipped", loop_count)
         return
