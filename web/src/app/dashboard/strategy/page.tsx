@@ -1,262 +1,381 @@
 "use client";
 
-const S = {
-  card: {
-    background: "#0e0e10" as const,
-    border: "1px solid #1c1c28",
-    borderRadius: 8,
-    padding: "20px 22px",
-    position: "relative" as const,
-    overflow: "hidden" as const,
-  },
-  heading: {
-    fontSize: 9,
-    fontFamily: "'JetBrains Mono', monospace",
-    color: "#607888",
-    letterSpacing: "0.18em",
-    textTransform: "uppercase" as const,
-    fontWeight: 600,
-    marginBottom: 14,
-    borderBottom: "1px solid #1c1c28",
-    paddingBottom: 10,
-  },
-  label: {
-    fontSize: 9.5,
-    color: "#607888",
-    fontFamily: "'JetBrains Mono', monospace",
-  },
-  value: {
-    fontSize: 11,
-    color: "#9aa8b8",
-    fontFamily: "'JetBrains Mono', monospace",
-    fontWeight: 600,
-  },
-  mono: {
-    fontFamily: "'JetBrains Mono', monospace",
-  },
-};
+import { useEffect, useMemo, useState } from "react";
 
-function Card({ title, accent, children }: { title: string; accent?: string; children: React.ReactNode }) {
-  const accentColor = accent ?? "#00ff88";
-  return (
-    <div style={S.card}>
-      <div style={{
-        position: "absolute", top: 0, left: 0, right: 0, height: 1,
-        background: `linear-gradient(90deg, transparent, ${accentColor}44, transparent)`,
-      }} />
-      <div style={S.heading}>{title}</div>
-      {children}
-    </div>
-  );
+// ── Types ─────────────────────────────────────────────────────────────────────
+
+interface AgentEvent {
+  id: string; agent: string; event_type: string;
+  message: string; created_at: string;
+  metadata?: {
+    symbol?: string; direction?: string; confidence?: number;
+    entry?: number; sl?: number; tp1?: number; tp2?: number; tp3?: number;
+    reason?: string; setup?: string; session?: string;
+    ict_score?: number; danial_score?: number; traditional_score?: number;
+    approved?: boolean; avg_score?: number;
+  };
 }
 
-function Row({ label, value, hint, color }: { label: string; value: string; hint?: string; color?: string }) {
-  return (
-    <div style={{
-      display: "flex", justifyContent: "space-between", alignItems: "flex-start",
-      padding: "5px 0", borderBottom: "1px solid rgba(28,28,40,0.4)",
-    }}>
-      <span style={S.label}>{label}</span>
-      <span style={{ textAlign: "right" }}>
-        <span style={{ ...S.value, color: color ?? "#9aa8b8" }}>{value}</span>
-        {hint && <span style={{ display: "block", fontSize: 8.5, color: "#607888", ...S.mono }}>{hint}</span>}
-      </span>
-    </div>
-  );
+interface Confidence {
+  strategy: string; confidence: number; wins: number; losses: number;
 }
 
-function Tag({ children, color }: { children: React.ReactNode; color: "green" | "red" | "yellow" | "blue" | "purple" }) {
-  const colors = {
-    green:  { bg: "rgba(0,255,136,0.12)",  text: "#00ff88", border: "rgba(0,255,136,0.25)" },
-    red:    { bg: "rgba(255,68,85,0.12)",   text: "#ff4455", border: "rgba(255,68,85,0.25)" },
-    yellow: { bg: "rgba(245,197,24,0.12)",  text: "#f5c518", border: "rgba(245,197,24,0.25)" },
-    blue:   { bg: "rgba(77,166,255,0.12)",  text: "#4da6ff", border: "rgba(77,166,255,0.25)" },
-    purple: { bg: "rgba(213,0,249,0.12)",   text: "#d500f9", border: "rgba(213,0,249,0.25)" },
-  }[color];
-  return (
-    <span style={{
-      display: "inline-block",
-      padding: "2px 9px", borderRadius: 3, marginRight: 8,
-      fontSize: 9, fontWeight: 700, letterSpacing: "0.08em",
-      fontFamily: "'JetBrains Mono', monospace",
-      background: colors.bg, color: colors.text,
-      border: `1px solid ${colors.border}`,
-      textTransform: "uppercase" as const,
-    }}>
-      {children}
-    </span>
-  );
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function fmt(n?: number, dec = 5): string {
+  if (n == null) return "—";
+  return n.toFixed(dec);
 }
 
-export default function StrategyPage() {
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+function confColor(conf?: number): string {
+  if (!conf) return "#adaaaa";
+  if (conf >= 0.80) return "#00fd87";
+  if (conf >= 0.65) return "#e966ff";
+  return "#ff716c";
+}
 
-      {/* Header */}
-      <div>
-        <div style={{
-          fontSize: 9, fontFamily: "'JetBrains Mono', monospace",
-          color: "#607888", letterSpacing: "0.2em", textTransform: "uppercase",
-        }}>
-          Architecture
+function dirColor(dir?: string): string {
+  return dir === "BUY" ? "#00fd87" : dir === "SELL" ? "#ff716c" : "#adaaaa";
+}
+
+function latestSignal(events: AgentEvent[], agent: string): AgentEvent | null {
+  return events.find((e) => e.agent === agent && e.metadata?.direction) ?? null;
+}
+
+function latestCouncil(events: AgentEvent[]): AgentEvent | null {
+  return events.find((e) => e.agent === "council" && e.metadata?.approved != null) ?? null;
+}
+
+// ── Page ──────────────────────────────────────────────────────────────────────
+
+export default function StrategyIntelligencePage() {
+  const [events, setEvents]           = useState<AgentEvent[]>([]);
+  const [confidences, setConfidences] = useState<Confidence[]>([]);
+
+  useEffect(() => {
+    let active = true;
+    const load = () => {
+      Promise.allSettled([
+        fetch("/api/events?limit=300").then((r) => r.json()),
+        fetch("/api/learning").then((r) => r.json()),
+      ]).then(([e, l]) => {
+        if (!active) return;
+        if (e.status === "fulfilled") setEvents(Array.isArray(e.value) ? e.value : []);
+        if (l.status === "fulfilled") setConfidences(l.value?.confidences ?? []);
+      });
+    };
+    load();
+    const id = setInterval(load, 8_000);
+    return () => { active = false; clearInterval(id); };
+  }, []);
+
+  const dsSignal       = useMemo(() => latestSignal(events, "deepseek"), [events]);
+  const ictSignal      = useMemo(() => latestSignal(events, "ict"),      [events]);
+  const councilVerdict = useMemo(() => latestCouncil(events),            [events]);
+
+  const confMap = useMemo(() => {
+    const m: Record<string, Confidence> = {};
+    for (const c of confidences) m[c.strategy] = c;
+    return m;
+  }, [confidences]);
+
+  const history = useMemo(
+    () => events.filter((e) => e.metadata?.direction).slice(0, 12),
+    [events]
+  );
+
+  const ds = dsSignal?.metadata;
+  const ict = ictSignal?.metadata;
+  const cv  = councilVerdict?.metadata;
+
+  return (
+    <div className="flex flex-col gap-6 mt-6">
+
+      {/* ── Page Header ── */}
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+        <div>
+          <span className="text-secondary font-bold tracking-widest text-xs mb-1 block">STRATEGY</span>
+          <h1 className="text-3xl md:text-5xl font-extrabold uppercase tracking-tighter">
+            DeepSeek + ICT Engine
+          </h1>
         </div>
-        <h1 style={{
-          fontSize: 20, fontFamily: "'JetBrains Mono', monospace",
-          fontWeight: 700, marginTop: 2,
-          background: "linear-gradient(90deg, #d500f9, #00ff88)",
-          WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
-        }}>
-          DeepSeek LLM Strategy
-        </h1>
-        <p style={{
-          fontSize: 11, ...S.mono, color: "#607888", marginTop: 8, lineHeight: 1.6,
-        }}>
-          The primary signal generator queries the DeepSeek chat API with the last 20 H1 candles
-          plus all computed indicators. The LLM reasons over price action and returns a structured
-          JSON signal. The Council (ICT + DanialFX + Traditional experts) confirms every signal
-          before it reaches execution.
-        </p>
-      </div>
-
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-
-        {/* API Setup */}
-        <Card title="DeepSeek API" accent="#d500f9">
-          <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
-            <Row label="Model"           value="deepseek-chat"    hint="configurable via DEEPSEEK_MODEL" />
-            <Row label="Min confidence"  value="65%"              hint="to generate a signal" color="#00ff88" />
-            <Row label="Cache TTL"       value="30 min"           hint="per symbol — avoids API spam" />
-            <Row label="Temperature"     value="0.2"              hint="low for consistent, structured output" />
-            <Row label="Max tokens"      value="300"              hint="JSON response only" />
-            <Row label="Timeout"         value="15 s"             hint="per call — never blocks the loop" />
-            <Row label="Response format" value="json_object"      hint="enforced by API parameter" color="#d500f9" />
-          </div>
-          <div style={{
-            marginTop: 14, fontFamily: "'JetBrains Mono', monospace", fontSize: 9.5,
-            background: "#0a0a12", border: "1px solid #1c1c28",
-            borderRadius: 5, padding: "10px 14px",
-            color: "#7a8a9a", lineHeight: 2,
-          }}>
-            <div style={{ color: "#d500f9" }}>Response schema:</div>
-            <div style={{ paddingLeft: 10 }}>{`{ "direction": "BUY" | "SELL" | "HOLD",`}</div>
-            <div style={{ paddingLeft: 10 }}>{`  "confidence": 0.0–1.0,`}</div>
-            <div style={{ paddingLeft: 10 }}>{`  "stop_loss": float,`}</div>
-            <div style={{ paddingLeft: 10 }}>{`  "take_profit_1": float,   // 1R`}</div>
-            <div style={{ paddingLeft: 10 }}>{`  "take_profit_2": float,   // 2R`}</div>
-            <div style={{ paddingLeft: 10 }}>{`  "take_profit_3": float,   // 3R`}</div>
-            <div style={{ paddingLeft: 10 }}>{`  "reasoning": "max 80 words" }`}</div>
-          </div>
-        </Card>
-
-        {/* Prompt Context */}
-        <Card title="Prompt Context (per call)" accent="#f5c518">
-          <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
-            <Row label="Candle history"  value="Last 20 H1 bars"   hint="OHLCV table, oldest → newest" />
-            <Row label="RSI"             value="14-period"          hint="normalised momentum" />
-            <Row label="ATR"             value="14-period"          hint="volatility baseline for SL" />
-            <Row label="SMA fast/slow"   value="10 / 50"            hint="crossover state + values" />
-            <Row label="Regime"          value="trending / ranging / volatile" />
-            <Row label="Trend"           value="bullish / bearish / neutral" />
-            <Row label="Session"         value="London / NY / Asian / overlap" />
-            <Row label="Macro (Crucix)"  value="tier, VIX, sentiment, lot_scale" hint="when Crucix is running" color="#00ffcc" />
-          </div>
-          <div style={{ marginTop: 14 }}>
-            <div style={{ fontSize: 9, color: "#607888", ...S.mono, lineHeight: 1.7 }}>
-              SL rules injected into prompt: must be beyond nearest swing high/low,
-              minimum 2×ATR distance. TP1=1R, TP2=2R, TP3=3R from entry.
+        <div className="flex items-center gap-4 bg-surface-container-high p-4 border-l-2 border-primary-container">
+          <div>
+            <span className="text-on-surface-variant text-[10px] block">STATUS</span>
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
+              <span className="font-bold text-sm">
+                {[dsSignal, ictSignal].filter(Boolean).length} Active Signal
+                {[dsSignal, ictSignal].filter(Boolean).length !== 1 ? "s" : ""}
+              </span>
             </div>
           </div>
-        </Card>
+        </div>
+      </div>
 
-        {/* Sanity checks */}
-        <Card title="Signal Sanity Checks" accent="#00ff88">
-          <div style={{ ...S.mono, fontSize: 10.5, color: "#7a8a9a", lineHeight: 1.7 }}>
-            <p style={{ marginBottom: 10, color: "#7a8a9a" }}>
-              Even with <span style={{ color: "#d500f9" }}>json_object</span> mode, every field is validated
-              before a signal is emitted:
+      {/* ── Strategy Grid ── */}
+      <div className="grid grid-cols-1 md:grid-cols-12 gap-1 bg-outline-variant/10">
+
+        {/* DeepSeek Signal — 8/12 */}
+        <div className="md:col-span-8 bg-surface p-6 flex flex-col gap-6">
+          <div className="flex justify-between items-start">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-tertiary" style={{ fontSize: 18 }}>
+                  psychology
+                </span>
+                <span className="text-tertiary font-bold tracking-wider text-sm uppercase">
+                  DeepSeek Signal
+                </span>
+              </div>
+              {ds ? (
+                <h2 className="text-4xl font-black text-on-surface">
+                  {ds.symbol ?? "—"}{" "}
+                  <span style={{ color: dirColor(ds.direction) }}>{ds.direction ?? "—"}</span>
+                </h2>
+              ) : (
+                <h2 className="text-3xl font-black text-on-surface-variant uppercase">
+                  No_Signal
+                </h2>
+              )}
+            </div>
+            <div className="text-right">
+              <span className="text-[10px] text-on-surface-variant block uppercase">Confidence</span>
+              <span className="text-2xl font-bold" style={{ color: confColor(ds?.confidence) }}>
+                {ds?.confidence != null ? `${Math.round(ds.confidence * 100)}%` : "—"}
+              </span>
+            </div>
+          </div>
+
+          {/* Entry / SL / TP / RR */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 py-4 border-y border-outline-variant/15">
+            {[
+              { label: "ENTRY", value: fmt(ds?.entry),  color: "#ffffff" },
+              { label: "SL",    value: fmt(ds?.sl),     color: "#ff716c" },
+              { label: "TP1",   value: fmt(ds?.tp1),    color: "#a4ffb9" },
+              {
+                label: "RR RATIO",
+                value: ds?.entry && ds?.sl && ds?.tp1
+                  ? `1:${(Math.abs(ds.tp1 - ds.entry) / Math.abs(ds.entry - ds.sl)).toFixed(2)}`
+                  : "—",
+                color: "#ffffff",
+              },
+            ].map(({ label, value, color }) => (
+              <div key={label}>
+                <span className="text-[10px] text-on-surface-variant block">{label}</span>
+                <span className="text-lg font-bold" style={{ color }}>{value}</span>
+              </div>
+            ))}
+          </div>
+
+          {/* Neural reasoning */}
+          <div className="bg-surface-container-low p-4 border-l-4 border-tertiary">
+            <span className="text-[10px] text-tertiary font-bold block mb-2 uppercase tracking-widest">
+              Neural Logic Output
+            </span>
+            <p className="text-sm leading-relaxed text-on-surface-variant">
+              {ds?.reason ?? dsSignal?.message ?? "Awaiting next DeepSeek inference cycle..."}
             </p>
-            <div style={{ paddingLeft: 12 }}>
-              <div><Tag color="green">pass</Tag><span>confidence ≥ DEEPSEEK_MIN_CONFIDENCE</span></div>
-              <div style={{ marginTop: 6 }}><Tag color="green">pass</Tag><span>direction ∈ {"{ BUY, SELL }"}</span></div>
-              <div style={{ marginTop: 6 }}><Tag color="red">reject</Tag><span>BUY with SL ≥ entry</span></div>
-              <div style={{ marginTop: 6 }}><Tag color="red">reject</Tag><span>SELL with SL ≤ entry</span></div>
-              <div style={{ marginTop: 6 }}><Tag color="red">reject</Tag><span>stop_loss or take_profit_1 = 0</span></div>
-              <div style={{ marginTop: 6 }}><Tag color="yellow">cache</Tag><span>re-use last result within 30 min TTL</span></div>
-              <div style={{ marginTop: 6 }}><Tag color="yellow">null</Tag><span>API error / timeout → return None (ICT/SMA fallback)</span></div>
+          </div>
+
+          {/* Strategy confidence bars */}
+          <div className="grid grid-cols-3 gap-3">
+            {[
+              { key: "deepseek", label: "DeepSeek", color: "#e966ff" },
+              { key: "ict",      label: "ICT",      color: "#00d2fd" },
+              { key: "sma",      label: "SMA",      color: "#494847" },
+            ].map(({ key, label, color }) => {
+              const c   = confMap[key];
+              const pct = c ? Math.round(c.confidence * 100) : 0;
+              return (
+                <div key={key} className="bg-surface-container-low p-3">
+                  <div className="flex justify-between text-[10px] mb-2">
+                    <span className="text-on-surface-variant uppercase">{label}</span>
+                    <span className="font-bold" style={{ color }}>{pct}%</span>
+                  </div>
+                  <div className="w-full h-px bg-surface-container-highest">
+                    <div className="h-full" style={{ width: `${pct}%`, background: color }} />
+                  </div>
+                  {c && (
+                    <div className="flex gap-3 mt-2 text-[9px] text-on-surface-variant">
+                      <span className="text-primary-container">{c.wins}W</span>
+                      <span className="text-error">{c.losses}L</span>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Council Review — 4/12 */}
+        <div className="md:col-span-4 bg-surface-container-high p-6 flex flex-col justify-between border-l border-outline-variant/10">
+          <div>
+            <div className="flex items-center gap-2 mb-6">
+              <span className="material-symbols-outlined" style={{ color: "#ffb86c", fontSize: 18 }}>
+                verified
+              </span>
+              <span className="font-bold tracking-wider text-sm uppercase" style={{ color: "#ffb86c" }}>
+                Council Review
+              </span>
+            </div>
+
+            <div className="space-y-6">
+              {[
+                { label: "ICT Expert",  score: cv?.ict_score },
+                { label: "Traditional", score: cv?.traditional_score },
+                { label: "DanialFX",    score: cv?.danial_score },
+              ].map(({ label, score }) => {
+                const pct   = score != null ? Math.round(score * 100) : 0;
+                const color = pct >= 80 ? "#00fd87" : pct >= 65 ? "#00d2fd" : "#ff716c";
+                return (
+                  <div key={label} className="flex items-center justify-between">
+                    <span className="text-xs text-on-surface">{label}</span>
+                    <div className="flex items-center gap-3">
+                      <div className="w-28 h-1 bg-surface-container-lowest">
+                        <div className="h-full" style={{ width: `${pct}%`, background: color }} />
+                      </div>
+                      <span className="text-sm font-bold w-8 text-right" style={{ color }}>
+                        {score != null ? score.toFixed(2) : "—"}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
-        </Card>
 
-        {/* Signal Flow */}
-        <Card title="Signal Pipeline (Main Loop)" accent="#ff9d00">
-          <div style={{
-            fontFamily: "'JetBrains Mono', monospace", fontSize: 9.5,
-            color: "#7a8a9a", lineHeight: 2,
-            background: "#0a0a12", border: "1px solid #1c1c28",
-            borderRadius: 5, padding: "10px 14px",
-          }}>
-            <div><span style={{ color: "#00d4ff" }}>Market</span> → get H1 candles + live tick</div>
-            <div><span style={{ color: "#f5c518" }}>Analysis</span> → RSI, ATR, SMA, regime, session</div>
-            <div><span style={{ color: "#00ff88" }}>Strategy</span> → run all 3 strategies in parallel</div>
-            <div style={{ paddingLeft: 14, color: "#d500f9" }}>DeepSeek → LLM call (cached 30 min)</div>
-            <div style={{ paddingLeft: 14, color: "#7a8a9a" }}>ICT/SMC → order blocks, FVG, BOS</div>
-            <div style={{ paddingLeft: 14, color: "#7a8a9a" }}>SMA crossover → fast/slow MA signal</div>
-            <div><span style={{ color: "#00ff88" }}>Rank</span> → sort all signals by confidence</div>
-            <div><span style={{ color: "#ff9d00" }}>Council</span> → ICT + DanialFX + Traditional confirm</div>
-            <div style={{ paddingLeft: 14, color: "#607888" }}>majority vote required to proceed</div>
-            <div><span style={{ color: "#ff4455" }}>Risk</span> → position size, daily limits, spread, correlation</div>
-            <div><span style={{ color: "#f0f0f0" }}>Exec</span> → open MT5 order (SL=2×ATR, TP×3)</div>
-            <div><span style={{ color: "#bf7fff" }}>TradeMgr</span> → partial close, breakeven, trailing</div>
+          <div
+            className="mt-12 p-4 border text-center"
+            style={{
+              borderColor: cv?.approved ? "rgba(255,184,108,0.3)" : "rgba(255,113,108,0.3)",
+              background:  cv?.approved ? "rgba(255,184,108,0.08)" : "rgba(255,113,108,0.08)",
+            }}
+          >
+            {cv != null ? (
+              <>
+                <span className="font-black text-xl tracking-tighter block" style={{ color: "#ffb86c" }}>
+                  SIGNAL {cv.approved ? "APPROVED ✅" : "REJECTED ❌"}
+                </span>
+                {cv.avg_score != null && (
+                  <span className="text-[10px] text-on-surface-variant mt-1 block">
+                    avg score: {cv.avg_score.toFixed(2)}
+                  </span>
+                )}
+              </>
+            ) : (
+              <span className="text-on-surface-variant text-[11px] uppercase tracking-widest">
+                AWAITING REVIEW
+              </span>
+            )}
           </div>
-        </Card>
+        </div>
 
-        {/* Risk Management */}
-        <Card title="Risk Management">
-          <Row label="Max Risk per Trade"    value="2%"         hint="of account equity" />
-          <Row label="Max Open Trades"       value="3" />
-          <Row label="Max Daily Loss"        value="5%"         hint="of account equity" />
-          <Row label="Max Spread"            value="3.0 pips"   hint="rejects trades above this" />
-          <Row label="Stop Loss"             value="2 × ATR"    hint="from entry (LLM may tighten)" color="#ff4455" />
-          <Row label="TP1"                   value="1R"         hint="close 40%" color="#00ff88" />
-          <Row label="TP2"                   value="2R"         hint="close 30%, trailing starts" color="#00ff88" />
-          <Row label="TP3"                   value="3R"         hint="close remainder" color="#00ff88" />
-          <Row label="Commission"            value="$7 / lot"   hint="factored into breakeven" />
-          <Row label="Macro blackout"        value="FLASH tier" hint="Crucix FLASH alert → no new trades" color="#00ffcc" />
-          <Row label="Correlation guard"     value="cross-pair" hint="blocks correlated pair in same direction" />
-        </Card>
-
-        {/* Score System */}
-        <Card title="Learning Score System">
-          <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: "'JetBrains Mono', monospace", fontSize: 10 }}>
-            <thead>
-              <tr style={{ borderBottom: "1px solid #1c1c28" }}>
-                <th style={{ padding: "4px 6px", textAlign: "left", fontSize: 8.5, color: "#607888", letterSpacing: "0.1em", textTransform: "uppercase" }}>Outcome</th>
-                <th style={{ padding: "4px 6px", textAlign: "right", fontSize: 8.5, color: "#607888", letterSpacing: "0.1em", textTransform: "uppercase" }}>Score</th>
-                <th style={{ padding: "4px 6px", textAlign: "left", fontSize: 8.5, color: "#607888", letterSpacing: "0.1em", textTransform: "uppercase" }}>Rule</th>
-              </tr>
-            </thead>
-            <tbody>
-              {[
-                { label: "Clean Win",    score: "+3", color: "#00ff88", rule: "Profit ≥ 2R" },
-                { label: "Messy Win",    score: "+1", color: "#76ff03", rule: "Profit > 0 but < 2R" },
-                { label: "Normal Loss",  score: "−2", color: "#f5c518", rule: "SL hit, entry valid" },
-                { label: "Bad Loss",     score: "−5", color: "#ff4455", rule: "SL hit + loss > 1.5R" },
-              ].map((r) => (
-                <tr key={r.label} style={{ borderBottom: "1px solid rgba(28,28,40,0.4)" }}>
-                  <td style={{ padding: "5px 6px", color: r.color }}>{r.label}</td>
-                  <td style={{ padding: "5px 6px", textAlign: "right", fontWeight: 700, color: r.color }}>{r.score}</td>
-                  <td style={{ padding: "5px 6px", color: "#7a8a9a" }}>{r.rule}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <div style={{ marginTop: 12, fontSize: 9.5, color: "#607888", fontFamily: "'JetBrains Mono', monospace", lineHeight: 1.6 }}>
-            Bonus: +0.5 each for RSI aligned, trend aligned, volume sufficient, no news event.
-            Confidence step: 0.02 per score point · min 10% · max 100%.
+        {/* ICT Signal — full width */}
+        {ict && (
+          <div className="md:col-span-12 bg-surface p-6 border-t border-outline-variant/10">
+            <div className="flex flex-col md:flex-row gap-8">
+              <div className="flex-1 space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="material-symbols-outlined text-secondary" style={{ fontSize: 18 }}>
+                      swap_horiz
+                    </span>
+                    <span className="text-secondary font-bold tracking-wider text-sm uppercase">
+                      ICT Signal
+                    </span>
+                  </div>
+                  <span className="text-2xl font-bold text-secondary">
+                    {ict.confidence != null ? `${Math.round(ict.confidence * 100)}%` : "—"}
+                    <span className="text-[10px] text-on-surface-variant font-normal uppercase ml-1">CONF</span>
+                  </span>
+                </div>
+                <h2 className="text-4xl font-black text-on-surface uppercase">
+                  {ict.symbol ?? "—"}{" "}
+                  <span style={{ color: dirColor(ict.direction) }}>{ict.direction ?? "—"}</span>
+                </h2>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-6 py-4">
+                  {[
+                    { label: "Entry",   value: fmt(ict.entry),    color: "#ffffff" },
+                    { label: "Stop",    value: fmt(ict.sl),       color: "#ff716c" },
+                    { label: "Session", value: ict.session ?? "—", color: "#ffffff" },
+                    { label: "Setup",   value: ict.setup ?? "—",   color: "#ffffff" },
+                  ].map(({ label, value, color }) => (
+                    <div key={label} className="border-l border-outline-variant/30 pl-3">
+                      <span className="text-[10px] text-on-surface-variant block uppercase">{label}</span>
+                      <span className="text-xl font-bold" style={{ color }}>{value}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="md:w-1/3">
+                <div className="h-full bg-surface-container-low p-4 relative min-h-[100px]">
+                  <span className="text-[10px] text-secondary font-bold block mb-2 uppercase">
+                    Market Context
+                  </span>
+                  <p className="text-xs text-on-surface-variant italic leading-relaxed">
+                    {ictSignal?.message ?? "Awaiting ICT analysis..."}
+                  </p>
+                  <div className="absolute bottom-2 right-2 flex gap-1 items-end">
+                    <div className="w-1 h-4 bg-secondary-container/50" />
+                    <div className="w-1 h-6 bg-secondary" />
+                    <div className="w-1 h-3 bg-secondary-container/50" />
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
-        </Card>
-
+        )}
       </div>
+
+      {/* ── Neural History Log ── */}
+      <div>
+        <h3 className="text-xs font-bold text-on-surface-variant mb-4 tracking-[0.3em] uppercase">
+          Neural History Log
+        </h3>
+        <div className="space-y-1">
+          {history.length === 0 ? (
+            <div className="p-4 bg-surface-container-low text-[11px] text-on-surface-variant text-center uppercase tracking-widest">
+              NO SIGNAL HISTORY
+            </div>
+          ) : (
+            history.map((ev) => {
+              const dir = ev.metadata?.direction;
+              const conf = ev.metadata?.confidence;
+              return (
+                <div
+                  key={ev.id}
+                  className="flex items-center justify-between p-3 bg-surface-container-low hover:bg-surface-bright duration-0"
+                >
+                  <div className="flex items-center gap-4">
+                    <span className="text-[10px] text-outline font-mono">
+                      {ev.created_at
+                        ? new Date(ev.created_at).toTimeString().slice(0, 8)
+                        : "—"}
+                    </span>
+                    <span className="text-xs font-bold">
+                      {ev.metadata?.symbol ?? ev.agent.toUpperCase()}
+                    </span>
+                    <span
+                      className="text-[9px] font-bold uppercase"
+                      style={{ color: dirColor(dir) }}
+                    >
+                      {dir ?? "—"}
+                    </span>
+                    <span className="text-[10px] bg-primary/10 text-primary px-2 py-0.5 uppercase">
+                      {ev.agent}
+                    </span>
+                  </div>
+                  <span className="text-xs font-bold text-on-surface-variant">
+                    {conf != null ? `${Math.round(conf * 100)}%` : "—"}
+                  </span>
+                </div>
+              );
+            })
+          )}
+        </div>
+      </div>
+
     </div>
   );
 }

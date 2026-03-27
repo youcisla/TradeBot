@@ -1,256 +1,111 @@
-@import url("https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700;800&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200");
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* ── Design tokens ─────────────────────────────────────────────────────────── */
-:root {
-  --matrix:          #00ff88;
-  --matrix-dim:      #00cc33;
-  --terminal:        #080808;
-  --terminal-surface:#0e0e10;
-  --terminal-border: #1c1c28;
-
-  /* Agent colors */
-  --agent-market:        #00d4ff;
-  --agent-analysis:      #f5c518;
-  --agent-strategy:      #00ff88;
-  --agent-neural:        #d500f9;
-  --agent-council:       #ff9d00;
-  --agent-risk:          #ff4455;
-  --agent-execution:     #f0f0f0;
-  --agent-trade-manager: #bf7fff;
-  --agent-learning:      #4da6ff;
-  --agent-model-manager: #76ff03;
-  --agent-logging:       #607888;
-}
-
+/* ── Base ──────────────────────────────────────────────────────────────────── */
 * {
   box-sizing: border-box;
 }
 
 body {
-  @apply font-mono;
-  background-color: var(--terminal);
-  color: var(--matrix);
+  font-family: 'JetBrains Mono', monospace;
+  background-color: #000000;
+  color: #ffffff;
+  min-height: 100dvh;
+}
+
+/* ── Material Symbols ──────────────────────────────────────────────────────── */
+.material-symbols-outlined {
+  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
 }
 
 /* ── Scrollbar ──────────────────────────────────────────────────────────────── */
 ::-webkit-scrollbar       { width: 4px; height: 4px; }
-::-webkit-scrollbar-track { background: var(--terminal); }
-::-webkit-scrollbar-thumb { background: #1c1c28; border-radius: 2px; }
-::-webkit-scrollbar-thumb:hover { background: var(--matrix-dim); }
+::-webkit-scrollbar-track { background: #0e0e0e; }
+::-webkit-scrollbar-thumb { background: #494847; }
+::-webkit-scrollbar-thumb:hover { background: #00fd87; }
 
-/* ── CRT scanline ────────────────────────────────────────────────────────────── */
-.crt-scanline {
-  background: repeating-linear-gradient(
-    0deg,
-    transparent, transparent 2px,
-    rgba(0,255,136,0.025) 2px,
-    rgba(0,255,136,0.025) 4px
-  );
+/* ── Utility: Glass Panel ───────────────────────────────────────────────────── */
+.glass-panel {
+  background: rgba(38, 38, 38, 0.4);
+  backdrop-filter: blur(20px);
 }
 
-/* ── Blinking cursor ────────────────────────────────────────────────────────── */
-@keyframes blink {
-  0%, 100% { opacity: 1; }
-  50%       { opacity: 0; }
+/* ── Utility: Neon Glow ─────────────────────────────────────────────────────── */
+.neon-glow-primary {
+  box-shadow: 0 0 15px rgba(0, 253, 135, 0.15);
 }
-.cursor-blink::after {
-  content: "█";
-  animation: blink 1s step-end infinite;
+.neon-text-primary {
+  text-shadow: 0 0 8px rgba(0, 253, 135, 0.6);
 }
-
-/* ── Glow pulse ─────────────────────────────────────────────────────────────── */
-@keyframes glowPulse {
-  0%, 100% { opacity: 1; }
-  50%       { opacity: 0.6; }
+.neon-glow-primary-bar {
+  box-shadow: 0 0 8px #00fd87;
 }
 
-/* ── Agent colors (CSS classes) ──────────────────────────────────────────────── */
-.agent-market        { color: var(--agent-market); }
-.agent-analysis      { color: var(--agent-analysis); }
-.agent-strategy      { color: var(--agent-strategy); }
-.agent-neural        { color: var(--agent-neural); }
-.agent-council       { color: var(--agent-council); }
-.agent-risk          { color: var(--agent-risk); }
-.agent-execution     { color: var(--agent-execution); }
-.agent-trade_manager { color: var(--agent-trade-manager); }
-.agent-learning      { color: var(--agent-learning); }
-.agent-model_manager { color: var(--agent-model-manager); }
-.agent-logging       { color: var(--agent-logging); }
+/* ── Utility: Instantaneous transitions ─────────────────────────────────────── */
+.duration-0 { transition-duration: 0ms !important; }
 
-/* ── Card glass ─────────────────────────────────────────────────────────────── */
-.card-glass {
-  background: rgba(14,14,16,0.95);
-  border: 1px solid #1c1c28;
-  border-radius: 8px;
-  backdrop-filter: blur(4px);
-}
-
-.card-glass-glow-green {
-  border-color: rgba(0,255,136,0.25);
-  box-shadow: 0 0 20px rgba(0,255,136,0.05), inset 0 0 20px rgba(0,255,136,0.02);
-}
-
-.card-glass-glow-cyan {
-  border-color: rgba(0,212,255,0.25);
-  box-shadow: 0 0 20px rgba(0,212,255,0.05), inset 0 0 20px rgba(0,212,255,0.02);
-}
-
-/* ── Section heading ────────────────────────────────────────────────────────── */
-.section-heading {
-  font-size: 10px;
-  font-family: 'JetBrains Mono', monospace;
-  text-transform: uppercase;
-  letter-spacing: 0.2em;
-  color: #607888;
-  font-weight: 600;
-}
-
-/* ── Table base ─────────────────────────────────────────────────────────────── */
-.data-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 11px;
-  font-family: 'JetBrains Mono', monospace;
-}
-.data-table thead tr {
-  border-bottom: 1px solid #1c1c28;
-}
-.data-table thead th {
-  padding: 8px 10px;
-  text-align: left;
-  font-size: 9px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: #607888;
-  font-weight: 600;
-}
-.data-table tbody tr {
-  border-bottom: 1px solid rgba(28,28,40,0.5);
-  transition: background 0.1s;
-}
-.data-table tbody tr:hover {
-  background: rgba(0,212,255,0.03);
-}
-.data-table tbody td {
-  padding: 7px 10px;
-  color: #7a8a9a;
-}
-
-/* ── Chip / badge ───────────────────────────────────────────────────────────── */
-.chip {
-  display: inline-flex;
-  align-items: center;
-  padding: 2px 8px;
-  border-radius: 3px;
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  font-family: 'JetBrains Mono', monospace;
-}
-
-.chip-green  { background: rgba(0,255,136,0.12);  color: #00ff88; border: 1px solid rgba(0,255,136,0.25); }
-.chip-red    { background: rgba(255,68,85,0.12);  color: #ff4455; border: 1px solid rgba(255,68,85,0.25); }
-.chip-yellow { background: rgba(245,197,24,0.12); color: #f5c518; border: 1px solid rgba(245,197,24,0.25); }
-.chip-cyan   { background: rgba(0,212,255,0.12);  color: #00d4ff; border: 1px solid rgba(0,212,255,0.25); }
-.chip-purple { background: rgba(213,0,249,0.12);  color: #d500f9; border: 1px solid rgba(213,0,249,0.25); }
-
-/* ── Input style ────────────────────────────────────────────────────────────── */
-.terminal-input {
-  background: #050508;
-  border: 1px solid #1c1c28;
-  border-radius: 4px;
-  padding: 8px 12px;
-  color: #00ff88;
-  font-family: 'JetBrains Mono', monospace;
+/* ── Terminal log row ───────────────────────────────────────────────────────── */
+.log-row {
+  display: flex;
+  gap: 12px;
+  padding: 4px 8px;
   font-size: 12px;
-  outline: none;
-  width: 100%;
-  transition: border-color 0.15s, box-shadow 0.15s;
-}
-.terminal-input:focus {
-  border-color: rgba(0,255,136,0.4);
-  box-shadow: 0 0 0 2px rgba(0,255,136,0.08);
-}
-
-/* ── Button styles ──────────────────────────────────────────────────────────── */
-.btn-primary {
-  background: rgba(0,255,136,0.1);
-  border: 1px solid rgba(0,255,136,0.35);
-  color: #00ff88;
-  border-radius: 4px;
-  padding: 7px 16px;
   font-family: 'JetBrains Mono', monospace;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  cursor: pointer;
-  transition: background 0.15s, box-shadow 0.15s;
+  transition: background 0ms;
 }
-.btn-primary:hover {
-  background: rgba(0,255,136,0.18);
-  box-shadow: 0 0 12px rgba(0,255,136,0.15);
-}
-.btn-primary:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
+.log-row:hover { background: #2c2c2c; }
+
+/* ── Legacy CSS vars (kept for non-migrated pages) ──────────────────────────── */
+:root {
+  --matrix:          #00fd87;
+  --matrix-dim:      #00ed7e;
+  --terminal:        #000000;
+  --terminal-surface:#0e0e0e;
+  --terminal-border: #494847;
+
+  /* Agent accent colors — new palette */
+  --agent-crucix:        #1cd5ff;
+  --agent-market:        #00d2fd;
+  --agent-analysis:      #ffffff;
+  --agent-strategy:      #00fd87;
+  --agent-deepseek:      #e966ff;
+  --agent-council:       #ffb86c;
+  --agent-risk:          #ff716c;
+  --agent-execution:     #ffffff;
+  --agent-trade-manager: #a4ffb9;
+  --agent-learning:      #79dfff;
+  --agent-logging:       #494847;
 }
 
-.btn-ghost {
-  background: transparent;
-  border: 1px solid #1c1c28;
-  color: #607888;
-  border-radius: 4px;
-  padding: 7px 16px;
+/* ── Legacy component classes (kept for non-migrated pages) ──────────────────── */
+.chip {
+  display: inline-flex; align-items: center;
+  padding: 2px 8px;
+  font-size: 9px; font-weight: 700;
+  letter-spacing: 0.08em; text-transform: uppercase;
   font-family: 'JetBrains Mono', monospace;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  cursor: pointer;
-  transition: background 0.15s, color 0.15s;
 }
-.btn-ghost:hover {
-  background: #1c1c28;
-  color: #9aa8b8;
-}
+.chip-green  { background: rgba(0,253,135,0.10); color: #00fd87; border: 1px solid rgba(0,253,135,0.25); }
+.chip-red    { background: rgba(255,113,108,0.10); color: #ff716c; border: 1px solid rgba(255,113,108,0.25); }
+.chip-yellow { background: rgba(245,197,24,0.10); color: #f5c518; border: 1px solid rgba(245,197,24,0.25); }
+.chip-cyan   { background: rgba(0,210,253,0.10); color: #00d2fd; border: 1px solid rgba(0,210,253,0.25); }
+.chip-purple { background: rgba(233,102,255,0.10); color: #e966ff; border: 1px solid rgba(233,102,255,0.25); }
 
-.btn-danger {
-  background: transparent;
-  border: 1px solid rgba(255,68,85,0.35);
-  color: #ff4455;
-  border-radius: 4px;
-  padding: 7px 16px;
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  cursor: pointer;
-  transition: background 0.15s;
-}
-.btn-danger:hover {
-  background: rgba(255,68,85,0.12);
-}
+.data-table { width: 100%; border-collapse: collapse; font-size: 11px; font-family: 'JetBrains Mono', monospace; }
+.data-table thead tr { border-bottom: 1px solid #494847; }
+.data-table thead th { padding: 8px 10px; text-align: left; font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase; color: #777575; font-weight: 600; }
+.data-table tbody tr { border-bottom: 1px solid rgba(73,72,71,0.3); }
+.data-table tbody tr:hover { background: #2c2c2c; }
+.data-table tbody td { padding: 7px 10px; color: #adaaaa; }
 
-/* ── KPI card ───────────────────────────────────────────────────────────────── */
-.kpi-card {
-  background: #0e0e10;
-  border: 1px solid #1c1c28;
-  border-radius: 8px;
-  padding: 14px 16px;
-  position: relative;
-  overflow: hidden;
+.terminal-input {
+  background: #131313; border: 1px solid #494847;
+  padding: 8px 12px; color: #00fd87;
+  font-family: 'JetBrains Mono', monospace; font-size: 12px;
+  outline: none; width: 100%;
 }
-.kpi-card::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(135deg, rgba(0,255,136,0.02) 0%, transparent 60%);
-  pointer-events: none;
-}
+.terminal-input:focus { border-color: rgba(0,253,135,0.4); box-shadow: 0 0 0 2px rgba(0,253,135,0.08); }

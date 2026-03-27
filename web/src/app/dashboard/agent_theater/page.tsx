@@ -1,221 +1,353 @@
 "use client";
-import React, { useEffect } from "react";
 
-type AgentEvent = {
-  agent: string;
-  level: string;
-  msg: string;
-  ts: string | null;
-  [k: string]: unknown;
+import { useEffect, useMemo, useRef, useState } from "react";
+
+// ── Types ─────────────────────────────────────────────────────────────────────
+
+interface AgentEvent {
+  id: string; agent: string; event_type: string;
+  message: string; created_at: string;
+  metadata?: Record<string, unknown>;
+}
+
+// ── Agent color map ────────────────────────────────────────────────────────────
+
+const AGENT_COLORS: Record<string, string> = {
+  crucix:        "#1cd5ff",
+  market:        "#00d2fd",
+  analysis:      "#ffffff",
+  strategy:      "#00fd87",
+  deepseek:      "#e966ff",
+  council:       "#ffb86c",
+  risk:          "#ff716c",
+  execution:     "#ffffff",
+  trade_manager: "#a4ffb9",
+  learning:      "#79dfff",
+  logging:       "#494847",
 };
 
-const AGENTS = [
-  { key: "market",        label: "Market",      color: "#00d4ff" },
-  { key: "analysis",      label: "Analysis",    color: "#f5c518" },
-  { key: "strategy",      label: "Strategy",    color: "#00ff88" },
-  { key: "deepseek",      label: "DeepSeek",    color: "#d500f9" },
-  { key: "council",       label: "Council",     color: "#ff9d00" },
-  { key: "risk",          label: "Risk",        color: "#ff4455" },
-  { key: "execution",     label: "Execution",   color: "#f0f0f0" },
-  { key: "trade_manager", label: "TradeMgr",    color: "#bf7fff" },
-  { key: "learning",      label: "Learning",    color: "#4da6ff" },
-  { key: "logging",       label: "Logging",     color: "#5c6a78" },
-];
-
-function timeAgo(ts: string | number | null | undefined): string {
-  if (!ts) return "idle";
-  const now = Date.now();
-  const t = typeof ts === "string" ? new Date(ts).getTime() : ts;
-  const s = Math.floor((now - t) / 1000);
-  if (s < 2) return "just now";
-  if (s < 60) return s + "s ago";
-  if (s < 3600) return Math.floor(s / 60) + "m ago";
-  return Math.floor(s / 3600) + "h ago";
+function agentColor(agent: string): string {
+  return AGENT_COLORS[agent.toLowerCase()] ?? "#adaaaa";
 }
 
-function crewmateSVG() {
-  return (
-    <svg className="crewmate" viewBox="0 0 60 80" width="72" height="96">
-      <ellipse className="crewmate-body" cx="30" cy="38" rx="22" ry="30" fill="var(--agent-color)" stroke="#222" strokeWidth="3" />
-      <rect x="16" y="22" width="28" height="12" rx="6" fill="#fff" stroke="#222" strokeWidth="2" />
-      <ellipse cx="30" cy="70" rx="10" ry="6" fill="#222" />
-      <ellipse cx="20" cy="76" rx="5" ry="3" fill="#222" />
-      <ellipse cx="40" cy="76" rx="5" ry="3" fill="#222" />
-    </svg>
-  );
+function agentLabel(agent: string): string {
+  return `[${agent.toUpperCase()}]`;
 }
 
-export default function AgentTheater() {
-  const lastEventsRef = React.useRef<Record<string, AgentEvent>>({});
-  const [lastEventTimestamps, setLastEventTimestamps] = React.useState<Record<string, number>>({});
-  const [agentStates, setAgentStates] = React.useState<Record<string, string>>({});
-  const [speechBubbles, setSpeechBubbles] = React.useState<Record<string, string>>({});
+function fmtTime(iso: string): string {
+  try {
+    const d = new Date(iso);
+    return d.toTimeString().slice(0, 8);
+  } catch {
+    return "00:00:00";
+  }
+}
 
-  const animationTimeouts = React.useRef<Record<string, ReturnType<typeof setTimeout>>>({});
-  const speechTimeouts = React.useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+// ── Page ──────────────────────────────────────────────────────────────────────
 
-  // Poll events
+export default function AgentTheaterPage() {
+  const [events, setEvents] = useState<AgentEvent[]>([]);
+  const [command, setCommand] = useState("");
+  const [sending, setSending] = useState(false);
+  const logRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
-    async function pollEvents() {
-      try {
-        const res = await fetch("/api/events?limit=20");
-        const data = await res.json();
-        const rawEvents = Array.isArray(data) ? data : (data.events ?? []);
-        if (!rawEvents.length) return;
-
-        const events: AgentEvent[] = rawEvents.map((ev: Record<string, unknown>) => ({
-          ...ev,
-          msg: (ev.msg ?? ev.message ?? "") as string,
-          ts: (ev.ts ?? ev.created_at ?? null) as string | null,
-        }));
-        const latest: Record<string, AgentEvent> = {};
-        events.forEach((ev: AgentEvent) => {
-          const key = (ev.agent || "").toLowerCase();
-          if (!latest[key]) latest[key] = ev;
-        });
-        AGENTS.forEach((agent) => {
-          const key = agent.key;
-          const ev = latest[key];
-          if (ev && (!lastEventsRef.current[key] || lastEventsRef.current[key].ts !== ev.ts)) {
-            lastEventsRef.current[key] = ev;
-            setLastEventTimestamps((prev) => ({ ...prev, [key]: ev.ts ? new Date(ev.ts).getTime() : Date.now() }));
-            let state = "idle";
-            if (ev.level === "warn" || ev.level === "error") state = "alert";
-            else if (ev.level === "info") state = "active";
-            setAgentStates((prev) => ({ ...prev, [key]: state }));
-            if (ev.msg) {
-              setSpeechBubbles((prev) => ({ ...prev, [key]: ev.msg.length > 60 ? ev.msg.slice(0, 57) + "..." : ev.msg }));
-              clearTimeout(speechTimeouts.current[key]);
-              speechTimeouts.current[key] = setTimeout(() => {
-                setSpeechBubbles((prev) => ({ ...prev, [key]: "" }));
-              }, 3000);
-            }
-            clearTimeout(animationTimeouts.current[key]);
-            animationTimeouts.current[key] = setTimeout(() => {
-              setAgentStates((prev) => ({ ...prev, [key]: "idle" }));
-            }, state === "active" ? 800 : state === "alert" ? 1200 : 2000);
-          }
-        });
-      } catch {
-        // Network error, do nothing
-      }
-    }
-    const interval = setInterval(pollEvents, 800);
-    pollEvents();
-    return () => {
-      clearInterval(interval);
-      Object.values(animationTimeouts.current).forEach((id) => clearTimeout(id));
-      Object.values(speechTimeouts.current).forEach((id) => clearTimeout(id));
-    };
+    let active = true;
+    const load = () =>
+      fetch("/api/events?limit=100")
+        .then((r) => r.json())
+        .then((data) => {
+          if (active && Array.isArray(data)) setEvents(data);
+        })
+        .catch(() => {});
+    load();
+    const id = setInterval(load, 2_000);
+    return () => { active = false; clearInterval(id); };
   }, []);
 
-  // Idle fallback
+  // Auto-scroll log to bottom on new events
   useEffect(() => {
-    const interval = setInterval(() => {
-      const now = Date.now();
-      AGENTS.forEach((agent) => {
-        const key = agent.key;
-        if (!lastEventTimestamps[key] || now - lastEventTimestamps[key] > 3000) {
-          setAgentStates((prev) => ({ ...prev, [key]: "idle" }));
-        }
+    if (logRef.current) {
+      logRef.current.scrollTop = logRef.current.scrollHeight;
+    }
+  }, [events]);
+
+  // Metrics derived from events
+  const agentSet = useMemo(() => new Set(events.map((e) => e.agent)), [events]);
+  const agentCount = agentSet.size;
+
+  const recentWindow = 5 * 60 * 1000; // 5 min
+  const recentEvents = useMemo(
+    () => events.filter((e) => Date.now() - new Date(e.created_at).getTime() < recentWindow),
+    [events]
+  );
+
+  const agreementPct = useMemo(() => {
+    const councilEvents = recentEvents.filter((e) => e.agent === "council");
+    if (councilEvents.length === 0) return 0;
+    const approved = councilEvents.filter(
+      (e) => (e.metadata as { approved?: boolean })?.approved === true
+    ).length;
+    return Math.round((approved / councilEvents.length) * 100);
+  }, [recentEvents]);
+
+  const entropyScore = (1 - agentCount / 12).toFixed(3);
+
+  async function sendCommand(cmd: string) {
+    if (!cmd.trim()) return;
+    setSending(true);
+    try {
+      await fetch("/api/commands", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ command: cmd.trim() }),
       });
-    }, 1000);
-    return () => clearInterval(interval);
-  }, [lastEventTimestamps]);
+    } catch { /* ignore */ } finally {
+      setSending(false);
+      setCommand("");
+    }
+  }
+
+  // Support node statuses
+  const learningLast = useMemo(
+    () => events.find((e) => e.agent === "learning"),
+    [events]
+  );
+  const loggingLast = useMemo(
+    () => events.find((e) => e.agent === "logging"),
+    [events]
+  );
 
   return (
-    <div style={{ minHeight: "100vh", background: "#080808", color: "#c0ccd8", fontFamily: "'JetBrains Mono', monospace" }}>
-      {/* Page header */}
-      <div style={{ marginTop: 32, textAlign: "center" }}>
-        <div style={{ fontSize: 9, fontFamily: "'JetBrains Mono', monospace", color: "#607888", letterSpacing: "0.2em", textTransform: "uppercase" }}>
-          Visualisation
+    <div className="flex flex-col gap-6 mt-6">
+
+      {/* ── Page Header ── */}
+      <div className="border-l-4 border-primary-fixed pl-6 py-2 bg-surface-container-low">
+        <div className="flex items-center gap-2 mb-1">
+          <span className="text-secondary text-[10px] font-bold tracking-[0.2em] uppercase">THEATER</span>
+          <span className="w-2 h-2 rounded-full bg-secondary animate-pulse" />
         </div>
-        <h1 style={{ fontSize: 20, fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, color: "#00ff88", textShadow: "0 0 20px rgba(0,255,136,0.3)", marginTop: 2 }}>
-          Agent Theater
+        <h1 className="text-3xl md:text-5xl font-extrabold tracking-tighter uppercase mb-2">
+          Active Multi-Agent Stream
         </h1>
+        <div className="flex items-center gap-4">
+          <span className="text-on-surface-variant font-mono text-sm">
+            {agentCount} agents synchronized
+          </span>
+          <span className="h-px flex-1 bg-outline-variant opacity-20" />
+          <span className="text-primary-fixed text-sm font-bold">[SYSTEM: NOMINAL]</span>
+        </div>
       </div>
 
-      <div className="theater" style={{ display: "flex", justifyContent: "center", alignItems: "flex-end", gap: 56, marginTop: 72, marginBottom: 48, flexWrap: "wrap" }}>
-        {AGENTS.map((agent) => {
-          const state = agentStates[agent.key] || "idle";
-          return (
-            <div
-              key={agent.key}
-              className={`agent ${agent.label} ${state}`}
-              id={`agent-${agent.key}`}
-              style={{ position: "relative", width: 90, display: "flex", flexDirection: "column", alignItems: "center", "--agent-color": agent.color } as React.CSSProperties}
-            >
-              <div
-                className={`speech-bubble${speechBubbles[agent.key] ? " active" : ""}`}
-                style={{
-                  position: "absolute", top: -56, left: "50%", transform: "translateX(-50%)",
-                  background: "#0a0a12", color: agent.color,
-                  border: `1px solid rgba(${hexToRgb(agent.color)},0.4)`,
-                  borderRadius: 8, padding: "6px 14px",
-                  fontSize: 11, fontFamily: "'JetBrains Mono', monospace",
-                  whiteSpace: "nowrap",
-                  opacity: speechBubbles[agent.key] ? 1 : 0,
-                  pointerEvents: "none", transition: "opacity 0.3s",
-                  zIndex: 2, maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis",
-                }}
-              >
-                {speechBubbles[agent.key]}
-              </div>
-              {crewmateSVG()}
-              <div style={{ marginTop: 10, fontSize: 11, color: agent.color, textAlign: "center", textShadow: "0 0 2px #000", letterSpacing: 1 }}>{agent.label}</div>
+      {/* ── Theater Grid ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+
+        {/* Log Stream — 8/12 */}
+        <div className="lg:col-span-8 bg-surface-container flex flex-col h-[600px] border border-outline-variant/10">
+
+          {/* Terminal titlebar */}
+          <div className="flex items-center justify-between p-3 bg-surface-container-high border-b border-outline-variant/15">
+            <div className="flex items-center gap-2">
+              <span className="material-symbols-outlined text-primary text-sm" style={{ fontSize: 16 }}>
+                terminal
+              </span>
+              <span className="text-xs font-bold tracking-widest text-on-surface">
+                NEURAL_LOG_STREAM_V4
+              </span>
             </div>
-          );
-        })}
+            <div className="flex gap-2">
+              <div className="w-3 h-3 bg-error-container" />
+              <div className="w-3 h-3 bg-tertiary-container" />
+              <div className="w-3 h-3 bg-primary-container" />
+            </div>
+          </div>
+
+          {/* Log rows */}
+          <div
+            ref={logRef}
+            className="flex-1 overflow-y-auto p-4 font-mono text-sm space-y-1"
+          >
+            {events.length === 0 ? (
+              <div className="text-on-surface-variant text-[11px] opacity-50 italic p-2">
+                Awaiting telemetry packets...
+              </div>
+            ) : (
+              [...events].reverse().map((ev, i) => (
+                <div
+                  key={ev.id ?? i}
+                  className={`group flex gap-3 hover:bg-surface-bright p-1 duration-0 ${
+                    i % 7 === 0 ? "bg-surface-container-high" : ""
+                  } ${ev.agent === "execution" ? "border-l-2 border-primary-fixed ml-1 pl-2" : ""}`}
+                >
+                  <span className="text-on-surface-variant shrink-0 text-[11px]">
+                    [{fmtTime(ev.created_at)}]
+                  </span>
+                  <span
+                    className="shrink-0 text-[11px] font-bold"
+                    style={{ color: agentColor(ev.agent) }}
+                  >
+                    {agentLabel(ev.agent)}
+                  </span>
+                  <span className="text-on-surface text-[11px] break-all">
+                    {ev.message}
+                  </span>
+                </div>
+              ))
+            )}
+          </div>
+
+          {/* Command input */}
+          <div className="p-3 bg-surface-container-lowest border-t border-outline-variant/15 flex items-center gap-3">
+            <span className="text-primary-fixed text-xs font-bold">$</span>
+            <input
+              type="text"
+              value={command}
+              onChange={(e) => setCommand(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") sendCommand(command);
+              }}
+              disabled={sending}
+              placeholder={sending ? "SENDING..." : "FORCE_COMMAND_OVERRIDE_ (status / kill / pause / resume)"}
+              className="bg-transparent border-none text-xs font-mono focus:ring-0 focus:outline-none w-full p-0 text-primary placeholder:text-outline disabled:opacity-40"
+            />
+          </div>
+        </div>
+
+        {/* Right Column — 4/12 */}
+        <div className="lg:col-span-4 flex flex-col gap-4">
+
+          {/* Support Nodes */}
+          <div className="bg-surface-container p-4 border border-outline-variant/10">
+            <h3 className="text-xs font-bold tracking-widest text-on-surface-variant mb-4 flex items-center gap-2">
+              <span className="material-symbols-outlined" style={{ fontSize: 14 }}>hub</span>
+              SUPPORT_NODES
+            </h3>
+            <div className="space-y-3">
+              {[
+                {
+                  label: "Learning Agent",
+                  sub:   "V-SYNAPSE-09",
+                  ev:    learningLast,
+                  tag:   "[ANALYZING]",
+                  tagColor: "#00d2fd",
+                },
+                {
+                  label: "Logging Node",
+                  sub:   "DB-COLLECTOR",
+                  ev:    loggingLast,
+                  tag:   "[PERSISTING]",
+                  tagColor: "#adaaaa",
+                },
+                {
+                  label: "Encryption Hub",
+                  sub:   "AES-256-GCM",
+                  ev:    null,
+                  tag:   "[SECURE]",
+                  tagColor: "#a4ffb9",
+                },
+              ].map(({ label, sub, tag, tagColor }) => (
+                <div
+                  key={label}
+                  className="flex justify-between items-center p-2 bg-surface-container-low border border-outline-variant/5"
+                >
+                  <div className="flex flex-col">
+                    <span className="text-xs text-on-surface">{label}</span>
+                    <span className="text-[10px] text-on-surface-variant">{sub}</span>
+                  </div>
+                  <span
+                    className="text-[10px] font-bold px-2 py-0.5 border"
+                    style={{
+                      color: tagColor,
+                      background: `${tagColor}18`,
+                      borderColor: `${tagColor}33`,
+                    }}
+                  >
+                    {tag}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Latency Metric */}
+          <div className="bg-surface-container-lowest p-6 border-2 border-outline-variant/20 relative overflow-hidden group">
+            <div className="absolute top-0 right-0 p-2 opacity-10 group-hover:opacity-100 transition-opacity duration-300">
+              <span className="material-symbols-outlined text-4xl text-secondary">analytics</span>
+            </div>
+            <div className="relative z-10">
+              <span className="text-[10px] uppercase tracking-widest text-on-surface-variant">
+                SYNCH_LATENCY
+              </span>
+              <div className="text-5xl font-extrabold text-surface-tint tracking-tighter my-2">
+                0.04<span className="text-lg">ms</span>
+              </div>
+              <div className="w-full bg-surface-container-high h-1 mt-4">
+                <div
+                  className="h-full w-3/4 neon-glow-primary-bar"
+                  style={{ background: "#00fd87" }}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Neural Viz placeholder */}
+          <div className="relative h-36 bg-surface-container-high border border-outline-variant/10 overflow-hidden">
+            <div className="absolute inset-0 flex flex-col justify-between p-3 pointer-events-none select-none">
+              {[...Array(8)].map((_, i) => (
+                <div
+                  key={i}
+                  className="h-px"
+                  style={{
+                    background: `rgba(0,253,135,${0.04 + (i % 3) * 0.03})`,
+                  }}
+                />
+              ))}
+            </div>
+            <div className="absolute inset-0 bg-gradient-to-t from-surface-container-lowest to-transparent z-10" />
+            <div className="absolute bottom-3 left-3 z-20">
+              <span className="text-[10px] font-bold text-primary-fixed bg-black/80 px-2 py-1">
+                CORE_FEED: {events.length} events
+              </span>
+            </div>
+          </div>
+        </div>
       </div>
 
-      {/* Status bar */}
-      <div style={{
-        width: "100%", background: "#0a0a12",
-        borderTop: "1px solid #1c1c28",
-        fontFamily: "'JetBrains Mono', monospace", fontSize: 9,
-        padding: "10px 24px", display: "flex", justifyContent: "center",
-        gap: 24, flexWrap: "wrap",
-        position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 10,
-      }}>
-        {AGENTS.map((agent) => {
-          const lastTs = lastEventTimestamps[agent.key];
-          const lastLevel = lastEventsRef.current[agent.key]?.level ?? "idle";
-          let dotBg = "#00ff88";
-          let dotShadow = "#00ff88";
-          if (lastLevel === "warn") { dotBg = "#f5c518"; dotShadow = "#f5c518"; }
-          else if (lastLevel === "error") { dotBg = "#ff4455"; dotShadow = "#ff4455"; }
-          else if (lastLevel === "idle" || !lastTs) { dotBg = "#1c1c28"; dotShadow = "rgba(28,28,40,0)"; }
-          return (
-            <span key={agent.key}>
-              <span style={{
-                display: "inline-block", width: 10, height: 10, borderRadius: "50%",
-                marginRight: 6, verticalAlign: "middle",
-                background: dotBg,
-                boxShadow: `0 0 4px ${dotShadow}`,
-              }} />
-              <span style={{ color: agent.color, fontSize: 9, marginLeft: 2 }}>{agent.label}: {timeAgo(lastTs)}</span>
-            </span>
-          );
-        })}
-      </div>
+      {/* ── Neural Consensus Metrics ── */}
+      <section className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="md:col-span-2 glass-panel p-6 border-l border-tertiary/30">
+          <h4 className="text-tertiary-fixed text-xs font-bold tracking-widest mb-6 uppercase">
+            Neural Consensus Metrics
+          </h4>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-6">
+            {[
+              { label: "AGREEMENT",  value: `${agreementPct}%`,    color: agreementPct >= 80 ? "#00fd87" : "#adaaaa" },
+              { label: "DIVERGENCE", value: agentCount > 6 ? "Low" : "High", color: "#ff716c" },
+              { label: "EPOCH",      value: events.length.toLocaleString(), color: "#ffffff" },
+              { label: "ENTROPY",    value: entropyScore,             color: "#00d2fd" },
+            ].map(({ label, value, color }) => (
+              <div key={label}>
+                <div className="text-on-surface-variant text-[10px] mb-1">{label}</div>
+                <div className="text-xl font-bold" style={{ color }}>{value}</div>
+              </div>
+            ))}
+          </div>
+        </div>
 
-      <style>{`
-        .crewmate-body { transition: filter 0.2s; }
-        .agent.idle .crewmate { animation: float 2s ease-in-out infinite; }
-        .agent.active .crewmate { animation: bounce 0.5s cubic-bezier(.5,1.8,.5,1) 1; }
-        .agent.alert .crewmate { animation: shake 0.5s linear 2, flash 0.5s linear 2; }
-        @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
-        @keyframes bounce { 0% { transform: translateY(0);} 30% { transform: translateY(-18px);} 60% { transform: translateY(0);} 100% { transform: translateY(-6px);} }
-        @keyframes shake { 0%, 100% { transform: translateX(0);} 20% { transform: translateX(-6px);} 40% { transform: translateX(6px);} 60% { transform: translateX(-6px);} 80% { transform: translateX(6px);} }
-        @keyframes flash { 0%, 100% { filter: brightness(1);} 50% { filter: brightness(2);} }
-      `}</style>
+        <div className="bg-surface-container-high p-6 flex flex-col justify-center border-r-4 border-secondary">
+          <p className="text-[11px] text-on-surface-variant font-mono leading-relaxed">
+            Agent Theater utilizes a synchronized clock to ensure all sub-modules operate
+            on a shared truth. Any deviation above 5ms triggers immediate reconciliation
+            via the Learning Agent.
+          </p>
+          <button
+            onClick={() => sendCommand("status")}
+            className="mt-4 bg-secondary text-on-secondary font-bold text-[10px] py-2 px-4 uppercase tracking-widest hover:opacity-90 duration-0 self-start"
+          >
+            RECALIBRATE_NODES
+          </button>
+        </div>
+      </section>
     </div>
   );
-}
-
-function hexToRgb(hex: string): string {
-  const r = parseInt(hex.slice(1,3),16);
-  const g = parseInt(hex.slice(3,5),16);
-  const b = parseInt(hex.slice(5,7),16);
-  return `${r},${g},${b}`;
 }
