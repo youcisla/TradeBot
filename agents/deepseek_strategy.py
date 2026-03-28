@@ -36,6 +36,14 @@ Be conservative — only recommend BUY/SELL when the setup is genuinely high qua
 Otherwise output HOLD.
 """
 
+# Characters that could be used to inject instructions into the prompt.
+_PROMPT_INJECT_CHARS = str.maketrans("", "", "\n\r\x00\x1b")
+
+
+def _sanitize(value: str, max_len: int = 80) -> str:
+    """Strip control characters and truncate to prevent prompt injection."""
+    return str(value).translate(_PROMPT_INJECT_CHARS)[:max_len]
+
 
 def _build_prompt(ctx: MarketContext) -> str:
     """Convert MarketContext into a concise, information-dense prompt."""
@@ -56,18 +64,18 @@ def _build_prompt(ctx: MarketContext) -> str:
     if ctx.macro and ctx.macro.crucix_available:
         m = ctx.macro
         macro_line = (
-            f"\nMacro (Crucix): tier={m.risk_tier}  vix={m.vix:.1f}"
-            f"  sentiment={m.osint_sentiment}  lot_scale={m.lot_scale_factor:.2f}x"
+            f"\nMacro (Crucix): tier={_sanitize(m.risk_tier, 20)}  vix={m.vix:.1f}"
+            f"  sentiment={_sanitize(m.osint_sentiment, 20)}  lot_scale={m.lot_scale_factor:.2f}x"
         )
 
     sma_cross = "ABOVE" if ctx.sma_fast > ctx.sma_slow else "BELOW"
 
     return f"""\
-Symbol: {ctx.symbol}  Timeframe: H1
+Symbol: {_sanitize(ctx.symbol, 20)}  Timeframe: H1
 Datetime: {ctx.timestamp.strftime('%Y-%m-%d %H:%M')} UTC
 Price: {ctx.current_price:.5f}  Bid: {ctx.bid:.5f}  Ask: {ctx.ask:.5f}  Spread: {ctx.spread:.5f}
-Session: {ctx.session}  Day: {ctx.day_of_week}
-Regime: {ctx.regime}  Trend: {ctx.trend_direction}
+Session: {_sanitize(ctx.session)}  Day: {_sanitize(ctx.day_of_week)}
+Regime: {_sanitize(ctx.regime)}  Trend: {_sanitize(ctx.trend_direction)}
 RSI: {ctx.rsi:.1f}  ATR: {ctx.atr:.5f}
 SMA_fast({settings.SMA_FAST_PERIOD}): {ctx.sma_fast:.5f}  SMA_slow({settings.SMA_SLOW_PERIOD}): {ctx.sma_slow:.5f}  (fast {sma_cross} slow){macro_line}
 

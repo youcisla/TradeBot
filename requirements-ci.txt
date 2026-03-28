@@ -1,0 +1,9 @@
+# CI requirements — identical to requirements.txt except MetaTrader5 is
+# excluded because it is Windows-only and unavailable on ubuntu-latest runners.
+psycopg2-binary>=2.9
+cryptography>=42.0
+python-dotenv>=1.0
+rich>=13.0
+bcrypt>=4.0
+openai>=1.0
+pytest>=7.0

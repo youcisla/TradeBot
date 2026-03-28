@@ -26,11 +26,12 @@ from database.db import Database
 def main() -> None:
     parser = argparse.ArgumentParser(description="Reset dashboard login credentials")
     parser.add_argument("--username", default="", help="New username (prompted if omitted)")
-    parser.add_argument("--password", default="", help="New password (prompted if omitted)")
+    # Intentionally no --password argument: passwords passed via CLI flags are
+    # visible in process listings (ps aux) and shell history.  Use the prompt.
     args = parser.parse_args()
 
     username = args.username.strip() or input("New username [admin]: ").strip() or "admin"
-    password = args.password or getpass.getpass("New password: ")
+    password = getpass.getpass("New password: ")
     if not password:
         print("Password cannot be empty.")
         sys.exit(1)

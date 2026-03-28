@@ -314,6 +314,18 @@ export async function getIctSessionStats() {
 
 // ── Broker Accounts ─────────────────────────────────────────────────────
 
+export async function getBrokerAccountById(
+  id: number
+): Promise<BrokerAccount | null> {
+  const rows = await query(
+    `SELECT id, user_id, name, account_number, server, is_demo, is_active,
+            created_at, last_connected
+     FROM broker_accounts WHERE id = $1`,
+    [id]
+  );
+  return (rows[0] as BrokerAccount) ?? null;
+}
+
 export async function getBrokerAccounts(userId?: number): Promise<BrokerAccount[]> {
   if (userId) {
     const rows = await query(

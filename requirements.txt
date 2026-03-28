@@ -1,6 +1,9 @@
 # ── Database ────────────────────────────────────────────────────────────
 psycopg2-binary>=2.9
 
+# ── Encryption (broker password AES-256-CBC + HMAC) ──────────────────────
+cryptography>=42.0
+
 # ── Broker (Windows + Python ≤ 3.13 only) ───────────────────────────────
 MetaTrader5>=5.0.45
 

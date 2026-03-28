@@ -36,6 +36,11 @@ _ict_contexts: dict[str, Any] = {}  # symbol → latest ICTContext
 _ict_lock = threading.Lock()
 _db: Optional["Database"] = None  # set by start() — shared with bot
 
+# Allowed CORS origin for browser clients (defaults to Next.js dev server).
+# Override via DASHBOARD_ORIGIN env var for production Vercel deployments.
+import os as _os
+_CORS_ORIGIN: str = _os.getenv("DASHBOARD_ORIGIN", "http://localhost:3000")
+
 # Supported timeframes (validated against incoming requests)
 _VALID_TFS = {"M1", "M5", "M15", "M30", "H1", "H4", "D1", "W1", "MN1"}
 
@@ -83,7 +88,7 @@ class _CandleHandler(BaseHTTPRequestHandler):
             candles = _broker.get_candles(symbol, timeframe, count)
         except Exception as exc:
             logger.warning("Candle server: failed to fetch %s %s: %s", symbol, timeframe, exc)
-            self._json_response(500, {"error": str(exc)})
+            self._json_response(500, {"error": "Internal server error"})
             return
 
         # Serialize to lightweight-charts format
@@ -105,7 +110,7 @@ class _CandleHandler(BaseHTTPRequestHandler):
     def do_OPTIONS(self) -> None:  # noqa: N802
         """Handle CORS preflight."""
         self.send_response(204)
-        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Origin", _CORS_ORIGIN)
         self.send_header("Access-Control-Allow-Methods", "GET, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Content-Type")
         self.end_headers()
@@ -154,7 +159,7 @@ class _CandleHandler(BaseHTTPRequestHandler):
                 conn.rollback()
             except Exception:
                 pass
-            self._json_response(500, {"error": str(exc)})
+            self._json_response(500, {"error": "Internal server error"})
             return
         finally:
             _db._put_conn(conn)
@@ -205,7 +210,7 @@ class _CandleHandler(BaseHTTPRequestHandler):
         self.send_response(code)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(payload)))
-        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Origin", _CORS_ORIGIN)
         self.send_header("Access-Control-Allow-Methods", "GET, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Content-Type")
         self.end_headers()
@@ -225,12 +230,12 @@ def start(broker: BrokerConnector, db: "Database", port: int | None = None) -> N
     _db = db  # share the bot's existing connection pool — no second pool
     _port = port or int(getattr(settings, "CANDLE_SERVER_PORT", 5555))
 
-    _server = ThreadingHTTPServer(("0.0.0.0", _port), _CandleHandler)
+    _server = ThreadingHTTPServer(("127.0.0.1", _port), _CandleHandler)
     _server.daemon_threads = True
 
     thread = threading.Thread(target=_server.serve_forever, daemon=True)
     thread.start()
-    logger.info("Candle server started on http://0.0.0.0:%d", _port)
+    logger.info("Candle server started on http://127.0.0.1:%d", _port)
 
 
 def stop() -> None:

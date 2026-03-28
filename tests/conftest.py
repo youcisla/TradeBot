@@ -179,12 +179,12 @@ def crucix_agent():
 def make_candles(count: int = 60, base: float = 1.1050,
                  trend: float = 0.0001) -> list[Candle]:
     """Generate a deterministic list of candles with a slight upward trend."""
-    from datetime import datetime, timedelta
+    from datetime import UTC, datetime, timedelta
     candles = []
     for i in range(count):
         c = round(base + i * trend, 5)
         candles.append(Candle(
-            timestamp=datetime(2026, 1, 1) + timedelta(hours=i),
+            timestamp=datetime(2026, 1, 1, tzinfo=UTC) + timedelta(hours=i),
             open=round(c - 0.0002, 5),
             high=round(c + 0.0010, 5),
             low=round(c - 0.0010, 5),

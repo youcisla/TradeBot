@@ -3,13 +3,13 @@
 Answers: *Is it safe?*
 
 Implements (in order):
-1. Drawdown circuit breaker
-2. Duplicate signal guard
-3. Correlation guard
-4. News blackout
-5. Live spread check
-6. Max open trades
-7. Position sizing
+1.  Drawdown circuit breaker
+1b. Crucix macro blackout
+2.  Duplicate signal guard
+3.  Correlation guard
+4.  Max open trades
+5.  Live spread check (per-asset-class)
+7.  Position sizing
 """
 
 from __future__ import annotations

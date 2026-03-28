@@ -54,7 +54,16 @@ class MT5Connector(BrokerConnector):
             logger.error("MT5 initialize failed: %s", mt5.last_error())
             return False
 
-        account = int(self._account)
+        try:
+            account = int(self._account)
+        except (TypeError, ValueError):
+            logger.error(
+                "Invalid BROKER_ACCOUNT value %r — must be a numeric account number",
+                self._account,
+            )
+            mt5.shutdown()
+            return False
+
         authorized = mt5.login(
             account,
             password=self._password,

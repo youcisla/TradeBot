@@ -17,6 +17,15 @@ import hmac
 import logging
 import os
 
+try:
+    from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+    from cryptography.hazmat.primitives import padding as _padding
+except ImportError as _err:
+    raise ImportError(
+        "The 'cryptography' package is required for broker password encryption. "
+        "Install it with: pip install cryptography>=42.0"
+    ) from _err
+
 from config import settings
 
 logger = logging.getLogger(__name__)
@@ -50,11 +59,8 @@ def encrypt(plaintext: str) -> str:
     if key is None:
         return plaintext
 
-    from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
-    from cryptography.hazmat.primitives import padding
-
     iv = os.urandom(16)
-    padder = padding.PKCS7(128).padder()
+    padder = _padding.PKCS7(128).padder()
     padded = padder.update(plaintext.encode()) + padder.finalize()
 
     cipher = Cipher(algorithms.AES(key), modes.CBC(iv))
@@ -92,14 +98,11 @@ def decrypt(ciphertext: str) -> str:
     if not hmac.compare_digest(stored_mac, computed_mac):
         return ciphertext  # HMAC mismatch → legacy plaintext
 
-    from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
-    from cryptography.hazmat.primitives import padding
-
     try:
         cipher = Cipher(algorithms.AES(key), modes.CBC(iv))
         decryptor = cipher.decryptor()
         padded = decryptor.update(encrypted) + decryptor.finalize()
-        unpadder = padding.PKCS7(128).unpadder()
+        unpadder = _padding.PKCS7(128).unpadder()
         plaintext = unpadder.update(padded) + unpadder.finalize()
         return plaintext.decode()
     except Exception:

@@ -30,8 +30,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install --upgrade pip
-          # MetaTrader5 is Windows-only — skip in CI
-          grep -v "^MetaTrader5" requirements.txt | grep -v "^#" | grep -v "^$" | pip install -r /dev/stdin
+          pip install -r requirements-ci.txt
 
       - name: Run tests
         run: python -m pytest tests/ -v --tb=short

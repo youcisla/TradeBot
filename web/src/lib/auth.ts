@@ -4,7 +4,10 @@ import bcrypt from "bcryptjs";
 import { getUserByUsername, getUserCount, createUser } from "@/lib/db";
 
 if (!process.env.NEXTAUTH_SECRET) {
-  console.warn("WARNING: NEXTAUTH_SECRET is not set!");
+  throw new Error(
+    "NEXTAUTH_SECRET is not set. Set this environment variable to a random 32+ character string. " +
+    "Run: openssl rand -base64 32"
+  );
 }
 
 export const authOptions: NextAuthOptions = {
@@ -21,9 +24,15 @@ export const authOptions: NextAuthOptions = {
         const username = credentials.username.trim().toLowerCase();
         const password = credentials.password;
 
-        // Auto-create first user if no users exist yet (initial setup)
+        // Auto-create first user if no users exist yet (initial setup).
+        // WARNING: any caller can claim admin on a fresh/wiped DB.
+        // Use scripts/reset_dashboard_user.py to pre-create credentials instead.
         const count = await getUserCount();
         if (count === 0) {
+          console.warn(
+            `[auth] WARNING: No users exist — auto-creating first user '${username}'. ` +
+            "Run scripts/reset_dashboard_user.py to set credentials before exposing the dashboard."
+          );
           const hash = await bcrypt.hash(password, 12);
           const id = await createUser(username, hash);
           return { id: String(id), name: username };
