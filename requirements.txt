@@ -22,5 +22,8 @@ bcrypt>=4.0
 # ── DeepSeek / OpenAI-compatible API client ──────────────────────────────
 openai>=1.0
 
+# ── BM25 episodic memory (Reflector / LearningAgent) ─────────────────────
+rank_bm25>=0.2.2
+
 # ── Testing ──────────────────────────────────────────────────────────────
 pytest>=7.0

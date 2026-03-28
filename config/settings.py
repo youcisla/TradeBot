@@ -69,8 +69,15 @@ NEURAL_MODELS_DIR: str     = os.getenv(
     str(Path(__file__).resolve().parent.parent / "models" / "neural"),
 )
 # Multi-timeframe candle counts fetched by MarketAgent
-H4_CANDLE_COUNT: int = int(os.getenv("H4_CANDLE_COUNT", "50"))
-D1_CANDLE_COUNT: int = int(os.getenv("D1_CANDLE_COUNT", "20"))
+# Analysis TFs: M30 (bridge), H1 (main), H4 (structure), D1 (bias)
+# Entry TFs:    M15 (trigger), M5/M1 (precision — future)
+H4_CANDLE_COUNT: int  = int(os.getenv("H4_CANDLE_COUNT",  "50"))
+D1_CANDLE_COUNT: int  = int(os.getenv("D1_CANDLE_COUNT",  "20"))
+M30_CANDLE_COUNT: int = int(os.getenv("M30_CANDLE_COUNT", "100"))
+M15_CANDLE_COUNT: int = int(os.getenv("M15_CANDLE_COUNT", "100"))
+# MTF alignment: confidence boost when all TFs agree, D1 veto when it contradicts
+MTF_ALIGNMENT_BOOST: float = float(os.getenv("MTF_ALIGNMENT_BOOST", "0.05"))
+MTF_D1_VETO: bool = os.getenv("MTF_D1_VETO", "true").lower() == "true"
 # Regime-based confidence adjustment (ranging market penalised)
 REGIME_ADX_TRENDING: float  = float(os.getenv("REGIME_ADX_TRENDING",  "25.0"))
 REGIME_ADX_RANGING: float   = float(os.getenv("REGIME_ADX_RANGING",   "20.0"))

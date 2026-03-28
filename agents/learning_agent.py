@@ -32,7 +32,7 @@ from database.db import Database
 from models.trade import Trade
 
 if TYPE_CHECKING:
-    pass
+    from agents.reflector import Reflector
 
 logger = logging.getLogger(__name__)
 
@@ -62,11 +62,21 @@ class LearningAgent:
 
     def __init__(self, db: Database) -> None:
         self._db = db
+        self._reflector: "Reflector | None" = None
+
+    def set_reflector(self, reflector: "Reflector") -> None:
+        """Attach the Reflector so post-trade lessons are generated automatically."""
+        self._reflector = reflector
 
     # ── public API ───────────────────────────────────────────────────────
 
-    def review_trade(self, trade: Trade) -> float:
+    def review_trade(self, trade: Trade, context: dict | None = None) -> float:
         """Score a closed trade, apply reward multiplier, adjust confidence.
+
+        Args:
+            trade:   The closed trade to review.
+            context: Optional signal-time context dict (regime, MTF bias, etc.)
+                     forwarded to the Reflector for richer post-trade lessons.
 
         Returns the raw score.
         """
@@ -120,6 +130,10 @@ class LearningAgent:
             trade.id, score, multiplier, streak,
             trade.strategy, current, new_conf,
         )
+
+        # Trigger async post-trade reflection (non-blocking)
+        if self._reflector is not None:
+            self._reflector.reflect_async(trade, context)
 
         return score
 

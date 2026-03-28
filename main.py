@@ -43,6 +43,7 @@ from agents.execution_agent import ExecutionAgent
 from agents.trade_manager import TradeManagerAgent
 from agents.learning_agent import LearningAgent
 from agents.logging_agent import LoggingAgent
+from agents.reflector import Reflector
 from agents.council_agent import CouncilAgent
 from agents.crucix_agent import CrucixAgent
 from agents.deepseek_strategy import DeepSeekStrategy
@@ -151,8 +152,10 @@ def main() -> None:
     # (moved after log_agent so startup errors can be logged)
     candle_server.start(broker, db)
 
-    # ── 3. Learning agent ────────────────────────────────────────────────
+    # ── 3. Learning agent + post-trade Reflector ─────────────────────────
     learning = LearningAgent(db)
+    reflector = Reflector()
+    learning.set_reflector(reflector)
 
     # ── 4. Strategies — DeepSeek (primary LLM) + ICT/SMC + SMA crossover
     deepseek_strategy = DeepSeekStrategy()

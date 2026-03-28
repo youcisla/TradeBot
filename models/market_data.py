@@ -31,7 +31,11 @@ class MarketData:
     volume: float = 0.0
     timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
     candles: list[Candle] = field(default_factory=list)
-    # Multi-timeframe candles for HTF bias features (empty = not fetched)
+    # Multi-timeframe candles (empty = not fetched)
+    # Analysis TFs: M30 bridge, H4 structure, D1 bias
+    # Entry TFs:    M15 trigger
+    m30_candles: list[Candle] = field(default_factory=list)
+    m15_candles: list[Candle] = field(default_factory=list)
     h4_candles: list[Candle] = field(default_factory=list)
     d1_candles: list[Candle] = field(default_factory=list)
 
@@ -79,11 +83,21 @@ class MarketContext:
     macro: "Optional[MacroContext]" = None
 
     candles: list[Candle] = field(default_factory=list)
-    # Multi-timeframe candles for HTF bias features (empty = not fetched)
+    # Multi-timeframe candles (empty = not fetched)
+    m30_candles: list[Candle] = field(default_factory=list)
+    m15_candles: list[Candle] = field(default_factory=list)
     h4_candles: list[Candle] = field(default_factory=list)
     d1_candles: list[Candle] = field(default_factory=list)
     # ADX value computed by AnalysisAgent (used by NeuralStrategy regime gate)
     adx: float = 0.0
+    # Per-timeframe trend directions (bullish / bearish / neutral)
+    m30_trend: str = "neutral"
+    h4_trend: str = "neutral"
+    d1_trend: str = "neutral"
+    # MTF alignment: fraction of analysis TFs agreeing with H1 (0.0–1.0)
+    # and a label: "aligned_bull" | "aligned_bear" | "mixed" | "unknown"
+    mtf_alignment: float = 0.0
+    mtf_bias: str = "unknown"
 
     def __post_init__(self) -> None:
         # If caller passed ``trend`` but left ``trend_direction`` at its

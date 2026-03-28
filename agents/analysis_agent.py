@@ -32,13 +32,14 @@ class AnalysisAgent:
             self._emit("info",
                        f"Crunching {data.symbol} — regime={ctx.regime} trend={ctx.trend_direction} "
                        f"RSI={ctx.rsi:.1f} ATR={ctx.atr:.5f} "
-                       f"SMA_fast={ctx.sma_fast:.5f} SMA_slow={ctx.sma_slow:.5f} "
-                       f"prev_fast={ctx.prev_sma_fast:.5f} prev_slow={ctx.prev_sma_slow:.5f} "
+                       f"MTF bias={ctx.mtf_bias} align={ctx.mtf_alignment:.0%} "
+                       f"[D1={ctx.d1_trend} H4={ctx.h4_trend} H1={ctx.trend_direction} M30={ctx.m30_trend}] "
                        f"session={ctx.session} news_blackout={ctx.near_news_event}",
                        {"regime": ctx.regime, "trend": ctx.trend_direction,
                         "rsi": ctx.rsi, "atr": ctx.atr,
-                        "sma_fast": ctx.sma_fast, "sma_slow": ctx.sma_slow,
-                        "prev_sma_fast": ctx.prev_sma_fast, "prev_sma_slow": ctx.prev_sma_slow,
+                        "mtf_bias": ctx.mtf_bias, "mtf_alignment": ctx.mtf_alignment,
+                        "d1_trend": ctx.d1_trend, "h4_trend": ctx.h4_trend,
+                        "m30_trend": ctx.m30_trend,
                         "session": ctx.session, "day": ctx.day_of_week,
                         "near_news": ctx.near_news_event,
                         "price": ctx.current_price, "spread": ctx.spread})
@@ -55,6 +56,7 @@ class AnalysisAgent:
     def _analyze_inner(self, data: MarketData) -> MarketContext:
         closes = [c.close for c in data.candles] if data.candles else []
 
+        # ── H1 indicators (primary analysis timeframe) ───────────────────
         sma_fast = self._sma(closes, settings.SMA_FAST_PERIOD)
         sma_slow = self._sma(closes, settings.SMA_SLOW_PERIOD)
         prev_sma_fast = self._sma(closes[:-1], settings.SMA_FAST_PERIOD) if len(closes) > settings.SMA_FAST_PERIOD else 0.0
@@ -63,7 +65,7 @@ class AnalysisAgent:
         atr = self._atr(data.candles, 14) if data.candles else 0.0
         adx = self._adx(data.candles, 14) if len(data.candles) >= 28 else 0.0
 
-        # ADX-based regime (more reliable than SMA spread heuristic)
+        # ADX-based regime
         if atr > 0 and len(closes) > 1:
             recent_range = max(closes[-14:]) - min(closes[-14:]) if len(closes) >= 14 else 0
             if recent_range > atr * 3:
@@ -73,18 +75,36 @@ class AnalysisAgent:
             elif adx <= settings.REGIME_ADX_RANGING:
                 regime = "ranging"
             else:
-                # borderline zone — use SMA spread as tiebreaker
                 regime = "trending" if (sma_fast != 0 and sma_slow != 0
                                         and abs(sma_fast - sma_slow) > atr) else "ranging"
         else:
             regime = "unknown"
 
-        if sma_fast > sma_slow:
-            trend = "bullish"
-        elif sma_fast < sma_slow:
-            trend = "bearish"
+        h1_trend = self._tf_trend(closes, settings.SMA_FAST_PERIOD, settings.SMA_SLOW_PERIOD)
+
+        # ── Per-timeframe trend (analysis stack: M30, H4, D1) ────────────
+        m30_trend = self._tf_trend_candles(data.m30_candles)
+        h4_trend  = self._tf_trend_candles(data.h4_candles)
+        d1_trend  = self._tf_trend_candles(data.d1_candles)
+
+        # ── MTF alignment: how many analysis TFs agree with H1 ───────────
+        analysis_tfs = [m30_trend, h1_trend, h4_trend, d1_trend]
+        bull_count = sum(1 for t in analysis_tfs if t == "bullish")
+        bear_count = sum(1 for t in analysis_tfs if t == "bearish")
+        known = [t for t in analysis_tfs if t != "neutral"]
+
+        if len(known) == 0:
+            mtf_bias      = "unknown"
+            mtf_alignment = 0.0
+        elif bull_count > bear_count:
+            mtf_alignment = bull_count / len(known)
+            mtf_bias      = "aligned_bull" if bull_count >= 3 else "mixed"
+        elif bear_count > bull_count:
+            mtf_alignment = bear_count / len(known)
+            mtf_bias      = "aligned_bear" if bear_count >= 3 else "mixed"
         else:
-            trend = "neutral"
+            mtf_bias      = "mixed"
+            mtf_alignment = 0.5
 
         near_news = self._crucix.is_blackout(data.symbol) if self._crucix else False
 
@@ -104,22 +124,49 @@ class AnalysisAgent:
             atr=atr,
             adx=adx,
             regime=regime,
-            trend_direction=trend,
+            trend_direction=h1_trend,
             session=current_session(),
             day_of_week=day_of_week(),
             near_news_event=near_news,
             candles=data.candles,
+            m30_candles=data.m30_candles,
+            m15_candles=data.m15_candles,
             h4_candles=data.h4_candles,
             d1_candles=data.d1_candles,
+            m30_trend=m30_trend,
+            h4_trend=h4_trend,
+            d1_trend=d1_trend,
+            mtf_alignment=mtf_alignment,
+            mtf_bias=mtf_bias,
         )
 
-        # Enrich with world context from Crucix (fails safely if not running)
         if self._crucix:
             ctx.macro = self._crucix.get_context()
 
         return ctx
 
     # ── indicator helpers ────────────────────────────────────────────────
+
+    @staticmethod
+    def _tf_trend(closes: list[float], fast: int, slow: int) -> str:
+        """SMA crossover trend direction from a close price list."""
+        if len(closes) < slow:
+            return "neutral"
+        sma_f = sum(closes[-fast:]) / fast
+        sma_s = sum(closes[-slow:]) / slow
+        if sma_f > sma_s:
+            return "bullish"
+        if sma_f < sma_s:
+            return "bearish"
+        return "neutral"
+
+    @classmethod
+    def _tf_trend_candles(cls, candles: list, fast: int = 10, slow: int = 50) -> str:
+        """Compute SMA crossover trend from a candle list (any timeframe)."""
+        if not candles or len(candles) < slow:
+            return "neutral"
+        closes = [c.close for c in candles]
+        return cls._tf_trend(closes, fast, slow)
 
     @staticmethod
     def _sma(values: list[float], period: int) -> float:

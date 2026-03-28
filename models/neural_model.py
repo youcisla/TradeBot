@@ -50,14 +50,18 @@ FEAT_NAMES = [
     # ── Momentum & volatility envelope (13–14) ────────────────────────────
     "macd_hist",        # (MACD line - signal line) / ATR
     "bb_pos",           # (close - BB_lower) / (BB_upper - BB_lower)  ∈ [0,1]
-    # ── Multi-timeframe bias (15–19, scalar broadcast across sequence) ────
+    # ── Multi-timeframe bias (15–22, scalar broadcast across sequence) ────
+    # Analysis stack: M30 bridge → H4 structure → D1 directional bias
+    "m30_close_ret",    # log return of latest M30 candle
+    "m30_rsi_centered", # (M30 RSI - 50) / 50  — momentum on entry bridge TF
+    "m30_atr_pct",      # M30 ATR / M30 close   — volatility on entry bridge TF
     "h4_close_ret",     # log return of latest H4 candle
     "h4_rsi_centered",  # (H4 RSI - 50) / 50
     "h4_atr_pct",       # H4 ATR / H4 close
     "d1_close_ret",     # log return of latest D1 candle
     "d1_range_pos",     # (H1_close - D1_low) / (D1_high - D1_low)
 ]
-N_FEATURES = len(FEAT_NAMES)  # 20
+N_FEATURES = len(FEAT_NAMES)  # 23
 
 
 # ── RSI helper (does not require context — computed from candles) ─────────
@@ -135,8 +139,9 @@ def build_features(
     sma_fast: float | None = None,
     sma_slow: float | None = None,
     timestamp=None,                   # datetime of the latest candle (for time encoding)
-    h4_candles=None,                  # list[Candle] H4 — latest bars for HTF bias
-    d1_candles=None,                  # list[Candle] D1 — latest bars for HTF bias
+    m30_candles=None,                 # list[Candle] M30 — entry bridge TF
+    h4_candles=None,                  # list[Candle] H4 — structure TF
+    d1_candles=None,                  # list[Candle] D1 — bias TF
 ) -> np.ndarray | None:
     """Convert the last *seq_len* candles to a (seq_len, N_FEATURES) float32 array.
 
@@ -213,34 +218,41 @@ def build_features(
     def _scalar_feature(val: float) -> np.ndarray:
         return np.full(len(closes), val, dtype=np.float64)
 
-    # H4 features
-    if h4_candles and len(h4_candles) >= 2:
-        h4c = h4_candles[-2:]
-        h4_ret   = float(np.log(h4c[-1].close / h4c[-2].close) if h4c[-2].close > 0 else 0.0)
-        h4_highs = np.array([c.high  for c in h4_candles[-15:]], dtype=np.float64)
-        h4_lows  = np.array([c.low   for c in h4_candles[-15:]], dtype=np.float64)
-        h4_cls   = np.array([c.close for c in h4_candles[-15:]], dtype=np.float64)
-        h4_atr_v = float(_compute_atr(h4_highs, h4_lows, h4_cls)[-1])
-        h4_rsi_v = float(_compute_rsi(h4_cls)[-1])
-        h4_close_v = float(h4_candles[-1].close) or 1e-9
-    else:
-        h4_ret   = 0.0
-        h4_atr_v = float(atr_arr[-1])
-        h4_rsi_v = 50.0
-        h4_close_v = float(closes[-1]) or 1e-9
+    def _htf_scalars(htf_candles, fallback_atr: float, fallback_close: float,
+                     ) -> tuple[float, float, float]:
+        """Return (close_ret, rsi_centered, atr_pct) for any HTF candle list."""
+        if htf_candles and len(htf_candles) >= 2:
+            c2 = htf_candles[-2:]
+            ret   = float(np.log(c2[-1].close / c2[-2].close) if c2[-2].close > 0 else 0.0)
+            hs = np.array([c.high  for c in htf_candles[-15:]], dtype=np.float64)
+            ls = np.array([c.low   for c in htf_candles[-15:]], dtype=np.float64)
+            cs = np.array([c.close for c in htf_candles[-15:]], dtype=np.float64)
+            atr_v   = float(_compute_atr(hs, ls, cs)[-1]) if len(cs) > 1 else fallback_atr
+            rsi_v   = float(_compute_rsi(cs)[-1]) if len(cs) > 1 else 50.0
+            close_v = float(htf_candles[-1].close) or 1e-9
+            return ret, (rsi_v - 50.0) / 50.0, atr_v / close_v
+        return 0.0, 0.0, fallback_atr / (fallback_close or 1e-9)
 
-    # D1 features
+    fallback_atr   = float(atr_arr[-1])
+    fallback_close = float(closes[-1]) or 1e-9
+
+    # M30 features (entry bridge TF)
+    m30_ret, m30_rsi_c, m30_atr_p = _htf_scalars(m30_candles, fallback_atr, fallback_close)
+
+    # H4 + D1 features via shared helper
+    h4_ret, h4_rsi_c, h4_atr_p = _htf_scalars(h4_candles, fallback_atr, fallback_close)
+
+    # D1: also need range position (where is H1 close inside today's D1 range?)
     if d1_candles and len(d1_candles) >= 2:
-        d1c = d1_candles[-2:]
-        d1_ret  = float(np.log(d1c[-1].close / d1c[-2].close) if d1c[-2].close > 0 else 0.0)
-        d1_high = float(d1_candles[-1].high)
-        d1_low  = float(d1_candles[-1].low)
+        d1_ret, _, _ = _htf_scalars(d1_candles, fallback_atr, fallback_close)
+        d1_high      = float(d1_candles[-1].high)
+        d1_low       = float(d1_candles[-1].low)
     else:
         d1_ret  = 0.0
-        d1_high = float(np.max(closes[-24:])) if len(closes) >= 24 else float(closes[-1])
-        d1_low  = float(np.min(closes[-24:])) if len(closes) >= 24 else float(closes[-1])
+        d1_high = float(np.max(closes[-24:])) if len(closes) >= 24 else fallback_close
+        d1_low  = float(np.min(closes[-24:])) if len(closes) >= 24 else fallback_close
 
-    d1_range = (d1_high - d1_low) or 1e-9
+    d1_range         = (d1_high - d1_low) or 1e-9
     d1_range_pos_val = float(np.clip((closes[-1] - d1_low) / d1_range, 0.0, 1.0))
 
     feat_matrix = np.stack([
@@ -259,12 +271,15 @@ def build_features(
         dow_cos,                                                    # 12 dow_cos
         macd_hist,                                                  # 13 macd_hist
         bb_pos,                                                     # 14 bb_pos
-        _scalar_feature(h4_ret),                                   # 15 h4_close_ret
-        _scalar_feature((h4_rsi_v - 50.0) / 50.0),                # 16 h4_rsi_centered
-        _scalar_feature(h4_atr_v / h4_close_v),                   # 17 h4_atr_pct
-        _scalar_feature(d1_ret),                                   # 18 d1_close_ret
-        _scalar_feature(d1_range_pos_val),                         # 19 d1_range_pos
-    ], axis=1)  # (needed, N_FEATURES=20)
+        _scalar_feature(m30_ret),                                  # 15 m30_close_ret
+        _scalar_feature(m30_rsi_c),                                # 16 m30_rsi_centered
+        _scalar_feature(m30_atr_p),                                # 17 m30_atr_pct
+        _scalar_feature(h4_ret),                                   # 18 h4_close_ret
+        _scalar_feature(h4_rsi_c),                                 # 19 h4_rsi_centered
+        _scalar_feature(h4_atr_p),                                 # 20 h4_atr_pct
+        _scalar_feature(d1_ret),                                   # 21 d1_close_ret
+        _scalar_feature(d1_range_pos_val),                         # 22 d1_range_pos
+    ], axis=1)  # (needed, N_FEATURES=23)
 
     # Return only the last seq_len bars (indicators are warmed up now)
     return feat_matrix[-seq_len:].astype(np.float32)

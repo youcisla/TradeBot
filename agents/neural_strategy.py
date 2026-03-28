@@ -53,7 +53,29 @@ class NeuralStrategy(BaseStrategy):
 
         direction, confidence = result
 
-        # Regime confidence penalty — ranging markets are noisier
+        # ── MTF D1 veto: D1 must not directly contradict the signal ──────
+        # D1 bearish + BUY signal = trading against the daily trend → skip
+        if settings.MTF_D1_VETO:
+            d1 = getattr(context, "d1_trend", "neutral")
+            if (direction == "BUY"  and d1 == "bearish") or \
+               (direction == "SELL" and d1 == "bullish"):
+                logger.info(
+                    "[neural] %s %s vetoed — D1 trend (%s) contradicts signal",
+                    direction, context.symbol, d1,
+                )
+                return None
+
+        # ── MTF alignment boost/penalty ───────────────────────────────────
+        mtf_bias      = getattr(context, "mtf_bias",      "unknown")
+        mtf_alignment = getattr(context, "mtf_alignment", 0.0)
+        aligned = (mtf_bias == "aligned_bull" and direction == "BUY") or \
+                  (mtf_bias == "aligned_bear" and direction == "SELL")
+        if aligned:
+            confidence += settings.MTF_ALIGNMENT_BOOST * mtf_alignment
+        elif mtf_bias == "mixed":
+            confidence -= settings.MTF_ALIGNMENT_BOOST  # slight penalty for choppy stack
+
+        # ── Regime confidence penalty — ranging markets are noisier ──────
         if context.regime == "ranging":
             confidence -= settings.REGIME_CONFIDENCE_PENALTY
 
@@ -83,8 +105,9 @@ class NeuralStrategy(BaseStrategy):
         )
 
         logger.info(
-            "[neural] Signal: %s %s conf=%.1f%% entry=%.5f sl=%.5f",
+            "[neural] Signal: %s %s conf=%.1f%% entry=%.5f sl=%.5f mtf=%s(%.0f%%)",
             direction, context.symbol, confidence * 100, entry, sl,
+            getattr(context, "mtf_bias", "?"), mtf_alignment * 100,
         )
 
         return Signal(

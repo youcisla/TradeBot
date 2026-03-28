@@ -28,6 +28,7 @@ const NAV_SECTIONS = [
     items: [
       { href: "/dashboard/chart", label: "Chart",      icon: "candlestick_chart" },
       { href: "/dashboard/world", label: "World Intel", icon: "public"           },
+      { href: "/dashboard/globe", label: "Globe",       icon: "language"         },
     ],
   },
   {

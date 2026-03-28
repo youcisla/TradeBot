@@ -67,7 +67,18 @@
       "Bash(python -m ruff check agents/analysis_agent.py agents/neural_strategy.py agents/trade_manager.py models/neural_model.py)",
       "Bash(python -m ruff check --fix models/neural_model.py)",
       "Bash(python -m pytest tests/ -x -q)",
-      "Bash(python -m pytest tests/ -q --ignore=tests/test_crucix_client.py)"
+      "Bash(python -m pytest tests/ -q --ignore=tests/test_crucix_client.py)",
+      "Bash(python -m ruff check agents/analysis_agent.py agents/neural_strategy.py agents/market_agent.py agents/model_manager.py models/neural_model.py models/market_data.py config/settings.py)",
+      "WebFetch(domain:github.com)",
+      "Bash(curl -s \"https://raw.githubusercontent.com/youcisla/TradingAgents/main/tradingagents/agents/utils/memory.py\")",
+      "Bash(curl -s \"https://raw.githubusercontent.com/youcisla/TradingAgents/main/tradingagents/graph/reflection.py\")",
+      "Bash(curl -s \"https://raw.githubusercontent.com/youcisla/TradingAgents/main/tradingagents/agents/utils/agent_states.py\")",
+      "Bash(echo \"exit:$?\")",
+      "Bash(python -m ruff check agents/learning_agent.py agents/reflector.py utils/memory.py main.py)",
+      "Bash(python -m ruff check agents/learning_agent.py agents/reflector.py utils/memory.py)",
+      "Bash(python -m pytest tests/test_learning_agent.py tests/test_memory.py -v)",
+      "Bash(python -m pytest tests/test_learning_agent.py -v)",
+      "Bash(python -c \"from utils.memory import AgentMemory; from agents.reflector import Reflector; print\\(''imports OK''\\)\")"
     ],
     "deny": []
   },

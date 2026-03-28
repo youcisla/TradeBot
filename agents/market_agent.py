@@ -62,15 +62,19 @@ class MarketAgent:
         validator = self._validator(symbol)
         validator.validate_tick(bid, ask, spread)
 
-        candles    = self._get_candles(symbol)
-        h4_candles = self._get_htf_candles(symbol, "H4", settings.H4_CANDLE_COUNT)
-        d1_candles = self._get_htf_candles(symbol, "D1", settings.D1_CANDLE_COUNT)
+        candles     = self._get_candles(symbol)
+        m30_candles = self._get_htf_candles(symbol, "M30", settings.M30_CANDLE_COUNT)
+        m15_candles = self._get_htf_candles(symbol, "M15", settings.M15_CANDLE_COUNT)
+        h4_candles  = self._get_htf_candles(symbol, "H4",  settings.H4_CANDLE_COUNT)
+        d1_candles  = self._get_htf_candles(symbol, "D1",  settings.D1_CANDLE_COUNT)
 
         self._emit("info",
                    f"{symbol} — bid={bid:.5f} spread={spread:.5f} "
-                   f"candles={len(candles)} h4={len(h4_candles)} d1={len(d1_candles)} vol={volume:.0f}",
+                   f"h1={len(candles)} m30={len(m30_candles)} m15={len(m15_candles)} "
+                   f"h4={len(h4_candles)} d1={len(d1_candles)} vol={volume:.0f}",
                    {"bid": bid, "ask": ask, "spread": spread,
                     "volume": volume, "candles": len(candles),
+                    "m30": len(m30_candles), "m15": len(m15_candles),
                     "last_close": candles[-1].close if candles else None})
 
         return MarketData(
@@ -80,6 +84,8 @@ class MarketAgent:
             spread=spread,
             volume=volume,
             candles=candles,
+            m30_candles=m30_candles,
+            m15_candles=m15_candles,
             h4_candles=h4_candles,
             d1_candles=d1_candles,
         )
