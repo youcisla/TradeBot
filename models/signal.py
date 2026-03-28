@@ -34,6 +34,11 @@ class Signal:
     take_profit_1: float = 0.0
     take_profit_2: float = 0.0
     take_profit_3: float = 0.0
+    take_profit_4: float = 0.0   # runner — HTF liquidity target (0 = not set)
+    # Structural breakeven: price of the nearest protective swing low (BUY) or
+    # swing high (SELL) below/above entry.  When > 0, trade_manager moves SL
+    # here after TP1 instead of the default entry+spread formula.
+    structural_be: float = 0.0
     confidence: float = 0.5
     timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
     reason: str = ""

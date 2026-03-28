@@ -242,15 +242,42 @@ class ICTStrategy(BaseStrategy):
         if best.missing:
             reason += f" | Missing: {', '.join(best.missing)}"
 
+        # ── Pillar 3: Entry precision ────────────────────────────────
+        # Snap the entry price to the zone midpoint (FVG CE or OB midpoint).
+        # If price has already moved past it by more than the staleness threshold,
+        # the edge is gone — skip the signal.
+        entry_price, skipped = self._precision_entry(
+            best, ctx.current_price, ctx.atr,
+        )
+        if skipped:
+            self._emit(
+                "info",
+                f"ICT {ctx.symbol} {best.direction}: entry STALE — price "
+                f"{ctx.current_price:.5f} already {skipped:.1f}× ATR past zone midpoint "
+                f"({entry_price:.5f}) — signal skipped",
+            )
+            return None
+
+        # ── Pillar 4: TP4 runner + structural breakeven ──────────────
+        tp4 = self._compute_tp4(best.direction, ict_ctx)
+        structural_be = self._compute_structural_be(best.direction, entry_price, ict_ctx)
+
+        if tp4 > 0:
+            confluences.append(f"TP4={tp4:.5f}")
+        if structural_be > 0:
+            confluences.append(f"struct_BE={structural_be:.5f}")
+
         signal = Signal(
             strategy=model_slug,  # Tell TradeManager exactly which model this is!
             symbol=ctx.symbol,
             direction=best.direction,
-            entry_price=best.entry_price,
+            entry_price=entry_price,
             stop_loss=best.stop_loss,
             take_profit_1=best.take_profit_1,
             take_profit_2=best.take_profit_2,
             take_profit_3=best.take_profit_3,
+            take_profit_4=tp4,
+            structural_be=structural_be,
             confidence=final_conf,  # normalized to 0.0 - 1.0
             timestamp=datetime.now(UTC),
             reason=reason,
@@ -261,6 +288,119 @@ class ICTStrategy(BaseStrategy):
         self._log_setup(best, ict_ctx)
 
         return signal
+
+    # ── Pillar 3 helpers ─────────────────────────────────────────────
+
+    def _precision_entry(
+        self,
+        best,
+        current_price: float,
+        atr: float,
+    ) -> tuple[float, float]:
+        """Return (snapped_entry, staleness_ratio).
+
+        Snaps entry to FVG CE or OB midpoint (whichever is most precise).
+        Returns staleness_ratio > 0 if price has already moved past the
+        snapped level by more than LIMIT_ENTRY_MAX_DISTANCE_ATR × ATR.
+        A staleness_ratio of 0 means the entry is still valid.
+        """
+        from models.ict_models import FairValueGap, OrderBlock
+
+        snapped = best.entry_price  # fallback: keep engine's value
+
+        # Prefer OB midpoint → FVG CE (OB is more precise)
+        if best.ob is not None:
+            snapped = round(best.ob.mean_threshold, 5)
+        elif best.fvg is not None:
+            snapped = round(best.fvg.ce, 5)
+
+        # Check staleness: has price already blown past the entry zone?
+        if atr > 0:
+            max_dist = settings.LIMIT_ENTRY_MAX_DISTANCE_ATR * atr
+            if best.direction == "BUY":
+                # For a BUY, entry should be at or below current price (price
+                # retraced into the zone).  Stale if price has already moved
+                # MORE than max_dist ABOVE the snapped entry (missed the zone).
+                overshoot = current_price - snapped
+            else:
+                # For a SELL, stale if price is more than max_dist BELOW snapped entry.
+                overshoot = snapped - current_price
+
+            if overshoot > max_dist:
+                return snapped, round(overshoot / atr, 2)
+
+        return snapped, 0.0
+
+    # ── Pillar 4 helpers ─────────────────────────────────────────────
+
+    def _compute_tp4(self, direction: str, ict_ctx) -> float:
+        """Return the nearest HTF liquidity level as the TP4 runner target.
+
+        BUY  → nearest buy-side liquidity (BSL) above current price.
+        SELL → nearest sell-side liquidity (SSL) below current price.
+        Returns 0.0 if no suitable level is found.
+        """
+        current = ict_ctx.current_price
+
+        if direction == "BUY":
+            candidates = [
+                lvl.price for lvl in ict_ctx.bsl_levels
+                if lvl.price > current and not lvl.swept
+            ]
+            if candidates:
+                return round(min(candidates), 5)
+            # Fallback: HTF OB top as liquidity proxy
+            htf_targets = [
+                ob.high for ob in ict_ctx.htf_obs
+                if ob.high > current and ob.valid and not ob.mitigated
+            ]
+            if htf_targets:
+                return round(min(htf_targets), 5)
+        else:
+            candidates = [
+                lvl.price for lvl in ict_ctx.ssl_levels
+                if lvl.price < current and not lvl.swept
+            ]
+            if candidates:
+                return round(max(candidates), 5)
+            htf_targets = [
+                ob.low for ob in ict_ctx.htf_obs
+                if ob.low < current and ob.valid and not ob.mitigated
+            ]
+            if htf_targets:
+                return round(max(htf_targets), 5)
+
+        return 0.0
+
+    def _compute_structural_be(
+        self,
+        direction: str,
+        entry_price: float,
+        ict_ctx,
+    ) -> float:
+        """Return the nearest structural swing level to use as breakeven.
+
+        BUY  → most recent swing LOW below entry (protecting the leg base).
+        SELL → most recent swing HIGH above entry.
+        Returns 0.0 if no qualifying swing is found.
+        """
+        if direction == "BUY":
+            # Most recent swing low that sits below the entry price
+            candidates = [
+                sp.price for sp in ict_ctx.swing_lows
+                if sp.price < entry_price and not sp.broken
+            ]
+            if candidates:
+                return round(max(candidates), 5)  # nearest below entry
+        else:
+            candidates = [
+                sp.price for sp in ict_ctx.swing_highs
+                if sp.price > entry_price and not sp.broken
+            ]
+            if candidates:
+                return round(min(candidates), 5)  # nearest above entry
+
+        return 0.0
 
     def _log_setup(self, best, ict_ctx) -> None:
         """Log the detected ICT setup to the database."""

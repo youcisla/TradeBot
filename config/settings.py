@@ -64,7 +64,11 @@ MAX_SPREAD_PIPS_EXOTIC: float = float(os.getenv("MAX_SPREAD_PIPS_EXOTIC", "15.0"
 # ── Trade Execution ──────────────────────────────────────────────────────
 TP1_CLOSE_PERCENT: float = float(os.getenv("TP1_CLOSE_PERCENT", "0.40"))
 TP2_CLOSE_PERCENT: float = float(os.getenv("TP2_CLOSE_PERCENT", "0.30"))
-TP3_CLOSE_PERCENT: float = float(os.getenv("TP3_CLOSE_PERCENT", "0.30"))
+TP3_CLOSE_PERCENT: float = float(os.getenv("TP3_CLOSE_PERCENT", "0.20"))
+# TP4 is the runner slice held for the HTF liquidity target.
+# Carved out of what was previously the full TP3 allocation:
+#   TP1=40%, TP2=30%, TP3=20%, TP4=10% → sums to 100%.
+TP4_CLOSE_PERCENT: float = float(os.getenv("TP4_CLOSE_PERCENT", "0.10"))
 TRAILING_STOP_DISTANCE_PIPS: float = float(os.getenv("TRAILING_STOP_DISTANCE_PIPS", "20"))
 # Per-asset-class round-trip commission in account currency per standard lot.
 # Defaults to 7.0 for all classes; override via .env once PuPrime rates are confirmed.
@@ -73,6 +77,12 @@ COMMISSION_PER_LOT_CRYPTO: float = float(os.getenv("COMMISSION_PER_LOT_CRYPTO", 
 COMMISSION_PER_LOT_COMMODITY: float = float(os.getenv("COMMISSION_PER_LOT_COMMODITY", "7.0"))
 COMMISSION_PER_LOT_EXOTIC: float = float(os.getenv("COMMISSION_PER_LOT_EXOTIC", "7.0"))
 BREAKEVEN_SPREAD_OFFSET: bool = os.getenv("BREAKEVEN_SPREAD_OFFSET", "true").lower() == "true"
+# Pillar 3 — entry precision gate.
+# When ICT snaps entry to an FVG CE or OB midpoint, skip the signal if current
+# price is already more than this many ATRs beyond the ideal entry level.
+# 0.5 ATR means "price has already moved more than half an ATR past the zone
+# midpoint — the edge is gone, skip it."
+LIMIT_ENTRY_MAX_DISTANCE_ATR: float = float(os.getenv("LIMIT_ENTRY_MAX_DISTANCE_ATR", "0.5"))
 
 # ── Bot Loop ─────────────────────────────────────────────────────────────
 LOOP_INTERVAL_SECONDS: int = int(os.getenv("LOOP_INTERVAL_SECONDS", "30"))

@@ -77,17 +77,24 @@ class ExecutionAgent:
             logger.warning("EXEC REJECT: lot_size %.2f below minimum", lot_size)
             return None
 
-        # Calculate per-TP lot allocations
+        # Calculate per-TP lot allocations.
+        # When TP4 is set (runner target at HTF liquidity), carve it from
+        # the position; otherwise the runner slice stays in TP3.
         tp1_lots = round(lot_size * settings.TP1_CLOSE_PERCENT, 2)
         tp2_lots = round(lot_size * settings.TP2_CLOSE_PERCENT, 2)
-        tp3_lots = round(lot_size - tp1_lots - tp2_lots, 2)
+        has_tp4 = signal.take_profit_4 > 0
+        tp4_lots = round(lot_size * settings.TP4_CLOSE_PERCENT, 2) if has_tp4 else 0.0
+        tp3_lots = round(lot_size - tp1_lots - tp2_lots - tp4_lots, 2)
 
         # Place ONE order for the full position.
-        # Set broker-side TP at TP3 (furthest) as a crash-safety net only —
-        # trade_manager manages the actual partial exits via close_partial.
-        # Use explicit > 0 check: 0.0 is falsy in Python and would otherwise
-        # fall through to TP1, causing the broker to close the full position early.
-        broker_tp = signal.take_profit_3 if signal.take_profit_3 > 0 else None
+        # Set broker-side TP at the furthest active target as a crash-safety net
+        # — trade_manager manages the actual partial exits via close_partial.
+        if has_tp4:
+            broker_tp = signal.take_profit_4
+        elif signal.take_profit_3 > 0:
+            broker_tp = signal.take_profit_3
+        else:
+            broker_tp = None
         result = self._broker.place_order(
             symbol=signal.symbol,
             direction=signal.direction,
@@ -131,9 +138,12 @@ class ExecutionAgent:
             take_profit_1=signal.take_profit_1 or 0.0,
             take_profit_2=signal.take_profit_2 or 0.0,
             take_profit_3=signal.take_profit_3 or 0.0,
+            take_profit_4=signal.take_profit_4,
             tp1_lots=tp1_lots,
             tp2_lots=tp2_lots,
             tp3_lots=tp3_lots,
+            tp4_lots=tp4_lots,
+            structural_be=signal.structural_be,
             broker_ticket=result.broker_ticket,
             spread_at_entry=snap.spread,
             open_time=datetime.now(UTC),
@@ -157,10 +167,15 @@ class ExecutionAgent:
             trade.id, trade.direction, trade.symbol,
             lot_size, trade.entry_price, trade.broker_ticket,
         )
+        tp_summary = (
+            f"TP1={trade.take_profit_1:.5f} TP2={trade.take_profit_2:.5f} "
+            f"TP3={trade.take_profit_3:.5f}"
+        )
+        if trade.take_profit_4 > 0:
+            tp_summary += f" TP4={trade.take_profit_4:.5f}(runner)"
         telegram_bot.send_message(
             f"📈 Trade opened: {trade.direction} {trade.symbol} "
             f"{lot_size} lots @ {trade.entry_price:.5f}  "
-            f"SL={trade.stop_loss:.5f}  "
-            f"TP1={trade.take_profit_1:.5f} TP2={trade.take_profit_2:.5f} TP3={trade.take_profit_3:.5f}"
+            f"SL={trade.stop_loss:.5f}  {tp_summary}"
         )
         return trade

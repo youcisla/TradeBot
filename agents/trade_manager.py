@@ -194,6 +194,13 @@ class TradeManagerAgent:
                 if self._tp_reached(trade, current_price, trade.take_profit_3):
                     self._handle_tp3(trade, pos_map)
 
+            # ── Check TP4 (runner to HTF liquidity) ──────────────────────
+            elif not trade.tp4_hit and trade.take_profit_4 > 0:
+                # Continue trailing the runner slice
+                self._trail_stop(trade, current_price)
+                if self._tp_reached(trade, current_price, trade.take_profit_4):
+                    self._handle_tp4(trade, pos_map)
+
             # ── Check SL ─────────────────────────────────────────────────
             if trade.is_open() and self._sl_hit(trade, current_price):
                 self._handle_sl(trade, pos_map)
@@ -230,18 +237,28 @@ class TradeManagerAgent:
         trade.tp1_hit = True
         trade.status = "PARTIAL"
 
-        be_sl = self._breakeven_price(trade)
+        # Pillar 4 — structural breakeven: prefer the structural swing level
+        # stored at trade-open time; fall back to the entry+spread formula.
+        if trade.structural_be > 0:
+            be_sl = trade.structural_be
+            be_type = "structural"
+        else:
+            be_sl = self._breakeven_price(trade)
+            be_type = "entry+spread"
         self._broker.modify_order(trade.broker_ticket, sl=be_sl)
         trade.stop_loss = be_sl
 
         self._state.save_trade(trade)
         self._emit("info",
-                   f"TP1 hit on {trade.symbol}! Closed {trade.tp1_lots:.2f} lots, moving SL → breakeven ({be_sl:.5f})",
-                   {"trade_id": trade.id, "tp": 1, "lots_closed": trade.tp1_lots})
-        logger.info("TP1 hit: trade %s — partial close %.2f lots, SL→BE %.5f",
-                     trade.id, trade.tp1_lots, be_sl)
+                   f"TP1 hit on {trade.symbol}! Closed {trade.tp1_lots:.2f} lots, "
+                   f"moving SL → {be_type} breakeven ({be_sl:.5f})",
+                   {"trade_id": trade.id, "tp": 1, "lots_closed": trade.tp1_lots,
+                    "be_type": be_type})
+        logger.info("TP1 hit: trade %s — partial close %.2f lots, SL→BE %.5f (%s)",
+                     trade.id, trade.tp1_lots, be_sl, be_type)
         telegram_bot.send_message(
-            f"✅ TP1 hit: {trade.symbol} — closed {trade.tp1_lots} lots, SL→ breakeven"
+            f"✅ TP1 hit: {trade.symbol} — closed {trade.tp1_lots} lots, "
+            f"SL→ {be_type} breakeven ({be_sl:.5f})"
         )
 
     def _handle_tp2(self, trade: Trade, pos_map: dict) -> None:
@@ -265,23 +282,59 @@ class TradeManagerAgent:
         )
 
     def _handle_tp3(self, trade: Trade, pos_map: dict) -> None:
-        ok = self._broker.close_order(trade.broker_ticket, trade.symbol, trade.direction)
+        # When TP4 (runner) is active, TP3 is a partial close, not the final exit.
+        has_runner = trade.take_profit_4 > 0 and trade.tp4_lots > 0
+        if has_runner:
+            ok = self._broker.close_partial(
+                trade.broker_ticket, trade.symbol, trade.tp3_lots, trade.direction,
+            )
+        else:
+            ok = self._broker.close_order(trade.broker_ticket, trade.symbol, trade.direction)
         if not ok and self._position_still_open(trade.broker_ticket, pos_map):
             logger.error("Failed to close TP3 for trade %s — position still open", trade.id)
             return
         trade.tp3_hit = True
-        trade.status = "CLOSED"
-        trade.close_time = datetime.now(UTC)
-        trade.close_reason = "TP3"
+        if not has_runner:
+            trade.status = "CLOSED"
+            trade.close_time = datetime.now(UTC)
+            trade.close_reason = "TP3"
         true_pnl = round(trade.pnl - trade.commission, 2)
         self._state.save_trade(trade)
         self._emit("info",
-                   f"TP3 hit on {trade.symbol}! Trade fully closed "
-                   f"(gross {trade.pnl:.2f} − commission {trade.commission:.2f} = {true_pnl:.2f}) — perfect exit.",
-                   {"trade_id": trade.id, "tp": 3, "pnl": trade.pnl, "true_pnl": true_pnl})
-        logger.info("TP3 hit: trade %s — fully closed (true PnL %.2f)", trade.id, true_pnl)
+                   f"TP3 hit on {trade.symbol}! "
+                   + (f"Closed {trade.tp3_lots:.2f} lots — runner active to TP4={trade.take_profit_4:.5f}"
+                      if has_runner else
+                      f"Trade fully closed (gross {trade.pnl:.2f} − commission {trade.commission:.2f} = {true_pnl:.2f}) — perfect exit."),
+                   {"trade_id": trade.id, "tp": 3, "pnl": trade.pnl, "true_pnl": true_pnl,
+                    "runner": has_runner})
+        logger.info("TP3 hit: trade %s — %s (true PnL so far %.2f)",
+                    trade.id, "runner continues" if has_runner else "fully closed", true_pnl)
         telegram_bot.send_message(
-            f"🎯 TP3 hit: {trade.symbol} — fully closed "
+            f"🎯 TP3 hit: {trade.symbol} — "
+            + (f"closed {trade.tp3_lots} lots, runner to TP4={trade.take_profit_4:.5f}"
+               if has_runner else
+               f"fully closed gross {trade.pnl:.2f} − commission {trade.commission:.2f} = **{true_pnl:.2f}**")
+        )
+
+    def _handle_tp4(self, trade: Trade, pos_map: dict) -> None:
+        """Close the runner slice at the HTF liquidity target (TP4)."""
+        ok = self._broker.close_order(trade.broker_ticket, trade.symbol, trade.direction)
+        if not ok and self._position_still_open(trade.broker_ticket, pos_map):
+            logger.error("Failed to close TP4 runner for trade %s — position still open", trade.id)
+            return
+        trade.tp4_hit = True
+        trade.status = "CLOSED"
+        trade.close_time = datetime.now(UTC)
+        trade.close_reason = "TP4"
+        true_pnl = round(trade.pnl - trade.commission, 2)
+        self._state.save_trade(trade)
+        self._emit("info",
+                   f"TP4 (runner) hit on {trade.symbol}! Trade fully closed at HTF liquidity "
+                   f"(gross {trade.pnl:.2f} − commission {trade.commission:.2f} = {true_pnl:.2f})",
+                   {"trade_id": trade.id, "tp": 4, "pnl": trade.pnl, "true_pnl": true_pnl})
+        logger.info("TP4 runner hit: trade %s — fully closed (true PnL %.2f)", trade.id, true_pnl)
+        telegram_bot.send_message(
+            f"🚀 TP4 runner hit: {trade.symbol} — fully closed at HTF liquidity "
             f"gross {trade.pnl:.2f} − commission {trade.commission:.2f} = **{true_pnl:.2f}**"
         )
 

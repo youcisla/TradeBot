@@ -227,6 +227,19 @@ BEGIN
 END $$;
 """
 
+_ALTER_TRADES_TP4 = """
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                   WHERE table_name='trades' AND column_name='take_profit_4') THEN
+        ALTER TABLE trades ADD COLUMN take_profit_4  NUMERIC DEFAULT 0.0;
+        ALTER TABLE trades ADD COLUMN tp4_lots       NUMERIC DEFAULT 0.0;
+        ALTER TABLE trades ADD COLUMN tp4_hit        BOOLEAN DEFAULT FALSE;
+        ALTER TABLE trades ADD COLUMN structural_be  NUMERIC DEFAULT 0.0;
+    END IF;
+END $$;
+"""
+
 _ALTER_BOT_STATUS_BROKER = """
 DO $$
 BEGIN
@@ -360,6 +373,7 @@ class Database:
                     cur.execute(_INIT_BOT_STATUS)
                     cur.execute(_ALTER_BOT_STATUS_BROKER)
                     cur.execute(_ALTER_TRADES_COMMISSION)
+                    cur.execute(_ALTER_TRADES_TP4)
                     cur.execute(_ALTER_STRATEGY_CONFIDENCE_STREAK)
                     cur.execute(_CREATE_INDEXES)
             logger.info("Database tables verified")
@@ -378,21 +392,22 @@ class Database:
                         INSERT INTO trades (
                             id, symbol, strategy, direction, entry_price, lot_size,
                             stop_loss, take_profit_1, take_profit_2, take_profit_3,
-                            tp1_lots, tp2_lots, tp3_lots,
-                            tp1_hit, tp2_hit, tp3_hit, status,
+                            take_profit_4, tp1_lots, tp2_lots, tp3_lots, tp4_lots,
+                            tp1_hit, tp2_hit, tp3_hit, tp4_hit, structural_be, status,
                             open_time, close_time, pnl, commission, close_reason,
                             broker_ticket, spread_at_entry,
                             snap_rsi_aligned, snap_trend_aligned,
                             snap_volume_sufficient, snap_near_news_event,
                             snap_market_condition, snap_session, snap_day_of_week
                         ) VALUES (
-                            %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,
-                            %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s
+                            %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,
+                            %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s
                         )
                         ON CONFLICT (id) DO UPDATE SET
                             stop_loss=EXCLUDED.stop_loss,
                             tp1_hit=EXCLUDED.tp1_hit, tp2_hit=EXCLUDED.tp2_hit,
-                            tp3_hit=EXCLUDED.tp3_hit, status=EXCLUDED.status,
+                            tp3_hit=EXCLUDED.tp3_hit, tp4_hit=EXCLUDED.tp4_hit,
+                            status=EXCLUDED.status,
                             close_time=EXCLUDED.close_time, pnl=EXCLUDED.pnl,
                             commission=EXCLUDED.commission,
                             close_reason=EXCLUDED.close_reason,
@@ -402,9 +417,10 @@ class Database:
                         (
                             t.id, t.symbol, t.strategy, t.direction, t.entry_price,
                             t.lot_size, t.stop_loss, t.take_profit_1, t.take_profit_2,
-                            t.take_profit_3, t.tp1_lots, t.tp2_lots, t.tp3_lots,
-                            t.tp1_hit, t.tp2_hit, t.tp3_hit, t.status,
-                            t.open_time, t.close_time,
+                            t.take_profit_3, t.take_profit_4,
+                            t.tp1_lots, t.tp2_lots, t.tp3_lots, t.tp4_lots,
+                            t.tp1_hit, t.tp2_hit, t.tp3_hit, t.tp4_hit, t.structural_be,
+                            t.status, t.open_time, t.close_time,
                             t.pnl, t.commission, t.close_reason, t.broker_ticket, t.spread_at_entry,
                             t.snap_rsi_aligned, t.snap_trend_aligned,
                             t.snap_volume_sufficient, t.snap_near_news_event,
@@ -455,12 +471,16 @@ class Database:
             take_profit_1=float(row["take_profit_1"]),
             take_profit_2=float(row["take_profit_2"]),
             take_profit_3=float(row["take_profit_3"]),
+            take_profit_4=float(row["take_profit_4"] or 0),
             tp1_lots=float(row["tp1_lots"]),
             tp2_lots=float(row["tp2_lots"]),
             tp3_lots=float(row["tp3_lots"]),
+            tp4_lots=float(row["tp4_lots"] or 0),
             tp1_hit=bool(row["tp1_hit"]),
             tp2_hit=bool(row["tp2_hit"]),
             tp3_hit=bool(row["tp3_hit"]),
+            tp4_hit=bool(row.get("tp4_hit", False)),
+            structural_be=float(row["structural_be"] or 0),
             status=row["status"],
             open_time=row["open_time"],
             close_time=row["close_time"],

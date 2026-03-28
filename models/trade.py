@@ -19,12 +19,18 @@ class Trade:
     take_profit_1: float = 0.0
     take_profit_2: float = 0.0
     take_profit_3: float = 0.0
+    take_profit_4: float = 0.0   # runner — HTF liquidity target (0 = not set)
     tp1_lots: float = 0.0
     tp2_lots: float = 0.0
     tp3_lots: float = 0.0
+    tp4_lots: float = 0.0        # lots held for the TP4 runner (0 = no runner)
     tp1_hit: bool = False
     tp2_hit: bool = False
     tp3_hit: bool = False
+    tp4_hit: bool = False
+    # Structural breakeven price stored at trade-open time.
+    # 0 = not set; trade_manager falls back to entry+spread formula.
+    structural_be: float = 0.0
     status: str = "OPEN"  # OPEN, PARTIAL, CLOSED
     open_time: datetime = field(default_factory=lambda: datetime.now(UTC))
     close_time: datetime | None = None
@@ -54,4 +60,6 @@ class Trade:
             closed += self.tp2_lots
         if self.tp3_hit:
             closed += self.tp3_lots
+        if self.tp4_hit:
+            closed += self.tp4_lots
         return round(self.lot_size - closed, 2)
