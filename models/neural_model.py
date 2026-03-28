@@ -3,7 +3,7 @@
 Architecture
 ------------
 LSTMTradingModel:
-  Input : (batch, seq_len, 9)  — 9 normalised features per H1 bar
+  Input : (batch, seq_len, 20) — 20 normalised features per H1 bar
   Output: (batch, 3)           — logits for [BUY, SELL, HOLD]
 
 Supporting utilities
@@ -16,10 +16,8 @@ auto_label()       — look-forward labelling for initial training
 from __future__ import annotations
 
 import json
-import math
 import logging
 from pathlib import Path
-from typing import Sequence
 
 import numpy as np
 import torch
@@ -34,17 +32,32 @@ HOLD = 2
 
 # ── Feature indices (must match build_features) ──────────────────────────
 FEAT_NAMES = [
-    "close_ret",     # log(close / prev_close)
-    "high_body",     # (high - close) / ATR
-    "low_body",      # (close - low) / ATR
-    "candle_body",   # (close - open) / ATR
-    "volume_z",      # (volume - vol_mean) / vol_std
-    "rsi_centered",  # (RSI - 50) / 50
-    "sma_ratio",     # (sma_fast - sma_slow) / ATR
-    "atr_pct",       # ATR / close
-    "spread_atr",    # spread / ATR  (0 when not available)
+    # ── Base candle features (0–8) ────────────────────────────────────────
+    "close_ret",        # log(close / prev_close)
+    "high_body",        # (high - close) / ATR
+    "low_body",         # (close - low) / ATR
+    "candle_body",      # (close - open) / ATR
+    "volume_z",         # (volume - vol_mean) / vol_std
+    "rsi_centered",     # (RSI - 50) / 50
+    "sma_ratio",        # (sma_fast - sma_slow) / ATR
+    "atr_pct",          # ATR / close
+    "spread_atr",       # spread / ATR  (0 when not available)
+    # ── Time encoding (9–12) — circular so Mon≡Sun boundary is smooth ─────
+    "hour_sin",         # sin(2π * hour / 24)
+    "hour_cos",         # cos(2π * hour / 24)
+    "dow_sin",          # sin(2π * day_of_week / 7)
+    "dow_cos",          # cos(2π * day_of_week / 7)
+    # ── Momentum & volatility envelope (13–14) ────────────────────────────
+    "macd_hist",        # (MACD line - signal line) / ATR
+    "bb_pos",           # (close - BB_lower) / (BB_upper - BB_lower)  ∈ [0,1]
+    # ── Multi-timeframe bias (15–19, scalar broadcast across sequence) ────
+    "h4_close_ret",     # log return of latest H4 candle
+    "h4_rsi_centered",  # (H4 RSI - 50) / 50
+    "h4_atr_pct",       # H4 ATR / H4 close
+    "d1_close_ret",     # log return of latest D1 candle
+    "d1_range_pos",     # (H1_close - D1_low) / (D1_high - D1_low)
 ]
-N_FEATURES = len(FEAT_NAMES)  # 9
+N_FEATURES = len(FEAT_NAMES)  # 20
 
 
 # ── RSI helper (does not require context — computed from candles) ─────────
@@ -79,6 +92,40 @@ def _compute_atr(highs: np.ndarray, lows: np.ndarray,
     return atr
 
 
+def _compute_ema(arr: np.ndarray, period: int) -> np.ndarray:
+    """Exponential moving average."""
+    ema = np.full_like(arr, arr[0])
+    k = 2.0 / (period + 1)
+    for i in range(1, len(arr)):
+        ema[i] = arr[i] * k + ema[i - 1] * (1 - k)
+    return ema
+
+
+def _compute_macd(closes: np.ndarray,
+                  fast: int = 12, slow: int = 26, signal: int = 9
+                  ) -> np.ndarray:
+    """Return MACD histogram array (macd_line - signal_line)."""
+    ema_fast   = _compute_ema(closes, fast)
+    ema_slow   = _compute_ema(closes, slow)
+    macd_line  = ema_fast - ema_slow
+    signal_line = _compute_ema(macd_line, signal)
+    return macd_line - signal_line
+
+
+def _compute_bb(closes: np.ndarray, period: int = 20,
+                n_std: float = 2.0) -> tuple[np.ndarray, np.ndarray]:
+    """Return (BB_lower, BB_upper) arrays."""
+    lower = np.full_like(closes, closes[0])
+    upper = np.full_like(closes, closes[0])
+    for i in range(period - 1, len(closes)):
+        window = closes[i - period + 1: i + 1]
+        mean   = np.mean(window)
+        std    = np.std(window) + 1e-9
+        lower[i] = mean - n_std * std
+        upper[i] = mean + n_std * std
+    return lower, upper
+
+
 # ── Feature builder ───────────────────────────────────────────────────────
 
 def build_features(
@@ -87,6 +134,9 @@ def build_features(
     spread: float = 0.0,
     sma_fast: float | None = None,
     sma_slow: float | None = None,
+    timestamp=None,                   # datetime of the latest candle (for time encoding)
+    h4_candles=None,                  # list[Candle] H4 — latest bars for HTF bias
+    d1_candles=None,                  # list[Candle] D1 — latest bars for HTF bias
 ) -> np.ndarray | None:
     """Convert the last *seq_len* candles to a (seq_len, N_FEATURES) float32 array.
 
@@ -131,17 +181,90 @@ def build_features(
 
     atr_safe = np.where(atr_arr > 1e-10, atr_arr, 1e-10)
 
+    # ── Time encoding (circular, derived from each candle's timestamp) ────
+    # Fall back to the provided timestamp or the candle's own timestamp.
+    # For training windows we use each candle's actual timestamp.
+    ts_arr = np.array([
+        getattr(c, "timestamp", None) for c in window
+    ], dtype=object)
+    hours = np.array([
+        (t.hour if t is not None else 0) for t in ts_arr
+    ], dtype=np.float64)
+    dows  = np.array([
+        (t.weekday() if t is not None else 0) for t in ts_arr
+    ], dtype=np.float64)
+    if timestamp is not None:
+        hours[-1] = float(timestamp.hour)
+        dows[-1]  = float(timestamp.weekday())
+    hour_sin = np.sin(2.0 * np.pi * hours / 24.0)
+    hour_cos = np.cos(2.0 * np.pi * hours / 24.0)
+    dow_sin  = np.sin(2.0 * np.pi * dows  /  7.0)
+    dow_cos  = np.cos(2.0 * np.pi * dows  /  7.0)
+
+    # ── MACD histogram ────────────────────────────────────────────────────
+    macd_hist = _compute_macd(closes) / atr_safe
+
+    # ── Bollinger Band position ───────────────────────────────────────────
+    bb_lower, bb_upper = _compute_bb(closes)
+    bb_range = np.where((bb_upper - bb_lower) > 1e-10, bb_upper - bb_lower, 1e-10)
+    bb_pos   = np.clip((closes - bb_lower) / bb_range, 0.0, 1.0)
+
+    # ── Multi-timeframe scalars (broadcast as constants across the window) ─
+    def _scalar_feature(val: float) -> np.ndarray:
+        return np.full(len(closes), val, dtype=np.float64)
+
+    # H4 features
+    if h4_candles and len(h4_candles) >= 2:
+        h4c = h4_candles[-2:]
+        h4_ret   = float(np.log(h4c[-1].close / h4c[-2].close) if h4c[-2].close > 0 else 0.0)
+        h4_highs = np.array([c.high  for c in h4_candles[-15:]], dtype=np.float64)
+        h4_lows  = np.array([c.low   for c in h4_candles[-15:]], dtype=np.float64)
+        h4_cls   = np.array([c.close for c in h4_candles[-15:]], dtype=np.float64)
+        h4_atr_v = float(_compute_atr(h4_highs, h4_lows, h4_cls)[-1])
+        h4_rsi_v = float(_compute_rsi(h4_cls)[-1])
+        h4_close_v = float(h4_candles[-1].close) or 1e-9
+    else:
+        h4_ret   = 0.0
+        h4_atr_v = float(atr_arr[-1])
+        h4_rsi_v = 50.0
+        h4_close_v = float(closes[-1]) or 1e-9
+
+    # D1 features
+    if d1_candles and len(d1_candles) >= 2:
+        d1c = d1_candles[-2:]
+        d1_ret  = float(np.log(d1c[-1].close / d1c[-2].close) if d1c[-2].close > 0 else 0.0)
+        d1_high = float(d1_candles[-1].high)
+        d1_low  = float(d1_candles[-1].low)
+    else:
+        d1_ret  = 0.0
+        d1_high = float(np.max(closes[-24:])) if len(closes) >= 24 else float(closes[-1])
+        d1_low  = float(np.min(closes[-24:])) if len(closes) >= 24 else float(closes[-1])
+
+    d1_range = (d1_high - d1_low) or 1e-9
+    d1_range_pos_val = float(np.clip((closes[-1] - d1_low) / d1_range, 0.0, 1.0))
+
     feat_matrix = np.stack([
-        log_ret,                                        # 0 close_ret
-        (highs  - closes) / atr_safe,                  # 1 high_body
-        (closes - lows  ) / atr_safe,                  # 2 low_body
-        (closes - opens ) / atr_safe,                  # 3 candle_body
-        (volumes - vol_mean) / vol_std,                 # 4 volume_z
-        (rsi_arr - 50.0) / 50.0,                       # 5 rsi_centered
-        (fast - slow) / atr_safe,                      # 6 sma_ratio
-        atr_arr / np.where(closes > 0, closes, 1e-9),  # 7 atr_pct
-        np.full_like(closes, spread / (atr_safe[-1] or 1e-10)),  # 8 spread_atr
-    ], axis=1)  # (needed, 9)
+        log_ret,                                                    # 0  close_ret
+        (highs  - closes) / atr_safe,                              # 1  high_body
+        (closes - lows  ) / atr_safe,                              # 2  low_body
+        (closes - opens ) / atr_safe,                              # 3  candle_body
+        (volumes - vol_mean) / vol_std,                            # 4  volume_z
+        (rsi_arr - 50.0) / 50.0,                                   # 5  rsi_centered
+        (fast - slow) / atr_safe,                                  # 6  sma_ratio
+        atr_arr / np.where(closes > 0, closes, 1e-9),              # 7  atr_pct
+        np.full_like(closes, spread / (atr_safe[-1] or 1e-10)),    # 8  spread_atr
+        hour_sin,                                                   # 9  hour_sin
+        hour_cos,                                                   # 10 hour_cos
+        dow_sin,                                                    # 11 dow_sin
+        dow_cos,                                                    # 12 dow_cos
+        macd_hist,                                                  # 13 macd_hist
+        bb_pos,                                                     # 14 bb_pos
+        _scalar_feature(h4_ret),                                   # 15 h4_close_ret
+        _scalar_feature((h4_rsi_v - 50.0) / 50.0),                # 16 h4_rsi_centered
+        _scalar_feature(h4_atr_v / h4_close_v),                   # 17 h4_atr_pct
+        _scalar_feature(d1_ret),                                   # 18 d1_close_ret
+        _scalar_feature(d1_range_pos_val),                         # 19 d1_range_pos
+    ], axis=1)  # (needed, N_FEATURES=20)
 
     # Return only the last seq_len bars (indicators are warmed up now)
     return feat_matrix[-seq_len:].astype(np.float32)
@@ -237,7 +360,14 @@ class FeatureNormalizer:
 # ── LSTM model ───────────────────────────────────────────────────────────
 
 class LSTMTradingModel(nn.Module):
-    """2-layer LSTM → dropout → linear → 3-class output.
+    """2-layer LSTM + self-attention head → 3-class output.
+
+    Architecture
+    ------------
+    LSTM(input_size, hidden_size, num_layers)  → (batch, seq_len, hidden)
+    Attention linear(hidden → 1)               → softmax weights over seq_len
+    Weighted sum                               → context vector (batch, hidden)
+    Dropout → Linear(hidden → 3)              → logits (batch, 3)
 
     Input : (batch, seq_len, N_FEATURES)
     Output: (batch, 3)  raw logits (apply softmax for probabilities)
@@ -258,13 +388,16 @@ class LSTMTradingModel(nn.Module):
             batch_first=True,
             dropout=dropout if num_layers > 1 else 0.0,
         )
+        self.attn    = nn.Linear(hidden_size, 1, bias=False)
         self.dropout = nn.Dropout(dropout)
         self.fc      = nn.Linear(hidden_size, 3)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        out, _ = self.lstm(x)        # (batch, seq_len, hidden)
-        last   = out[:, -1, :]      # take last timestep
-        return self.fc(self.dropout(last))   # (batch, 3) logits
+        out, _ = self.lstm(x)                          # (batch, seq_len, hidden)
+        scores  = self.attn(out)                       # (batch, seq_len, 1)
+        weights = torch.softmax(scores, dim=1)         # (batch, seq_len, 1)
+        context = (weights * out).sum(dim=1)           # (batch, hidden)
+        return self.fc(self.dropout(context))          # (batch, 3) logits
 
     # ── Persistence ──────────────────────────────────────────────────────
 

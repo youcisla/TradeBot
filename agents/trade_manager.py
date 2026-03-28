@@ -205,6 +205,12 @@ class TradeManagerAgent:
             if trade.is_open() and self._sl_hit(trade, current_price):
                 self._handle_sl(trade, pos_map)
 
+            # ── Time-in-trade limit ───────────────────────────────────────
+            if trade.is_open():
+                hours_open = (datetime.now(UTC) - trade.open_time).total_seconds() / 3600
+                if hours_open >= settings.MAX_HOURS_IN_TRADE:
+                    self._handle_time_limit(trade, pos_map, hours_open)
+
         # Remove fully closed trades from in-memory list
         self._open_trades = [t for t in self._open_trades if t.is_open()]
 
@@ -357,6 +363,30 @@ class TradeManagerAgent:
                     trade.id, trade.pnl, trade.commission, true_pnl)
         telegram_bot.send_message(
             f"🛑 SL hit: {trade.symbol} — "
+            f"gross {trade.pnl:.2f} − commission {trade.commission:.2f} = **{true_pnl:.2f}**"
+        )
+
+    def _handle_time_limit(self, trade: Trade, pos_map: dict, hours_open: float) -> None:
+        """Force-close a stale trade that has exceeded MAX_HOURS_IN_TRADE."""
+        ok = self._broker.close_order(trade.broker_ticket, trade.symbol, trade.direction)
+        if not ok and self._position_still_open(trade.broker_ticket, pos_map):
+            logger.error("Failed to force-close stale trade %s after %.1fh", trade.id, hours_open)
+            return
+        trade.status = "CLOSED"
+        trade.close_time = datetime.now(UTC)
+        trade.close_reason = "TIME_LIMIT"
+        true_pnl = round(trade.pnl - trade.commission, 2)
+        self._state.save_trade(trade)
+        self._emit("warn",
+                   f"Time limit: {trade.symbol} closed after {hours_open:.1f}h "
+                   f"(max={settings.MAX_HOURS_IN_TRADE}h) "
+                   f"(gross {trade.pnl:.2f} − commission {trade.commission:.2f} = {true_pnl:.2f})",
+                   {"trade_id": trade.id, "hours_open": round(hours_open, 1),
+                    "pnl": trade.pnl, "true_pnl": true_pnl})
+        logger.warning("TIME_LIMIT: trade %s force-closed after %.1fh (true PnL %.2f)",
+                       trade.id, hours_open, true_pnl)
+        telegram_bot.send_message(
+            f"⏰ Time limit: {trade.symbol} closed after {hours_open:.1f}h — "
             f"gross {trade.pnl:.2f} − commission {trade.commission:.2f} = **{true_pnl:.2f}**"
         )
 

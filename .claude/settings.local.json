@@ -62,7 +62,12 @@
       "Bash(python3 -m ruff check agents/ strategies/ config/settings.py main.py --select=F401,F841,W291,W293)",
       "Bash(python3 -m bandit -r agents/ broker/ config/ -ll --quiet)",
       "Bash(python3 -m bandit -r agents/ broker/ config/ -l)",
-      "Bash(python3 -m bandit -r agents/ broker/ config/ -ll)"
+      "Bash(python3 -m bandit -r agents/ broker/ config/ -ll)",
+      "Bash(python3 -c \"from config import settings; print\\({k:v for k,v in vars\\(settings\\).items\\(\\) if ''NEURAL'' in k}\\)\")",
+      "Bash(python -m ruff check agents/analysis_agent.py agents/neural_strategy.py agents/trade_manager.py models/neural_model.py)",
+      "Bash(python -m ruff check --fix models/neural_model.py)",
+      "Bash(python -m pytest tests/ -x -q)",
+      "Bash(python -m pytest tests/ -q --ignore=tests/test_crucix_client.py)"
     ],
     "deny": []
   },

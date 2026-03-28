@@ -57,6 +57,31 @@ COUNCIL_WORLD_WEIGHT: float  = float(os.getenv("COUNCIL_WORLD_WEIGHT",  "0.16"))
 COUNCIL_MIN_CANDLES: int = int(os.getenv("COUNCIL_MIN_CANDLES", "20"))
 # Minimum candle count required before the neural strategy will infer.
 NEURAL_MIN_CANDLES: int = int(os.getenv("NEURAL_MIN_CANDLES", "65"))
+# LSTM architecture & training
+NEURAL_SEQ_LEN: int        = int(os.getenv("NEURAL_SEQ_LEN",        "50"))
+NEURAL_HIDDEN_SIZE: int    = int(os.getenv("NEURAL_HIDDEN_SIZE",    "128"))
+NEURAL_NUM_LAYERS: int     = int(os.getenv("NEURAL_NUM_LAYERS",     "2"))
+NEURAL_TRAIN_EPOCHS: int   = int(os.getenv("NEURAL_TRAIN_EPOCHS",   "100"))
+NEURAL_RETRAIN_EVERY: int  = int(os.getenv("NEURAL_RETRAIN_EVERY",  "20"))
+NEURAL_MIN_CONFIDENCE: float = float(os.getenv("NEURAL_MIN_CONFIDENCE", "0.55"))
+NEURAL_MODELS_DIR: str     = os.getenv(
+    "NEURAL_MODELS_DIR",
+    str(Path(__file__).resolve().parent.parent / "models" / "neural"),
+)
+# Multi-timeframe candle counts fetched by MarketAgent
+H4_CANDLE_COUNT: int = int(os.getenv("H4_CANDLE_COUNT", "50"))
+D1_CANDLE_COUNT: int = int(os.getenv("D1_CANDLE_COUNT", "20"))
+# Regime-based confidence adjustment (ranging market penalised)
+REGIME_ADX_TRENDING: float  = float(os.getenv("REGIME_ADX_TRENDING",  "25.0"))
+REGIME_ADX_RANGING: float   = float(os.getenv("REGIME_ADX_RANGING",   "20.0"))
+REGIME_CONFIDENCE_PENALTY: float = float(os.getenv("REGIME_CONFIDENCE_PENALTY", "0.10"))
+# Dynamic TP multipliers per regime
+TP_TRENDING_TP3_MULT: float = float(os.getenv("TP_TRENDING_TP3_MULT", "4.0"))
+TP_TRENDING_TP4_MULT: float = float(os.getenv("TP_TRENDING_TP4_MULT", "6.0"))
+TP_RANGING_TP1_MULT: float  = float(os.getenv("TP_RANGING_TP1_MULT",  "0.8"))
+TP_RANGING_TP2_MULT: float  = float(os.getenv("TP_RANGING_TP2_MULT",  "1.5"))
+# Time-in-trade limit: close stale trades after this many hours with no TP hit
+MAX_HOURS_IN_TRADE: int = int(os.getenv("MAX_HOURS_IN_TRADE", "48"))
 # Minimum ICT engine score for crypto (lower than forex — crypto lacks killzones
 # so the session component caps at 5.0 instead of 7.0, reducing potential max score).
 MIN_ICT_SCORE_CRYPTO: float = float(os.getenv("MIN_ICT_SCORE_CRYPTO", "42.0"))

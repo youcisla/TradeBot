@@ -31,6 +31,9 @@ class MarketData:
     volume: float = 0.0
     timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
     candles: list[Candle] = field(default_factory=list)
+    # Multi-timeframe candles for HTF bias features (empty = not fetched)
+    h4_candles: list[Candle] = field(default_factory=list)
+    d1_candles: list[Candle] = field(default_factory=list)
 
     @property
     def mid_price(self) -> float:
@@ -76,6 +79,11 @@ class MarketContext:
     macro: "Optional[MacroContext]" = None
 
     candles: list[Candle] = field(default_factory=list)
+    # Multi-timeframe candles for HTF bias features (empty = not fetched)
+    h4_candles: list[Candle] = field(default_factory=list)
+    d1_candles: list[Candle] = field(default_factory=list)
+    # ADX value computed by AnalysisAgent (used by NeuralStrategy regime gate)
+    adx: float = 0.0
 
     def __post_init__(self) -> None:
         # If caller passed ``trend`` but left ``trend_direction`` at its

@@ -111,9 +111,12 @@ class ModelManager:
         if state is None or not state.ready:
             return None
 
-        spread    = getattr(context, "spread", 0.0) if context else 0.0
-        sma_fast  = getattr(context, "sma_fast", None) if context else None
-        sma_slow  = getattr(context, "sma_slow", None) if context else None
+        spread     = getattr(context, "spread",     0.0)  if context else 0.0
+        sma_fast   = getattr(context, "sma_fast",   None) if context else None
+        sma_slow   = getattr(context, "sma_slow",   None) if context else None
+        timestamp  = getattr(context, "timestamp",  None) if context else None
+        h4_candles = getattr(context, "h4_candles", None) if context else None
+        d1_candles = getattr(context, "d1_candles", None) if context else None
 
         feat = build_features(
             candles,
@@ -121,6 +124,9 @@ class ModelManager:
             spread=spread,
             sma_fast=sma_fast,
             sma_slow=sma_slow,
+            timestamp=timestamp,
+            h4_candles=h4_candles,
+            d1_candles=d1_candles,
         )
         if feat is None:
             return None
@@ -132,7 +138,7 @@ class ModelManager:
         if norm is None or model is None:
             return None
 
-        feat_norm = norm.transform(feat)   # (seq_len, 9)
+        feat_norm = norm.transform(feat)   # (seq_len, N_FEATURES)
         proba = model.predict_proba(feat_norm)   # [p_buy, p_sell, p_hold]
 
         best_class = int(np.argmax(proba))
@@ -170,9 +176,12 @@ class ModelManager:
         if not candles:
             return
 
-        spread   = getattr(context, "spread", 0.0) if context else 0.0
-        sma_fast = getattr(context, "sma_fast", None) if context else None
-        sma_slow = getattr(context, "sma_slow", None) if context else None
+        spread     = getattr(context, "spread",     0.0)  if context else 0.0
+        sma_fast   = getattr(context, "sma_fast",   None) if context else None
+        sma_slow   = getattr(context, "sma_slow",   None) if context else None
+        timestamp  = getattr(context, "timestamp",  None) if context else None
+        h4_candles = getattr(context, "h4_candles", None) if context else None
+        d1_candles = getattr(context, "d1_candles", None) if context else None
 
         feat = build_features(
             candles,
@@ -180,6 +189,9 @@ class ModelManager:
             spread=spread,
             sma_fast=sma_fast,
             sma_slow=sma_slow,
+            timestamp=timestamp,
+            h4_candles=h4_candles,
+            d1_candles=d1_candles,
         )
         if feat is None:
             return

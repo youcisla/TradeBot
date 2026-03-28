@@ -53,6 +53,10 @@ class NeuralStrategy(BaseStrategy):
 
         direction, confidence = result
 
+        # Regime confidence penalty — ranging markets are noisier
+        if context.regime == "ranging":
+            confidence -= settings.REGIME_CONFIDENCE_PENALTY
+
         # Sanitise confidence into the [0.5, 1.0] range used by risk/sizing
         confidence = max(0.50, min(1.0, confidence))
 
@@ -115,14 +119,27 @@ class NeuralStrategy(BaseStrategy):
         direction: str,
     ) -> tuple[float, float, float]:
         risk = abs(entry - sl)
+        regime = getattr(context, "regime", "unknown")
+
+        if regime == "ranging":
+            mult1 = settings.TP_RANGING_TP1_MULT   # 0.8R
+            mult2 = settings.TP_RANGING_TP2_MULT   # 1.5R
+            mult3 = 2.0
+        elif regime == "trending":
+            mult1 = 1.0
+            mult2 = 2.0
+            mult3 = settings.TP_TRENDING_TP3_MULT  # 4.0R
+        else:
+            mult1, mult2, mult3 = 1.0, 2.0, 3.0
+
         if direction == "BUY":
             return (
-                round(entry + 1.0 * risk, 5),
-                round(entry + 2.0 * risk, 5),
-                round(entry + 3.0 * risk, 5),
+                round(entry + mult1 * risk, 5),
+                round(entry + mult2 * risk, 5),
+                round(entry + mult3 * risk, 5),
             )
         return (
-            round(entry - 1.0 * risk, 5),
-            round(entry - 2.0 * risk, 5),
-            round(entry - 3.0 * risk, 5),
+            round(entry - mult1 * risk, 5),
+            round(entry - mult2 * risk, 5),
+            round(entry - mult3 * risk, 5),
         )

@@ -61,16 +61,21 @@ class AnalysisAgent:
         prev_sma_slow = self._sma(closes[:-1], settings.SMA_SLOW_PERIOD) if len(closes) > settings.SMA_SLOW_PERIOD else 0.0
         rsi = self._rsi(closes, 14)
         atr = self._atr(data.candles, 14) if data.candles else 0.0
+        adx = self._adx(data.candles, 14) if len(data.candles) >= 28 else 0.0
 
-        # Regime
+        # ADX-based regime (more reliable than SMA spread heuristic)
         if atr > 0 and len(closes) > 1:
             recent_range = max(closes[-14:]) - min(closes[-14:]) if len(closes) >= 14 else 0
             if recent_range > atr * 3:
                 regime = "volatile"
-            elif sma_fast != 0 and sma_slow != 0 and abs(sma_fast - sma_slow) > atr:
+            elif adx >= settings.REGIME_ADX_TRENDING:
                 regime = "trending"
-            else:
+            elif adx <= settings.REGIME_ADX_RANGING:
                 regime = "ranging"
+            else:
+                # borderline zone — use SMA spread as tiebreaker
+                regime = "trending" if (sma_fast != 0 and sma_slow != 0
+                                        and abs(sma_fast - sma_slow) > atr) else "ranging"
         else:
             regime = "unknown"
 
@@ -97,12 +102,15 @@ class AnalysisAgent:
             prev_sma_slow=prev_sma_slow,
             rsi=rsi,
             atr=atr,
+            adx=adx,
             regime=regime,
             trend_direction=trend,
             session=current_session(),
             day_of_week=day_of_week(),
             near_news_event=near_news,
             candles=data.candles,
+            h4_candles=data.h4_candles,
+            d1_candles=data.d1_candles,
         )
 
         # Enrich with world context from Crucix (fails safely if not running)
@@ -141,8 +149,49 @@ class AnalysisAgent:
         trs: list[float] = []
         for i in range(1, len(candles)):
             h = candles[i].high
-            l = candles[i].low
+            lo = candles[i].low
             pc = candles[i - 1].close
-            trs.append(max(h - l, abs(h - pc), abs(l - pc)))
+            trs.append(max(h - lo, abs(h - pc), abs(lo - pc)))
         recent = trs[-period:]
         return round(sum(recent) / len(recent), 5) if recent else 0.0
+
+    @staticmethod
+    def _adx(candles: list, period: int = 14) -> float:
+        """Wilder-smoothed ADX.  Requires at least 2*period candles."""
+        if len(candles) < period * 2:
+            return 0.0
+        plus_dm: list[float] = []
+        minus_dm: list[float] = []
+        trs: list[float] = []
+        for i in range(1, len(candles)):
+            h, lo, pc = candles[i].high, candles[i].low, candles[i - 1].close
+            ph, pl = candles[i - 1].high, candles[i - 1].low
+            up = h - ph
+            down = pl - lo
+            plus_dm.append(up if up > down and up > 0 else 0.0)
+            minus_dm.append(down if down > up and down > 0 else 0.0)
+            trs.append(max(h - lo, abs(h - pc), abs(lo - pc)))
+
+        def wilder_smooth(values: list[float], n: int) -> list[float]:
+            smoothed = [sum(values[:n])]
+            for v in values[n:]:
+                smoothed.append(smoothed[-1] - smoothed[-1] / n + v)
+            return smoothed
+
+        atr_s = wilder_smooth(trs, period)
+        pdm_s = wilder_smooth(plus_dm, period)
+        mdm_s = wilder_smooth(minus_dm, period)
+
+        dx_vals: list[float] = []
+        for atr_v, pdm_v, mdm_v in zip(atr_s, pdm_s, mdm_s):
+            if atr_v == 0:
+                continue
+            pdi = 100 * pdm_v / atr_v
+            mdi = 100 * mdm_v / atr_v
+            denom = pdi + mdi
+            dx_vals.append(100 * abs(pdi - mdi) / denom if denom else 0.0)
+
+        if len(dx_vals) < period:
+            return 0.0
+        adx = sum(dx_vals[-period:]) / period
+        return round(adx, 2)

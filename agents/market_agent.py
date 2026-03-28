@@ -62,11 +62,13 @@ class MarketAgent:
         validator = self._validator(symbol)
         validator.validate_tick(bid, ask, spread)
 
-        candles = self._get_candles(symbol)
+        candles    = self._get_candles(symbol)
+        h4_candles = self._get_htf_candles(symbol, "H4", settings.H4_CANDLE_COUNT)
+        d1_candles = self._get_htf_candles(symbol, "D1", settings.D1_CANDLE_COUNT)
 
         self._emit("info",
                    f"{symbol} — bid={bid:.5f} spread={spread:.5f} "
-                   f"candles={len(candles)} vol={volume:.0f}",
+                   f"candles={len(candles)} h4={len(h4_candles)} d1={len(d1_candles)} vol={volume:.0f}",
                    {"bid": bid, "ask": ask, "spread": spread,
                     "volume": volume, "candles": len(candles),
                     "last_close": candles[-1].close if candles else None})
@@ -78,6 +80,8 @@ class MarketAgent:
             spread=spread,
             volume=volume,
             candles=candles,
+            h4_candles=h4_candles,
+            d1_candles=d1_candles,
         )
 
     def _emit(self, level: str, msg: str, data: dict | None = None) -> None:
@@ -96,4 +100,12 @@ class MarketAgent:
             raise
         except Exception:
             logger.warning("Failed to fetch candles for %s", symbol, exc_info=True)
+            return []
+
+    def _get_htf_candles(self, symbol: str, timeframe: str, count: int) -> list[Candle]:
+        """Fetch higher-timeframe candles; returns [] silently on failure."""
+        try:
+            return self._broker.get_candles(symbol, timeframe, count=count) or []
+        except Exception:
+            logger.debug("HTF candles unavailable for %s %s", symbol, timeframe)
             return []
