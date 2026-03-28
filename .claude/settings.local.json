@@ -1,35 +1,14 @@
 {
   "permissions": {
     "allow": [
-      "Bash(grep -rh \"^import \\\\|^from \" c:/Users/Y.chehboub/Downloads/TradingBot/backtesting --include=*.py)",
-      "Bash(.venv/Scripts/pip install:*)",
-      "Bash(.venv/Scripts/python scripts/reset_dashboard_user.py --username admin --password admin123)",
-      "Bash(npx tsc:*)",
-      "Bash(python -m py_compile main.py)",
-      "Bash(.venv/Scripts/python.exe -c \":*)",
-      "Skill(claude-api)",
-      "Skill(claude-api:*)",
-      "Bash(.venv/Scripts/python.exe -c \"import anthropic; print\\(''anthropic'', anthropic.__version__\\)\")",
-      "Bash(python -c \"from agents.council_agent import CouncilAgent, CouncilVerdict, ICTExpert, DanialFXExpert, TraditionalExpert; print\\(''Import OK''\\); c = CouncilAgent\\(\\); print\\(''Instantiation OK''\\)\")",
-      "Bash(find /c/Users/Y.chehboub/Downloads/TradingBot -type f \\\\\\(-name *tui* -o -name *ui* -o -name *feed* -o -name *dashboard* -o -name *display* -o -name *render* \\\\\\) ! -path */.venv/* ! -path */node_modules/*)",
-      "Bash(grep -r \"AGENT ORCHESTRATION\\\\|theater\\\\|agent.*feed\" /c/Users/Y.chehboub/Downloads/TradingBot --include=*.py --include=*.tsx --include=*.ts)",
-      "Bash(find /c/Users/Y.chehboub/Downloads/TradingBot -type f -name globals.css -o -name *theme* -o -name *style*)",
-      "Bash(find c:UsersY.chehboubDownloadsTradingBot -type f \\\\\\(-name *reward* -o -name *score* -o -name *performance* -o -name *feedback* \\\\\\))",
-      "Bash(python -c \":*)",
-      "Bash(python -c \"from state.persistence import StatePersistence; from broker.connector import BrokerConnector; print\\(''Import OK''\\)\")",
-      "Bash(python -c \"import numpy; import pandas; print\\(''numpy:'', numpy.__version__\\); print\\(''pandas:'', pandas.__version__\\)\")",
-      "Bash(pip install:*)",
-      "Bash(python -c \"import torch; print\\(''torch'', torch.__version__\\); import numpy; print\\(''numpy'', numpy.__version__\\)\")",
-      "Bash(ls -la \"c:\\\\Users\\\\Y.chehboub\\\\Downloads\\\\TradingBot\\\\web\\\\src\\\\app\\\\api\"\" 2>/dev/null | grep \"route.ts \")",
-      "Bash(mkdir -p \"c:/Users/Y.chehboub/Downloads/TradingBot/.claude/skills/coding-standards\")",
-      "Bash(mkdir -p \"c:/Users/Y.chehboub/Downloads/TradingBot/.claude/skills/prompt-guide\")",
-      "Bash(npx next:*)",
-      "Bash(.venv/Scripts/python.exe -m py_compile broker/mt5_connector.py)",
-      "Bash(.venv/Scripts/python.exe -m py_compile main.py)",
-      "Bash(powershell -Command \":*)",
-      "Bash(find /c/Users/Y.chehboub/Downloads/TradingBot -type f -name *.log -o -name *error*)",
-      "Bash(pip show:*)",
-      "Bash(python -c \"from agents.deepseek_strategy import DeepSeekStrategy; s = DeepSeekStrategy\\(\\); print\\(''OK''\\)\")"
-    ]
+      "read",
+      "write",
+      "execute",
+      "browser"
+    ],
+    "deny": []
+  },
+  "personal": {
+    "notes": "This file is gitignored. Override any settings from settings.json here for your local environment."
   }
 }

@@ -191,6 +191,21 @@ class RiskAgent:
                        {"symbol": signal.symbol, "check": "correlation"})
             return False
 
+        # 4. Maximum concurrent open trades
+        if len(open_trades) >= settings.MAX_OPEN_TRADES:
+            logger.warning(
+                "RISK REJECT [MAX_TRADES]: %d open >= limit %d",
+                len(open_trades), settings.MAX_OPEN_TRADES,
+            )
+            self._emit(
+                "warn",
+                f"MAX_TRADES — {len(open_trades)} open trades >= limit {settings.MAX_OPEN_TRADES}",
+                {"check": "max_trades",
+                 "count": len(open_trades),
+                 "limit": settings.MAX_OPEN_TRADES},
+            )
+            return False
+
         # 5. Live spread check (per-asset-class limits)
         ac = asset_class(signal.symbol)
         if ac == "crypto":

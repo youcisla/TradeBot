@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "read",
+      "write",
+      "execute"
+    ],
+    "deny": []
+  },
+  "config": {
+    "model": "claude-sonnet-4-20250514",
+    "contextFiles": [
+      "CLAUDE.md",
+      ".claude/rules/code-style.md",
+      ".claude/rules/testing.md",
+      ".claude/rules/api-conventions.md"
+    ],
+    "autoInvokeSkills": true
+  }
+}

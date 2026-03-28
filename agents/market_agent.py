@@ -22,10 +22,16 @@ logger = logging.getLogger(__name__)
 class MarketAgent:
     """Fetches and validates market data before passing it downstream."""
 
-    def __init__(self, broker: BrokerConnector, db: Database | None = None) -> None:
+    def __init__(
+        self,
+        broker: BrokerConnector,
+        db: Database | None = None,
+        candle_count: int = 100,
+    ) -> None:
         self._broker = broker
         self._db = db
         self._validators: dict[str, DataValidator] = {}
+        self._candle_count = candle_count
 
     def _validator(self, symbol: str) -> DataValidator:
         if symbol not in self._validators:
@@ -81,7 +87,7 @@ class MarketAgent:
     def _get_candles(self, symbol: str) -> list[Candle]:
         try:
             candles = self._broker.get_candles(
-                symbol, settings.DEFAULT_TIMEFRAME, count=250,
+                symbol, settings.DEFAULT_TIMEFRAME, count=self._candle_count,
             )
             validator = self._validator(symbol)
             validator.validate_candles(candles)

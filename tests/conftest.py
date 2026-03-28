@@ -6,6 +6,7 @@ external dependencies or files are needed.
 
 from __future__ import annotations
 
+import sqlite3
 from typing import Any
 
 import pytest
@@ -18,11 +19,38 @@ from state.persistence import StatePersistence
 
 
 class _MockDatabase:
-    """In-memory shim that satisfies the Database interface used by tests."""
+    """In-memory shim that satisfies the Database interface used by tests.
+
+    Provides:
+    - A real ``sqlite3`` connection (``self.conn``) with an ``events`` table
+      so that logging-agent tests can query it directly.
+    - ``log_event`` that inserts into the SQLite table.
+    - All methods called by LoggingAgent, LearningAgent, and other agents
+      during the test suite.
+    """
 
     def __init__(self) -> None:
         self._trades: dict[str, Trade] = {}
         self._events: list[dict[str, Any]] = []
+        self._confidences: dict[str, float] = {}
+
+        # Real in-memory SQLite so logging-agent tests can query conn directly.
+        self.conn = sqlite3.connect(":memory:")
+        self.conn.row_factory = sqlite3.Row
+        self.conn.execute(
+            """
+            CREATE TABLE events (
+                id      INTEGER PRIMARY KEY AUTOINCREMENT,
+                level   TEXT,
+                source  TEXT,
+                message TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+        self.conn.commit()
+
+    # ── trade persistence ─────────────────────────────────────────────────
 
     def upsert_trade(self, trade: Trade) -> None:
         self._trades[trade.id] = trade
@@ -33,24 +61,93 @@ class _MockDatabase:
     def get_trade(self, trade_id: str) -> Trade | None:
         return self._trades.get(trade_id)
 
+    def get_trades_closed_today(self) -> list[Trade]:
+        return []
+
+    # ── event logging ─────────────────────────────────────────────────────
+
+    def log_event(self, level: str, source: str, message: str) -> None:
+        """Insert a structured event into the in-memory SQLite events table."""
+        self.conn.execute(
+            "INSERT INTO events (level, source, message) VALUES (?, ?, ?)",
+            (level, source, message),
+        )
+        self.conn.commit()
+
     def log_agent_event(self, agent: str, level: str, message: str, data: Any = None) -> None:
         self._events.append({"agent": agent, "level": level, "message": message, "data": data})
 
-    # Stubs for any other methods that might be called
+    # ── strategy confidence ───────────────────────────────────────────────
+
+    def get_confidence(self, strategy: str) -> float | None:
+        """Return stored confidence for ``strategy``, or None if not set."""
+        return self._confidences.get(strategy)
+
+    def upsert_confidence(
+        self,
+        strategy: str,
+        confidence: float,
+        total_trades: int,
+        total_score: int,
+    ) -> None:
+        self._confidences[strategy] = confidence
+
+    # Legacy names used by non-learning agents (kept for backward compat)
     def get_strategy_confidence(self, strategy: str, symbol: str) -> float:
-        return 0.5
+        return self._confidences.get(strategy, 0.5)
 
     def upsert_strategy_confidence(self, strategy: str, symbol: str, confidence: float) -> None:
-        pass
+        self._confidences[strategy] = confidence
+
+    def boost_all_strategy_confidence(self, boost: float) -> None:
+        for key in self._confidences:
+            self._confidences[key] = min(1.0, self._confidences[key] + boost)
+
+    # ── trade scoring ─────────────────────────────────────────────────────
+
+    def insert_score(self, **kwargs: Any) -> None:
+        """No-op stub — score persistence is not verified in unit tests."""
 
     def save_trade_score(self, *args: Any, **kwargs: Any) -> None:
         pass
+
+    # ── streak tracking ───────────────────────────────────────────────────
+
+    def get_strategy_streak(self, strategy: str) -> int:
+        return 0
+
+    def update_strategy_streak(self, strategy: str, streak: int, score: float) -> None:
+        pass
+
+    # ── rolling statistics ────────────────────────────────────────────────
+
+    def get_rolling_avg_score(self, strategy: str, n: int = 10) -> float | None:
+        return None
+
+    # ── period performance snapshots ──────────────────────────────────────
+
+    def get_period_stats(self, since: Any, until: Any) -> dict[str, Any]:
+        return {"trades": 0, "total_pnl": 0.0, "win_rate": 0.0, "avg_score": 0.0}
+
+    def save_performance_snapshot(
+        self, period_type: str, period_key: str, **kwargs: Any
+    ) -> None:
+        pass
+
+    def get_previous_snapshot(
+        self, period_type: str, period_key: str
+    ) -> dict[str, Any] | None:
+        return None
+
+    # ── command bus ───────────────────────────────────────────────────────
 
     def get_pending_command(self) -> dict[str, Any] | None:
         return None
 
     def mark_command_done(self, command_id: int) -> None:
         pass
+
+    # ── bot status ────────────────────────────────────────────────────────
 
     def update_bot_status(self, *args: Any, **kwargs: Any) -> None:
         pass
