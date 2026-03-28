@@ -1,14 +1,9 @@
-import { redirect } from "next/navigation";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
 import DashHeader from "@/components/DashHeader";
 import DashSidebar from "@/components/DashSidebar";
 import DashBottomNav from "@/components/DashBottomNav";
 
-export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const session = await getServerSession(authOptions);
-  if (!session) redirect("/login");
-
+// Auth is handled by middleware.ts (Edge runtime) — no session check needed here.
+export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen bg-surface-container-lowest text-on-surface">
       {/* Fixed top header — full width */}

@@ -315,8 +315,15 @@ class ICTStrategy(BaseStrategy):
             snapped = round(best.fvg.ce, 5)
 
         # Check staleness: has price already blown past the entry zone?
+        # Crypto and high-value instruments (BTCUSD, XAUUSD) have ATR >> 10
+        # in price terms; use a wider multiplier so we don't reject every setup.
         if atr > 0:
-            max_dist = settings.LIMIT_ENTRY_MAX_DISTANCE_ATR * atr
+            _multiplier = (
+                settings.LIMIT_ENTRY_MAX_DISTANCE_ATR_CRYPTO
+                if atr > 10.0
+                else settings.LIMIT_ENTRY_MAX_DISTANCE_ATR
+            )
+            max_dist = _multiplier * atr
             if best.direction == "BUY":
                 # For a BUY, entry should be at or below current price (price
                 # retraced into the zone).  Stale if price has already moved

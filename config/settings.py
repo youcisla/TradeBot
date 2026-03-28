@@ -41,10 +41,13 @@ ENCRYPTION_KEY: str = os.getenv("ENCRYPTION_KEY", "")
 
 # ── Trading Council (algorithmic quality gate) ───────────────────────────
 # Set COUNCIL_ENABLED=true to activate the three-expert algorithmic debate.
-# Signals must score >= COUNCIL_MIN_CONFIDENCE (default 65%) to proceed.
+# Signals must score >= COUNCIL_MIN_CONFIDENCE to proceed.
+# ICT signals get strategy-aware weighting (ICT expert carries 50% weight)
+# so the effective bar is already higher for non-ICT strategies.
+# Default 60% — do NOT raise above 70% or near-zero trades will result.
 # On unexpected errors the council fails open — trading is never blocked.
 COUNCIL_ENABLED: bool = os.getenv("COUNCIL_ENABLED", "true").lower() == "true"
-COUNCIL_MIN_CONFIDENCE: float = float(os.getenv("COUNCIL_MIN_CONFIDENCE", "0.65"))
+COUNCIL_MIN_CONFIDENCE: float = float(os.getenv("COUNCIL_MIN_CONFIDENCE", "0.60"))
 
 # ── Risk ─────────────────────────────────────────────────────────────────
 MAX_RISK_PER_TRADE: float = float(os.getenv("MAX_RISK_PER_TRADE", "0.02"))
@@ -80,9 +83,10 @@ BREAKEVEN_SPREAD_OFFSET: bool = os.getenv("BREAKEVEN_SPREAD_OFFSET", "true").low
 # Pillar 3 — entry precision gate.
 # When ICT snaps entry to an FVG CE or OB midpoint, skip the signal if current
 # price is already more than this many ATRs beyond the ideal entry level.
-# 0.5 ATR means "price has already moved more than half an ATR past the zone
-# midpoint — the edge is gone, skip it."
+# Forex default: 0.5 ATR.  Crypto gets a larger multiplier because BTCUSD
+# moves $100+ per candle; 0.5 ATR would reject almost every setup.
 LIMIT_ENTRY_MAX_DISTANCE_ATR: float = float(os.getenv("LIMIT_ENTRY_MAX_DISTANCE_ATR", "0.5"))
+LIMIT_ENTRY_MAX_DISTANCE_ATR_CRYPTO: float = float(os.getenv("LIMIT_ENTRY_MAX_DISTANCE_ATR_CRYPTO", "2.0"))
 
 # ── Bot Loop ─────────────────────────────────────────────────────────────
 LOOP_INTERVAL_SECONDS: int = int(os.getenv("LOOP_INTERVAL_SECONDS", "30"))

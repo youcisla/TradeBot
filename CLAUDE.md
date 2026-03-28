@@ -34,8 +34,7 @@ Never skip step 1-3. Never write code based on memory alone. Always read → the
 | `learning-system` | Reward scoring, confidence adjustment |
 | `configure-infra` | Infra, API keys, deployment, broker config |
 | `coding-standards` | UI/UX, code style, frontend patterns (READ THIS for any web work) |
-| `prompt-guide` | How to write expert prompts for Claude |
-| `trading-bot-overview` | Full system reference |
+| `prompt-guide` | How to write expert prompts for DeepSeek/Claude |
 
 **Before writing any frontend code → read `coding-standards` skill first.**
 
@@ -76,6 +75,24 @@ config/settings.py               ← All env-driven config
 web/                             ← Next.js dashboard
   src/app/dashboard/             ← Pages: page, analytics, trades, learning, strategy, ict, settings, chart
   src/components/                ← Shared components
+```
+
+---
+
+## Skills Infrastructure
+
+Project-specific skills live in `.claude/skills/` (read by Claude at the start of each session).
+
+1,322 general-purpose skills are installed globally from the antigravity submodule:
+```
+antigravity-awesome-skills/   ← git submodule (https://github.com/youcisla/antigravity-awesome-skills)
+~/.claude/skills/             ← installed via: node antigravity-awesome-skills/tools/bin/install.js --claude
+```
+
+To reinstall after pulling submodule updates:
+```bash
+git submodule update --remote antigravity-awesome-skills
+node antigravity-awesome-skills/tools/bin/install.js --claude
 ```
 
 ---

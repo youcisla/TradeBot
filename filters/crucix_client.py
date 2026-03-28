@@ -196,11 +196,17 @@ class CrucixClient:
         """
         ctx = MacroContext(crucix_available=True)
 
-        # ── Sweep age ────────────────────────────────────────────────────
-        sweep_time_str = raw.get("timestamp") or raw.get("lastSweep") or ""
+        from datetime import UTC, datetime
+
+        # ── Sweep age — matches dashboard: raw.meta.timestamp ────────────
+        sweep_time_str = (
+            raw.get("meta", {}).get("timestamp")
+            or raw.get("timestamp")
+            or raw.get("lastSweep")
+            or ""
+        )
         if sweep_time_str:
             try:
-                from datetime import UTC, datetime
                 sweep_dt = datetime.fromisoformat(
                     sweep_time_str.replace("Z", "+00:00")
                 )
@@ -209,84 +215,108 @@ class CrucixClient:
             except (ValueError, TypeError):
                 pass
 
-        # ── Alert tier ───────────────────────────────────────────────────
-        # Crucix delta engine produces FLASH/PRIORITY/ROUTINE alerts
-        alerts = raw.get("alerts") or raw.get("delta", {}).get("alerts") or []
-        tiers = [str(a.get("tier", "")).upper() for a in alerts if isinstance(a, dict)]
-        flash_alerts = [a for a in alerts if isinstance(a, dict)
-                        and str(a.get("tier", "")).upper() == "FLASH"]
+        # ── VIX — matches dashboard: raw.markets.vix.value ───────────────
+        markets = raw.get("markets") or {}
+        vix_obj = markets.get("vix") if isinstance(markets, dict) else None
+        if isinstance(vix_obj, dict):
+            vix_raw = vix_obj.get("value")
+        else:
+            # Fallback: flat keys the old parser tried
+            market_flat = raw.get("market") or raw.get("marketData") or {}
+            vix_raw = None
+            for key in ("vix", "VIX", "^VIX", "vixLevel"):
+                val = market_flat.get(key) if isinstance(market_flat, dict) else None
+                if val and isinstance(val, (int, float)):
+                    vix_raw = val
+                    break
+        if vix_raw and isinstance(vix_raw, (int, float)):
+            ctx.vix = float(vix_raw)
 
-        if "FLASH" in tiers:
+        # ── Risk tier — derived from VIX, same thresholds as dashboard ───
+        # Dashboard: vix > 40 → FLASH, > 28 → PRIORITY, > 18 → ROUTINE
+        # Telegram urgent alerts can still force FLASH regardless of VIX
+        tg_urgent: list = raw.get("tg", {}).get("urgent", []) if isinstance(raw.get("tg"), dict) else []
+        has_flash_alert = any(
+            str(p.get("tier", "")).upper() == "FLASH"
+            for p in tg_urgent if isinstance(p, dict)
+        )
+        if has_flash_alert:
             ctx.risk_tier = TIER_FLASH
             ctx.active_flash_alerts = [
-                a.get("title", "Unknown alert") for a in flash_alerts
+                str(p.get("text", ""))[:100] for p in tg_urgent
+                if isinstance(p, dict) and str(p.get("tier", "")).upper() == "FLASH"
             ]
-        elif "PRIORITY" in tiers:
+        elif ctx.vix > 40:
+            ctx.risk_tier = TIER_FLASH
+            ctx.active_flash_alerts = [f"VIX spike: {ctx.vix:.1f}"]
+        elif ctx.vix > 28:
             ctx.risk_tier = TIER_PRIORITY
-        elif "ROUTINE" in tiers:
+        elif ctx.vix > 18:
             ctx.risk_tier = TIER_ROUTINE
         else:
             ctx.risk_tier = TIER_CLEAR
 
-        # ── Market data ──────────────────────────────────────────────────
-        market = raw.get("market") or raw.get("marketData") or {}
-        if isinstance(market, dict):
-            # VIX — try multiple possible key names Crucix might use
-            for key in ("vix", "VIX", "^VIX", "vixLevel"):
-                val = market.get(key)
-                if val and isinstance(val, (int, float)):
-                    ctx.vix = float(val)
-                    break
-
-            # Oil price
-            for key in ("wti", "oil", "crude", "WTI", "CL=F"):
-                val = market.get(key)
-                if val and isinstance(val, (int, float)):
-                    ctx.oil_price = float(val)
-                    break
-
-            # USD index
-            for key in ("dxy", "DXY", "usdIndex", "USD"):
-                val = market.get(key)
-                if val and isinstance(val, (int, float)):
-                    ctx.usd_index = float(val)
-                    break
-
-        # ── Economic indicators (FRED) ────────────────────────────────────
-        economic = raw.get("economic") or raw.get("fred") or {}
-        if isinstance(economic, dict):
-            # Yield curve — 10Y minus 2Y spread
-            spread = economic.get("yieldCurveSpread") or economic.get("t10y2y")
-            if spread is not None:
-                try:
-                    ctx.yield_curve_inverted = float(spread) < 0
-                except (TypeError, ValueError):
-                    pass
-
-            # Economic stress — multiple signals flashing
-            stress_signals = economic.get("stressSignals") or economic.get("alerts") or []
-            ctx.economic_stress = len(stress_signals) >= 3 if isinstance(stress_signals, list) else False
-
-        # ── Supply chain ─────────────────────────────────────────────────
-        supply = raw.get("supplyChain") or raw.get("gscpi") or {}
-        if isinstance(supply, dict):
-            gscpi = supply.get("value") or supply.get("gscpi") or 0
+        # ── OSINT sentiment — matches dashboard: GDELT avgTone ───────────
+        gdelt_tone: float | None = raw.get("gdelt", {}).get("avgTone") if isinstance(raw.get("gdelt"), dict) else None
+        if gdelt_tone is not None:
             try:
-                ctx.supply_chain_stress = float(gscpi)
+                tone = float(gdelt_tone)
+                if tone < -3:
+                    ctx.osint_sentiment = "bearish"
+                elif tone > 3:
+                    ctx.osint_sentiment = "bullish"
+                else:
+                    ctx.osint_sentiment = "neutral"
             except (TypeError, ValueError):
                 pass
+        else:
+            # Fallback to social/sentiment block
+            social = raw.get("social") or raw.get("sentiment") or raw.get("osint") or {}
+            if isinstance(social, dict):
+                ctx.osint_sentiment = str(social.get("sentiment") or "neutral").lower()
+                ctx.osint_signal_count = int(social.get("signalCount") or social.get("count") or 0)
+
+        # ── Yield curve — matches dashboard: FRED GS10 - GS2 ─────────────
+        fred_series: list = raw.get("fred", []) if isinstance(raw.get("fred"), list) else []
+        if fred_series:
+            t10y = next((f.get("value") for f in fred_series if isinstance(f, dict) and f.get("id") == "GS10"), None)
+            t2y  = next((f.get("value") for f in fred_series if isinstance(f, dict) and f.get("id") == "GS2"),  None)
+            if t10y is not None and t2y is not None:
+                try:
+                    ctx.yield_curve_inverted = float(t10y) - float(t2y) < 0
+                except (TypeError, ValueError):
+                    pass
+        else:
+            # Fallback: old flat fred dict
+            economic = raw.get("economic") or {}
+            if isinstance(economic, dict):
+                spread = economic.get("yieldCurveSpread") or economic.get("t10y2y")
+                if spread is not None:
+                    try:
+                        ctx.yield_curve_inverted = float(spread) < 0
+                    except (TypeError, ValueError):
+                        pass
+                stress_signals = economic.get("stressSignals") or economic.get("alerts") or []
+                ctx.economic_stress = len(stress_signals) >= 3 if isinstance(stress_signals, list) else False
+
+        # ── Oil / DXY — still read from markets object ────────────────────
+        if isinstance(markets, dict):
+            oil_obj = markets.get("oil") or markets.get("wti") or markets.get("crude") or {}
+            if isinstance(oil_obj, dict):
+                oil_val = oil_obj.get("value")
+                if oil_val and isinstance(oil_val, (int, float)):
+                    ctx.oil_price = float(oil_val)
+            dxy_obj = markets.get("dxy") or markets.get("usdIndex") or {}
+            if isinstance(dxy_obj, dict):
+                dxy_val = dxy_obj.get("value")
+                if dxy_val and isinstance(dxy_val, (int, float)):
+                    ctx.usd_index = float(dxy_val)
 
         # ── Geopolitical / OSINT ─────────────────────────────────────────
         geo = raw.get("geopolitical") or raw.get("conflict") or {}
         if isinstance(geo, dict):
             ctx.conflict_regions = geo.get("activeRegions") or geo.get("regions") or []
             ctx.sanctions_change = bool(geo.get("sanctionsUpdate") or geo.get("newSanctions"))
-
-        # ── Social sentiment ─────────────────────────────────────────────
-        social = raw.get("social") or raw.get("sentiment") or raw.get("osint") or {}
-        if isinstance(social, dict):
-            ctx.osint_sentiment = str(social.get("sentiment") or "neutral").lower()
-            ctx.osint_signal_count = int(social.get("signalCount") or social.get("count") or 0)
 
         logger.debug(
             "CrucixClient: tier=%s vix=%.1f yield_inverted=%s osint=%s "

@@ -576,13 +576,28 @@ class CouncilAgent:
         traditional = self._traditional.analyse(signal, context)
         world = self._world.analyse(signal, context)
 
-        # Weight: world context has 25% weight, others split remaining 75%
-        confidence = (
-            ict.score         * 0.25 +
-            danial.score      * 0.25 +
-            traditional.score * 0.25 +
-            world.score       * 0.25
-        )
+        # Strategy-aware weighting: give extra weight to the expert that
+        # matches the signal's originating strategy.  This prevents a valid
+        # ICT setup from being overruled by DanialFX / Traditional experts
+        # who use incompatible methodologies.
+        #
+        #   ICT signal    → ICT=50%, DanialFX=17%, Traditional=17%, World=16%
+        #   DeepSeek/other → equal 25% each (original behaviour)
+        is_ict_signal = signal.strategy.startswith("ict_smc")
+        if is_ict_signal:
+            confidence = (
+                ict.score         * 0.50 +
+                danial.score      * 0.17 +
+                traditional.score * 0.17 +
+                world.score       * 0.16
+            )
+        else:
+            confidence = (
+                ict.score         * 0.25 +
+                danial.score      * 0.25 +
+                traditional.score * 0.25 +
+                world.score       * 0.25
+            )
 
         reasons_for = (
             ict.reasons_for + danial.reasons_for +

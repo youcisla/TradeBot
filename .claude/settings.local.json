@@ -14,7 +14,12 @@
       "Bash(python -c \"import zoneinfo; from zoneinfo import ZoneInfo; import datetime; paris = ZoneInfo\\(''Europe/Paris''\\); now_paris = datetime.datetime.now\\(paris\\); print\\(''Paris time:'', now_paris.strftime\\(''%H:%M''\\), ''UTC:'', datetime.datetime.now\\(datetime.UTC\\).strftime\\(''%H:%M''\\)\\)\")",
       "Bash(python -c \":*)",
       "Bash(.venv/Scripts/pip install:*)",
-      "Bash(.venv/Scripts/python -c \"from utils.helpers import local_now; print\\(''Paris time:'', local_now\\(\\).strftime\\(''%H:%M %Z''\\)\\)\")"
+      "Bash(.venv/Scripts/python -c \"from utils.helpers import local_now; print\\(''Paris time:'', local_now\\(\\).strftime\\(''%H:%M %Z''\\)\\)\")",
+      "Bash(gh api:*)",
+      "WebFetch(domain:api.github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(node \"c:/Users/Y.chehboub/Downloads/TradingBot/antigravity-awesome-skills/tools/bin/install.js\" --help)",
+      "Bash(node \"c:/Users/Y.chehboub/Downloads/TradingBot/antigravity-awesome-skills/tools/bin/install.js\" --claude)"
     ],
     "deny": []
   },
