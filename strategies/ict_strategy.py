@@ -18,7 +18,7 @@ from models.market_data import Candle, MarketContext
 from models.signal import EntrySnapshot, Signal
 from strategies.base_strategy import BaseStrategy
 from strategies.ict.engine import ICTEngine
-from utils.helpers import current_session, day_of_week
+from utils.helpers import day_of_week
 
 logger = logging.getLogger(__name__)
 
@@ -203,18 +203,18 @@ class ICTStrategy(BaseStrategy):
         # We include historical backtest analysis in the Agent decision
         model_slug = f"{self.name}:{best.model.name}"
         historical_conf = 0.5
-        
+
         if self._db:
             historical_conf = self._db.get_confidence(model_slug)
             # If backtesting proved this model is unprofitable, the agent suppresses the signal
             if historical_conf < settings.CONFIDENCE_ALLOW:
                 self._emit("info", f"Rejecting {best.model.name} setup due to poor historical confidence ({historical_conf:.2f})")
                 return None
-                
+
         # Blend the real-time confluence score (115 scale) with historical confidence
         realtime_conf = max(0.1, min(1.0, best.confidence / 100.0))
         final_conf = (historical_conf + realtime_conf) / 2.0
-        
+
         if final_conf < settings.CONFIDENCE_ALLOW:
             self._emit("info", f"Rejecting {best.model.name} (blended conf {final_conf:.2f} < {settings.CONFIDENCE_ALLOW})")
             return None
@@ -320,7 +320,6 @@ class ICTStrategy(BaseStrategy):
         snapped level by more than LIMIT_ENTRY_MAX_DISTANCE_ATR × ATR.
         A staleness_ratio of 0 means the entry is still valid.
         """
-        from models.ict_models import FairValueGap, OrderBlock
 
         snapped = best.entry_price  # fallback: keep engine's value
 

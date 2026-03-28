@@ -24,7 +24,7 @@ from typing import Optional
 
 from models.market_data import Candle
 from models.ict_models import (
-    Bias, ICTContext, SetupCandidate, SetupModel, ConfidenceBreakdown,
+    ICTContext, SetupCandidate, SetupModel,
 )
 from strategies.ict.structure import (
     find_swing_points, detect_structure_breaks,

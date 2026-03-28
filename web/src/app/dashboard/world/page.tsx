@@ -106,7 +106,7 @@ export default function WorldIntelPage() {
                   background: `${tierColor}10`,
                 }}
               >
-                {data?.sourceCount ?? 27} INTELLIGENCE SOURCES
+                {String(data?.sourceCount ?? 27)} INTELLIGENCE SOURCES
               </div>
             </div>
           </div>

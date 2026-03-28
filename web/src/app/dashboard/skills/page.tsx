@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import ReactMarkdown from "react-markdown";
 
 interface Skill {
   name: string;
@@ -394,23 +395,79 @@ export default function SkillsPage() {
                   placeholder="# Skill content (markdown)"
                 />
               ) : (
-                <pre style={{
-                  ...MONO,
-                  fontSize: 11.5,
-                  color: "#a0b0c0",
-                  lineHeight: 1.65,
-                  whiteSpace: "pre-wrap",
-                  wordBreak: "break-word",
-                  margin: 0,
+                <div style={{
                   background: "#06060c",
                   padding: 16,
                   borderRadius: 6,
                   border: "1px solid #1c1c28",
                   flex: 1,
                   overflow: "auto",
+                  color: "#a0b0c0",
+                  lineHeight: 1.7,
+                  fontSize: 13,
                 }}>
-                  {content}
-                </pre>
+                  <ReactMarkdown
+                    components={{
+                      h1: ({ children }) => (
+                        <h1 style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 18, fontWeight: 700, color: "#00ff88", borderBottom: "1px solid #1c1c28", paddingBottom: 8, marginBottom: 14, marginTop: 0 }}>{children}</h1>
+                      ),
+                      h2: ({ children }) => (
+                        <h2 style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 14, fontWeight: 700, color: "#c0e8ff", marginTop: 22, marginBottom: 8 }}>{children}</h2>
+                      ),
+                      h3: ({ children }) => (
+                        <h3 style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 700, color: "#9aa8b8", marginTop: 16, marginBottom: 6 }}>{children}</h3>
+                      ),
+                      p: ({ children }) => (
+                        <p style={{ marginTop: 0, marginBottom: 10, color: "#a0b0c0" }}>{children}</p>
+                      ),
+                      ul: ({ children }) => (
+                        <ul style={{ paddingLeft: 20, marginBottom: 10, color: "#a0b0c0" }}>{children}</ul>
+                      ),
+                      ol: ({ children }) => (
+                        <ol style={{ paddingLeft: 20, marginBottom: 10, color: "#a0b0c0" }}>{children}</ol>
+                      ),
+                      li: ({ children }) => (
+                        <li style={{ marginBottom: 4 }}>{children}</li>
+                      ),
+                      code: ({ children, className }) => {
+                        const isBlock = className?.startsWith("language-");
+                        return isBlock ? (
+                          <pre style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, background: "#0a0a14", border: "1px solid #1c1c28", borderRadius: 4, padding: "10px 14px", overflowX: "auto", marginBottom: 12, color: "#c0e8ff" }}>
+                            <code>{children}</code>
+                          </pre>
+                        ) : (
+                          <code style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, background: "#0a0a14", border: "1px solid #1c1c28", borderRadius: 3, padding: "1px 5px", color: "#00ff88" }}>{children}</code>
+                        );
+                      },
+                      blockquote: ({ children }) => (
+                        <blockquote style={{ borderLeft: "3px solid #00ff88", paddingLeft: 12, marginLeft: 0, color: "#607888", fontStyle: "italic" }}>{children}</blockquote>
+                      ),
+                      a: ({ href, children }) => (
+                        <a href={href} target="_blank" rel="noreferrer" style={{ color: "#00aaff", textDecoration: "none" }}>{children}</a>
+                      ),
+                      strong: ({ children }) => (
+                        <strong style={{ color: "#c0e8ff", fontWeight: 700 }}>{children}</strong>
+                      ),
+                      em: ({ children }) => (
+                        <em style={{ color: "#9aa8b8" }}>{children}</em>
+                      ),
+                      hr: () => (
+                        <hr style={{ border: "none", borderTop: "1px solid #1c1c28", margin: "18px 0" }} />
+                      ),
+                      table: ({ children }) => (
+                        <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 12, fontSize: 12 }}>{children}</table>
+                      ),
+                      th: ({ children }) => (
+                        <th style={{ fontFamily: "'JetBrains Mono', monospace", textAlign: "left", padding: "5px 10px", borderBottom: "1px solid #1c1c28", color: "#607888", fontSize: 10, letterSpacing: "0.08em", textTransform: "uppercase" }}>{children}</th>
+                      ),
+                      td: ({ children }) => (
+                        <td style={{ padding: "5px 10px", borderBottom: "1px solid #0d0d1a", color: "#a0b0c0" }}>{children}</td>
+                      ),
+                    }}
+                  >
+                    {content}
+                  </ReactMarkdown>
+                </div>
               )}
             </>
           ) : (

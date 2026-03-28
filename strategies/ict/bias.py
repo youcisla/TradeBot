@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from models.market_data import Candle
 from models.ict_models import (
-    Bias, Regime, DealingRange, SwingPoint,
+    Bias, Regime, DealingRange,
 )
 from strategies.ict.structure import find_swing_points, get_structure_bias
 

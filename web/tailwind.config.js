@@ -75,10 +75,12 @@ module.exports = {
         "on-background":             "#ffffff",
       },
       fontFamily: {
-        mono:     ["JetBrains Mono", "monospace"],
-        headline: ["JetBrains Mono", "monospace"],
-        body:     ["JetBrains Mono", "monospace"],
-        label:    ["JetBrains Mono", "monospace"],
+        mono:      ["JetBrains Mono", "monospace"],
+        code:      ["Fira Code", "JetBrains Mono", "monospace"],
+        headline:  ["Fira Code", "JetBrains Mono", "monospace"],
+        sans:      ["Fira Sans", "system-ui", "sans-serif"],
+        body:      ["Fira Sans", "system-ui", "sans-serif"],
+        label:     ["JetBrains Mono", "monospace"],
       },
       boxShadow: {
         "neon-primary": "0 0 15px rgba(0, 253, 135, 0.15)",

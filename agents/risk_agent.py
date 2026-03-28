@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING, Callable
 
 from broker.connector import BrokerConnector
 from config import settings
-from config.symbols import pip_value, contract_size, asset_class
+from config.symbols import pip_value, asset_class
 from models.signal import Signal
 from models.trade import Trade
 from utils import telegram_bot

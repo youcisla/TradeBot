@@ -6,7 +6,6 @@ Answers: *What does it mean?*
 from __future__ import annotations
 
 import logging
-from datetime import datetime
 from typing import TYPE_CHECKING
 
 from config import settings
@@ -55,7 +54,6 @@ class AnalysisAgent:
 
     def _analyze_inner(self, data: MarketData) -> MarketContext:
         closes = [c.close for c in data.candles] if data.candles else []
-        volumes = [c.volume for c in data.candles] if data.candles else []
 
         sma_fast = self._sma(closes, settings.SMA_FAST_PERIOD)
         sma_slow = self._sma(closes, settings.SMA_SLOW_PERIOD)

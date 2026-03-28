@@ -18,8 +18,7 @@ from datetime import UTC, datetime
 from typing import Optional
 
 from models.ict_models import (
-    Bias, Regime, OBType, FVGType, SetupModel, SessionName,
-    ICTContext, SetupCandidate,
+    Bias, Regime, OBType, FVGType, SetupModel, ICTContext, SetupCandidate,
     LiquiditySweep, FairValueGap, OrderBlock, StructureBreak, Displacement,
 )
 
@@ -230,7 +229,7 @@ def _build_candidate(
 ) -> SetupCandidate:
     """Build a fully populated SetupCandidate."""
     entry = ctx.current_price
-    
+
     # 1. Refine entry price to Golden Zone midpoint for optimal positioning
     if ctx.fibonacci:
         aligned = (direction == "BUY" and ctx.fibonacci.direction == Bias.BULLISH) or \
@@ -240,7 +239,7 @@ def _build_candidate(
 
     # 2. Strict 0.786 SL invalidation
     sl, sl_reason = _calc_sl(ctx, direction, ob, fvg, sweep)
-    
+
     # 3. Institutional Fib extension targets
     tp1, tp2, tp3, tp_reason = _calc_tps(ctx, entry, sl, direction)
 

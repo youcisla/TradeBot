@@ -25,10 +25,43 @@ body {
 ::-webkit-scrollbar-thumb { background: #494847; }
 ::-webkit-scrollbar-thumb:hover { background: #00fd87; }
 
-/* ── Utility: Glass Panel ───────────────────────────────────────────────────── */
+/* ── Utility: Glass Panel (Glassmorphism — design system: backdrop blur + light reflection) */
 .glass-panel {
-  background: rgba(38, 38, 38, 0.4);
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.04) 0%,
+    rgba(255, 255, 255, 0.01) 100%
+  );
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+/* ── Utility: Glass Card (elevated glassmorphism — for interactive cards) ─────── */
+.glass-card {
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.06) 0%,
+    rgba(255, 255, 255, 0.02) 100%
+  );
   backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  box-shadow:
+    0 4px 24px rgba(0, 0, 0, 0.35),
+    0 1px 2px rgba(0, 0, 0, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  transition: box-shadow 200ms ease-out, border-color 200ms ease-out;
+}
+.glass-card:hover {
+  border-color: rgba(255, 255, 255, 0.16);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.45),
+    0 1px 2px rgba(0, 0, 0, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.10);
 }
 
 /* ── Utility: Neon Glow ─────────────────────────────────────────────────────── */
@@ -42,6 +75,27 @@ body {
   box-shadow: 0 0 8px #00fd87;
 }
 
+/* ── Utility: Smooth transitions (design system: 150–300ms ease-out) ─────────── */
+.transition-smooth {
+  transition: all 200ms ease-out;
+}
+.transition-colors-smooth {
+  transition: color 200ms ease-out, background-color 200ms ease-out,
+              border-color 200ms ease-out, opacity 200ms ease-out;
+}
+
+/* ── Interactive element baseline (design system: cursor-pointer + hover feedback) */
+button,
+[role="button"],
+[role="tab"],
+[role="option"],
+select,
+label[for],
+.interactive {
+  cursor: pointer;
+}
+a { cursor: pointer; }
+
 /* ── Page entry animation ───────────────────────────────────────────────────── */
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(4px); }
@@ -51,6 +105,16 @@ body {
 /* Applied to main page content so every nav transition feels instant */
 main > * {
   animation: fadeIn 120ms ease-out;
+}
+
+/* ── Accessibility: respect reduced-motion preference (design system requirement) */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  .animate-pulse, .animate-spin, .animate-bounce { animation: none !important; }
 }
 
 /* ── Utility: Instantaneous transitions ─────────────────────────────────────── */
@@ -117,3 +181,39 @@ main > * {
   outline: none; width: 100%;
 }
 .terminal-input:focus { border-color: rgba(0,253,135,0.4); box-shadow: 0 0 0 2px rgba(0,253,135,0.08); }
+
+/* ── Design System: Fira Code as heading font ────────────────────────────────── */
+/* Use font-headline / font-code Tailwind classes to apply Fira Code.             */
+/* Body text remains JetBrains Mono (technical terminal feel).                   */
+h1, h2, h3 { font-family: 'Fira Code', 'JetBrains Mono', monospace; }
+
+/* ── Design System: Skeleton loader (design system: skeleton screens over blank) */
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position:  200% 0; }
+}
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.03) 25%,
+    rgba(255, 255, 255, 0.07) 50%,
+    rgba(255, 255, 255, 0.03) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+
+/* ── Design System: Focus states (keyboard nav accessibility) ────────────────── */
+:focus-visible {
+  outline: 2px solid rgba(0, 253, 135, 0.6);
+  outline-offset: 2px;
+}
+
+/* ── Design System: Z-depth layering scale ───────────────────────────────────── */
+:root {
+  --z-base:    10;
+  --z-float:   20;
+  --z-overlay: 30;
+  --z-modal:   50;
+  --z-top:     100;
+}

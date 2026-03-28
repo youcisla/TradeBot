@@ -31,7 +31,7 @@ import torch.nn as nn
 
 from config import settings
 from models.neural_model import (
-    BUY, SELL, HOLD,
+    BUY, HOLD,
     LSTMTradingModel,
     FeatureNormalizer,
     build_features,
@@ -421,7 +421,7 @@ class ModelManager:
 
         # Try the existing data_downloader first (saves to CSV for reuse)
         try:
-            from backtesting.data_downloader import download_history, DATA_DIR
+            from backtesting.data_downloader import download_history
             path = download_history(symbol, "H1", start, end)
             if path and path.exists():
                 from models.market_data import Candle

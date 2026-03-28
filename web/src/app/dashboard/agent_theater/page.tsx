@@ -10,6 +10,179 @@ interface AgentEvent {
   metadata?: Record<string, unknown>;
 }
 
+// ── Log row helpers ────────────────────────────────────────────────────────────
+
+function eventTypeColor(eventType: string): string {
+  const t = (eventType ?? "").toLowerCase();
+  if (t.includes("error") || t.includes("fail") || t.includes("reject"))  return "#ff5555";
+  if (t.includes("warn"))                                                  return "#ffb86c";
+  if (t.includes("trade") || t.includes("open") || t.includes("fill"))    return "#00fd87";
+  if (t.includes("close") || t.includes("sl") || t.includes("tp"))        return "#a4ffb9";
+  if (t.includes("signal") || t.includes("council") || t.includes("vote")) return "#e966ff";
+  if (t.includes("info"))                                                  return "#79dfff";
+  return "#adaaaa";
+}
+
+function LogRow({
+  ev,
+  isExpanded,
+  onToggle,
+}: {
+  ev: AgentEvent;
+  isExpanded: boolean;
+  onToggle: () => void;
+}) {
+  const color       = agentColor(ev.agent);
+  const lvlColor    = eventTypeColor(ev.event_type);
+  const hasMetadata = ev.metadata && Object.keys(ev.metadata).length > 0;
+  const isExecution = ev.agent === "execution";
+  const isError     = (ev.event_type ?? "").toLowerCase().includes("error") ||
+                      (ev.event_type ?? "").toLowerCase().includes("fail");
+
+  return (
+    <div
+      style={{
+        display:       "flex",
+        flexDirection: "column",
+        borderLeft:    isExecution ? `2px solid ${color}` : isError ? "2px solid #ff5555" : "2px solid transparent",
+        marginBottom:  2,
+        background:    isError ? "rgba(255,85,85,0.05)" : undefined,
+        borderRadius:  2,
+        cursor:        hasMetadata ? "pointer" : "default",
+      }}
+      onClick={hasMetadata ? onToggle : undefined}
+    >
+      {/* Main row */}
+      <div
+        style={{
+          display:    "flex",
+          alignItems: "flex-start",
+          gap:        8,
+          padding:    "5px 8px",
+        }}
+      >
+        {/* Timestamp */}
+        <span
+          style={{
+            color:      "#666",
+            fontFamily: "monospace",
+            fontSize:   10,
+            flexShrink: 0,
+            paddingTop: 1,
+            minWidth:   58,
+          }}
+        >
+          {fmtTime(ev.created_at)}
+        </span>
+
+        {/* Agent badge */}
+        <span
+          style={{
+            background:   `${color}22`,
+            border:       `1px solid ${color}55`,
+            color,
+            fontSize:     9,
+            fontWeight:   700,
+            letterSpacing: "0.08em",
+            padding:      "1px 6px",
+            borderRadius: 2,
+            flexShrink:   0,
+            textTransform: "uppercase",
+            minWidth:      72,
+            textAlign:     "center",
+          }}
+        >
+          {ev.agent}
+        </span>
+
+        {/* Event type pill */}
+        {ev.event_type && (
+          <span
+            style={{
+              color:        lvlColor,
+              fontSize:     9,
+              fontWeight:   600,
+              letterSpacing: "0.05em",
+              padding:      "1px 5px",
+              background:   `${lvlColor}18`,
+              border:       `1px solid ${lvlColor}33`,
+              borderRadius: 2,
+              flexShrink:   0,
+              textTransform: "uppercase",
+              maxWidth:     100,
+              overflow:     "hidden",
+              whiteSpace:   "nowrap",
+              textOverflow: "ellipsis",
+            }}
+          >
+            {ev.event_type}
+          </span>
+        )}
+
+        {/* Message */}
+        <span
+          style={{
+            color:      isError ? "#ff8888" : "#d8d8d8",
+            fontSize:   12,
+            fontFamily: "monospace",
+            flex:       1,
+            lineHeight: 1.5,
+            wordBreak:  "break-word",
+          }}
+        >
+          {ev.message}
+        </span>
+
+        {/* Expand indicator */}
+        {hasMetadata && (
+          <span
+            style={{
+              color:      "#555",
+              fontSize:   10,
+              flexShrink: 0,
+              paddingTop: 2,
+              transition: "transform 0.1s",
+              transform:  isExpanded ? "rotate(90deg)" : "rotate(0deg)",
+              display:    "inline-block",
+            }}
+          >
+            ▶
+          </span>
+        )}
+      </div>
+
+      {/* Expanded metadata panel */}
+      {isExpanded && hasMetadata && (
+        <div
+          style={{
+            margin:       "0 8px 6px 74px",
+            background:   "#0a0a14",
+            border:       "1px solid #1e1e2e",
+            borderRadius: 3,
+            padding:      "8px 10px",
+            maxHeight:    200,
+            overflowY:    "auto",
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <pre
+            style={{
+              margin:     0,
+              fontFamily: "monospace",
+              fontSize:   11,
+              color:      "#c0e8ff",
+              whiteSpace: "pre-wrap",
+              wordBreak:  "break-word",
+            }}
+          >
+            {JSON.stringify(ev.metadata, null, 2)}
+          </pre>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Agent color map ────────────────────────────────────────────────────────────
 
 const AGENT_COLORS: Record<string, string> = {
@@ -30,9 +203,6 @@ function agentColor(agent: string): string {
   return AGENT_COLORS[agent.toLowerCase()] ?? "#adaaaa";
 }
 
-function agentLabel(agent: string): string {
-  return `[${agent.toUpperCase()}]`;
-}
 
 function fmtTime(iso: string): string {
   try {
@@ -49,7 +219,17 @@ export default function AgentTheaterPage() {
   const [events, setEvents] = useState<AgentEvent[]>([]);
   const [command, setCommand] = useState("");
   const [sending, setSending] = useState(false);
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [agentFilter, setAgentFilter] = useState<string>("all");
   const logRef = useRef<HTMLDivElement>(null);
+
+  function toggleExpanded(id: string) {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
 
   useEffect(() => {
     let active = true;
@@ -108,6 +288,16 @@ export default function AgentTheaterPage() {
     }
   }
 
+  const filteredEvents = useMemo(
+    () => agentFilter === "all" ? events : events.filter((e) => e.agent === agentFilter),
+    [events, agentFilter]
+  );
+
+  const uniqueAgents = useMemo(
+    () => Array.from(new Set(events.map((e) => e.agent))).sort(),
+    [events]
+  );
+
   // Support node statuses
   const learningLast = useMemo(
     () => events.find((e) => e.agent === "learning"),
@@ -154,44 +344,99 @@ export default function AgentTheaterPage() {
               <span className="text-xs font-bold tracking-widest text-on-surface">
                 NEURAL_LOG_STREAM_V4
               </span>
+              <span
+                style={{
+                  background: "#00fd8722",
+                  border: "1px solid #00fd8755",
+                  color: "#00fd87",
+                  fontSize: 9,
+                  fontWeight: 700,
+                  padding: "1px 6px",
+                  letterSpacing: "0.1em",
+                }}
+              >
+                LIVE
+              </span>
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-2 items-center">
+              <span style={{ color: "#666", fontSize: 10, fontFamily: "monospace" }}>
+                {filteredEvents.length} events
+              </span>
               <div className="w-3 h-3 bg-error-container" />
               <div className="w-3 h-3 bg-tertiary-container" />
               <div className="w-3 h-3 bg-primary-container" />
             </div>
           </div>
 
+          {/* Agent filter bar */}
+          <div
+            style={{
+              display:        "flex",
+              gap:            4,
+              padding:        "6px 10px",
+              borderBottom:   "1px solid rgba(255,255,255,0.06)",
+              background:     "#0d0d1a",
+              overflowX:      "auto",
+              flexShrink:     0,
+            }}
+          >
+            {["all", ...uniqueAgents].map((a) => (
+              <button
+                key={a}
+                onClick={() => setAgentFilter(a)}
+                style={{
+                  background:    agentFilter === a
+                    ? (a === "all" ? "#ffffff22" : `${agentColor(a)}33`)
+                    : "transparent",
+                  border:        `1px solid ${agentFilter === a
+                    ? (a === "all" ? "#ffffff55" : `${agentColor(a)}88`)
+                    : "rgba(255,255,255,0.1)"}`,
+                  color:         agentFilter === a
+                    ? (a === "all" ? "#fff" : agentColor(a))
+                    : "#666",
+                  fontSize:      9,
+                  fontWeight:    700,
+                  letterSpacing: "0.08em",
+                  padding:       "2px 8px",
+                  cursor:        "pointer",
+                  borderRadius:  2,
+                  textTransform: "uppercase",
+                  transition:    "all 0.1s",
+                  flexShrink:    0,
+                }}
+              >
+                {a}
+              </button>
+            ))}
+          </div>
+
           {/* Log rows */}
           <div
             ref={logRef}
-            className="flex-1 overflow-y-auto p-4 font-mono text-sm space-y-1"
+            style={{ flex: 1, overflowY: "auto", padding: "6px 4px" }}
           >
-            {events.length === 0 ? (
-              <div className="text-on-surface-variant text-[11px] opacity-50 italic p-2">
-                Awaiting telemetry packets...
+            {filteredEvents.length === 0 ? (
+              <div
+                style={{
+                  color:      "#555",
+                  fontSize:   11,
+                  fontFamily: "monospace",
+                  fontStyle:  "italic",
+                  padding:    "16px 12px",
+                }}
+              >
+                {events.length === 0
+                  ? "Awaiting telemetry packets..."
+                  : `No events from agent: ${agentFilter}`}
               </div>
             ) : (
-              [...events].reverse().map((ev, i) => (
-                <div
-                  key={ev.id ?? i}
-                  className={`group flex gap-3 hover:bg-surface-bright p-1 duration-0 ${
-                    i % 7 === 0 ? "bg-surface-container-high" : ""
-                  } ${ev.agent === "execution" ? "border-l-2 border-primary-fixed ml-1 pl-2" : ""}`}
-                >
-                  <span className="text-on-surface-variant shrink-0 text-[11px]">
-                    [{fmtTime(ev.created_at)}]
-                  </span>
-                  <span
-                    className="shrink-0 text-[11px] font-bold"
-                    style={{ color: agentColor(ev.agent) }}
-                  >
-                    {agentLabel(ev.agent)}
-                  </span>
-                  <span className="text-on-surface text-[11px] break-all">
-                    {ev.message}
-                  </span>
-                </div>
+              [...filteredEvents].reverse().map((ev) => (
+                <LogRow
+                  key={ev.id}
+                  ev={ev}
+                  isExpanded={expanded.has(ev.id)}
+                  onToggle={() => toggleExpanded(ev.id)}
+                />
               ))
             )}
           </div>

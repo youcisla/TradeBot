@@ -89,7 +89,7 @@ class StrategyAgent:
                 # Otherwise, fallback to the generic strategy confidence
                 final_confidence = signal.confidence if signal.confidence != 0.5 else confidence
                 signal.confidence = max(0.0, min(1.0, final_confidence))
-                
+
                 self._emit("info",
                            f"Signal detected! {signal.strategy or strategy.name} says {signal.direction} "
                            f"{signal.symbol} @ {signal.entry_price:.5f} (conf={final_confidence:.2f})",
