@@ -6,8 +6,8 @@ import {
   XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend,
 } from "recharts";
 import { formatChartDate } from "@/lib/time";
-import SymbolFilter from "@/components/SymbolFilter";
-import PageHeader from "@/components/PageHeader";
+
+// ── Types ─────────────────────────────────────────────────────────────────────
 
 interface Trade {
   id: string; symbol: string; direction: string; pnl: number;
@@ -34,71 +34,25 @@ function sinceDate(r: Range): string | undefined {
   return d.toISOString();
 }
 
-const SYM_COLORS = ["#00ff88","#00d4ff","#f5c518","#ff9d00","#d500f9","#4da6ff","#ff4455","#76ff03","#bf7fff","#f0f0f0"];
+const SYM_COLORS = ["#00fd87","#00d2fd","#e966ff","#ffb86c","#ff716c","#79dfff","#a4ffb9","#1cd5ff","#d501f9","#ffffff"];
+const TOOLTIP_STYLE = { background: "#0e0e0e", border: "1px solid #494847", fontSize: 11, fontFamily: "'JetBrains Mono', monospace", color: "#ffffff" };
 
-// ── KPI Card ────────────────────────────────────────────────────────────────
+// ── Sub-components ────────────────────────────────────────────────────────────
 
-function KpiCard({
-  label, value, sub, color = "#00ff88", glowColor,
-}: {
-  label: string; value: string; sub?: string; color?: string; glowColor?: string;
-}) {
-  const glow = glowColor ?? color;
+function KpiCard({ label, value, sub, color = "#00fd87" }: { label: string; value: string; sub?: string; color?: string }) {
   return (
-    <div style={{
-      background: "#0e0e10",
-      border: "1px solid #1c1c28",
-      borderRadius: 8,
-      padding: "14px 16px",
-      position: "relative",
-      overflow: "hidden",
-    }}>
-      <div style={{
-        position: "absolute", top: 0, left: 0, right: 0, height: 1,
-        background: `linear-gradient(90deg, transparent, ${glow}33, transparent)`,
-      }} />
-      <div style={{
-        fontSize: 8.5, fontFamily: "'JetBrains Mono', monospace",
-        color: "#607888", letterSpacing: "0.18em", textTransform: "uppercase",
-        marginBottom: 6,
-      }}>
-        {label}
-      </div>
-      <div style={{
-        fontSize: 20, fontFamily: "'JetBrains Mono', monospace",
-        fontWeight: 700, color,
-        textShadow: `0 0 12px ${glow}55`,
-        lineHeight: 1.1,
-      }}>
-        {value}
-      </div>
-      {sub && (
-        <div style={{
-          fontSize: 9, fontFamily: "'JetBrains Mono', monospace",
-          color: "#607888", marginTop: 4,
-        }}>
-          {sub}
-        </div>
-      )}
+    <div className="bg-surface border-l-2 p-4 relative overflow-hidden" style={{ borderLeftColor: color }}>
+      <div className="text-[9px] text-on-surface-variant uppercase tracking-[0.18em] mb-2">{label}</div>
+      <div className="text-2xl font-bold font-mono" style={{ color }}>{value}</div>
+      {sub && <div className="text-[10px] text-on-surface-variant mt-1">{sub}</div>}
     </div>
   );
 }
 
-// ── Chart card ──────────────────────────────────────────────────────────────
-
-function ChartCard({ title, children }: { title: string; children: React.ReactNode }) {
+function ChartCard({ title, accent = "#494847", children }: { title: string; accent?: string; children: React.ReactNode }) {
   return (
-    <div style={{
-      background: "#0e0e10", border: "1px solid #1c1c28",
-      borderRadius: 8, padding: "16px",
-    }}>
-      <div style={{
-        fontSize: 9, fontFamily: "'JetBrains Mono', monospace",
-        color: "#607888", letterSpacing: "0.2em", textTransform: "uppercase",
-        marginBottom: 14,
-      }}>
-        {title}
-      </div>
+    <div className="bg-surface p-4 border border-outline-variant/10">
+      <div className="text-[9px] font-bold uppercase tracking-[0.2em] mb-4" style={{ color: accent }}>{title}</div>
       {children}
     </div>
   );
@@ -106,36 +60,35 @@ function ChartCard({ title, children }: { title: string; children: React.ReactNo
 
 function NoData() {
   return (
-    <div style={{
-      height: 180, display: "flex", alignItems: "center", justifyContent: "center",
-      color: "#607888", fontFamily: "'JetBrains Mono', monospace", fontSize: 11,
-    }}>
+    <div className="h-44 flex items-center justify-center text-on-surface-variant text-[11px] uppercase tracking-widest">
       no data yet
     </div>
   );
 }
 
-const TOOLTIP_STYLE = { background: "#0e0e10", border: "1px solid #1c1c28", fontSize: 11, fontFamily: "'JetBrains Mono', monospace" };
-
-// ── Range chip ──────────────────────────────────────────────────────────────
-
-function RangeChip({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
+function SymbolPill({ value, options, onChange }: { value: string | null; options: string[]; onChange: (v: string | null) => void }) {
   return (
-    <button onClick={onClick} style={{
-      padding: "4px 12px", borderRadius: 4, fontSize: 10,
-      fontFamily: "'JetBrains Mono', monospace", fontWeight: 700,
-      letterSpacing: "0.08em", textTransform: "uppercase", cursor: "pointer",
-      border: active ? "1px solid rgba(0,212,255,0.5)" : "1px solid #1c1c28",
-      background: active ? "rgba(0,212,255,0.12)" : "transparent",
-      color: active ? "#00d4ff" : "#607888",
-      transition: "all 0.15s",
-    }}>
-      {label === "all" ? "All Time" : label}
-    </button>
+    <div className="flex gap-2 flex-wrap">
+      <button
+        onClick={() => onChange(null)}
+        className={`px-3 py-1 text-[10px] font-bold uppercase tracking-wider duration-0 ${!value ? "bg-primary-fixed/10 text-primary-fixed border border-primary-fixed/30" : "text-on-surface-variant border border-outline-variant/20 hover:text-on-surface"}`}
+      >
+        All
+      </button>
+      {options.map((s) => (
+        <button
+          key={s}
+          onClick={() => onChange(s === value ? null : s)}
+          className={`px-3 py-1 text-[10px] font-bold uppercase tracking-wider duration-0 ${value === s ? "bg-secondary/10 text-secondary border border-secondary/30" : "text-on-surface-variant border border-outline-variant/20 hover:text-on-surface"}`}
+        >
+          {s}
+        </button>
+      ))}
+    </div>
   );
 }
 
-// ── Page ─────────────────────────────────────────────────────────────────────
+// ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function AnalyticsPage() {
   const [range, setRange]             = useState<Range>("all");
@@ -145,7 +98,7 @@ export default function AnalyticsPage() {
   const [symbolStats, setSymbolStats] = useState<SymbolStat[]>([]);
   const [dirStats, setDirStats]       = useState<DirStat[]>([]);
   const [closedTrades, setClosedTrades] = useState<Trade[]>([]);
-  const [loading, setLoading]         = useState(true);
+  const [loading, setLoading]           = useState(true);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -167,15 +120,15 @@ export default function AnalyticsPage() {
   useEffect(() => { load(); }, [load]);
 
   // Derived
-  const filteredTrades  = symbol ? closedTrades.filter((t) => t.symbol === symbol) : closedTrades;
-  const fWins           = filteredTrades.filter((t) => Number(t.pnl) > 0).length;
-  const fTotal          = filteredTrades.length;
-  const fTotalPnl       = filteredTrades.reduce((s, t) => s + Number(t.pnl), 0);
-  const fAvgPnl         = fTotal > 0 ? fTotalPnl / fTotal : 0;
-  const fBest           = fTotal > 0 ? Math.max(...filteredTrades.map((t) => Number(t.pnl))) : 0;
-  const fWorst          = fTotal > 0 ? Math.min(...filteredTrades.map((t) => Number(t.pnl))) : 0;
-  const winRate         = fTotal > 0 ? (fWins / fTotal) * 100 : 0;
-  const winRateColor    = winRate >= 55 ? "#00ff88" : winRate >= 45 ? "#f5c518" : "#ff4455";
+  const filteredTrades = symbol ? closedTrades.filter((t) => t.symbol === symbol) : closedTrades;
+  const fWins    = filteredTrades.filter((t) => Number(t.pnl) > 0).length;
+  const fTotal   = filteredTrades.length;
+  const fTotalPnl = filteredTrades.reduce((s, t) => s + Number(t.pnl), 0);
+  const fAvgPnl  = fTotal > 0 ? fTotalPnl / fTotal : 0;
+  const fBest    = fTotal > 0 ? Math.max(...filteredTrades.map((t) => Number(t.pnl))) : 0;
+  const fWorst   = fTotal > 0 ? Math.min(...filteredTrades.map((t) => Number(t.pnl))) : 0;
+  const winRate  = fTotal > 0 ? (fWins / fTotal) * 100 : 0;
+  const winRateColor = winRate >= 55 ? "#00fd87" : winRate >= 45 ? "#ffb86c" : "#ff716c";
 
   const displayKpis: Kpis | null = symbol && kpis
     ? { total_trades: fTotal, wins: fWins, losses: fTotal - fWins, total_pnl: fTotalPnl, avg_pnl: fAvgPnl, best_trade: fBest, worst_trade: fWorst, avg_duration_min: kpis.avg_duration_min }
@@ -190,19 +143,17 @@ export default function AnalyticsPage() {
   let peak = 0;
   const drawdownCurve = equityCurve.map((p) => {
     if (p.cum > peak) peak = p.cum;
-    const dd = peak > 0 ? ((p.cum - peak) / peak) * 100 : 0;
-    return { date: p.date, drawdown: Math.min(0, dd) };
+    return { date: p.date, drawdown: Math.min(0, peak > 0 ? ((p.cum - peak) / peak) * 100 : 0) };
   });
 
   const filteredSymbolStats = symbol ? symbolStats.filter((s) => s.symbol === symbol) : symbolStats;
   const symbolPie  = filteredSymbolStats.map((s) => ({ name: s.symbol, value: Math.abs(Number(s.total_pnl)), pnl: Number(s.total_pnl) }));
   const symbolBars = filteredSymbolStats.map((s) => ({ symbol: s.symbol, wins: Number(s.wins), losses: Number(s.losses) }));
-
   const filteredDirStats = symbol
     ? (() => {
         const buys  = filteredTrades.filter((t) => t.direction === "BUY");
         const sells = filteredTrades.filter((t) => t.direction === "SELL");
-        return [...(buys.length  ? [{ name: "BUY",  value: buys.length }]  : []),
+        return [...(buys.length ? [{ name: "BUY", value: buys.length }] : []),
                 ...(sells.length ? [{ name: "SELL", value: sells.length }] : [])];
       })()
     : dirStats.map((d) => ({ name: d.direction, value: Number(d.total) }));
@@ -218,187 +169,148 @@ export default function AnalyticsPage() {
       })()
     : dailyPnl;
 
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+  const allSymbols = [...new Set(closedTrades.map((t) => t.symbol))].sort();
 
-      {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
-        <PageHeader subsystem="Performance" title="Analytics" accent="#00d4ff" />
-        <div style={{ display: "flex", gap: 6 }}>
-          {(["24h","7d","30d","all"] as Range[]).map((r) => (
-            <RangeChip key={r} label={r} active={range === r} onClick={() => setRange(r)} />
-          ))}
+  return (
+    <div className="flex flex-col gap-5">
+
+      {/* ── Page Header ── */}
+      <div className="flex items-end justify-between gap-4 flex-wrap">
+        <div>
+          <span className="text-[10px] font-bold tracking-widest text-on-surface-variant uppercase block mb-1">PERFORMANCE</span>
+          <h1 className="text-3xl font-extrabold uppercase tracking-tighter">Analytics</h1>
+        </div>
+        <div className="flex items-center gap-4 flex-wrap">
+          {/* Range selector */}
+          <div className="flex gap-1">
+            {(["24h","7d","30d","all"] as Range[]).map((r) => (
+              <button
+                key={r}
+                onClick={() => setRange(r)}
+                className={`px-3 py-1 text-[10px] font-bold uppercase tracking-wider duration-0 ${range === r ? "bg-secondary/10 text-secondary border border-secondary/30" : "text-on-surface-variant border border-outline-variant/20 hover:text-on-surface"}`}
+              >
+                {r === "all" ? "All Time" : r}
+              </button>
+            ))}
+          </div>
+          {loading && (
+            <div className="flex items-center gap-2 text-[10px] text-on-surface-variant">
+              <div className="w-3 h-3 border border-outline-variant border-t-primary-fixed rounded-full animate-spin" />
+              Loading…
+            </div>
+          )}
         </div>
       </div>
 
-      <SymbolFilter value={symbol} onChange={setSymbol} />
+      {/* Symbol filter */}
+      <SymbolPill value={symbol} options={allSymbols} onChange={setSymbol} />
 
-      {loading && (
-        <div style={{
-          padding: "48px 20px", textAlign: "center",
-          fontFamily: "'JetBrains Mono', monospace",
-          fontSize: 9, letterSpacing: "0.2em", textTransform: "uppercase",
-          color: "#607888",
-        }}>
-          <div style={{
-            width: 20, height: 20, border: "1.5px solid #1c1c28",
-            borderTop: "1.5px solid #00ff88", borderRadius: "50%",
-            animation: "spin 0.8s linear infinite",
-            margin: "0 auto 12px",
-          }} />
-          loading…
-          <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-        </div>
-      )}
-
-      {/* KPI row */}
+      {/* KPI rows */}
       {displayKpis && (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10 }}>
-          <KpiCard label="Total Trades" value={String(displayKpis.total_trades)} color="#9aa8b8" />
-          <KpiCard label="Win Rate"  value={`${winRate.toFixed(1)}%`} color={winRateColor} glowColor={winRateColor} />
-          <KpiCard
-            label="Total P&L"
-            value={`${Number(displayKpis.total_pnl) >= 0 ? "+" : ""}${Number(displayKpis.total_pnl).toFixed(2)}`}
-            color={Number(displayKpis.total_pnl) >= 0 ? "#00ff88" : "#ff4455"}
-            sub={`${displayKpis.wins}W / ${displayKpis.losses}L`}
-          />
-          <KpiCard label="Avg P&L" value={Number(displayKpis.avg_pnl).toFixed(2)} color={Number(displayKpis.avg_pnl) >= 0 ? "#00ff88" : "#ff4455"} />
-        </div>
+        <>
+          <div className="grid grid-cols-4 xl:grid-cols-8 gap-3">
+            <KpiCard label="Total Trades" value={String(displayKpis.total_trades)} color="#adaaaa" />
+            <KpiCard label="Win Rate"     value={`${winRate.toFixed(1)}%`} color={winRateColor} />
+            <KpiCard
+              label="Total P&L"
+              value={`${Number(displayKpis.total_pnl) >= 0 ? "+" : ""}$${Number(displayKpis.total_pnl).toFixed(2)}`}
+              color={Number(displayKpis.total_pnl) >= 0 ? "#00fd87" : "#ff716c"}
+              sub={`${displayKpis.wins}W / ${displayKpis.losses}L`}
+            />
+            <KpiCard label="Avg P&L"     value={`${Number(displayKpis.avg_pnl) >= 0 ? "+" : ""}$${Number(displayKpis.avg_pnl).toFixed(2)}`} color={Number(displayKpis.avg_pnl) >= 0 ? "#00fd87" : "#ff716c"} />
+            <KpiCard label="Best Trade"  value={`+$${Number(displayKpis.best_trade).toFixed(2)}`}  color="#00fd87" />
+            <KpiCard label="Worst Trade" value={`$${Number(displayKpis.worst_trade).toFixed(2)}`} color="#ff716c" />
+            <KpiCard label="Avg Duration" value={`${Math.floor(Number(displayKpis.avg_duration_min))}m`} color="#adaaaa" sub="per trade" />
+            <KpiCard label="Total Closed" value={String(filteredTrades.length)} color="#00d2fd" />
+          </div>
+        </>
       )}
 
-      {/* Second KPI row */}
-      {displayKpis && (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10 }}>
-          <KpiCard label="Best Trade"  value={`+${Number(displayKpis.best_trade).toFixed(2)}`}  color="#00ff88" />
-          <KpiCard label="Worst Trade" value={Number(displayKpis.worst_trade).toFixed(2)} color="#ff4455" />
-          <KpiCard label="Avg Duration" value={`${Math.floor(Number(displayKpis.avg_duration_min))}m`} color="#7a8a9a" sub="per trade" />
-          <KpiCard label="Total Closed" value={String(filteredTrades.length)} color="#4da6ff" />
-        </div>
-      )}
-
-      {/* Charts row 1: Equity + Drawdown */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-        <ChartCard title="Cumulative P&L">
+      {/* Charts row 1 */}
+      <div className="grid grid-cols-2 gap-4">
+        <ChartCard title="Cumulative P&L" accent="#00fd87">
           {equityCurve.length < 2 ? <NoData /> : (
-            <ResponsiveContainer width="100%" height={180}>
+            <ResponsiveContainer width="100%" height={200}>
               <AreaChart data={equityCurve}>
                 <defs>
                   <linearGradient id="gCum" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%"  stopColor="#00ff88" stopOpacity={0.25} />
-                    <stop offset="95%" stopColor="#00ff88" stopOpacity={0} />
+                    <stop offset="5%"  stopColor="#00fd87" stopOpacity={0.2} />
+                    <stop offset="95%" stopColor="#00fd87" stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#1c1c28" />
-                <XAxis dataKey="date" tickFormatter={formatChartDate} tick={{ fill: "#607888", fontSize: 9, fontFamily: "JetBrains Mono" }} />
-                <YAxis tick={{ fill: "#607888", fontSize: 9, fontFamily: "JetBrains Mono" }} />
-                <Tooltip contentStyle={TOOLTIP_STYLE} labelFormatter={(l) => formatChartDate(String(l))} formatter={(v) => [`${Number(v).toFixed(2)}`, "Cum PnL"]} />
-                <Area type="monotone" dataKey="cum" stroke="#00ff88" fill="url(#gCum)" strokeWidth={2} />
+                <CartesianGrid strokeDasharray="3 3" stroke="#494847" strokeOpacity={0.2} />
+                <XAxis dataKey="date" tickFormatter={formatChartDate} tick={{ fill: "#777575", fontSize: 9, fontFamily: "JetBrains Mono" }} />
+                <YAxis tick={{ fill: "#777575", fontSize: 9, fontFamily: "JetBrains Mono" }} />
+                <Tooltip contentStyle={TOOLTIP_STYLE} labelFormatter={(l) => formatChartDate(String(l))} formatter={(v) => [`$${Number(v).toFixed(2)}`, "Cum PnL"]} />
+                <Area type="monotone" dataKey="cum" stroke="#00fd87" fill="url(#gCum)" strokeWidth={2} />
               </AreaChart>
             </ResponsiveContainer>
           )}
         </ChartCard>
 
-        <ChartCard title="Drawdown %">
+        <ChartCard title="Drawdown %" accent="#ff716c">
           {drawdownCurve.length < 2 ? <NoData /> : (
-            <ResponsiveContainer width="100%" height={180}>
+            <ResponsiveContainer width="100%" height={200}>
               <AreaChart data={drawdownCurve}>
                 <defs>
                   <linearGradient id="gDD" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%"  stopColor="#ff4455" stopOpacity={0.25} />
-                    <stop offset="95%" stopColor="#ff4455" stopOpacity={0} />
+                    <stop offset="5%"  stopColor="#ff716c" stopOpacity={0.2} />
+                    <stop offset="95%" stopColor="#ff716c" stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#1c1c28" />
-                <XAxis dataKey="date" tickFormatter={formatChartDate} tick={{ fill: "#607888", fontSize: 9, fontFamily: "JetBrains Mono" }} />
-                <YAxis tick={{ fill: "#607888", fontSize: 9, fontFamily: "JetBrains Mono" }} />
+                <CartesianGrid strokeDasharray="3 3" stroke="#494847" strokeOpacity={0.2} />
+                <XAxis dataKey="date" tickFormatter={formatChartDate} tick={{ fill: "#777575", fontSize: 9, fontFamily: "JetBrains Mono" }} />
+                <YAxis tick={{ fill: "#777575", fontSize: 9, fontFamily: "JetBrains Mono" }} />
                 <Tooltip contentStyle={TOOLTIP_STYLE} labelFormatter={(l) => formatChartDate(String(l))} formatter={(v) => [`${Number(v).toFixed(2)}%`, "Drawdown"]} />
-                <Area type="monotone" dataKey="drawdown" stroke="#ff4455" fill="url(#gDD)" strokeWidth={2} />
+                <Area type="monotone" dataKey="drawdown" stroke="#ff716c" fill="url(#gDD)" strokeWidth={2} />
               </AreaChart>
             </ResponsiveContainer>
           )}
         </ChartCard>
       </div>
 
-      {/* Charts row 2: Daily PnL + Symbol bars */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-        <ChartCard title="Daily P&L">
+      {/* Charts row 2 */}
+      <div className="grid grid-cols-3 gap-4">
+        <ChartCard title="Daily P&L" accent="#00d2fd">
           {filteredDailyPnl.length === 0 ? <NoData /> : (
-            <ResponsiveContainer width="100%" height={180}>
+            <ResponsiveContainer width="100%" height={200}>
               <BarChart data={filteredDailyPnl.map((d) => ({ ...d, pnl: Number(d.pnl) }))}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#1c1c28" />
-                <XAxis dataKey="day" tickFormatter={formatChartDate} tick={{ fill: "#607888", fontSize: 9, fontFamily: "JetBrains Mono" }} />
-                <YAxis tick={{ fill: "#607888", fontSize: 9, fontFamily: "JetBrains Mono" }} />
-                <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v) => [`${Number(v).toFixed(2)}`, "PnL"]} />
+                <CartesianGrid strokeDasharray="3 3" stroke="#494847" strokeOpacity={0.2} />
+                <XAxis dataKey="day" tickFormatter={formatChartDate} tick={{ fill: "#777575", fontSize: 9, fontFamily: "JetBrains Mono" }} />
+                <YAxis tick={{ fill: "#777575", fontSize: 9, fontFamily: "JetBrains Mono" }} />
+                <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v) => [`$${Number(v).toFixed(2)}`, "PnL"]} />
                 <Bar dataKey="pnl">
-                  {filteredDailyPnl.map((d, i) => (
-                    <Cell key={i} fill={Number(d.pnl) >= 0 ? "#00ff88" : "#ff4455"} />
-                  ))}
+                  {filteredDailyPnl.map((d, i) => <Cell key={i} fill={Number(d.pnl) >= 0 ? "#00fd87" : "#ff716c"} />)}
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
           )}
         </ChartCard>
 
-        <ChartCard title="Trades by Symbol">
+        <ChartCard title="Trades by Symbol" accent="#e966ff">
           {symbolBars.length === 0 ? <NoData /> : (
-            <ResponsiveContainer width="100%" height={180}>
+            <ResponsiveContainer width="100%" height={200}>
               <BarChart data={symbolBars} layout="vertical">
-                <CartesianGrid strokeDasharray="3 3" stroke="#1c1c28" />
-                <XAxis type="number" tick={{ fill: "#607888", fontSize: 9, fontFamily: "JetBrains Mono" }} />
-                <YAxis dataKey="symbol" type="category" tick={{ fill: "#9aa8b8", fontSize: 9, fontFamily: "JetBrains Mono" }} width={70} />
+                <CartesianGrid strokeDasharray="3 3" stroke="#494847" strokeOpacity={0.2} />
+                <XAxis type="number" tick={{ fill: "#777575", fontSize: 9, fontFamily: "JetBrains Mono" }} />
+                <YAxis dataKey="symbol" type="category" tick={{ fill: "#adaaaa", fontSize: 9, fontFamily: "JetBrains Mono" }} width={64} />
                 <Tooltip contentStyle={TOOLTIP_STYLE} />
-                <Legend wrapperStyle={{ fontSize: 9, fontFamily: "JetBrains Mono", color: "#7a8a9a" }} />
-                <Bar dataKey="wins"   stackId="a" fill="#00ff88" name="Wins" />
-                <Bar dataKey="losses" stackId="a" fill="#ff4455" name="Losses" />
+                <Legend wrapperStyle={{ fontSize: 9, fontFamily: "JetBrains Mono", color: "#adaaaa" }} />
+                <Bar dataKey="wins"   stackId="a" fill="#00fd87" name="Wins" />
+                <Bar dataKey="losses" stackId="a" fill="#ff716c" name="Losses" />
               </BarChart>
             </ResponsiveContainer>
           )}
         </ChartCard>
-      </div>
 
-      {/* Charts row 3: Pie charts + Symbol ranking */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14 }}>
-
-        <ChartCard title="P&L by Symbol">
-          {symbolPie.length === 0 ? <NoData /> : (
-            <ResponsiveContainer width="100%" height={200}>
-              <PieChart>
-                <Pie data={symbolPie} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={72} label={({ name }) => name} labelLine={{ stroke: "#607888" }}>
-                  {symbolPie.map((_, i) => <Cell key={i} fill={SYM_COLORS[i % SYM_COLORS.length]} />)}
-                </Pie>
-                <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(_v, _n, entry) => [`${(entry.payload?.pnl ?? 0) >= 0 ? "+" : ""}${Number(entry.payload?.pnl ?? 0).toFixed(2)}`, "PnL"]} />
-              </PieChart>
-            </ResponsiveContainer>
-          )}
-        </ChartCard>
-
-        <ChartCard title="Buy vs Sell">
-          {filteredDirStats.length === 0 ? <NoData /> : (
-            <ResponsiveContainer width="100%" height={200}>
-              <PieChart>
-                <Pie data={filteredDirStats} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={72} label={({ name, value }) => `${name}: ${value}`} labelLine={{ stroke: "#607888" }}>
-                  <Cell fill="#00ff88" />
-                  <Cell fill="#ff4455" />
-                </Pie>
-                <Tooltip contentStyle={TOOLTIP_STYLE} />
-              </PieChart>
-            </ResponsiveContainer>
-          )}
-        </ChartCard>
-
-        {/* Symbol ranking table */}
-        <ChartCard title="Symbol Ranking">
-          {filteredSymbolStats.length === 0 ? (
-            <div style={{ color: "#607888", fontFamily: "'JetBrains Mono', monospace", fontSize: 11, padding: "20px 0" }}>no data</div>
-          ) : (
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 10, fontFamily: "'JetBrains Mono', monospace" }}>
+        {/* Symbol ranking */}
+        <ChartCard title="Symbol Ranking" accent="#ffb86c">
+          {filteredSymbolStats.length === 0 ? <NoData /> : (
+            <table className="w-full text-xs">
               <thead>
-                <tr style={{ borderBottom: "1px solid #1c1c28" }}>
+                <tr className="border-b border-outline-variant/20">
                   {["Symbol","Trades","Win%","PnL"].map((h) => (
-                    <th key={h} style={{
-                      padding: "4px 6px", textAlign: h === "Symbol" ? "left" : "right",
-                      fontSize: 8.5, letterSpacing: "0.12em", textTransform: "uppercase", color: "#607888",
-                    }}>{h}</th>
+                    <th key={h} className="pb-2 text-[9px] uppercase tracking-widest text-outline font-normal text-left last:text-right">{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -407,12 +319,12 @@ export default function AnalyticsPage() {
                   const wr  = s.total > 0 ? ((Number(s.wins) / Number(s.total)) * 100).toFixed(0) : "0";
                   const pnl = Number(s.total_pnl);
                   return (
-                    <tr key={s.symbol} style={{ borderBottom: "1px solid rgba(28,28,40,0.4)" }}>
-                      <td style={{ padding: "5px 6px", color: "#00d4ff", fontWeight: 700 }}>{s.symbol}</td>
-                      <td style={{ padding: "5px 6px", textAlign: "right", color: "#7a8a9a" }}>{s.total}</td>
-                      <td style={{ padding: "5px 6px", textAlign: "right", color: Number(wr) >= 50 ? "#00ff88" : "#ff4455" }}>{wr}%</td>
-                      <td style={{ padding: "5px 6px", textAlign: "right", fontWeight: 700, color: pnl >= 0 ? "#00ff88" : "#ff4455" }}>
-                        {pnl >= 0 ? "+" : ""}{pnl.toFixed(2)}
+                    <tr key={s.symbol} className="border-b border-outline-variant/10 hover:bg-surface-bright duration-0">
+                      <td className="py-2 text-secondary font-bold">{s.symbol}</td>
+                      <td className="py-2 text-on-surface-variant">{s.total}</td>
+                      <td className="py-2" style={{ color: Number(wr) >= 50 ? "#00fd87" : "#ff716c" }}>{wr}%</td>
+                      <td className="py-2 text-right font-bold" style={{ color: pnl >= 0 ? "#00fd87" : "#ff716c" }}>
+                        {pnl >= 0 ? "+" : ""}${pnl.toFixed(2)}
                       </td>
                     </tr>
                   );
@@ -423,6 +335,35 @@ export default function AnalyticsPage() {
         </ChartCard>
       </div>
 
+      {/* Pie row */}
+      <div className="grid grid-cols-2 gap-4">
+        <ChartCard title="P&L by Symbol">
+          {symbolPie.length === 0 ? <NoData /> : (
+            <ResponsiveContainer width="100%" height={220}>
+              <PieChart>
+                <Pie data={symbolPie} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label={({ name }) => name} labelLine={{ stroke: "#777575" }}>
+                  {symbolPie.map((_, i) => <Cell key={i} fill={SYM_COLORS[i % SYM_COLORS.length]} />)}
+                </Pie>
+                <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(_v, _n, e) => [`${(e.payload?.pnl ?? 0) >= 0 ? "+" : ""}$${Number(e.payload?.pnl ?? 0).toFixed(2)}`, "PnL"]} />
+              </PieChart>
+            </ResponsiveContainer>
+          )}
+        </ChartCard>
+
+        <ChartCard title="Buy vs Sell">
+          {filteredDirStats.length === 0 ? <NoData /> : (
+            <ResponsiveContainer width="100%" height={220}>
+              <PieChart>
+                <Pie data={filteredDirStats} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label={({ name, value }) => `${name}: ${value}`} labelLine={{ stroke: "#777575" }}>
+                  <Cell fill="#00fd87" />
+                  <Cell fill="#ff716c" />
+                </Pie>
+                <Tooltip contentStyle={TOOLTIP_STYLE} />
+              </PieChart>
+            </ResponsiveContainer>
+          )}
+        </ChartCard>
+      </div>
     </div>
   );
 }

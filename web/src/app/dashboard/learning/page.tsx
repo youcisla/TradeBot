@@ -1,9 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { formatShort } from "@/lib/time";
-import SymbolFilter from "@/components/SymbolFilter";
-import PageHeader from "@/components/PageHeader";
+
+// ── Types ─────────────────────────────────────────────────────────────────────
 
 interface StrategyConfidence {
   strategy: string; confidence: number;
@@ -16,120 +15,38 @@ interface TradeScore {
   score: number; pnl: number; created_at: string;
 }
 
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
 function formatStrategy(raw: string): string {
   const model = raw.includes(":") ? raw.split(":").pop()! : raw;
   return model.toLowerCase().replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 function confColor(conf: number): string {
-  if (conf >= 0.7) return "#00ff88";
-  if (conf >= 0.5) return "#f5c518";
-  return "#ff4455";
+  if (conf >= 0.7) return "#00fd87";
+  if (conf >= 0.5) return "#ffb86c";
+  return "#ff716c";
+}
+
+function confLabel(conf: number): string {
+  if (conf >= 0.7) return "FULL";
+  if (conf >= 0.5) return "NORMAL";
+  if (conf >= 0.2) return "LOW";
+  return "DISABLED";
 }
 
 function scoreColor(score: number): string {
-  if (score >= 3) return "#00ff88";
-  if (score > 0)  return "#76ff03";
-  if (score >= -2) return "#f5c518";
-  return "#ff4455";
+  if (score >= 3) return "#00fd87";
+  if (score > 0)  return "#a4ffb9";
+  if (score >= -2) return "#ffb86c";
+  return "#ff716c";
 }
 
-function ConfidenceBar({ strategy, confidence, totalTrades, totalScore }: {
-  strategy: string; confidence: number; totalTrades: number; totalScore: number;
-}) {
-  const pct   = Math.max(0, Math.min(100, confidence * 100));
-  const color = confColor(confidence);
-  const label = formatStrategy(strategy);
-
-  return (
-    <div style={{
-      background: "#0a0a12", border: "1px solid #1c1c28",
-      borderRadius: 6, padding: "12px 16px",
-      position: "relative", overflow: "hidden",
-    }}>
-      {/* Background fill */}
-      <div style={{
-        position: "absolute", inset: 0,
-        background: `linear-gradient(90deg, ${color}08 0%, transparent ${pct}%, transparent 100%)`,
-        pointerEvents: "none",
-      }} />
-
-      <div style={{ position: "relative", display: "flex", alignItems: "center", gap: 14 }}>
-        {/* Strategy name */}
-        <div style={{ width: 200, flexShrink: 0 }}>
-          <div style={{
-            fontFamily: "'JetBrains Mono', monospace", fontSize: 11,
-            fontWeight: 700, color: "#9aa8b8", letterSpacing: "0.04em",
-          }} title={strategy}>
-            {label}
-          </div>
-          <div style={{
-            fontFamily: "'JetBrains Mono', monospace", fontSize: 8.5,
-            color: "#607888", marginTop: 2, letterSpacing: "0.06em",
-          }}>
-            {totalTrades} trades · score {totalScore >= 0 ? "+" : ""}{totalScore}
-          </div>
-        </div>
-
-        {/* Bar */}
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 4 }}>
-          <div style={{
-            height: 6, background: "#0e0e10",
-            border: "1px solid #1c1c28", borderRadius: 3,
-            overflow: "hidden",
-          }}>
-            <div style={{
-              height: "100%", borderRadius: 3,
-              width: `${pct}%`,
-              background: `linear-gradient(90deg, ${color}88, ${color})`,
-              boxShadow: `0 0 8px ${color}55`,
-              transition: "width 0.8s cubic-bezier(0.4, 0, 0.2, 1)",
-            }} />
-          </div>
-
-          {/* Threshold markers */}
-          <div style={{ position: "relative", height: 0 }}>
-            {[20, 50, 70].map((threshold) => (
-              <div key={threshold} style={{
-                position: "absolute",
-                left: `${threshold}%`,
-                top: -12,
-                width: 1, height: 8,
-                background: "#1c1c28",
-              }} />
-            ))}
-          </div>
-        </div>
-
-        {/* Value */}
-        <div style={{ width: 64, textAlign: "right", flexShrink: 0 }}>
-          <span style={{
-            fontFamily: "'JetBrains Mono', monospace",
-            fontSize: 16, fontWeight: 700, color,
-            textShadow: `0 0 10px ${color}66`,
-          }}>
-            {pct.toFixed(0)}%
-          </span>
-        </div>
-
-        {/* Status badge */}
-        <div style={{ width: 80, flexShrink: 0, textAlign: "right" }}>
-          <span style={{
-            display: "inline-block",
-            padding: "2px 8px", borderRadius: 3,
-            fontSize: 9, fontWeight: 700, letterSpacing: "0.08em",
-            fontFamily: "'JetBrains Mono', monospace",
-            background: confidence >= 0.2 ? `${color}18` : "rgba(255,68,85,0.12)",
-            color: confidence >= 0.2 ? color : "#ff4455",
-            border: `1px solid ${confidence >= 0.2 ? `${color}33` : "rgba(255,68,85,0.25)"}`,
-          }}>
-            {confidence >= 0.7 ? "FULL" : confidence >= 0.5 ? "NORMAL" : confidence >= 0.2 ? "LOW" : "DISABLED"}
-          </span>
-        </div>
-      </div>
-    </div>
-  );
+function fmtTime(iso: string): string {
+  try { return new Date(iso).toLocaleString(); } catch { return "—"; }
 }
+
+// ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function LearningPage() {
   const [confidences, setConfidences] = useState<StrategyConfidence[]>([]);
@@ -137,148 +54,222 @@ export default function LearningPage() {
   const [symbol, setSymbol]           = useState<string | null>(null);
 
   useEffect(() => {
-    fetch("/api/learning")
-      .then((r) => r.json())
-      .then((data) => {
-        setConfidences(data.confidences ?? []);
-        setScores(data.scores ?? []);
-      })
-      .catch(() => {});
+    let active = true;
+    const load = () =>
+      fetch("/api/learning")
+        .then((r) => r.json())
+        .then((data) => {
+          if (!active) return;
+          setConfidences(data.confidences ?? []);
+          setScores(data.scores ?? []);
+        })
+        .catch(() => {});
+    load();
+    const id = setInterval(load, 15_000);
+    return () => { active = false; clearInterval(id); };
   }, []);
 
+  const symbols = Array.from(new Set(scores.map((s) => s.symbol))).filter(Boolean);
   const filtered = symbol ? scores.filter((s) => s.symbol === symbol) : scores;
 
-  // Aggregate stats
   const totalWins   = filtered.filter((s) => Number(s.score) > 0).length;
   const totalLosses = filtered.filter((s) => Number(s.score) <= 0).length;
-  const avgScore    = filtered.length > 0 ? filtered.reduce((s, t) => s + Number(t.score), 0) / filtered.length : 0;
+  const avgScore    = filtered.length > 0
+    ? filtered.reduce((a, t) => a + Number(t.score), 0) / filtered.length
+    : 0;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+    <div className="flex flex-col gap-6 mt-6">
 
-      <PageHeader subsystem="Feedback Loop" title="Learning System" accent="#4da6ff" />
+      {/* ── Page Header ── */}
+      <div className="border-l-4 border-secondary pl-6 py-2 bg-surface-container-low">
+        <div className="flex items-center gap-2 mb-1">
+          <span className="text-secondary text-[10px] font-bold tracking-[0.2em] uppercase">FEEDBACK LOOP</span>
+          <span className="w-2 h-2 rounded-full bg-secondary animate-pulse" />
+        </div>
+        <h1 className="text-3xl md:text-5xl font-extrabold tracking-tighter uppercase mb-2">
+          Learning System
+        </h1>
+        <p className="text-on-surface-variant text-sm font-mono">
+          Reinforcement loop — strategy confidence adjusts on every scored trade
+        </p>
+      </div>
 
-      <SymbolFilter value={symbol} onChange={setSymbol} />
-
-      {/* Stats strip */}
-      {filtered.length > 0 && (
-        <div style={{
-          display: "flex", gap: 24, padding: "10px 16px",
-          background: "#0a0a12", border: "1px solid #1c1c28", borderRadius: 6,
-          fontFamily: "'JetBrains Mono', monospace",
-        }}>
-          <div>
-            <div style={{ fontSize: 8.5, color: "#607888", letterSpacing: "0.15em", textTransform: "uppercase" }}>Scored</div>
-            <div style={{ fontSize: 13, fontWeight: 700, color: "#9aa8b8", marginTop: 2 }}>{filtered.length}</div>
-          </div>
-          <div>
-            <div style={{ fontSize: 8.5, color: "#607888", letterSpacing: "0.15em", textTransform: "uppercase" }}>Wins</div>
-            <div style={{ fontSize: 13, fontWeight: 700, color: "#00ff88", marginTop: 2 }}>{totalWins}</div>
-          </div>
-          <div>
-            <div style={{ fontSize: 8.5, color: "#607888", letterSpacing: "0.15em", textTransform: "uppercase" }}>Losses</div>
-            <div style={{ fontSize: 13, fontWeight: 700, color: "#ff4455", marginTop: 2 }}>{totalLosses}</div>
-          </div>
-          <div>
-            <div style={{ fontSize: 8.5, color: "#607888", letterSpacing: "0.15em", textTransform: "uppercase" }}>Avg Score</div>
-            <div style={{ fontSize: 13, fontWeight: 700, color: avgScore >= 0 ? "#00ff88" : "#ff4455", marginTop: 2 }}>
-              {avgScore >= 0 ? "+" : ""}{avgScore.toFixed(1)}
-            </div>
-          </div>
+      {/* ── Symbol Filter ── */}
+      {symbols.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={() => setSymbol(null)}
+            className={[
+              "text-[10px] font-bold tracking-widest uppercase px-3 py-1 border duration-0",
+              !symbol
+                ? "border-secondary text-secondary bg-secondary/10"
+                : "border-outline-variant/30 text-on-surface-variant hover:border-outline",
+            ].join(" ")}
+          >
+            ALL
+          </button>
+          {symbols.map((s) => (
+            <button
+              key={s}
+              onClick={() => setSymbol(s === symbol ? null : s)}
+              className={[
+                "text-[10px] font-bold tracking-widest uppercase px-3 py-1 border duration-0",
+                symbol === s
+                  ? "border-secondary text-secondary bg-secondary/10"
+                  : "border-outline-variant/30 text-on-surface-variant hover:border-outline",
+              ].join(" ")}
+            >
+              {s}
+            </button>
+          ))}
         </div>
       )}
 
-      {/* Strategy Confidence */}
+      {/* ── Stats Strip ── */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-1 bg-outline-variant/10">
+        {[
+          { label: "SCORED",    value: filtered.length,                      color: "text-on-surface" },
+          { label: "WINS",      value: totalWins,                             color: "text-primary-fixed" },
+          { label: "LOSSES",    value: totalLosses,                          color: "text-error" },
+          { label: "AVG SCORE", value: `${avgScore >= 0 ? "+" : ""}${avgScore.toFixed(1)}`, color: avgScore >= 0 ? "text-primary-fixed" : "text-error" },
+        ].map(({ label, value, color }) => (
+          <div key={label} className="bg-surface p-4">
+            <div className="text-[9px] text-on-surface-variant tracking-[0.2em] uppercase mb-1">{label}</div>
+            <div className={`text-2xl font-extrabold ${color}`}>{value}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* ── Strategy Confidence ── */}
       <div>
-        <div style={{
-          fontSize: 9, fontFamily: "'JetBrains Mono', monospace",
-          color: "#607888", letterSpacing: "0.18em", textTransform: "uppercase",
-          marginBottom: 10,
-        }}>
-          Strategy Confidence
-          <span style={{ marginLeft: 10, color: "#607888" }}>
+        <div className="flex items-center gap-4 mb-4">
+          <h3 className="text-[9px] font-bold tracking-[0.3em] text-on-surface-variant uppercase">
+            Strategy Confidence
+          </h3>
+          <span className="text-[9px] text-outline">
             20% = disabled · 50% = reduced · 70% = full
           </span>
         </div>
+
         {confidences.length === 0 ? (
-          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: "#607888", padding: "20px 0" }}>
-            No strategies tracked yet.
+          <div className="p-8 bg-surface-container text-center text-[11px] text-on-surface-variant uppercase tracking-widest">
+            No strategies tracked yet
           </div>
         ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {confidences.map((c) => (
-              <ConfidenceBar
-                key={c.strategy}
-                strategy={c.strategy}
-                confidence={Number(c.confidence)}
-                totalTrades={Number(c.total_trades)}
-                totalScore={Number(c.total_score)}
-              />
-            ))}
+          <div className="flex flex-col gap-2">
+            {confidences.map((c) => {
+              const pct   = Math.max(0, Math.min(100, Number(c.confidence) * 100));
+              const color = confColor(Number(c.confidence));
+              const label = confLabel(Number(c.confidence));
+              return (
+                <div
+                  key={c.strategy}
+                  className="relative bg-surface-container-low border border-outline-variant/10 p-4 overflow-hidden"
+                >
+                  {/* Background fill track */}
+                  <div
+                    className="absolute inset-0 pointer-events-none"
+                    style={{ background: `linear-gradient(90deg, ${color}08 0%, transparent ${pct}%, transparent 100%)` }}
+                  />
+                  <div className="relative flex items-center gap-4">
+                    {/* Name + meta */}
+                    <div className="w-44 shrink-0">
+                      <div className="text-[11px] font-bold text-on-surface-variant truncate" title={c.strategy}>
+                        {formatStrategy(c.strategy)}
+                      </div>
+                      <div className="text-[9px] text-outline mt-0.5">
+                        {Number(c.total_trades)} trades · score {Number(c.total_score) >= 0 ? "+" : ""}{Number(c.total_score)}
+                      </div>
+                    </div>
+
+                    {/* Bar */}
+                    <div className="flex-1">
+                      <div className="w-full h-1.5 bg-surface-container-high overflow-hidden">
+                        <div
+                          className="h-full"
+                          style={{ width: `${pct}%`, background: color }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Pct */}
+                    <div className="w-12 text-right shrink-0">
+                      <span className="text-base font-extrabold" style={{ color }}>{pct.toFixed(0)}%</span>
+                    </div>
+
+                    {/* Badge */}
+                    <div className="w-20 shrink-0 text-right">
+                      <span
+                        className="text-[9px] font-bold px-2 py-0.5 border"
+                        style={{
+                          color,
+                          background: `${color}18`,
+                          borderColor: `${color}33`,
+                        }}
+                      >
+                        {label}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
 
-      {/* Recent Scores */}
+      {/* ── Recent Scores ── */}
       <div>
-        <div style={{
-          fontSize: 9, fontFamily: "'JetBrains Mono', monospace",
-          color: "#607888", letterSpacing: "0.18em", textTransform: "uppercase",
-          marginBottom: 10,
-        }}>
+        <h3 className="text-[9px] font-bold tracking-[0.3em] text-on-surface-variant uppercase mb-4">
           Recent Scores
-        </div>
-        <div style={{
-          background: "#0e0e10", border: "1px solid #1c1c28",
-          borderRadius: 8, overflow: "auto",
-        }}>
-          <table style={{
-            width: "100%", borderCollapse: "collapse",
-            fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5,
-          }}>
+        </h3>
+
+        <div className="overflow-x-auto bg-surface-container border border-outline-variant/10">
+          <table className="w-full text-[11px]">
             <thead>
-              <tr style={{ borderBottom: "1px solid #1c1c28" }}>
-                {["Trade","Strategy","Symbol","Session","Condition","Score","P&L","Time"].map((h) => (
-                  <th key={h} style={{
-                    padding: "9px 10px",
-                    textAlign: h === "Score" || h === "P&L" ? "right" : "left",
-                    fontSize: 8.5, letterSpacing: "0.12em", textTransform: "uppercase",
-                    color: "#607888", fontWeight: 600,
-                  }}>{h}</th>
+              <tr className="border-b border-outline-variant/15">
+                {["Trade", "Strategy", "Symbol", "Session", "Condition", "Score", "P&L", "Time"].map((h) => (
+                  <th
+                    key={h}
+                    className={[
+                      "px-3 py-2.5 text-[9px] font-bold tracking-[0.15em] uppercase text-outline",
+                      h === "Score" || h === "P&L" ? "text-right" : "text-left",
+                    ].join(" ")}
+                  >
+                    {h}
+                  </th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {filtered.map((s) => (
+              {filtered.map((s, i) => (
                 <tr
                   key={s.id}
-                  style={{ borderBottom: "1px solid rgba(28,28,40,0.5)", transition: "background 0.1s" }}
-                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(0,212,255,0.03)"; }}
-                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = ""; }}
+                  className={`border-b border-outline-variant/5 hover:bg-surface-bright duration-0 ${i % 2 === 0 ? "bg-surface-container-low" : ""}`}
                 >
-                  <td style={{ padding: "7px 10px", color: "#607888", fontSize: 9.5 }}>{s.trade_id.slice(0, 8)}</td>
-                  <td style={{ padding: "7px 10px", color: "#9aa8b8", fontSize: 9.5 }} title={s.strategy}>
+                  <td className="px-3 py-2 text-outline font-mono">{s.trade_id.slice(0, 8)}</td>
+                  <td className="px-3 py-2 text-on-surface-variant" title={s.strategy}>
                     {formatStrategy(s.strategy)}
                   </td>
-                  <td style={{ padding: "7px 10px", color: "#00d4ff", fontWeight: 700 }}>{s.symbol}</td>
-                  <td style={{ padding: "7px 10px", color: "#7a8a9a", fontSize: 9.5 }}>{s.session || "—"}</td>
-                  <td style={{ padding: "7px 10px", color: "#7a8a9a", fontSize: 9.5 }}>{s.market_condition || "—"}</td>
-                  <td style={{ padding: "7px 10px", textAlign: "right", fontWeight: 700, color: scoreColor(Number(s.score)) }}>
+                  <td className="px-3 py-2 text-secondary font-bold">{s.symbol}</td>
+                  <td className="px-3 py-2 text-outline">{s.session || "—"}</td>
+                  <td className="px-3 py-2 text-outline">{s.market_condition || "—"}</td>
+                  <td className="px-3 py-2 text-right font-bold" style={{ color: scoreColor(Number(s.score)) }}>
                     {Number(s.score) >= 0 ? "+" : ""}{s.score}
                   </td>
-                  <td style={{ padding: "7px 10px", textAlign: "right", color: Number(s.pnl) >= 0 ? "#00ff88" : "#ff4455" }}>
+                  <td className="px-3 py-2 text-right font-bold" style={{ color: Number(s.pnl) >= 0 ? "#00fd87" : "#ff716c" }}>
                     {Number(s.pnl) >= 0 ? "+" : ""}{Number(s.pnl).toFixed(2)}
                   </td>
-                  <td style={{ padding: "7px 10px", color: "#607888", fontSize: 9.5, whiteSpace: "nowrap" }}>
-                    {formatShort(s.created_at)}
-                  </td>
+                  <td className="px-3 py-2 text-outline whitespace-nowrap">{fmtTime(s.created_at)}</td>
                 </tr>
               ))}
             </tbody>
           </table>
+
           {filtered.length === 0 && (
-            <div style={{ padding: "40px 20px", textAlign: "center", fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: "#607888" }}>
-              {symbol ? `no scores for ${symbol}` : "no scores recorded yet"}
+            <div className="py-10 text-center text-[11px] text-outline uppercase tracking-widest">
+              {symbol ? `No scores for ${symbol}` : "No scores recorded yet"}
             </div>
           )}
         </div>

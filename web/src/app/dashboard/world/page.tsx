@@ -2,40 +2,25 @@
 
 import { useEffect, useState } from "react";
 
-type Tier = "FLASH" | "PRIORITY" | "ROUTINE" | "CLEAR" | null;
+// ── Types ─────────────────────────────────────────────────────────────────────
+
+type Tier = "FLASH" | "PRIORITY" | "ROUTINE" | "CLEAR";
 
 const TIER_COLOR: Record<string, string> = {
-  FLASH:    "#ff4455",
-  PRIORITY: "#f5c518",
-  ROUTINE:  "#00d4ff",
-  CLEAR:    "#00ff88",
+  FLASH:    "#ff716c",
+  PRIORITY: "#ffb86c",
+  ROUTINE:  "#00d2fd",
+  CLEAR:    "#00fd87",
 };
 
-const TIER_BG: Record<string, string> = {
-  FLASH:    "rgba(255,68,85,0.1)",
-  PRIORITY: "rgba(245,197,24,0.1)",
-  ROUTINE:  "rgba(0,212,255,0.08)",
-  CLEAR:    "rgba(0,255,136,0.06)",
+const TIER_DESC: Record<string, string> = {
+  FLASH:    "Critical — trading halted by macro blackout",
+  PRIORITY: "Significant event — lot sizes reduced 50%",
+  ROUTINE:  "Background signals — lot sizes reduced 25%",
+  CLEAR:    "All clear — normal trading conditions",
 };
 
-function Kpi({ label, value, color = "#9aa8b8" }: { label: string; value: string; color?: string }) {
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-      <div style={{ fontSize: 8.5, fontFamily: "'JetBrains Mono', monospace", color: "#607888", letterSpacing: "0.16em", textTransform: "uppercase" }}>{label}</div>
-      <div style={{ fontSize: 16, fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, color }}>{value}</div>
-    </div>
-  );
-}
-
-function Alert({ title, tier }: { title: string; tier: string }) {
-  const c = TIER_COLOR[tier] || "#9aa8b8";
-  return (
-    <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 12px", background: TIER_BG[tier] || "transparent", borderLeft: `2px solid ${c}`, borderRadius: "0 4px 4px 0", marginBottom: 4 }}>
-      <span style={{ fontSize: 8.5, fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, color: c, letterSpacing: "0.1em", minWidth: 56 }}>{tier}</span>
-      <span style={{ fontSize: 10.5, fontFamily: "'JetBrains Mono', monospace", color: "#9aa8b8" }}>{title}</span>
-    </div>
-  );
-}
+// ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function WorldIntelPage() {
   const [data, setData]       = useState<Record<string, unknown> | null>(null);
@@ -49,87 +34,149 @@ export default function WorldIntelPage() {
         .then((d) => { if (active) { setData(d); setLoading(false); } })
         .catch(() => { if (active) setLoading(false); });
     load();
-    const id = setInterval(load, 60_000);   // refresh every 60s
+    const id = setInterval(load, 60_000);
     return () => { active = false; clearInterval(id); };
   }, []);
 
-  const available = data?.available === true;
-  const tier = (data as Record<string, unknown> | null)
-    ? (String((data as Record<string, unknown>).riskTier || "CLEAR")) as Tier
-    : null;
-  const tierColor = tier ? (TIER_COLOR[tier] || "#9aa8b8") : "#607888";
+  const available  = data?.available === true;
+  const tier       = data ? (String(data.riskTier || "CLEAR") as Tier) : null;
+  const tierColor  = tier ? (TIER_COLOR[tier] || "#adaaaa") : "#adaaaa";
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-      {/* Header */}
-      <div>
-        <div style={{ fontSize: 9, fontFamily: "'JetBrains Mono', monospace", color: "#607888", letterSpacing: "0.2em", textTransform: "uppercase" }}>OSINT · Macro · Geopolitical</div>
-        <h1 style={{ fontSize: 20, fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, color: "#00d4ff", textShadow: "0 0 20px rgba(0,212,255,0.3)", marginTop: 2 }}>World Intelligence</h1>
+    <div className="flex flex-col gap-6 mt-6">
+
+      {/* ── Page Header ── */}
+      <div className="border-l-4 border-secondary pl-6 py-2 bg-surface-container-low">
+        <div className="flex items-center gap-2 mb-1">
+          <span className="text-secondary text-[10px] font-bold tracking-[0.2em] uppercase">OSINT · MACRO · GEOPOLITICAL</span>
+          <span className="w-2 h-2 rounded-full bg-secondary animate-pulse" />
+        </div>
+        <h1 className="text-3xl md:text-5xl font-extrabold tracking-tighter uppercase mb-2">
+          World Intelligence
+        </h1>
+        <p className="text-on-surface-variant text-sm font-mono">
+          Powered by Crucix — live geopolitical + macro risk feed
+        </p>
       </div>
 
-      {/* Status */}
+      {/* ── Loading ── */}
       {loading && (
-        <div style={{ padding: "40px 20px", textAlign: "center", fontFamily: "'JetBrains Mono', monospace", fontSize: 9, letterSpacing: "0.2em", textTransform: "uppercase", color: "#607888" }}>
-          <div style={{ width: 20, height: 20, border: "1.5px solid #1c1c28", borderTop: "1.5px solid #00ff88", borderRadius: "50%", animation: "spin 0.8s linear infinite", margin: "0 auto 12px" }} />
-          connecting to crucix…
-          <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+        <div className="flex flex-col items-center justify-center py-20 gap-4">
+          <div className="w-6 h-6 border-2 border-outline-variant border-t-primary-fixed rounded-full animate-spin" />
+          <span className="text-[9px] text-outline tracking-[0.3em] uppercase">Connecting to Crucix…</span>
         </div>
       )}
 
+      {/* ── Crucix Offline ── */}
       {!loading && !available && (
-        <div style={{ background: "#0a0a12", border: "1px solid #1c1c28", borderRadius: 8, padding: "24px 20px", fontFamily: "'JetBrains Mono', monospace" }}>
-          <div style={{ fontSize: 11, color: "#ff4455", marginBottom: 8 }}>Crucix not running</div>
-          <div style={{ fontSize: 9.5, color: "#607888", lineHeight: 1.7 }}>
-            Start it with: <span style={{ color: "#00ff88" }}>cd crucix && node server.mjs</span><br />
+        <div className="bg-surface-container-low border border-outline-variant/10 border-l-4 border-l-error p-6">
+          <div className="text-error font-bold text-sm mb-2">Crucix not running</div>
+          <div className="text-on-surface-variant text-[11px] leading-relaxed">
+            Start it with:{" "}
+            <span className="text-primary-fixed font-bold">cd crucix && node server.mjs</span>
+            <br />
             The trading bot continues normally without it.
           </div>
         </div>
       )}
 
+      {/* ── Data ── */}
       {!loading && available && (
         <>
-          {/* Risk tier */}
-          <div style={{ background: "#0a0a12", border: `1px solid ${tierColor}40`, borderTop: `2px solid ${tierColor}`, borderRadius: 8, padding: "16px 20px", display: "flex", alignItems: "center", gap: 20 }}>
+          {/* Risk Tier Banner */}
+          <div
+            className="p-6 border-t-4 bg-surface-container-low flex items-start gap-8"
+            style={{ borderTopColor: tierColor }}
+          >
             <div>
-              <div style={{ fontSize: 8.5, fontFamily: "'JetBrains Mono', monospace", color: "#607888", letterSpacing: "0.16em", textTransform: "uppercase", marginBottom: 4 }}>Macro risk tier</div>
-              <div style={{ fontSize: 28, fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, color: tierColor }}>{tier}</div>
+              <div className="text-[9px] text-outline tracking-[0.2em] uppercase mb-2">MACRO RISK TIER</div>
+              <div className="text-5xl font-extrabold tracking-tighter" style={{ color: tierColor }}>
+                {tier}
+              </div>
             </div>
-            <div style={{ fontSize: 9.5, fontFamily: "'JetBrains Mono', monospace", color: "#607888", lineHeight: 1.8 }}>
-              {tier === "FLASH"    && "Critical — trading halted by macro blackout"}
-              {tier === "PRIORITY" && "Significant event — lot sizes reduced 50%"}
-              {tier === "ROUTINE"  && "Background signals — lot sizes reduced 25%"}
-              {tier === "CLEAR"    && "All clear — normal trading conditions"}
-            </div>
-          </div>
-
-          {/* KPIs */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
-            <div style={{ background: "#0a0a12", border: "1px solid #1c1c28", borderRadius: 8, padding: "14px 16px" }}>
-              <Kpi label="VIX" value={String((data as Record<string, unknown> | null)?.vix ?? "—")} color={(Number((data as Record<string, unknown> | null)?.vix) || 0) > 30 ? "#ff4455" : "#00ff88"} />
-            </div>
-            <div style={{ background: "#0a0a12", border: "1px solid #1c1c28", borderRadius: 8, padding: "14px 16px" }}>
-              <Kpi label="Yield curve" value={(data as Record<string, unknown> | null)?.yieldCurveInverted ? "INVERTED" : "Normal"} color={(data as Record<string, unknown> | null)?.yieldCurveInverted ? "#ff4455" : "#00ff88"} />
-            </div>
-            <div style={{ background: "#0a0a12", border: "1px solid #1c1c28", borderRadius: 8, padding: "14px 16px" }}>
-              <Kpi label="OSINT sentiment" value={String((data as Record<string, unknown> | null)?.osintSentiment ?? "neutral")} color="#9aa8b8" />
-            </div>
-            <div style={{ background: "#0a0a12", border: "1px solid #1c1c28", borderRadius: 8, padding: "14px 16px" }}>
-              <Kpi label="Sweep age" value={`${(data as Record<string, unknown> | null)?.sweepAgeMinutes ?? "?"}m`} color={Number((data as Record<string, unknown> | null)?.sweepAgeMinutes) > 20 ? "#f5c518" : "#00ff88"} />
+            <div className="flex-1 pt-2">
+              <p className="text-on-surface-variant text-sm leading-relaxed">
+                {tier ? TIER_DESC[tier] : "—"}
+              </p>
+              <div
+                className="mt-4 inline-block text-[10px] font-bold px-3 py-1 border"
+                style={{
+                  color: tierColor,
+                  borderColor: `${tierColor}40`,
+                  background: `${tierColor}10`,
+                }}
+              >
+                {data?.sourceCount ?? 27} INTELLIGENCE SOURCES
+              </div>
             </div>
           </div>
 
-          {/* Active alerts */}
-          {Array.isArray((data as Record<string, unknown> | null)?.alerts) && ((data as Record<string, unknown>).alerts as unknown[]).length > 0 && (
-            <div style={{ background: "#0a0a12", border: "1px solid #1c1c28", borderRadius: 8, padding: "16px 20px" }}>
-              <div style={{ fontSize: 9, fontFamily: "'JetBrains Mono', monospace", color: "#607888", letterSpacing: "0.16em", textTransform: "uppercase", marginBottom: 12, paddingBottom: 10, borderBottom: "1px solid #1c1c28" }}>Active alerts</div>
-              {((data as Record<string, unknown>).alerts as Array<{ tier: string; title: string }>).slice(0, 8).map((a, i) => (
-                <Alert key={i} title={a.title || "Unnamed alert"} tier={String(a.tier || "ROUTINE").toUpperCase()} />
-              ))}
+          {/* KPI Grid */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-1 bg-outline-variant/10">
+            {[
+              {
+                label: "VIX",
+                value: String(data?.vix ?? "—"),
+                color: (Number(data?.vix) || 0) > 30 ? "#ff716c" : "#00fd87",
+              },
+              {
+                label: "YIELD CURVE",
+                value: data?.yieldCurveInverted ? "INVERTED" : "Normal",
+                color: data?.yieldCurveInverted ? "#ff716c" : "#00fd87",
+              },
+              {
+                label: "OSINT SENTIMENT",
+                value: String(data?.osintSentiment ?? "neutral"),
+                color: "#adaaaa",
+              },
+              {
+                label: "SWEEP AGE",
+                value: `${data?.sweepAgeMinutes ?? "?"}m`,
+                color: Number(data?.sweepAgeMinutes) > 20 ? "#ffb86c" : "#00fd87",
+              },
+            ].map(({ label, value, color }) => (
+              <div key={label} className="bg-surface p-5">
+                <div className="text-[9px] text-outline tracking-[0.2em] uppercase mb-1">{label}</div>
+                <div className="text-2xl font-extrabold" style={{ color }}>{value}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Active Alerts */}
+          {Array.isArray(data?.alerts) && (data.alerts as unknown[]).length > 0 && (
+            <div className="bg-surface-container-low border border-outline-variant/10 p-6">
+              <h3 className="text-[9px] font-bold tracking-[0.3em] text-outline uppercase mb-4 pb-3 border-b border-outline-variant/15">
+                Active Alerts
+              </h3>
+              <div className="flex flex-col gap-2">
+                {(data.alerts as Array<{ tier: string; title: string }>).slice(0, 8).map((a, i) => {
+                  const ac = TIER_COLOR[String(a.tier || "ROUTINE").toUpperCase()] || "#adaaaa";
+                  return (
+                    <div
+                      key={i}
+                      className="flex items-center gap-4 p-2.5 border-l-2"
+                      style={{
+                        borderLeftColor: ac,
+                        background: `${ac}0a`,
+                      }}
+                    >
+                      <span
+                        className="text-[9px] font-bold tracking-[0.1em] shrink-0 w-16"
+                        style={{ color: ac }}
+                      >
+                        {String(a.tier || "ROUTINE").toUpperCase()}
+                      </span>
+                      <span className="text-[11px] text-on-surface-variant">{a.title || "Unnamed alert"}</span>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           )}
 
-          <div style={{ fontSize: 8.5, fontFamily: "'JetBrains Mono', monospace", color: "#607888", textAlign: "right" }}>
-            Powered by Crucix — {(data as Record<string, unknown> | null)?.sourceCount ?? 27} intelligence sources · refreshes every 60s
+          {/* Footer */}
+          <div className="text-right text-[9px] text-outline tracking-widest">
+            Refreshes every 60s
           </div>
         </>
       )}
