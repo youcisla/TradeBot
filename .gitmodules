@@ -1,3 +1,6 @@
 [submodule "crucix"]
 	path = crucix
 	url = https://github.com/youcisla/crucix.git
+[submodule "antigravity-awesome-skills"]
+	path = antigravity-awesome-skills
+	url = https://github.com/youcisla/antigravity-awesome-skills.git
