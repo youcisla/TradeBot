@@ -144,7 +144,7 @@ XAUUSD → XAUUSD
 ```
 
 ### DEMO_MODE
-`settings.DEMO_MODE = True` is hardcoded in Phase 1. In demo mode:
+`settings.DEMO_MODE = False` is hardcoded in Phase 1. In demo mode:
 - Trades are logged but NOT sent to MT5
 - All risk calculations still run normally
 
@@ -208,4 +208,4 @@ All under `web/src/app/api/`:
 - Dashboard can run separately (Vercel, local server)
 - Database is hosted on Supabase — no local Postgres needed
 - Logs written to `logs/bot_YYYY-MM-DD.log` (rotating daily)
-- `DEMO_MODE=True` in `settings.py` must be manually changed to go live — it is NOT an env var
+- `DEMO_MODE=False` in `settings.py` must be manually changed to go live — it is NOT an env var

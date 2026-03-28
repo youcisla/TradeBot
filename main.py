@@ -3,7 +3,7 @@
 Wires all agents, runs the time-corrected main loop, handles startup
 reconciliation and graceful shutdown.
 
-Phase 1 uses MockConnector + DEMO_MODE = True — fully runnable end-to-end.
+Phase 1 uses MockConnector + DEMO_MODE = False — fully runnable end-to-end.
 """
 
 from __future__ import annotations

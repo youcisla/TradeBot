@@ -53,7 +53,14 @@ class TestRiskAgent:
         # 3 open >= MAX_OPEN_TRADES (3) → should fail
         assert agent.validate(signal) is False
 
-    def test_rejects_high_spread(self, broker, crucix_agent):
+    def test_rejects_high_spread(self, broker, crucix_agent, monkeypatch):
+        # T2-6: live spread is fetched via get_tick() — ensure it matches the
+        # high snapshot spread so the test isn't overridden by MockConnector's
+        # random 0.5–2.5 pip response.
+        monkeypatch.setattr(
+            broker, "get_tick",
+            lambda sym: {"bid": 1.1050, "ask": 1.1055, "spread": 0.0005, "volume": 1000},
+        )
         agent = self._make_agent(broker, crucix_agent=crucix_agent)
         signal = make_signal(spread=0.0005)  # 5 pips > MAX_SPREAD_PIPS (3.0)
         assert agent.validate(signal) is False

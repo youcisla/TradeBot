@@ -13,6 +13,7 @@ from datetime import UTC, datetime
 from typing import Optional
 
 from config import settings
+from config.symbols import asset_class as _asset_class
 from models.market_data import Candle, MarketContext
 from models.signal import EntrySnapshot, Signal
 from strategies.base_strategy import BaseStrategy
@@ -98,6 +99,19 @@ class ICTStrategy(BaseStrategy):
             logger.warning("ICTStrategy: broker is None — cannot fetch HTF candles, skipping %s", ctx.symbol)
             return None
 
+        # Crypto lacks forex killzones so the session score is capped lower.
+        # Use a reduced minimum-confidence threshold to avoid filtering good setups.
+        _is_crypto = _asset_class(ctx.symbol) == "crypto"
+        _orig_min = self._engine.min_confidence
+        if _is_crypto:
+            self._engine.min_confidence = settings.MIN_ICT_SCORE_CRYPTO
+        try:
+            return self._detect_crypto_inner(ctx, _is_crypto)
+        finally:
+            if _is_crypto:
+                self._engine.min_confidence = _orig_min
+
+    def _detect_crypto_inner(self, ctx: MarketContext, _is_crypto: bool) -> Optional[Signal]:
         candles = ctx.candles
         if len(candles) < 30:
             self._emit("warn", f"ICT {ctx.symbol}: only {len(candles)} candles (need 30+) — skipping")
@@ -171,7 +185,9 @@ class ICTStrategy(BaseStrategy):
                 # Determine which threshold applied
                 from models.ict_models import SetupModel as _SM
                 _is_range = rejected.model in (_SM.RANGE_DEALING_LONG, _SM.RANGE_DEALING_SHORT)
-                _thresh = self._engine.range_min_confidence if _is_range else self._engine.min_confidence
+                _thresh = self._engine.range_min_confidence if _is_range else (
+                    settings.MIN_ICT_SCORE_CRYPTO if _is_crypto else self._engine.min_confidence
+                )
                 self._emit("info",
                            f"ICT {ctx.symbol}: {rejected.model.value} setup found but score "
                            f"{rejected.confidence:.0f}/100 < {_thresh:.0f} threshold "

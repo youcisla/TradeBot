@@ -12,7 +12,7 @@ jobs:
 
     env:
       # Use mock/demo mode — no real broker or DB needed in CI
-      DEMO_MODE: "true"
+      DEMO_MODE: "false"
       DATABASE_URL: ""
       LOG_LEVEL: WARNING
 

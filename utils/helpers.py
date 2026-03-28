@@ -24,15 +24,20 @@ def local_now() -> datetime:
     return datetime.now(_local_tz())
 
 
-def current_session() -> str:
-    """Return the forex session name based on current UTC hour.
+def current_session(dt: datetime | None = None) -> str:
+    """Return the forex session name based on UTC hour.
 
     London   07:00 – 16:00 UTC
     New York 12:00 – 21:00 UTC
     Asian    00:00 – 09:00 UTC
     Overlap  12:00 – 16:00 UTC (London + NY)
+
+    Parameters
+    ----------
+    dt : datetime, optional
+        Override the timestamp (useful for backtesting).  Must be UTC-aware.
     """
-    hour = datetime.now(UTC).hour
+    hour = (dt if dt is not None else datetime.now(UTC)).hour
     if 12 <= hour < 16:
         return "overlap"
     if 7 <= hour < 16:

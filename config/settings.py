@@ -16,7 +16,7 @@ _env_path = Path(__file__).resolve().parent.parent / ".env"
 load_dotenv(_env_path)
 
 # ── Mode ─────────────────────────────────────────────────────────────────
-DEMO_MODE: bool = True  # Hardcoded for Phase 1 — never change via .env
+DEMO_MODE: bool = False  # Hardcoded for Phase 1 — never change via .env
 
 # ── Broker ───────────────────────────────────────────────────────────────
 BROKER_ACCOUNT: str = os.getenv("BROKER_ACCOUNT", "")
@@ -57,6 +57,9 @@ COUNCIL_WORLD_WEIGHT: float  = float(os.getenv("COUNCIL_WORLD_WEIGHT",  "0.16"))
 COUNCIL_MIN_CANDLES: int = int(os.getenv("COUNCIL_MIN_CANDLES", "20"))
 # Minimum candle count required before the neural strategy will infer.
 NEURAL_MIN_CANDLES: int = int(os.getenv("NEURAL_MIN_CANDLES", "65"))
+# Minimum ICT engine score for crypto (lower than forex — crypto lacks killzones
+# so the session component caps at 5.0 instead of 7.0, reducing potential max score).
+MIN_ICT_SCORE_CRYPTO: float = float(os.getenv("MIN_ICT_SCORE_CRYPTO", "42.0"))
 
 # ── Risk ─────────────────────────────────────────────────────────────────
 MAX_RISK_PER_TRADE: float = float(os.getenv("MAX_RISK_PER_TRADE", "0.02"))
@@ -73,6 +76,8 @@ MAX_LOT_SIZE: float = float(os.getenv("MAX_LOT_SIZE", "5.0"))
 MAX_SPREAD_PCT_CRYPTO: float = float(os.getenv("MAX_SPREAD_PCT_CRYPTO", "2.5"))
 MAX_SPREAD_PIPS_COMMODITY: float = float(os.getenv("MAX_SPREAD_PIPS_COMMODITY", "10.0"))
 MAX_SPREAD_PIPS_EXOTIC: float = float(os.getenv("MAX_SPREAD_PIPS_EXOTIC", "15.0"))
+# Indices are quoted in points — allow up to 5 points spread (covers typical CFD spread)
+MAX_SPREAD_POINTS_INDEX: float = float(os.getenv("MAX_SPREAD_POINTS_INDEX", "5.0"))
 # ── Trade Execution ──────────────────────────────────────────────────────
 TP1_CLOSE_PERCENT: float = float(os.getenv("TP1_CLOSE_PERCENT", "0.40"))
 TP2_CLOSE_PERCENT: float = float(os.getenv("TP2_CLOSE_PERCENT", "0.30"))

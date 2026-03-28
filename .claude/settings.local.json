@@ -28,7 +28,13 @@
       "Bash(grep -r style={{ /c/Users/Y.chehboub/Downloads/TradingBot/web/src --include=*.tsx)",
       "Bash(grep -n \"TODO\\\\|FIXME\\\\|BUG\\\\|HACK\\\\|XXX\" /c/Users/Y.chehboub/Downloads/TradingBot/broker/mt5_connector.py /c/Users/Y.chehboub/Downloads/TradingBot/database/db.py /c/Users/Y.chehboub/Downloads/TradingBot/backtesting/*.py)",
       "Bash(python -m pytest tests/ -v --co)",
-      "Bash(grep -r \"assert\\\\|def test\" /c/Users/Y.chehboub/Downloads/TradingBot/tests/*.py)"
+      "Bash(grep -r \"assert\\\\|def test\" /c/Users/Y.chehboub/Downloads/TradingBot/tests/*.py)",
+      "Bash(python -m pytest tests/test_trade_lifecycle.py -v)",
+      "Bash(python -m pytest tests/test_db_resilience.py -v)",
+      "Bash(python -m pytest tests/ -v --tb=short)",
+      "Bash(ls -la *.log)",
+      "Bash(grep -n \"killzone\\\\|kill_zone\\\\|in_killzone\\\\|outside.*kill\\\\|kill.*outside\" strategies/ict/*.py agents/council_agent.py)",
+      "Bash(python -m pytest tests/test_ict_engine.py tests/test_strategy_agent.py tests/test_council_agent.py -v --tb=short)"
     ],
     "deny": []
   },

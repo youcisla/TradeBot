@@ -15,7 +15,7 @@ date_added: "2026-03-28"
 - **Broker:** PU Prime via MetaTrader 5 (Windows only)
 - **DB:** PostgreSQL (Supabase) — 7 tables
 - **Primary strategy:** LSTM Neural Network (per-symbol, auto-trained on 2yr H1 history)
-- **Mode:** DEMO_MODE = True (hardcoded, Phase 1)
+- **Mode:** DEMO_MODE = False (hardcoded, Phase 1)
 
 ---
 
@@ -100,7 +100,7 @@ END $$;
 
 ## Key Configuration (`config/settings.py`)
 All values from `.env`, never hardcoded. Key settings:
-- `DEMO_MODE=True` — hardcoded, never change via env
+- `DEMO_MODE=False` — hardcoded, never change via env
 - `TIMEZONE=Europe/Paris` — affects logs, day labels, daily summary
 - `COUNCIL_MIN_CONFIDENCE=0.60`
 - `LIMIT_ENTRY_MAX_DISTANCE_ATR=0.5` (forex), `LIMIT_ENTRY_MAX_DISTANCE_ATR_CRYPTO=2.0`

@@ -304,7 +304,7 @@ export default function AnalyticsPage() {
 
         {/* Symbol ranking */}
         <ChartCard title="Symbol Ranking" accent="#ffb86c">
-          {filteredSymbolStats.length === 0 ? <NoData /> : (
+          {symbolStats.length === 0 ? <NoData /> : (
             <table className="w-full text-xs">
               <thead>
                 <tr className="border-b border-outline-variant/20">
@@ -314,7 +314,7 @@ export default function AnalyticsPage() {
                 </tr>
               </thead>
               <tbody>
-                {filteredSymbolStats.map((s) => {
+                {symbolStats.map((s) => {
                   const wr  = s.total > 0 ? ((Number(s.wins) / Number(s.total)) * 100).toFixed(0) : "0";
                   const pnl = Number(s.total_pnl);
                   return (

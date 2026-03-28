@@ -80,9 +80,15 @@ class ICTExpert:
         passed = 0
 
         # 1. Killzone timing
-        if self._in_killzone():
+        # Crypto trades 24/7 — forex killzones are irrelevant, auto-grant this check.
+        from config.symbols import asset_class as _asset_class
+        _is_crypto = _asset_class(signal.symbol) == "crypto"
+        if _is_crypto or self._in_killzone():
             passed += 1
-            verdict.reasons_for.append("Entry is within an ICT killzone")
+            if _is_crypto:
+                verdict.reasons_for.append("Crypto asset — killzone timing not applicable (24/7 market)")
+            else:
+                verdict.reasons_for.append("Entry is within an ICT killzone")
         else:
             verdict.reasons_against.append("Entry is outside ICT killzones")
 

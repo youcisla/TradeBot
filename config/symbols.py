@@ -13,53 +13,112 @@ import os
 
 FOREX_MAJORS: list[str] = [
     "EURUSD", "USDJPY", "GBPUSD", "AUDUSD",
-    "USDCAD", "USDCHF",
+    "NZDUSD", "USDCAD", "USDCHF",
 ]
 
 FOREX_CROSSES: list[str] = [
-    "EURJPY", "GBPJPY", "EURGBP", "AUDJPY", "EURAUD",
-    "EURCAD", "GBPCHF", "GBPAUD", "CADJPY", "CHFJPY",
-    "EURCHF", "NZDJPY",
+    # EUR crosses
+    "EURJPY", "EURGBP", "EURAUD", "EURCAD", "EURCHF", "EURNZD",
+    # GBP crosses
+    "GBPJPY", "GBPAUD", "GBPCAD", "GBPCHF", "GBPNZD",
+    # AUD crosses
+    "AUDJPY", "AUDCAD", "AUDCHF", "AUDNZD",
+    # NZD crosses
+    "NZDJPY", "NZDCAD", "NZDCHF",
+    # Other crosses
+    "CADJPY", "CHFJPY", "CADCHF",
 ]
 
 COMMODITIES: list[str] = [
-    "XAUUSD", "XAGUSD", "USOUSD", "UKOUSD",
+    # Metals
+    "XAUUSD", "XAGUSD", "XPTUSD", "XPDUSD",
+    # Oil
+    "USOUSD", "UKOUSD",
+    # Agricultural / Soft
+    "NATGASUSD", "COPPERUSD",
+]
+
+INDICES: list[str] = [
+    # US
+    "US30",    # Dow Jones
+    "US500",   # S&P 500
+    "USTEC",   # Nasdaq 100
+    # Europe
+    "GER40",   # DAX
+    "UK100",   # FTSE 100
+    "FRA40",   # CAC 40
+    "ESP35",   # IBEX 35
+    "ITA40",   # FTSE MIB
+    "EU50",    # Euro Stoxx 50
+    # Asia-Pacific
+    "JPN225",  # Nikkei 225
+    "AUS200",  # ASX 200
+    "HK50",    # Hang Seng
+    "CHN50",   # CSI 300
 ]
 
 CRYPTO: list[str] = [
-    "BTCUSD", "ETHUSD", "XRPUSD", "LTCUSD", "BCHUSD",
+    # Large-cap
+    "BTCUSD", "ETHUSD", "BNBUSD", "SOLUSD", "XRPUSD",
+    # Mid-cap
+    "ADAUSD", "DOTUSD", "DOGEUSD", "LTCUSD", "LINKUSD",
+    # Others
+    "BCHUSD", "EOSUSD", "XLMUSD", "TRXUSD", "AVAXUSD",
 ]
 
 EXOTICS: list[str] = [
-    "USDZAR", "USDTRY",
+    "USDZAR", "USDTRY", "USDMXN", "USDSEK", "USDNOK",
+    "USDDKK", "USDSGD", "USDCNH", "USDHKD",
 ]
 
 ALL_SYMBOLS: list[str] = (
-    FOREX_MAJORS + FOREX_CROSSES + COMMODITIES + CRYPTO + EXOTICS
+    FOREX_MAJORS + FOREX_CROSSES + COMMODITIES + INDICES + CRYPTO + EXOTICS
 )
 
 # ── Per-symbol pip value ────────────────────────────────────────────────
 
+_ALL_FOREX = FOREX_MAJORS + FOREX_CROSSES + EXOTICS
+
 PIP_VALUES: dict[str, float] = {
-    # Standard 5-digit forex
-    **{s: 0.0001 for s in FOREX_MAJORS + FOREX_CROSSES},
+    # Standard 5-digit forex and exotics
+    **{s: 0.0001 for s in _ALL_FOREX},
     # JPY pairs override → 0.01
     **{s: 0.01 for s in ALL_SYMBOLS if s.endswith("JPY")},
+    # SGD, HKD, NOK, SEK, DKK, CNH — larger pip
+    "USDSGD": 0.0001,
+    "USDHKD": 0.0001,
+    "USDSEK": 0.0001,
+    "USDNOK": 0.0001,
+    "USDDKK": 0.0001,
+    "USDCNH": 0.0001,
     # Metals
     "XAUUSD": 0.01,
     "XAGUSD": 0.001,
-    # Oil
-    "USOUSD": 0.01,
-    "UKOUSD": 0.01,
+    "XPTUSD": 0.01,
+    "XPDUSD": 0.01,
+    # Energy / commodities
+    "USOUSD":    0.01,
+    "UKOUSD":    0.01,
+    "NATGASUSD": 0.001,
+    "COPPERUSD": 0.0001,
+    # Indices — price-point based (1 point = 1 index unit)
+    **{s: 1.0 for s in INDICES},
     # Crypto
-    "BTCUSD": 0.01,
-    "ETHUSD": 0.01,
-    "XRPUSD": 0.0001,
-    "LTCUSD": 0.01,
-    "BCHUSD": 0.01,
-    # Exotics
-    "USDZAR": 0.0001,
-    "USDTRY": 0.0001,
+    "BTCUSD":  0.01,
+    "ETHUSD":  0.01,
+    "BNBUSD":  0.01,
+    "SOLUSD":  0.01,
+    "XRPUSD":  0.0001,
+    "ADAUSD":  0.0001,
+    "DOTUSD":  0.01,
+    "DOGEUSD": 0.00001,
+    "LTCUSD":  0.01,
+    "LINKUSD": 0.001,
+    "BCHUSD":  0.01,
+    "EOSUSD":  0.001,
+    "XLMUSD":  0.00001,
+    "TRXUSD":  0.00001,
+    "AVAXUSD": 0.01,
 }
 
 # ── Asset class lookup ──────────────────────────────────────────────────
@@ -71,6 +130,8 @@ for _s in FOREX_CROSSES:
     SYMBOL_CLASS[_s] = "forex_cross"
 for _s in COMMODITIES:
     SYMBOL_CLASS[_s] = "commodity"
+for _s in INDICES:
+    SYMBOL_CLASS[_s] = "index"
 for _s in CRYPTO:
     SYMBOL_CLASS[_s] = "crypto"
 for _s in EXOTICS:
@@ -78,27 +139,37 @@ for _s in EXOTICS:
 
 
 # ── Contract sizes (units of base asset per 1 standard lot) ─────────────
-# These reflect the most common MT5 broker conventions.
-# Standard forex: 100,000 base currency units per lot.
-# Crypto: 1 coin per lot (BTC, ETH, LTC, BCH) or 1000 coins (XRP).
-# Metals: 100 oz gold, 5000 oz silver; Oil: 100 barrels.
+# Forex: 100,000 base units.  Indices: 1 contract.  Crypto: 1 coin (XRP=1000).
 CONTRACT_SIZES: dict[str, float] = {
     # Forex — 100,000 base units per standard lot
-    **{s: 100_000.0 for s in FOREX_MAJORS + FOREX_CROSSES},
+    **{s: 100_000.0 for s in _ALL_FOREX},
     # Commodities
-    "XAUUSD": 100.0,    # 100 troy oz
-    "XAGUSD": 5_000.0,  # 5,000 troy oz
-    "USOUSD": 100.0,    # 100 barrels
-    "UKOUSD": 100.0,    # 100 barrels
-    # Crypto — 1 coin per lot (standard at most ECN brokers)
-    "BTCUSD": 1.0,
-    "ETHUSD": 1.0,
-    "XRPUSD": 1_000.0,  # most brokers: 1 lot = 1,000 XRP
-    "LTCUSD": 1.0,
-    "BCHUSD": 1.0,
-    # Exotics — 100,000 base units
-    "USDZAR": 100_000.0,
-    "USDTRY": 100_000.0,
+    "XAUUSD":    100.0,      # 100 troy oz
+    "XAGUSD":    5_000.0,    # 5,000 troy oz
+    "XPTUSD":    100.0,      # 100 troy oz
+    "XPDUSD":    100.0,      # 100 troy oz
+    "USOUSD":    100.0,      # 100 barrels
+    "UKOUSD":    100.0,      # 100 barrels
+    "NATGASUSD": 10_000.0,   # 10,000 MMBtu
+    "COPPERUSD": 25_000.0,   # 25,000 lbs
+    # Indices — 1 contract = 1 index unit (price × contract = dollar value)
+    **{s: 1.0 for s in INDICES},
+    # Crypto
+    "BTCUSD":  1.0,
+    "ETHUSD":  1.0,
+    "BNBUSD":  1.0,
+    "SOLUSD":  1.0,
+    "XRPUSD":  1_000.0,
+    "ADAUSD":  1_000.0,
+    "DOTUSD":  1.0,
+    "DOGEUSD": 1_000.0,
+    "LTCUSD":  1.0,
+    "LINKUSD": 1.0,
+    "BCHUSD":  1.0,
+    "EOSUSD":  1.0,
+    "XLMUSD":  1_000.0,
+    "TRXUSD":  1_000.0,
+    "AVAXUSD": 1.0,
 }
 
 
@@ -127,7 +198,7 @@ def commission_per_lot(symbol: str) -> float:
     ac = asset_class(symbol)
     if ac == "crypto":
         return settings.COMMISSION_PER_LOT_CRYPTO
-    elif ac == "commodity":
+    elif ac in ("commodity", "index"):
         return settings.COMMISSION_PER_LOT_COMMODITY
     elif ac == "exotic":
         return settings.COMMISSION_PER_LOT_EXOTIC
@@ -140,5 +211,5 @@ _env_active = os.getenv("ACTIVE_SYMBOLS", "")
 SYMBOLS: list[str] = (
     [s.strip() for s in _env_active.split(",") if s.strip()]
     if _env_active
-    else ALL_SYMBOLS  # default: trade all 30+ symbols
+    else ALL_SYMBOLS  # default: scan everything
 )

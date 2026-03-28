@@ -64,9 +64,19 @@ _CORRELATED_PAIRS: dict[str, frozenset[str]] = {
     "EURCHF": frozenset({"EURUSD", "USDCHF", "GBPCHF"}),
     "EURCAD": frozenset({"EURUSD", "USDCAD"}),
     "AUDNZD": frozenset({"AUDUSD", "NZDUSD"}),
+    # Indices — US cluster
+    "US30":   frozenset({"US500", "USTEC"}),
+    "US500":  frozenset({"US30",  "USTEC"}),
+    "USTEC":  frozenset({"US30",  "US500"}),
+    # Indices — European cluster
+    "GER40":  frozenset({"FRA40", "EU50", "UK100"}),
+    "FRA40":  frozenset({"GER40", "EU50"}),
+    "EU50":   frozenset({"GER40", "FRA40"}),
     # Precious metals / safe-haven
-    "XAUUSD": frozenset({"XAGUSD"}),
+    "XAUUSD": frozenset({"XAGUSD", "XPTUSD", "XPDUSD"}),
     "XAGUSD": frozenset({"XAUUSD"}),
+    "XPTUSD": frozenset({"XAUUSD", "XPDUSD"}),
+    "XPDUSD": frozenset({"XPTUSD"}),
     # Crypto cluster
     "BTCUSD": frozenset({"ETHUSD", "LTCUSD", "XRPUSD", "SOLUSD"}),
     "ETHUSD": frozenset({"BTCUSD", "LTCUSD", "XRPUSD", "SOLUSD"}),
@@ -246,6 +256,8 @@ class RiskAgent:
             spread_pips = live_spread / pv
             if ac == "commodity":
                 max_spread = settings.MAX_SPREAD_PIPS_COMMODITY
+            elif ac == "index":
+                max_spread = settings.MAX_SPREAD_POINTS_INDEX
             elif ac == "exotic":
                 max_spread = settings.MAX_SPREAD_PIPS_EXOTIC
             else:
