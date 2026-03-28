@@ -558,7 +558,7 @@ class CouncilAgent:
     def _run_council(self, signal: Signal,
                      context: "MarketContext") -> CouncilVerdict:
         # Guard: insufficient candle data to run expert analysis
-        if not context.candles or len(context.candles) < 20:
+        if not context.candles or len(context.candles) < settings.COUNCIL_MIN_CANDLES:
             logger.warning(
                 "Council: only %d candles for %s — insufficient for review",
                 len(context.candles) if context.candles else 0,
@@ -586,10 +586,10 @@ class CouncilAgent:
         is_ict_signal = signal.strategy.startswith("ict_smc")
         if is_ict_signal:
             confidence = (
-                ict.score         * 0.50 +
-                danial.score      * 0.17 +
-                traditional.score * 0.17 +
-                world.score       * 0.16
+                ict.score         * settings.COUNCIL_ICT_WEIGHT +
+                danial.score      * settings.COUNCIL_DANIAL_WEIGHT +
+                traditional.score * settings.COUNCIL_TRAD_WEIGHT +
+                world.score       * settings.COUNCIL_WORLD_WEIGHT
             )
         else:
             confidence = (

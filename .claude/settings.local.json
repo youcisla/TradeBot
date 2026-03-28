@@ -19,7 +19,16 @@
       "WebFetch(domain:api.github.com)",
       "WebFetch(domain:raw.githubusercontent.com)",
       "Bash(node \"c:/Users/Y.chehboub/Downloads/TradingBot/antigravity-awesome-skills/tools/bin/install.js\" --help)",
-      "Bash(node \"c:/Users/Y.chehboub/Downloads/TradingBot/antigravity-awesome-skills/tools/bin/install.js\" --claude)"
+      "Bash(node \"c:/Users/Y.chehboub/Downloads/TradingBot/antigravity-awesome-skills/tools/bin/install.js\" --claude)",
+      "Bash(find /c/Users/Y.chehboub/Downloads/TradingBot/agents -name *.py -type f)",
+      "Bash(find /c/Users/Y.chehboub/Downloads/TradingBot/models -name *.py -type f)",
+      "Bash(find /c/Users/Y.chehboub/Downloads/TradingBot/strategies -name *.py -type f)",
+      "Bash(find /c/Users/Y.chehboub/Downloads/TradingBot/filters -name *.py -type f)",
+      "Bash(grep -l \"skip\\\\|Skip\\\\|xfail\\\\|TODO\\\\|FIXME\" /c/Users/Y.chehboub/Downloads/TradingBot/tests/*.py)",
+      "Bash(grep -r style={{ /c/Users/Y.chehboub/Downloads/TradingBot/web/src --include=*.tsx)",
+      "Bash(grep -n \"TODO\\\\|FIXME\\\\|BUG\\\\|HACK\\\\|XXX\" /c/Users/Y.chehboub/Downloads/TradingBot/broker/mt5_connector.py /c/Users/Y.chehboub/Downloads/TradingBot/database/db.py /c/Users/Y.chehboub/Downloads/TradingBot/backtesting/*.py)",
+      "Bash(python -m pytest tests/ -v --co)",
+      "Bash(grep -r \"assert\\\\|def test\" /c/Users/Y.chehboub/Downloads/TradingBot/tests/*.py)"
     ],
     "deny": []
   },

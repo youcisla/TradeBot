@@ -6,13 +6,9 @@ import {
   XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend,
 } from "recharts";
 import { formatChartDate } from "@/lib/time";
+import type { Trade } from "@/lib/db";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
-
-interface Trade {
-  id: string; symbol: string; direction: string; pnl: number;
-  close_time: string | null; open_time: string; status: string; strategy: string;
-}
 interface SymbolStat {
   symbol: string; total: number; wins: number; losses: number;
   total_pnl: number; avg_pnl: number; avg_win: number; avg_loss: number;
@@ -103,7 +99,10 @@ export default function AnalyticsPage() {
   const load = useCallback(() => {
     setLoading(true);
     const since = sinceDate(range);
-    const qs = since ? `?since=${encodeURIComponent(since)}` : "";
+    const params = new URLSearchParams();
+    if (since) params.set("since", since);
+    if (symbol) params.set("symbol", symbol);
+    const qs = params.toString() ? `?${params.toString()}` : "";
     fetch(`/api/analytics${qs}`)
       .then((r) => { if (!r.ok) throw new Error(); return r.json(); })
       .then((d) => {
@@ -115,12 +114,12 @@ export default function AnalyticsPage() {
       })
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [range]);
+  }, [range, symbol]);
 
   useEffect(() => { load(); }, [load]);
 
-  // Derived
-  const filteredTrades = symbol ? closedTrades.filter((t) => t.symbol === symbol) : closedTrades;
+  // Derived — closedTrades is already filtered by the server when symbol is set
+  const filteredTrades = closedTrades;
   const fWins    = filteredTrades.filter((t) => Number(t.pnl) > 0).length;
   const fTotal   = filteredTrades.length;
   const fTotalPnl = filteredTrades.reduce((s, t) => s + Number(t.pnl), 0);
@@ -130,7 +129,7 @@ export default function AnalyticsPage() {
   const winRate  = fTotal > 0 ? (fWins / fTotal) * 100 : 0;
   const winRateColor = winRate >= 55 ? "#00fd87" : winRate >= 45 ? "#ffb86c" : "#ff716c";
 
-  const displayKpis: Kpis | null = symbol && kpis
+  const displayKpis: Kpis | null = (symbol && kpis)
     ? { total_trades: fTotal, wins: fWins, losses: fTotal - fWins, total_pnl: fTotalPnl, avg_pnl: fAvgPnl, best_trade: fBest, worst_trade: fWorst, avg_duration_min: kpis.avg_duration_min }
     : kpis;
 
@@ -146,9 +145,9 @@ export default function AnalyticsPage() {
     return { date: p.date, drawdown: Math.min(0, peak > 0 ? ((p.cum - peak) / peak) * 100 : 0) };
   });
 
-  const filteredSymbolStats = symbol ? symbolStats.filter((s) => s.symbol === symbol) : symbolStats;
-  const symbolPie  = filteredSymbolStats.map((s) => ({ name: s.symbol, value: Math.abs(Number(s.total_pnl)), pnl: Number(s.total_pnl) }));
-  const symbolBars = filteredSymbolStats.map((s) => ({ symbol: s.symbol, wins: Number(s.wins), losses: Number(s.losses) }));
+  // symbolStats and directionStats are also server-filtered when symbol is set
+  const symbolPie  = symbolStats.map((s) => ({ name: s.symbol, value: Math.abs(Number(s.total_pnl)), pnl: Number(s.total_pnl) }));
+  const symbolBars = symbolStats.map((s) => ({ symbol: s.symbol, wins: Number(s.wins), losses: Number(s.losses) }));
   const filteredDirStats = symbol
     ? (() => {
         const buys  = filteredTrades.filter((t) => t.direction === "BUY");

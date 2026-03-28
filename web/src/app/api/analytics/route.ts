@@ -18,11 +18,23 @@ export async function GET(request: Request) {
 
   try {
     const { searchParams } = new URL(request.url);
-    const since = searchParams.get("since") || undefined; // ISO date string
+    const sinceRaw = searchParams.get("since") || undefined;
+    if (sinceRaw) {
+      const d = new Date(sinceRaw);
+      if (isNaN(d.getTime())) {
+        return NextResponse.json({ error: "Invalid since date" }, { status: 400 });
+      }
+    }
+    const since = sinceRaw;
+    const symbolRaw = searchParams.get("symbol") || undefined;
+    if (symbolRaw && !/^[A-Z0-9]{3,10}$/.test(symbolRaw)) {
+      return NextResponse.json({ error: "Invalid symbol" }, { status: 400 });
+    }
+    const symbol = symbolRaw;
 
     const [closedTrades, symbolStats, directionStats, dailyPnl, kpis] =
       await Promise.all([
-        getClosedTrades(since),
+        getClosedTrades(since, symbol),
         getSymbolStats(),
         getDirectionStats(),
         getDailyPnl(since),

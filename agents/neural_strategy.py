@@ -22,6 +22,7 @@ import logging
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Optional
 
+from config import settings
 from models.market_data import MarketContext
 from models.signal import EntrySnapshot, Signal
 from strategies.base_strategy import BaseStrategy
@@ -43,7 +44,7 @@ class NeuralStrategy(BaseStrategy):
     # ── BaseStrategy interface ────────────────────────────────────────────
 
     def detect(self, context: MarketContext) -> Optional[Signal]:
-        if not context.candles or len(context.candles) < 65:
+        if not context.candles or len(context.candles) < settings.NEURAL_MIN_CANDLES:
             return None
 
         result = self._mm.predict(context.symbol, context.candles, context)

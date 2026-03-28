@@ -6,10 +6,15 @@ Works with any MT5 broker (PUPrime, ICMarkets, Pepperstone, etc.).
 
 from __future__ import annotations
 
+import concurrent.futures
 import logging
 from datetime import UTC, datetime, timezone
+from typing import Callable, TypeVar
 
 import MetaTrader5 as mt5
+
+_T = TypeVar("_T")
+_MT5_CALL_TIMEOUT = 10.0  # seconds — MT5 IPC calls that hang will raise TimeoutError
 
 from broker.connector import BrokerConnector, OrderResult, PositionInfo
 from config import settings
@@ -227,29 +232,46 @@ class MT5Connector(BrokerConnector):
         """Translate canonical symbol to broker symbol name."""
         return getattr(self, 'symbol_map', {}).get(symbol, symbol)
 
+    @staticmethod
+    def _call_with_timeout(fn: "Callable[[], _T]", timeout: float = _MT5_CALL_TIMEOUT) -> "_T":
+        """Run *fn* in a thread; raise TimeoutError if it exceeds *timeout* seconds."""
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
+            future = ex.submit(fn)
+            try:
+                return future.result(timeout=timeout)
+            except concurrent.futures.TimeoutError:
+                raise TimeoutError(f"MT5 call timed out after {timeout}s")
+
     def get_tick(self, symbol: str) -> dict[str, float]:
         broker_sym = self.resolve(symbol)
-        tick = mt5.symbol_info_tick(broker_sym)
-        if tick is None:
-            # Try enabling the symbol
-            mt5.symbol_select(broker_sym, True)
+
+        def _fetch() -> dict[str, float]:
             tick = mt5.symbol_info_tick(broker_sym)
-        if tick is None:
-            raise RuntimeError(f"No tick data for {symbol}: {mt5.last_error()}")
-        spread = tick.ask - tick.bid
-        return {
-            "bid": tick.bid,
-            "ask": tick.ask,
-            "spread": round(spread, 6),
-            "volume": float(tick.volume),
-        }
+            if tick is None:
+                mt5.symbol_select(broker_sym, True)
+                tick = mt5.symbol_info_tick(broker_sym)
+            if tick is None:
+                raise RuntimeError(f"No tick data for {symbol}: {mt5.last_error()}")
+            spread = tick.ask - tick.bid
+            return {
+                "bid": tick.bid,
+                "ask": tick.ask,
+                "spread": round(spread, 6),
+                "volume": float(tick.volume),
+            }
+
+        return self._call_with_timeout(_fetch)
 
     def get_candles(self, symbol: str, timeframe: str, count: int) -> list[Candle]:
         broker_sym = self.resolve(symbol)
         tf = _TF_MAP.get(timeframe, mt5.TIMEFRAME_H1)
-        # Ensure symbol is selected so MT5 loads its history
-        mt5.symbol_select(broker_sym, True)
-        rates = mt5.copy_rates_from_pos(broker_sym, tf, 0, count)
+
+        def _fetch_rates():
+            # Ensure symbol is selected so MT5 loads its history
+            mt5.symbol_select(broker_sym, True)
+            return mt5.copy_rates_from_pos(broker_sym, tf, 0, count)
+
+        rates = self._call_with_timeout(_fetch_rates)
         if rates is None:
             logger.warning("No candle data for %s (%s) %s: %s", symbol, broker_sym, timeframe, mt5.last_error())
             return []
@@ -301,7 +323,7 @@ class MT5Connector(BrokerConnector):
             "sl": float(sl),
             "deviation": 20,
             "magic": 202603,
-            "comment": comment.encode("ascii", "ignore").decode("ascii")[:29],
+            "comment": comment.encode("ascii", "ignore").decode("ascii")[:31],
             "type_time": mt5.ORDER_TIME_GTC,
             "type_filling": mt5.ORDER_FILLING_IOC,
         }

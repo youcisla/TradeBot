@@ -258,6 +258,14 @@ BEGIN
 END $$;
 """
 
+_CREATE_SYMBOL_FAULT = """
+CREATE TABLE IF NOT EXISTS symbol_fault (
+    symbol        TEXT PRIMARY KEY,
+    fail_count    INTEGER DEFAULT 0,
+    disabled_until TIMESTAMP WITH TIME ZONE
+);
+"""
+
 _CREATE_INDEXES = """
 CREATE INDEX IF NOT EXISTS idx_agent_events_created_at   ON agent_events (created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_agent_events_agent         ON agent_events (agent);
@@ -282,6 +290,7 @@ _ALL_TABLES = [
     _CREATE_BROKER_ACCOUNTS,
     _CREATE_DASHBOARD_USERS,
     _CREATE_PERFORMANCE_SNAPSHOTS,
+    _CREATE_SYMBOL_FAULT,
 ]
 
 
@@ -810,6 +819,41 @@ class Database:
                     cur.execute(
                         "UPDATE bot_status SET state = 'stopped', last_tick = NOW() WHERE id = 1"
                     )
+        finally:
+            self._put_conn(conn)
+
+    # ── symbol fault persistence ─────────────────────────────────────────
+
+    def load_symbol_faults(self) -> dict[str, dict]:
+        """Return {symbol: {fail_count, disabled_until}} for all persisted faults."""
+        conn = self._get_conn()
+        try:
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute("SELECT symbol, fail_count, disabled_until FROM symbol_fault")
+                return {r["symbol"]: {"fail_count": r["fail_count"],
+                                      "disabled_until": r["disabled_until"]}
+                        for r in cur.fetchall()}
+        finally:
+            self._put_conn(conn)
+
+    def save_symbol_fault(self, symbol: str, fail_count: int,
+                          disabled_until: "datetime | None") -> None:
+        """Upsert fault state for one symbol. Pass fail_count=0 to clear."""
+        conn = self._get_conn()
+        try:
+            with conn:
+                with conn.cursor() as cur:
+                    if fail_count == 0 and disabled_until is None:
+                        cur.execute("DELETE FROM symbol_fault WHERE symbol = %s", (symbol,))
+                    else:
+                        cur.execute(
+                            """INSERT INTO symbol_fault (symbol, fail_count, disabled_until)
+                               VALUES (%s, %s, %s)
+                               ON CONFLICT (symbol) DO UPDATE SET
+                                   fail_count = EXCLUDED.fail_count,
+                                   disabled_until = EXCLUDED.disabled_until""",
+                            (symbol, fail_count, disabled_until),
+                        )
         finally:
             self._put_conn(conn)
 

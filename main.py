@@ -250,7 +250,7 @@ def main() -> None:
 
     _market_closed_logged = False
     # Minimum wall-clock seconds between re-scanning the same symbol.
-    _SCAN_COOLDOWN_S: float = 5 * 60  # 5 minutes
+    _SCAN_COOLDOWN_S: float = float(settings.SCAN_COOLDOWN_SECONDS)
     _last_scan_ts: dict[str, float] = {}  # symbol → monotonic time of last analysis
 
     # ── Symbol fault tracking ────────────────────────────────────────────
@@ -258,8 +258,22 @@ def main() -> None:
     # avoid wasting time on each loop iteration.
     _symbol_fail_count:     dict[str, int]   = {}   # consecutive failures
     _symbol_disabled_until: dict[str, float] = {}   # monotonic re-enable time
-    _SYMBOL_MAX_FAILS      = 3                       # disable after this many consecutive IPC failures
-    _SYMBOL_DISABLE_SECS   = 3600.0                 # re-enable after 1 hour
+    _SYMBOL_MAX_FAILS      = settings.SYMBOL_MAX_FAIL_COUNT
+    _SYMBOL_DISABLE_SECS   = float(settings.SYMBOL_DISABLE_SECONDS)
+
+    # Restore fault state persisted from the previous run
+    try:
+        _now_utc = datetime.now(UTC)
+        _now_mono = time.monotonic()
+        for _sym, _fault in db.load_symbol_faults().items():
+            _symbol_fail_count[_sym] = _fault["fail_count"]
+            if _fault["disabled_until"] is not None:
+                _remaining = (_fault["disabled_until"] - _now_utc).total_seconds()
+                if _remaining > 0:
+                    _symbol_disabled_until[_sym] = _now_mono + _remaining
+                    logger.info("Restored fault state for %s — disabled for %.0fs more", _sym, _remaining)
+    except Exception:
+        logger.warning("Could not load symbol fault state from DB — starting fresh")
 
     while not _shutdown:
         loop_start = time.monotonic()
@@ -617,6 +631,10 @@ def _run_iteration(
             logger.info("Re-enabling %s after IPC cooldown (was disabled for 1h)", symbol)
             symbol_fail_count[symbol] = 0
             symbol_disabled_until[symbol] = 0.0
+            try:
+                db.save_symbol_fault(symbol, 0, None)
+            except Exception:
+                logger.debug("Could not clear symbol fault for %s", symbol)
 
         # Per-symbol cooldown — re-scan every 15 min (aligns with M15 bar)
         if now_mono - last_scan_ts.get(symbol, 0.0) < scan_cooldown:
@@ -645,6 +663,14 @@ def _run_iteration(
                         "market",
                         f"{symbol} auto-disabled for 1h — {count} consecutive IPC failures",
                     )
+                    try:
+                        from datetime import timedelta
+                        db.save_symbol_fault(
+                            symbol, count,
+                            datetime.now(UTC) + timedelta(seconds=symbol_disable_secs),
+                        )
+                    except Exception:
+                        logger.debug("Could not persist symbol fault for %s", symbol)
             else:
                 symbol_fail_count[symbol] = 0  # non-IPC error: don't count toward disable
             logger.warning("Data validation failed for %s: %s — skipping", symbol, e)
@@ -696,6 +722,11 @@ def _run_iteration(
                     symbol_fail_count[sym] = 0
                     symbol_disabled_until[sym] = 0.0
                     last_scan_ts.pop(sym, None)
+                try:
+                    for sym in ipc_fail_symbols:
+                        db.save_symbol_fault(sym, 0, None)
+                except Exception:
+                    logger.debug("Could not clear symbol faults after MT5 reconnect")
             else:
                 logger.warning("MT5 reconnect failed — will retry next iteration")
         except Exception as _re:

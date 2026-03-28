@@ -2,21 +2,7 @@
 
 import { useEffect, useState, useMemo } from "react";
 import { formatShort } from "@/lib/time";
-
-// ── Types ─────────────────────────────────────────────────────────────────────
-
-interface Trade {
-  id: string; symbol: string; strategy: string; direction: string;
-  entry_price: number; lot_size: number; stop_loss: number;
-  take_profit_1: number; take_profit_2: number; take_profit_3: number;
-  tp1_hit: boolean; tp2_hit: boolean; tp3_hit: boolean;
-  status: string; open_time: string; close_time: string | null;
-  pnl: number; close_reason: string;
-}
-
-interface BotStatus {
-  daily_pnl: number; balance: number; equity: number;
-}
+import type { Trade, BotStatus } from "@/lib/db";
 
 // ── Emergency Close ────────────────────────────────────────────────────────────
 
@@ -168,7 +154,11 @@ export default function LiveMonitoringPage() {
 
           <div className="mt-4">
             <button
-              onClick={async () => { setClosing(true); await emergencyCloseAll(); setClosing(false); }}
+              onClick={async () => {
+                setClosing(true);
+                try { await emergencyCloseAll(); } catch { /* error already logged inside */ }
+                setClosing(false);
+              }}
               disabled={closing || openTrades.length === 0}
               className="w-full py-2.5 bg-error-container text-on-error-container font-bold uppercase text-[10px] tracking-widest hover:bg-error-dim duration-0 disabled:opacity-40"
             >

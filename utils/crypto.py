@@ -53,11 +53,16 @@ def _get_key() -> bytes | None:
 def encrypt(plaintext: str) -> str:
     """Encrypt a string.  Returns base64(iv + hmac + ciphertext).
 
-    If no encryption key is configured, returns plaintext unchanged.
+    Raises RuntimeError if ENCRYPTION_KEY is not configured — broker
+    credentials must never be stored in plaintext.
     """
     key = _get_key()
     if key is None:
-        return plaintext
+        raise RuntimeError(
+            "ENCRYPTION_KEY is not set. Broker passwords cannot be stored securely. "
+            "Generate a key with: python -c \"import secrets; print(secrets.token_urlsafe(32))\" "
+            "and add it to your .env file."
+        )
 
     iv = os.urandom(16)
     padder = _padding.PKCS7(128).padder()

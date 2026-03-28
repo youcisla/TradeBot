@@ -104,8 +104,8 @@ class CrucixAgent:
                     },
                 )
                 return True
-        except Exception:
-            pass  # Crucix unavailable — do not block trading
+        except Exception as exc:
+            logger.debug("CrucixAgent unavailable: %s", exc)
         return False
 
     def get_context(self) -> MacroContext:

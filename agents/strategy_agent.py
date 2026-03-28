@@ -88,7 +88,7 @@ class StrategyAgent:
                 # If strategy provides its own dynamic confidence (e.g. from ICT setups with historical backtest), keep it
                 # Otherwise, fallback to the generic strategy confidence
                 final_confidence = signal.confidence if signal.confidence != 0.5 else confidence
-                signal.confidence = final_confidence
+                signal.confidence = max(0.0, min(1.0, final_confidence))
                 
                 self._emit("info",
                            f"Signal detected! {signal.strategy or strategy.name} says {signal.direction} "

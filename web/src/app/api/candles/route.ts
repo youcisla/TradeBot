@@ -16,6 +16,18 @@ export async function GET(request: Request) {
   const timeframe = searchParams.get("timeframe") || "H1";
   const count = searchParams.get("count") || "500";
 
+  // Validate inputs before forwarding to the internal candle server
+  if (!/^[A-Z0-9]{3,10}$/.test(symbol)) {
+    return NextResponse.json({ error: "Invalid symbol" }, { status: 400 });
+  }
+  if (!/^(M1|M5|M15|M30|H1|H4|D1|W1|MN1)$/.test(timeframe)) {
+    return NextResponse.json({ error: "Invalid timeframe" }, { status: 400 });
+  }
+  const countNum = parseInt(count, 10);
+  if (isNaN(countNum) || countNum < 1 || countNum > 1000) {
+    return NextResponse.json({ error: "count must be 1–1000" }, { status: 400 });
+  }
+
   try {
     const url = `${CANDLE_SERVER}/candles?symbol=${encodeURIComponent(symbol)}&timeframe=${encodeURIComponent(timeframe)}&count=${encodeURIComponent(count)}`;
     const res = await fetch(url, { signal: AbortSignal.timeout(30_000) });

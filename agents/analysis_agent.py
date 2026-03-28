@@ -9,6 +9,7 @@ import logging
 from datetime import datetime
 from typing import TYPE_CHECKING
 
+from config import settings
 from models.market_data import MarketContext, MarketData
 from utils.helpers import current_session, day_of_week
 
@@ -56,10 +57,10 @@ class AnalysisAgent:
         closes = [c.close for c in data.candles] if data.candles else []
         volumes = [c.volume for c in data.candles] if data.candles else []
 
-        sma_fast = self._sma(closes, 10)
-        sma_slow = self._sma(closes, 50)
-        prev_sma_fast = self._sma(closes[:-1], 10) if len(closes) > 10 else 0.0
-        prev_sma_slow = self._sma(closes[:-1], 50) if len(closes) > 50 else 0.0
+        sma_fast = self._sma(closes, settings.SMA_FAST_PERIOD)
+        sma_slow = self._sma(closes, settings.SMA_SLOW_PERIOD)
+        prev_sma_fast = self._sma(closes[:-1], settings.SMA_FAST_PERIOD) if len(closes) > settings.SMA_FAST_PERIOD else 0.0
+        prev_sma_slow = self._sma(closes[:-1], settings.SMA_SLOW_PERIOD) if len(closes) > settings.SMA_SLOW_PERIOD else 0.0
         rsi = self._rsi(closes, 14)
         atr = self._atr(data.candles, 14) if data.candles else 0.0
 
@@ -128,6 +129,8 @@ class AnalysisAgent:
         recent = deltas[-period:]
         gains = [d for d in recent if d > 0]
         losses = [-d for d in recent if d < 0]
+        if not gains and not losses:
+            return 50.0  # flat market — no movement in either direction
         avg_gain = sum(gains) / period if gains else 0.0
         avg_loss = sum(losses) / period if losses else 0.0001
         rs = avg_gain / avg_loss

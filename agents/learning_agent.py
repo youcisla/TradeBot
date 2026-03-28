@@ -98,8 +98,10 @@ class LearningAgent:
         current = self.get_confidence(trade.strategy)
         base_delta = score * self.CONFIDENCE_STEP
         delta = base_delta * multiplier if base_delta > 0 else base_delta
-        new_conf = max(self.CONFIDENCE_MIN,
+        proposed = max(self.CONFIDENCE_MIN,
                        min(self.CONFIDENCE_MAX, current + delta))
+        # EMA smoothing: blend proposed value with current to prevent per-trade oscillation
+        new_conf = round(0.3 * proposed + 0.7 * current, 4)
         self._db.upsert_confidence(trade.strategy, new_conf, 0, 0)
 
         # Log

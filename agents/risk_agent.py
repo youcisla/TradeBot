@@ -55,14 +55,24 @@ _CORRELATED_PAIRS: dict[str, frozenset[str]] = {
     "EURJPY": frozenset({"GBPJPY", "AUDJPY", "CADJPY", "CHFJPY"}),
     "GBPJPY": frozenset({"EURJPY", "AUDJPY", "CADJPY"}),
     "AUDJPY": frozenset({"EURJPY", "GBPJPY", "CADJPY"}),
+    "CADJPY": frozenset({"USDJPY", "USDCAD", "EURJPY", "GBPJPY", "AUDJPY", "CHFJPY"}),
+    "CHFJPY": frozenset({"USDJPY", "USDCHF", "EURJPY", "CADJPY"}),
+    # Non-USD crosses
+    "GBPAUD": frozenset({"GBPUSD", "AUDUSD", "EURAUD"}),
+    "GBPCHF": frozenset({"GBPUSD", "USDCHF", "EURCHF"}),
+    "EURAUD": frozenset({"EURUSD", "AUDUSD", "GBPAUD"}),
+    "EURCHF": frozenset({"EURUSD", "USDCHF", "GBPCHF"}),
+    "EURCAD": frozenset({"EURUSD", "USDCAD"}),
+    "AUDNZD": frozenset({"AUDUSD", "NZDUSD"}),
     # Precious metals / safe-haven
     "XAUUSD": frozenset({"XAGUSD"}),
     "XAGUSD": frozenset({"XAUUSD"}),
     # Crypto cluster
     "BTCUSD": frozenset({"ETHUSD", "LTCUSD", "XRPUSD", "SOLUSD"}),
-    "ETHUSD": frozenset({"BTCUSD", "LTCUSD", "XRPUSD"}),
-    "LTCUSD": frozenset({"BTCUSD", "ETHUSD"}),
-    "XRPUSD": frozenset({"BTCUSD", "ETHUSD"}),
+    "ETHUSD": frozenset({"BTCUSD", "LTCUSD", "XRPUSD", "SOLUSD"}),
+    "LTCUSD": frozenset({"BTCUSD", "ETHUSD", "XRPUSD", "SOLUSD"}),
+    "XRPUSD": frozenset({"BTCUSD", "ETHUSD", "LTCUSD", "SOLUSD"}),
+    "SOLUSD": frozenset({"BTCUSD", "ETHUSD", "LTCUSD", "XRPUSD"}),
     # Oil
     "USOIL":  frozenset({"UKOIL"}),
     "UKOIL":  frozenset({"USOIL"}),
@@ -207,11 +217,20 @@ class RiskAgent:
             return False
 
         # 5. Live spread check (per-asset-class limits)
+        # Prefer a fresh tick over the stale snapshot captured at signal time.
+        live_spread = signal.entry_snapshot.spread
+        try:
+            tick = self._broker.get_tick(signal.symbol)
+            if tick and tick.get("spread", 0) > 0:
+                live_spread = tick["spread"]
+        except Exception:
+            pass  # broker unavailable — fall back to snapshot spread
+
         ac = asset_class(signal.symbol)
         if ac == "crypto":
             # Percentage-of-price check for crypto
             price = signal.entry_price or 1.0
-            spread_pct = (signal.entry_snapshot.spread / price) * 100
+            spread_pct = (live_spread / price) * 100
             if spread_pct > settings.MAX_SPREAD_PCT_CRYPTO:
                 logger.warning(
                     "RISK REJECT [SPREAD]: %.3f%% > max %.1f%% for %s (crypto)",
@@ -224,7 +243,7 @@ class RiskAgent:
                 return False
         else:
             pv = pip_value(signal.symbol)
-            spread_pips = signal.entry_snapshot.spread / pv
+            spread_pips = live_spread / pv
             if ac == "commodity":
                 max_spread = settings.MAX_SPREAD_PIPS_COMMODITY
             elif ac == "exotic":

@@ -40,7 +40,9 @@ class TestRiskAgent:
         signal = make_signal(symbol="EURUSD", direction="BUY", strategy="sma_crossover")
         assert agent.validate(signal) is False
 
-    def test_rejects_max_trades(self, broker, crucix_agent):
+    def test_rejects_max_trades(self, broker, crucix_agent, monkeypatch):
+        from config import settings as _settings
+        monkeypatch.setattr(_settings, "MAX_OPEN_TRADES", 3)
         trades = [
             make_trade(symbol="EURUSD", direction="BUY", broker_ticket=100_001),
             make_trade(symbol="GBPUSD", direction="SELL", broker_ticket=100_002),

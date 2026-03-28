@@ -11,7 +11,7 @@ function getPool(): Pool {
     );
     globalForPg.__pgPool = new Pool({
       connectionString: connStr,
-      ssl: { rejectUnauthorized: false },
+      ssl: process.env.NODE_ENV === "production" ? true : { rejectUnauthorized: false },
       max: 10,
       idleTimeoutMillis: 15_000,
       connectionTimeoutMillis: 10_000,
@@ -148,7 +148,14 @@ export async function getOpenTrades(): Promise<Trade[]> {
   return rows as Trade[];
 }
 
-export async function getAllTrades(limit = 100): Promise<Trade[]> {
+export async function getAllTrades(limit = 500, cursor?: string): Promise<Trade[]> {
+  if (cursor) {
+    const rows = await query(
+      "SELECT * FROM trades WHERE open_time < $1 ORDER BY open_time DESC LIMIT $2",
+      [cursor, limit]
+    );
+    return rows as Trade[];
+  }
   const rows = await query(
     "SELECT * FROM trades ORDER BY open_time DESC LIMIT $1",
     [limit]
@@ -181,17 +188,16 @@ export async function insertCommand(
 
 // ── Analytics queries ──────────────────────────────────────────────────
 
-/** All closed trades, ordered by close time, optionally filtered by date range */
-export async function getClosedTrades(since?: string): Promise<Trade[]> {
-  if (since) {
-    const rows = await query(
-      "SELECT * FROM trades WHERE status = 'CLOSED' AND close_time >= $1 ORDER BY close_time ASC",
-      [since]
-    );
-    return rows as Trade[];
-  }
+/** All closed trades, ordered by close time, optionally filtered by date range and/or symbol */
+export async function getClosedTrades(since?: string, symbol?: string): Promise<Trade[]> {
+  const conditions: string[] = ["status = 'CLOSED'"];
+  const params: unknown[] = [];
+  if (since) { params.push(since); conditions.push(`close_time >= $${params.length}`); }
+  if (symbol) { params.push(symbol); conditions.push(`symbol = $${params.length}`); }
+  const where = conditions.join(" AND ");
   const rows = await query(
-    "SELECT * FROM trades WHERE status = 'CLOSED' ORDER BY close_time ASC"
+    `SELECT * FROM trades WHERE ${where} ORDER BY close_time ASC`,
+    params.length ? params : undefined
   );
   return rows as Trade[];
 }
@@ -457,7 +463,12 @@ function getFernetKey(): Buffer | null {
  */
 export function encryptValue(plaintext: string): string {
   const key = getFernetKey();
-  if (!key) return plaintext; // no key → store as-is (dev fallback)
+  if (!key) {
+    throw new Error(
+      "ENCRYPTION_KEY is not set. Broker passwords cannot be stored securely. " +
+      "Generate a key and add it to your .env file."
+    );
+  }
 
   const iv = crypto.randomBytes(16);
   const cipher = crypto.createCipheriv("aes-256-cbc", key, iv);

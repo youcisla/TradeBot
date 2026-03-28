@@ -1,13 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import type { BotStatus } from "@/lib/db";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
-
-interface BotStatus {
-  state: string; equity: number; daily_pnl: number;
-  open_trades: number; balance: number; last_tick: string | null;
-}
 
 interface WorldData {
   available: boolean; riskTier?: string; vix?: number;

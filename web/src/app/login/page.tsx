@@ -1,7 +1,7 @@
 "use client";
 
 import { signIn } from "next-auth/react";
-import { FormEvent, useState, useEffect } from "react";
+import { FormEvent, useState } from "react";
 import TerminalInput from "@/components/TerminalInput";
 
 /* LoginInput replaced by shared TerminalInput component */
@@ -11,14 +11,6 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError]       = useState(false);
   const [loading, setLoading]   = useState(false);
-  const [isFirstLogin, setIsFirstLogin] = useState<boolean | null>(null);
-
-  useEffect(() => {
-    fetch("/api/auth/check")
-      .then((r) => r.json())
-      .then((data) => setIsFirstLogin(data.firstLogin))
-      .catch(() => {});
-  }, []);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -79,9 +71,7 @@ export default function LoginPage() {
             fontSize: 10, color: "#607888",
             marginTop: 6, lineHeight: 1.5,
           }}>
-            {isFirstLogin
-              ? "First login — credentials will create the admin account."
-              : "Enter your credentials to continue."}
+            Enter your credentials to continue.
           </div>
         </div>
 
@@ -148,11 +138,7 @@ export default function LoginPage() {
             (e.currentTarget as HTMLButtonElement).style.boxShadow = "none";
           }}
         >
-          {loading
-            ? "Authenticating…"
-            : isFirstLogin
-              ? "Create Account & Login"
-              : "Authenticate"}
+          {loading ? "Authenticating…" : "Authenticate"}
         </button>
       </form>
     </div>

@@ -1,14 +1,12 @@
 import { NextResponse } from "next/server";
-import { getUserCount } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
-/** GET /api/auth/check — returns whether this is the first login (no users) */
+/**
+ * GET /api/auth/check — kept for backwards compatibility.
+ * Auto-signup has been removed; always returns firstLogin: false.
+ * To create the first dashboard user run: python scripts/reset_dashboard_user.py
+ */
 export async function GET() {
-  try {
-    const count = await getUserCount();
-    return NextResponse.json({ firstLogin: count === 0 });
-  } catch {
-    return NextResponse.json({ firstLogin: false });
-  }
+  return NextResponse.json({ firstLogin: false });
 }
