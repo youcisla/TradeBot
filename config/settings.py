@@ -126,5 +126,16 @@ SMA_SLOW_PERIOD: int = int(os.getenv("SMA_SLOW_PERIOD", "50"))
 DATABASE_URL: str = os.getenv("DATABASE_URL", "")
 DB_PATH: str = os.getenv("DB_PATH", str(Path(__file__).resolve().parent.parent / "data" / "trading_bot.db"))
 
+# ── Timezone (display only — all internal trading logic stays UTC) ───────
+# Used for log timestamps, day-of-week labels, and daily summary scheduling.
+# Must be a valid IANA timezone name.  Defaults to Europe/Paris (CET/CEST).
+TIMEZONE: str = os.getenv("TIMEZONE", "Europe/Paris")
+
+# ── Weekend / Crypto-only mode ───────────────────────────────────────────
+# Symbols scanned during the forex weekend (Friday 22:00 – Sunday 22:00 UTC).
+# Crypto markets run 24/7 so the bot stays active but narrows focus.
+# Comma-separated, e.g. "BTCUSD" or "BTCUSD,ETHUSD".
+WEEKEND_SYMBOLS: str = os.getenv("WEEKEND_SYMBOLS", "BTCUSD")
+
 # ── Crucix World Intelligence (optional) ─────────────────────────────
 CRUCIX_URL: str = os.getenv("CRUCIX_URL", "http://localhost:3117")

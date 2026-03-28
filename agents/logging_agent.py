@@ -16,6 +16,7 @@ import logging
 import logging.handlers
 from datetime import date, datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from config import settings
 from database.db import Database
@@ -37,7 +38,24 @@ _LEVEL_COLOUR = {
 }
 
 
-class _ErrorConsoleFormatter(logging.Formatter):
+class _LocalTimeFormatter(logging.Formatter):
+    """Formatter that stamps every record with the configured local timezone.
+
+    Python's default logging.Formatter uses time.localtime() which depends on
+    the OS timezone — unreliable on servers set to UTC.  This formatter always
+    uses settings.TIMEZONE (default: Europe/Paris) so timestamps match what
+    the operator sees on their screen, including correct DST transitions.
+    """
+
+    def formatTime(self, record: logging.LogRecord, datefmt: str | None = None) -> str:
+        tz = ZoneInfo(settings.TIMEZONE)
+        ct = datetime.fromtimestamp(record.created, tz=tz)
+        if datefmt:
+            return ct.strftime(datefmt)
+        return ct.strftime("%Y-%m-%d %H:%M:%S")
+
+
+class _ErrorConsoleFormatter(_LocalTimeFormatter):
     """Prints only ERROR / CRITICAL to the terminal, loudly coloured."""
 
     _BAR = "─" * 72
@@ -149,7 +167,7 @@ class LoggingAgent:
 
         root.setLevel(logging.DEBUG)
 
-        file_fmt = logging.Formatter(
+        file_fmt = _LocalTimeFormatter(
             "%(asctime)s | %(levelname)-8s | %(name)s | %(message)s",
             datefmt="%Y-%m-%d %H:%M:%S",
         )
@@ -161,7 +179,8 @@ class LoggingAgent:
         root.addHandler(ch)
 
         # ── File: full debug log, rotating ───────────────────────────────
-        log_file = self._log_dir / f"bot_{date.today().isoformat()}.log"
+        from utils.helpers import local_now
+        log_file = self._log_dir / f"bot_{local_now().strftime('%Y-%m-%d')}.log"
         fh = logging.handlers.RotatingFileHandler(
             log_file, maxBytes=5_000_000, backupCount=5, encoding="utf-8",
         )

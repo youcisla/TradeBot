@@ -3,8 +3,25 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from zoneinfo import ZoneInfo
 
 from config.symbols import CRYPTO, SYMBOL_CLASS
+
+
+def _local_tz() -> ZoneInfo:
+    """Return the configured local timezone (lazy import avoids circular dep)."""
+    from config import settings
+    return ZoneInfo(settings.TIMEZONE)
+
+
+def local_now() -> datetime:
+    """Return the current time in the configured local timezone (e.g. Europe/Paris).
+
+    Use this for **display purposes only** — logs, day labels, summary scheduling.
+    All internal trading logic (sessions, market hours, candle timestamps) must
+    keep using ``datetime.now(UTC)`` so DST never affects trade decisions.
+    """
+    return datetime.now(_local_tz())
 
 
 def current_session() -> str:
@@ -26,7 +43,8 @@ def current_session() -> str:
 
 
 def day_of_week() -> str:
-    return datetime.now(UTC).strftime("%A")
+    """Return the current day name in the configured local timezone."""
+    return local_now().strftime("%A")
 
 
 # ── Market hours ─────────────────────────────────────────────────────────
@@ -76,3 +94,23 @@ def is_market_open(symbol: str, now: datetime | None = None) -> bool:
 def is_any_market_open(symbols: list[str], now: datetime | None = None) -> bool:
     """Return True if at least one symbol's market is open."""
     return any(is_market_open(s, now) for s in symbols)
+
+
+def is_weekend(now: datetime | None = None) -> bool:
+    """Return True during the forex weekend (Friday 22:00 UTC – Sunday 22:00 UTC).
+
+    During this window only crypto markets are open.  The bot switches to
+    weekend mode: crypto-only symbols, multi-timeframe ICT analysis.
+    """
+    if now is None:
+        now = datetime.now(UTC)
+    weekday = now.weekday()   # Mon=0 … Sun=6
+    hour = now.hour
+
+    if weekday == 5:           # All of Saturday
+        return True
+    if weekday == 4 and hour >= 22:   # Friday from 22:00
+        return True
+    if weekday == 6 and hour < 22:    # Sunday before 22:00
+        return True
+    return False

@@ -50,7 +50,7 @@ from agents.deepseek_strategy import DeepSeekStrategy
 from utils import telegram_bot
 from utils import candle_server
 from utils import terminal_ui as tui
-from utils.helpers import is_market_open, is_any_market_open
+from utils.helpers import is_market_open, is_any_market_open, is_weekend, local_now
 from utils.symbol_event_tracker import SymbolEventTracker
 
 logger = logging.getLogger(__name__)
@@ -161,12 +161,34 @@ def main() -> None:
     strategies = [deepseek_strategy, ict_strategy, sma_strategy]
     logger.info("Multi-strategy mode: DeepSeek LLM + ICT/SMC + SMAcrossover")
 
+    # ── Weekend crypto strategies — multi-TF ICT for BTCUSD ─────────────
+    # During the forex weekend, only crypto trades.  Three ICT instances
+    # cover the full timeframe stack: intraday (M15+H4), swing (H1+D1),
+    # and macro (H4+W1).  The existing ict_strategy covers M15+H4.
+    ict_btc_h1d1 = ICTStrategy(
+        broker=broker, db=db, min_confidence=55.0,
+        htf_timeframe="D1", htf_candle_count=100,
+        entry_timeframe="H1", entry_candle_count=200,
+    )
+    ict_btc_h4w1 = ICTStrategy(
+        broker=broker, db=db, min_confidence=50.0,  # slightly lower — H4 setups are rarer
+        htf_timeframe="W1", htf_candle_count=52,
+        entry_timeframe="H4", entry_candle_count=150,
+    )
+    weekend_strategies = [deepseek_strategy, ict_btc_h4w1, ict_strategy, ict_btc_h1d1]
+
+    # Parse weekend symbol list (e.g. "BTCUSD" or "BTCUSD,ETHUSD")
+    _weekend_symbols: list[str] = [
+        s.strip() for s in settings.WEEKEND_SYMBOLS.split(",") if s.strip()
+    ]
+
     # ── 6. Agents (db passed for persona events) ────────────────────────
     market_agent = MarketAgent(broker, db=db)
     analysis_agent = AnalysisAgent(crucix_agent, db=db)
     trade_manager = TradeManagerAgent(broker, state, db)
     risk_agent = RiskAgent(broker, trade_manager.get_open_trades, crucix_agent, db=db)
     strategy_agent = StrategyAgent(strategies, learning.get_confidence, db=db)
+    weekend_strategy_agent = StrategyAgent(weekend_strategies, learning.get_confidence, db=db)
     execution_agent = ExecutionAgent(broker, state, risk_agent.calculate_position_size, db=db)
 
     # ── Trading Council (algorithmic quality gate) ────────────────────────
@@ -265,6 +287,7 @@ def main() -> None:
             _market_closed_logged = False
 
         try:
+            _weekend = is_weekend()
             _run_iteration(
                 loop_count=loop_count,
                 db=db,
@@ -272,7 +295,7 @@ def main() -> None:
                 crucix_agent=crucix_agent,
                 market_agent=market_agent,
                 analysis_agent=analysis_agent,
-                strategy_agent=strategy_agent,
+                strategy_agent=weekend_strategy_agent if _weekend else strategy_agent,
                 risk_agent=risk_agent,
                 execution_agent=execution_agent,
                 trade_manager=trade_manager,
@@ -286,6 +309,7 @@ def main() -> None:
                 symbol_disabled_until=_symbol_disabled_until,
                 symbol_max_fails=_SYMBOL_MAX_FAILS,
                 symbol_disable_secs=_SYMBOL_DISABLE_SECS,
+                weekend_symbols=_weekend_symbols if _weekend else None,
             )
         except Exception:
             logger.exception("Unhandled error in main loop iteration %d", loop_count)
@@ -304,8 +328,8 @@ def main() -> None:
         # ── Process UI command queue ─────────────────────────────────────
         _process_commands(db, trade_manager)
 
-        # ── Daily summary ────────────────────────────────────────────────
-        now = datetime.now(UTC)
+        # ── Daily summary (triggered at DAILY_SUMMARY_HOUR in local time) ──
+        now = local_now()
         today_str = now.strftime("%Y-%m-%d")
         if (now.hour >= settings.DAILY_SUMMARY_HOUR
                 and today_str != last_summary_date):
@@ -505,6 +529,7 @@ def _run_iteration(
     symbol_disabled_until: dict[str, float],
     symbol_max_fails: int,
     symbol_disable_secs: float,
+    weekend_symbols: list[str] | None = None,
 ) -> None:
     """Single iteration of the trading loop.
 
@@ -516,6 +541,13 @@ def _run_iteration(
     This ensures we never miss a high-confidence setup just because another
     symbol happened to be checked first in the list.
     """
+
+    # ── Weekend mode notice (logged once per entry into weekend window) ──
+    if weekend_symbols is not None:
+        logger.debug(
+            "Weekend mode active — scanning only: %s (3-TF ICT: M15+H4, H1+D1, H4+W1)",
+            ", ".join(weekend_symbols),
+        )
 
     # ── Crucix macro sweep (once per iteration, logs to DB) ──────────────
     crucix_agent.run()
@@ -569,6 +601,9 @@ def _run_iteration(
 
     for symbol in _active_symbols:
         if not is_market_open(symbol):
+            continue
+        # Weekend mode: restrict scanning to crypto-only symbols (default: BTCUSD)
+        if weekend_symbols is not None and symbol not in weekend_symbols:
             continue
         if symbol in open_symbols:
             continue

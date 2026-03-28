@@ -10,7 +10,9 @@
       "Bash(python -c \"from models.trade import Trade; t = Trade\\(\\); print\\(''take_profit_4:'', t.take_profit_4, ''tp4_lots:'', t.tp4_lots, ''tp4_hit:'', t.tp4_hit, ''structural_be:'', t.structural_be, ''remaining_lots:'', t.remaining_lots\\(\\)\\)\")",
       "Bash(python -c \"from models.signal import Signal; s = Signal\\(\\); print\\(''take_profit_4:'', s.take_profit_4, ''structural_be:'', s.structural_be\\)\")",
       "Bash(python -m pytest tests/ -v --tb=short -q)",
-      "Bash(python -m pytest tests/ -q --tb=short)"
+      "Bash(python -m pytest tests/ -q --tb=short)",
+      "Bash(python -c \"import zoneinfo; from zoneinfo import ZoneInfo; import datetime; paris = ZoneInfo\\(''Europe/Paris''\\); now_paris = datetime.datetime.now\\(paris\\); print\\(''Paris time:'', now_paris.strftime\\(''%H:%M''\\), ''UTC:'', datetime.datetime.now\\(datetime.UTC\\).strftime\\(''%H:%M''\\)\\)\")",
+      "Bash(python -c \":*)"
     ],
     "deny": []
   },
