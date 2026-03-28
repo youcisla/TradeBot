@@ -1,18 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { nowParis } from "@/lib/time";
 
 export default function DashHeader() {
-  const [utcTime, setUtcTime] = useState("--:--:-- UTC");
+  const [localTime, setLocalTime] = useState("--:--:--");
 
   useEffect(() => {
-    const tick = () => {
-      const now = new Date();
-      const hh = String(now.getUTCHours()).padStart(2, "0");
-      const mm = String(now.getUTCMinutes()).padStart(2, "0");
-      const ss = String(now.getUTCSeconds()).padStart(2, "0");
-      setUtcTime(`${hh}:${mm}:${ss} UTC`);
-    };
+    const tick = () => setLocalTime(nowParis());
     tick();
     const id = setInterval(tick, 1000);
     return () => clearInterval(id);
@@ -30,7 +25,7 @@ export default function DashHeader() {
           </span>
         </div>
         <div className="font-mono uppercase tracking-tighter text-sm text-primary">
-          {utcTime}
+          {localTime}
         </div>
       </div>
       <div className="bg-surface-container-low h-px w-full" />

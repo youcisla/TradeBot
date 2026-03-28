@@ -3,6 +3,7 @@
 psycopg2-binary>=2.9
 cryptography>=42.0
 python-dotenv>=1.0
+tzdata>=2024.1
 rich>=13.0
 bcrypt>=4.0
 openai>=1.0
