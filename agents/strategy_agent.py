@@ -9,6 +9,7 @@ import logging
 from typing import TYPE_CHECKING, Callable, Optional, Sequence
 
 from config import settings
+from config.symbols import asset_class
 from models.market_data import MarketContext
 from models.signal import Signal
 from strategies.base_strategy import BaseStrategy
@@ -73,6 +74,7 @@ class StrategyAgent:
     def _collect_signals(self, context: MarketContext) -> list[Signal]:
         """Run every strategy and collect all valid signals."""
         signals: list[Signal] = []
+        min_conf = self._min_confidence_for_context(context)
 
         for strategy in self._strategies:
             confidence = self._get_confidence(strategy.name)
@@ -90,6 +92,23 @@ class StrategyAgent:
                 final_confidence = signal.confidence if signal.confidence != 0.5 else confidence
                 signal.confidence = max(0.0, min(1.0, final_confidence))
 
+                # Dynamic confidence floor by regime + asset class.
+                if signal.confidence < min_conf:
+                    self._emit(
+                        "info",
+                        (
+                            f"Signal skipped on {signal.symbol}: conf={signal.confidence:.2f} "
+                            f"< min={min_conf:.2f} for regime={context.regime}"
+                        ),
+                        {
+                            "symbol": signal.symbol,
+                            "confidence": signal.confidence,
+                            "min_confidence": min_conf,
+                            "regime": context.regime,
+                        },
+                    )
+                    continue
+
                 self._emit("info",
                            f"Signal detected! {signal.strategy or strategy.name} says {signal.direction} "
                            f"{signal.symbol} @ {signal.entry_price:.5f} (conf={final_confidence:.2f})",
@@ -103,3 +122,24 @@ class StrategyAgent:
                 signals.append(signal)
 
         return signals
+
+    @staticmethod
+    def _min_confidence_for_context(context: MarketContext) -> float:
+        """Return a regime-aware confidence floor with asset-class adjustments."""
+        regime = (context.regime or "unknown").lower()
+        if regime == "trending":
+            floor = settings.MIN_CONF_TRENDING
+        elif regime == "ranging":
+            floor = settings.MIN_CONF_RANGING
+        elif regime == "volatile":
+            floor = settings.MIN_CONF_VOLATILE
+        else:
+            floor = settings.MIN_CONF_UNKNOWN
+
+        ac = asset_class(context.symbol)
+        if ac == "crypto":
+            floor += settings.MIN_CONF_CRYPTO_BONUS
+        elif ac == "exotic":
+            floor += settings.MIN_CONF_EXOTIC_BONUS
+
+        return max(settings.CONFIDENCE_ALLOW, min(0.95, floor))

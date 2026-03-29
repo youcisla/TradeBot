@@ -311,9 +311,9 @@ class Database:
                 self._pool.closeall()
             except Exception:
                 pass
-        self._pool = psycopg2.pool.SimpleConnectionPool(
+        self._pool = psycopg2.pool.ThreadedConnectionPool(
             minconn=1,
-            maxconn=5,
+            maxconn=20,
             dsn=self._dsn,
             options="-c statement_timeout=15000",
         )
@@ -468,7 +468,23 @@ class Database:
             self._put_conn(conn)
 
     @staticmethod
+    def _ensure_utc(dt: datetime | None) -> datetime | None:
+        """Return a UTC-aware datetime for values loaded from Postgres.
+
+        The `trades` table currently stores `TIMESTAMP` (without timezone), so
+        psycopg2 can return naive datetimes. Trade manager arithmetic uses
+        UTC-aware datetimes, so normalize at the DB boundary.
+        """
+        if dt is None:
+            return None
+        if dt.tzinfo is None:
+            return dt.replace(tzinfo=UTC)
+        return dt.astimezone(UTC)
+
+    @staticmethod
     def _row_to_trade(row: dict) -> Trade:
+        open_time = Database._ensure_utc(row["open_time"]) or datetime.now(UTC)
+        close_time = Database._ensure_utc(row["close_time"])
         return Trade(
             id=row["id"],
             symbol=row["symbol"],
@@ -491,8 +507,8 @@ class Database:
             tp4_hit=bool(row.get("tp4_hit", False)),
             structural_be=float(row["structural_be"] or 0),
             status=row["status"],
-            open_time=row["open_time"],
-            close_time=row["close_time"],
+            open_time=open_time,
+            close_time=close_time,
             pnl=float(row["pnl"] or 0),
             commission=float(row["commission"] or 0),
             close_reason=row["close_reason"] or "",

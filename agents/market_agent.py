@@ -6,12 +6,15 @@ Answers: *What is the market doing?*
 from __future__ import annotations
 
 import logging
+import time
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from broker.connector import BrokerConnector
 from config import settings
 from filters.data_validator import DataValidationError, DataValidator
 from models.market_data import Candle, MarketData
+from utils.helpers import current_session
 
 if TYPE_CHECKING:
     from database.db import Database
@@ -32,11 +35,32 @@ class MarketAgent:
         self._db = db
         self._validators: dict[str, DataValidator] = {}
         self._candle_count = candle_count
+        # Cache slow-changing higher-timeframe candles to reduce MT5 round-trips.
+        self._htf_cache: dict[tuple[str, str, int], tuple[float, list[Candle]]] = {}
+        self._htf_cache_base_ttl_seconds: dict[str, float] = {
+            "M15": settings.HTF_CACHE_TTL_M15_SECONDS,
+            "M30": settings.HTF_CACHE_TTL_M30_SECONDS,
+            "H4": settings.HTF_CACHE_TTL_H4_SECONDS,
+            "D1": settings.HTF_CACHE_TTL_D1_SECONDS,
+        }
 
     def _validator(self, symbol: str) -> DataValidator:
         if symbol not in self._validators:
             self._validators[symbol] = DataValidator(db=self._db)
         return self._validators[symbol]
+
+    @staticmethod
+    def _session_profile() -> str:
+        session_name = current_session(datetime.now(UTC))
+        if session_name in {"london", "newyork", "overlap"}:
+            return "london_ny"
+        return "asia"
+
+    def _htf_ttl_seconds(self, timeframe: str, session_profile: str) -> float:
+        base = self._htf_cache_base_ttl_seconds.get(timeframe, 30.0)
+        if session_profile == "london_ny":
+            return max(5.0, base * settings.HTF_CACHE_TTL_MULTIPLIER_LONDON_NY)
+        return max(5.0, base * settings.HTF_CACHE_TTL_MULTIPLIER_ASIA)
 
     def get_data(self, symbol: str) -> MarketData:
         """Return a validated MarketData snapshot.
@@ -62,11 +86,13 @@ class MarketAgent:
         validator = self._validator(symbol)
         validator.validate_tick(bid, ask, spread)
 
-        candles     = self._get_candles(symbol)
-        m30_candles = self._get_htf_candles(symbol, "M30", settings.M30_CANDLE_COUNT)
-        m15_candles = self._get_htf_candles(symbol, "M15", settings.M15_CANDLE_COUNT)
-        h4_candles  = self._get_htf_candles(symbol, "H4",  settings.H4_CANDLE_COUNT)
-        d1_candles  = self._get_htf_candles(symbol, "D1",  settings.D1_CANDLE_COUNT)
+        session_profile = self._session_profile()
+
+        candles = self._get_candles(symbol)
+        m30_candles = self._get_htf_candles(symbol, "M30", settings.M30_CANDLE_COUNT, session_profile)
+        m15_candles = self._get_htf_candles(symbol, "M15", settings.M15_CANDLE_COUNT, session_profile)
+        h4_candles = self._get_htf_candles(symbol, "H4", settings.H4_CANDLE_COUNT, session_profile)
+        d1_candles = self._get_htf_candles(symbol, "D1", settings.D1_CANDLE_COUNT, session_profile)
 
         self._emit("info",
                    f"{symbol} — bid={bid:.5f} spread={spread:.5f} "
@@ -108,10 +134,27 @@ class MarketAgent:
             logger.warning("Failed to fetch candles for %s", symbol, exc_info=True)
             return []
 
-    def _get_htf_candles(self, symbol: str, timeframe: str, count: int) -> list[Candle]:
+    def _get_htf_candles(
+        self,
+        symbol: str,
+        timeframe: str,
+        count: int,
+        session_profile: str,
+    ) -> list[Candle]:
         """Fetch higher-timeframe candles; returns [] silently on failure."""
+        cache_key = (symbol, timeframe, count)
+        now = time.monotonic()
+        ttl = self._htf_ttl_seconds(timeframe, session_profile)
+        cached = self._htf_cache.get(cache_key)
+        if cached is not None:
+            fetched_at, candles = cached
+            if now - fetched_at <= ttl:
+                return candles
+
         try:
-            return self._broker.get_candles(symbol, timeframe, count=count) or []
+            candles = self._broker.get_candles(symbol, timeframe, count=count) or []
+            self._htf_cache[cache_key] = (now, candles)
+            return candles
         except Exception:
             logger.debug("HTF candles unavailable for %s %s", symbol, timeframe)
             return []

@@ -236,16 +236,26 @@ class CrucixClient:
         # Dashboard: vix > 40 → FLASH, > 28 → PRIORITY, > 18 → ROUTINE
         # Telegram urgent alerts can still force FLASH regardless of VIX
         tg_urgent: list = raw.get("tg", {}).get("urgent", []) if isinstance(raw.get("tg"), dict) else []
+        alerts_list: list = raw.get("alerts", []) if isinstance(raw.get("alerts"), list) else []
+        all_alerts = tg_urgent + alerts_list
+
         has_flash_alert = any(
             str(p.get("tier", "")).upper() == "FLASH"
-            for p in tg_urgent if isinstance(p, dict)
+            for p in all_alerts if isinstance(p, dict)
         )
+        has_priority_alert = any(
+            str(p.get("tier", "")).upper() == "PRIORITY"
+            for p in all_alerts if isinstance(p, dict)
+        )
+
         if has_flash_alert:
             ctx.risk_tier = TIER_FLASH
             ctx.active_flash_alerts = [
-                str(p.get("text", ""))[:100] for p in tg_urgent
+                str(p.get("text", p.get("title", "")))[:100] for p in all_alerts
                 if isinstance(p, dict) and str(p.get("tier", "")).upper() == "FLASH"
             ]
+        elif has_priority_alert:
+            ctx.risk_tier = TIER_PRIORITY
         elif ctx.vix > 40:
             ctx.risk_tier = TIER_FLASH
             ctx.active_flash_alerts = [f"VIX spike: {ctx.vix:.1f}"]

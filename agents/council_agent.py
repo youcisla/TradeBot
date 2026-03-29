@@ -582,20 +582,26 @@ class CouncilAgent:
         traditional = self._traditional.analyse(signal, context)
         world = self._world.analyse(signal, context)
 
-        # Strategy-aware weighting: give extra weight to the expert that
-        # matches the signal's originating strategy.  This prevents a valid
-        # ICT setup from being overruled by DanialFX / Traditional experts
-        # who use incompatible methodologies.
+        # Strategy-aware weighting: adapt expert weights to signal origin.
         #
-        #   ICT signal    → ICT=50%, DanialFX=17%, Traditional=17%, World=16%
-        #   DeepSeek/other → equal 25% each (original behaviour)
+        #   ICT signal      → ICT-heavy weights from settings.
+        #   DeepSeek signal → traditional/world-heavy weights from settings.
+        #   Other signals   → equal 25% each (fallback behaviour).
         is_ict_signal = signal.strategy.startswith("ict_smc")
+        is_deepseek_signal = signal.strategy.startswith("deepseek")
         if is_ict_signal:
             confidence = (
                 ict.score         * settings.COUNCIL_ICT_WEIGHT +
                 danial.score      * settings.COUNCIL_DANIAL_WEIGHT +
                 traditional.score * settings.COUNCIL_TRAD_WEIGHT +
                 world.score       * settings.COUNCIL_WORLD_WEIGHT
+            )
+        elif is_deepseek_signal:
+            confidence = (
+                ict.score         * settings.COUNCIL_DEEPSEEK_ICT_WEIGHT +
+                danial.score      * settings.COUNCIL_DEEPSEEK_DANIAL_WEIGHT +
+                traditional.score * settings.COUNCIL_DEEPSEEK_TRAD_WEIGHT +
+                world.score       * settings.COUNCIL_DEEPSEEK_WORLD_WEIGHT
             )
         else:
             confidence = (

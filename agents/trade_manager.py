@@ -54,6 +54,13 @@ class TradeManagerAgent:
         if self._db:
             self._db.log_agent_event("trade_manager", level, msg, data)
 
+    @staticmethod
+    def _ensure_utc(dt: datetime) -> datetime:
+        """Normalize a datetime to timezone-aware UTC for safe arithmetic."""
+        if dt.tzinfo is None:
+            return dt.replace(tzinfo=UTC)
+        return dt.astimezone(UTC)
+
     def reconcile(self, send_alert: Callable[[str], None] | None = None) -> None:
         """Run full reconciliation: DB vs broker, including TP repair."""
         alert_fn = send_alert or telegram_bot.send_message
@@ -207,7 +214,8 @@ class TradeManagerAgent:
 
             # ── Time-in-trade limit ───────────────────────────────────────
             if trade.is_open():
-                hours_open = (datetime.now(UTC) - trade.open_time).total_seconds() / 3600
+                open_time_utc = self._ensure_utc(trade.open_time)
+                hours_open = (datetime.now(UTC) - open_time_utc).total_seconds() / 3600
                 if hours_open >= settings.MAX_HOURS_IN_TRADE:
                     self._handle_time_limit(trade, pos_map, hours_open)
 

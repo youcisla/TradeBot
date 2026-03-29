@@ -6,15 +6,15 @@ Works with any MT5 broker (PUPrime, ICMarkets, Pepperstone, etc.).
 
 from __future__ import annotations
 
-import concurrent.futures
 import logging
 from datetime import UTC, datetime, timezone
-from typing import Callable, TypeVar
+from typing import Any, cast
 
-import MetaTrader5 as mt5
+import MetaTrader5 as _mt5
 
-_T = TypeVar("_T")
-_MT5_CALL_TIMEOUT = 10.0  # seconds — MT5 IPC calls that hang will raise TimeoutError
+# MetaTrader5 runtime package exposes many attributes dynamically and lacks
+# complete static type hints, so we cast it to Any for this connector module.
+mt5 = cast(Any, _mt5)
 
 from broker.connector import BrokerConnector, OrderResult, PositionInfo
 from config import settings
@@ -232,46 +232,31 @@ class MT5Connector(BrokerConnector):
         """Translate canonical symbol to broker symbol name."""
         return getattr(self, 'symbol_map', {}).get(symbol, symbol)
 
-    @staticmethod
-    def _call_with_timeout(fn: "Callable[[], _T]", timeout: float = _MT5_CALL_TIMEOUT) -> "_T":
-        """Run *fn* in a thread; raise TimeoutError if it exceeds *timeout* seconds."""
-        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
-            future = ex.submit(fn)
-            try:
-                return future.result(timeout=timeout)
-            except concurrent.futures.TimeoutError:
-                raise TimeoutError(f"MT5 call timed out after {timeout}s")
-
     def get_tick(self, symbol: str) -> dict[str, float]:
         broker_sym = self.resolve(symbol)
 
-        def _fetch() -> dict[str, float]:
+        tick = mt5.symbol_info_tick(broker_sym)
+        if tick is None:
+            mt5.symbol_select(broker_sym, True)
             tick = mt5.symbol_info_tick(broker_sym)
-            if tick is None:
-                mt5.symbol_select(broker_sym, True)
-                tick = mt5.symbol_info_tick(broker_sym)
-            if tick is None:
-                raise RuntimeError(f"No tick data for {symbol}: {mt5.last_error()}")
-            spread = tick.ask - tick.bid
-            return {
-                "bid": tick.bid,
-                "ask": tick.ask,
-                "spread": round(spread, 6),
-                "volume": float(tick.volume),
-            }
+        if tick is None:
+            raise RuntimeError(f"No tick data for {symbol}: {mt5.last_error()}")
 
-        return self._call_with_timeout(_fetch)
+        spread = tick.ask - tick.bid
+        return {
+            "bid": tick.bid,
+            "ask": tick.ask,
+            "spread": round(spread, 6),
+            "volume": float(tick.volume),
+        }
 
     def get_candles(self, symbol: str, timeframe: str, count: int) -> list[Candle]:
         broker_sym = self.resolve(symbol)
         tf = _TF_MAP.get(timeframe, mt5.TIMEFRAME_H1)
 
-        def _fetch_rates():
-            # Ensure symbol is selected so MT5 loads its history
-            mt5.symbol_select(broker_sym, True)
-            return mt5.copy_rates_from_pos(broker_sym, tf, 0, count)
-
-        rates = self._call_with_timeout(_fetch_rates)
+        # Ensure symbol is selected so MT5 loads its history.
+        mt5.symbol_select(broker_sym, True)
+        rates = mt5.copy_rates_from_pos(broker_sym, tf, 0, count)
         if rates is None:
             logger.warning("No candle data for %s (%s) %s: %s", symbol, broker_sym, timeframe, mt5.last_error())
             return []
@@ -323,7 +308,7 @@ class MT5Connector(BrokerConnector):
             "sl": float(sl),
             "deviation": 20,
             "magic": 202603,
-            "comment": comment.encode("ascii", "ignore").decode("ascii")[:31],
+            "comment": self._sanitize_comment(comment),
             "type_time": mt5.ORDER_TIME_GTC,
             "type_filling": mt5.ORDER_FILLING_IOC,
         }
@@ -390,7 +375,7 @@ class MT5Connector(BrokerConnector):
             "price": price,
             "deviation": 20,
             "magic": 202603,
-            "comment": "partial_close",
+            "comment": self._sanitize_comment("partial_close"),
             "type_time": mt5.ORDER_TIME_GTC,
             "type_filling": mt5.ORDER_FILLING_IOC,
         }
@@ -459,3 +444,17 @@ class MT5Connector(BrokerConnector):
             magic=getattr(pos, 'magic', 0),
             comment=getattr(pos, 'comment', ''),
         )
+
+    @staticmethod
+    def _sanitize_comment(comment: str | None) -> str:
+        """Return an MT5-safe order comment.
+
+        MT5 comments must be short ASCII and can fail on control chars or empty values.
+        """
+        raw = str(comment or "")
+        ascii_only = raw.encode("ascii", "ignore").decode("ascii")
+        cleaned = "".join(ch for ch in ascii_only if 32 <= ord(ch) <= 126)
+        compact = " ".join(cleaned.split())
+        if not compact:
+            compact = "bot"
+        return compact[:29]

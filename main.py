@@ -19,6 +19,7 @@ import time
 if sys.platform == "win32":
     os.system("")  # activates VT100 processing for the current console
 from datetime import UTC, datetime
+from typing import cast
 
 from broker.connector import BrokerConnector
 from broker.mock_connector import MockConnector
@@ -51,7 +52,7 @@ from agents.deepseek_strategy import DeepSeekStrategy
 from utils import telegram_bot
 from utils import candle_server
 from utils import terminal_ui as tui
-from utils.helpers import is_market_open, is_any_market_open, is_weekend, local_now
+from utils.helpers import current_session, is_market_open, is_any_market_open, is_weekend, local_now
 from utils.symbol_event_tracker import SymbolEventTracker
 
 logger = logging.getLogger(__name__)
@@ -252,9 +253,26 @@ def main() -> None:
     logger.info("Entering main loop (interval=%ds)", settings.LOOP_INTERVAL_SECONDS)
 
     _market_closed_logged = False
-    # Minimum wall-clock seconds between re-scanning the same symbol.
-    _SCAN_COOLDOWN_S: float = float(settings.SCAN_COOLDOWN_SECONDS)
     _last_scan_ts: dict[str, float] = {}  # symbol → monotonic time of last analysis
+    _deferred_entries: list[dict[str, object]] = []
+    _metrics: dict[str, float] = {
+        "loops": 0,
+        "scanned_symbols": 0,
+        "raw_signals": 0,
+        "ranked_signals": 0,
+        "council_rejections": 0,
+        "risk_rejections": 0,
+        "fast_lane_attempts": 0,
+        "fast_lane_fills": 0,
+        "fast_lane_closed": 0,
+        "full_lane_fills": 0,
+        "deferred_added": 0,
+        "deferred_promoted": 0,
+        "last_scan_latency_ms": 0.0,
+        "last_rank_latency_ms": 0.0,
+        "last_execution_latency_ms": 0.0,
+        "last_signal_to_order_ms": -1.0,
+    }
 
     # ── Symbol fault tracking ────────────────────────────────────────────
     # Symbols with repeated IPC / data errors are temporarily disabled to
@@ -281,6 +299,11 @@ def main() -> None:
     while not _shutdown:
         loop_start = time.monotonic()
         loop_count += 1
+        _active_session = current_session(datetime.now(UTC))
+        if _active_session in {"london", "newyork", "overlap"}:
+            _active_scan_cooldown = float(settings.SCAN_COOLDOWN_SECONDS_LONDON_NY)
+        else:
+            _active_scan_cooldown = float(settings.SCAN_COOLDOWN_SECONDS_ASIA)
 
         # ── Market hours: if ALL markets are closed, sleep longer ────────
         if not is_any_market_open(_active_symbols):
@@ -321,11 +344,14 @@ def main() -> None:
                 council=council,
                 symbol_event_tracker=symbol_event_tracker,
                 last_scan_ts=_last_scan_ts,
-                scan_cooldown=_SCAN_COOLDOWN_S,
+                scan_cooldown=_active_scan_cooldown,
+                deferred_entries=_deferred_entries,
+                metrics=_metrics,
                 symbol_fail_count=_symbol_fail_count,
                 symbol_disabled_until=_symbol_disabled_until,
                 symbol_max_fails=_SYMBOL_MAX_FAILS,
                 symbol_disable_secs=_SYMBOL_DISABLE_SECS,
+                session_profile=_active_session,
                 weekend_symbols=_weekend_symbols if _weekend else None,
             )
         except Exception:
@@ -341,6 +367,51 @@ def main() -> None:
             _update_heartbeat(db, broker, trade_manager, learning)
         except Exception:
             logger.warning("Heartbeat update failed — continuing")
+
+        if settings.METRICS_LOG_EVERY_N_LOOPS > 0 and loop_count % settings.METRICS_LOG_EVERY_N_LOOPS == 0:
+            logger.info(
+                "KPI snapshot @loop %d | scanned=%d raw=%d ranked=%d council_rej=%d risk_rej=%d "
+                "fast_attempts=%d fast_fills=%d fast_closed=%d full_fills=%d deferred_added=%d deferred_promoted=%d "
+                "session=%s cooldown=%.0fs scan_ms=%.1f rank_ms=%.1f exec_ms=%.1f signal_to_order_ms=%.1f",
+                loop_count,
+                _metrics["scanned_symbols"],
+                _metrics["raw_signals"],
+                _metrics["ranked_signals"],
+                _metrics["council_rejections"],
+                _metrics["risk_rejections"],
+                _metrics["fast_lane_attempts"],
+                _metrics["fast_lane_fills"],
+                _metrics["fast_lane_closed"],
+                _metrics["full_lane_fills"],
+                _metrics["deferred_added"],
+                _metrics["deferred_promoted"],
+                _active_session,
+                _active_scan_cooldown,
+                _metrics["last_scan_latency_ms"],
+                _metrics["last_rank_latency_ms"],
+                _metrics["last_execution_latency_ms"],
+                _metrics["last_signal_to_order_ms"],
+            )
+            db.log_agent_event(
+                "logging",
+                "info",
+                (
+                    f"Loop telemetry: session={_active_session} cooldown={_active_scan_cooldown:.0f}s "
+                    f"scan={_metrics['last_scan_latency_ms']:.1f}ms "
+                    f"rank={_metrics['last_rank_latency_ms']:.1f}ms "
+                    f"exec={_metrics['last_execution_latency_ms']:.1f}ms "
+                    f"signal_to_order={_metrics['last_signal_to_order_ms']:.1f}ms"
+                ),
+                {
+                    "loop": loop_count,
+                    "session": _active_session,
+                    "scan_cooldown_s": _active_scan_cooldown,
+                    "scan_latency_ms": _metrics["last_scan_latency_ms"],
+                    "rank_latency_ms": _metrics["last_rank_latency_ms"],
+                    "execution_latency_ms": _metrics["last_execution_latency_ms"],
+                    "signal_to_order_latency_ms": _metrics["last_signal_to_order_ms"],
+                },
+            )
 
         # ── Process UI command queue ─────────────────────────────────────
         _process_commands(db, trade_manager)
@@ -542,10 +613,13 @@ def _run_iteration(
     symbol_event_tracker: SymbolEventTracker,
     last_scan_ts: dict[str, float],
     scan_cooldown: float,
+    deferred_entries: list[dict[str, object]],
+    metrics: dict[str, float],
     symbol_fail_count: dict[str, int],
     symbol_disabled_until: dict[str, float],
     symbol_max_fails: int,
     symbol_disable_secs: float,
+    session_profile: str,
     weekend_symbols: list[str] | None = None,
 ) -> None:
     """Single iteration of the trading loop.
@@ -559,12 +633,24 @@ def _run_iteration(
     symbol happened to be checked first in the list.
     """
 
+    def _to_float(value: object, default: float = 0.0) -> float:
+        if isinstance(value, (int, float)):
+            return float(value)
+        if isinstance(value, str):
+            try:
+                return float(value)
+            except ValueError:
+                return default
+        return default
+
     # ── Weekend mode notice (logged once per entry into weekend window) ──
     if weekend_symbols is not None:
         logger.debug(
             "Weekend mode active — scanning only: %s (3-TF ICT: M15+H4, H1+D1, H4+W1)",
             ", ".join(weekend_symbols),
         )
+
+    iter_start_ts = time.monotonic()
 
     # ── Crucix macro sweep (once per iteration, logs to DB) ──────────────
     crucix_agent.run()
@@ -594,6 +680,8 @@ def _run_iteration(
             log_agent.log_trade(closed_trade.id, "CLOSED",
                                 f"{closed_trade.close_reason} PnL={closed_trade.pnl:.2f}")
 
+    metrics["loops"] = metrics.get("loops", 0) + 1
+
     # ── Skip new signals if paused ───────────────────────────────────────
     if telegram_bot.is_paused():
         logger.warning("Bot is PAUSED — skipping signal detection (loop %d). "
@@ -612,25 +700,81 @@ def _run_iteration(
     open_symbols = {t.symbol for t in trade_manager.get_open_trades()}
 
     now_mono = time.monotonic()
+    scan_phase_start = now_mono
     scanned: list[str] = []
     skipped_cooldown: list[str] = []
     ipc_fail_symbols: list[str] = []   # IPC failures in this iteration only
 
-    for symbol in _active_symbols:
+    def _process_single_symbol(symbol: str):
         if not is_market_open(symbol):
-            continue
-        # Weekend mode: restrict scanning to crypto-only symbols (default: BTCUSD)
+            return (symbol, "skip", False, None, None, None, False)
         if weekend_symbols is not None and symbol not in weekend_symbols:
-            continue
+            return (symbol, "skip", False, None, None, None, False)
         if symbol in open_symbols:
+            return (symbol, "skip", False, None, None, None, False)
+
+        disabled_until = symbol_disabled_until.get(symbol, 0.0)
+        is_re_enabled = False
+        if disabled_until > 0.0:
+            if now_mono < disabled_until:
+                return (symbol, "skip", False, None, None, None, False)
+            else:
+                is_re_enabled = True
+
+        is_cooldown = False
+        if now_mono - last_scan_ts.get(symbol, 0.0) < scan_cooldown:
+            if settings.EVENT_DRIVEN_RESCAN_ON_NEW_CANDLE:
+                last_candle_ts = symbol_event_tracker.get(symbol, "last_candle")
+                if last_candle_ts <= 0 or time.time() - last_candle_ts > scan_cooldown:
+                    is_cooldown = True
+            else:
+                is_cooldown = True
+        
+        if is_cooldown:
+            return (symbol, "cooldown", is_re_enabled, None, None, None, False)
+
+        try:
+            if _tui:
+                _tui.set_agent_status("market", f"fetching {symbol}")
+            data = market_agent.get_data(symbol)
+        except DataValidationError as e:
+            err_str = str(e)
+            is_ipc = "IPC" in err_str or "No tick data" in err_str or "-10004" in err_str
+            return (symbol, "error", is_re_enabled, None, None, err_str, is_ipc)
+
+        if _tui:
+            _tui.set_agent_status("analysis", f"analyzing {symbol}")
+        context = analysis_agent.analyze(data)
+        
+        if _tui:
+            _tui.set_agent_status("strategy", f"scanning {symbol}")
+        signals = strategy_agent.detect_all(context)
+        
+        return (symbol, "success", is_re_enabled, context, signals, None, False)
+
+    # MT5 IPC is thread-sensitive; concurrent symbol scans can produce random
+    # tick/candle misses. Keep MT5 scans single-threaded for reliability.
+    is_mt5_broker = broker.__class__.__name__ == "MT5Connector"
+    scan_results: list[tuple[str, str, bool, MarketContext | None, list[Signal] | None, str | None, bool]] = []
+
+    if is_mt5_broker:
+        for symbol in _active_symbols:
+            scan_results.append(_process_single_symbol(symbol))
+    else:
+        futures = []
+        with concurrent.futures.ThreadPoolExecutor(max_workers=min(10, max(1, len(_active_symbols)))) as executor:
+            for symbol in _active_symbols:
+                futures.append(executor.submit(_process_single_symbol, symbol))
+        for future in concurrent.futures.as_completed(futures):
+            scan_results.append(future.result())
+
+    for res in scan_results:
+        symbol, status, is_re_enabled, context, signals, err_str, is_ipc = res
+
+        if status == "skip":
             continue
 
-        # ── Auto-disable: skip symbols with repeated IPC / data failures ─
-        disabled_until = symbol_disabled_until.get(symbol, 0.0)
-        if now_mono < disabled_until:
-            continue
-        elif disabled_until > 0.0:
-            # Re-enable: cooldown expired — reset failure counter and retry
+        if is_re_enabled:
             logger.info("Re-enabling %s after IPC cooldown (was disabled for 1h)", symbol)
             symbol_fail_count[symbol] = 0
             symbol_disabled_until[symbol] = 0.0
@@ -639,20 +783,12 @@ def _run_iteration(
             except Exception:
                 logger.debug("Could not clear symbol fault for %s", symbol)
 
-        # Per-symbol cooldown — re-scan every 15 min (aligns with M15 bar)
-        if now_mono - last_scan_ts.get(symbol, 0.0) < scan_cooldown:
+        if status == "cooldown":
             skipped_cooldown.append(symbol)
             continue
-        last_scan_ts[symbol] = now_mono
 
-        try:
-            if _tui:
-                _tui.set_agent_status("market", f"fetching {symbol}")
-            data = market_agent.get_data(symbol)
-        except DataValidationError as e:
-            err_str = str(e)
-            # Count consecutive IPC failures and auto-disable after threshold
-            if "IPC" in err_str or "No tick data" in err_str or "-10004" in err_str:
+        if status == "error":
+            if is_ipc:
                 ipc_fail_symbols.append(symbol)
                 count = symbol_fail_count.get(symbol, 0) + 1
                 symbol_fail_count[symbol] = count
@@ -675,34 +811,33 @@ def _run_iteration(
                     except Exception:
                         logger.debug("Could not persist symbol fault for %s", symbol)
             else:
-                symbol_fail_count[symbol] = 0  # non-IPC error: don't count toward disable
-            logger.warning("Data validation failed for %s: %s — skipping", symbol, e)
+                symbol_fail_count[symbol] = 0
+            logger.warning("Data validation failed for %s: %s — skipping", symbol, err_str)
             continue
-        # Successful fetch — reset failure counter
-        symbol_fail_count[symbol] = 0
 
-        if data.candles:
-            symbol_event_tracker.update(symbol, "last_candle",
-                                        data.candles[-1].timestamp.timestamp())
+        # Mark cooldown only for successful/non-error scans. Errors should
+        # retry quickly in the next loop so opportunities are not missed.
+        last_scan_ts[symbol] = now_mono
+
+        # Success
+        symbol_fail_count[symbol] = 0
+        if context and context.candles:
+            symbol_event_tracker.update(symbol, "last_candle", context.candles[-1].timestamp.timestamp())
         scanned.append(symbol)
 
-        if _tui:
-            _tui.set_agent_status("analysis", f"analyzing {symbol}")
-        context = analysis_agent.analyze(data)
-        if _tui:
-            _tui.set_agent_status("strategy", f"scanning {symbol}")
-        signals = strategy_agent.detect_all(context)
-        # Track last signal event per symbol
         if signals:
             symbol_event_tracker.update(symbol, "last_signal", time.time())
             if _tui:
                 for sig in signals:
-                    _tui.add_event("strategy", "info",
-                                   f"{sig.direction} {sig.symbol} conf={sig.confidence:.0%}")
-            # Store context keyed by signal id for council review later
-            for sig in signals:
-                signal_contexts[id(sig)] = context
-        all_signals.extend(signals)
+                    _tui.add_event("strategy", "info", f"{sig.direction} {sig.symbol} conf={sig.confidence:.0%}")
+            if context is not None:
+                for sig in signals:
+                    signal_contexts[id(sig)] = context
+            all_signals.extend(signals)
+
+    metrics["scanned_symbols"] = metrics.get("scanned_symbols", 0) + len(scanned)
+    metrics["raw_signals"] = metrics.get("raw_signals", 0) + len(all_signals)
+    metrics["last_scan_latency_ms"] = (time.monotonic() - scan_phase_start) * 1000.0
 
     if skipped_cooldown:
         logger.debug("Cooldown active for: %s", ", ".join(skipped_cooldown))
@@ -737,15 +872,44 @@ def _run_iteration(
         return
 
     if not scanned:
+        metrics["last_rank_latency_ms"] = 0.0
+        metrics["last_execution_latency_ms"] = 0.0
+        metrics["last_signal_to_order_ms"] = -1.0
         logger.debug("Loop %d: all symbols on cooldown or skipped", loop_count)
         return
     if not all_signals:
-        logger.info("Loop %d: scanned %s — no signals generated", loop_count, ", ".join(scanned))
-        return
+        if settings.DEFERRED_ENTRY_ENABLED and deferred_entries:
+            now_wall = time.time()
+            promoted: list[Signal] = []
+            remaining: list[dict[str, object]] = []
+            for item in deferred_entries:
+                exp = _to_float(item.get("expires_at", 0.0), 0.0)
+                sig = item.get("signal")
+                if exp <= now_wall or not isinstance(sig, Signal):
+                    continue
+                remaining.append(item)
+                promoted.append(sig)
+                ctx = item.get("context")
+                if isinstance(ctx, MarketContext):
+                    signal_contexts[id(sig)] = ctx
+
+            deferred_entries.clear()
+            deferred_entries.extend(remaining)
+            if promoted:
+                all_signals.extend(promoted)
+                metrics["deferred_promoted"] = metrics.get("deferred_promoted", 0) + len(promoted)
+
+        if not all_signals:
+            metrics["last_rank_latency_ms"] = 0.0
+            metrics["last_execution_latency_ms"] = 0.0
+            metrics["last_signal_to_order_ms"] = -1.0
+            logger.info("Loop %d: scanned %s — no signals generated", loop_count, ", ".join(scanned))
+            return
 
     # ══════════════════════════════════════════════════════════════════════
     # PHASE 2: Rank by confidence (highest first) and deduplicate
     # ══════════════════════════════════════════════════════════════════════
+    rank_phase_start = time.monotonic()
     all_signals.sort(key=lambda s: s.confidence, reverse=True)
 
     # Keep only the best signal per (symbol, direction) — avoids ICT+SMA
@@ -758,16 +922,39 @@ def _run_iteration(
             seen.add(key)
             ranked.append(sig)
 
+    if settings.DEFERRED_ENTRY_ENABLED and deferred_entries:
+        now_wall = time.time()
+        for item in deferred_entries[:]:
+            exp = _to_float(item.get("expires_at", 0.0), 0.0)
+            sig = item.get("signal")
+            if exp <= now_wall or not isinstance(sig, Signal):
+                deferred_entries.remove(item)
+                continue
+            key = (sig.symbol, sig.direction)
+            if key in seen:
+                continue
+            seen.add(key)
+            ranked.append(sig)
+            ctx = item.get("context")
+            if isinstance(ctx, MarketContext):
+                signal_contexts[id(sig)] = ctx
+            metrics["deferred_promoted"] = metrics.get("deferred_promoted", 0) + 1
+
     logger.info(
         "Signal scan: %d raw → %d ranked  [%s]",
         len(all_signals), len(ranked),
         ", ".join(f"{s.symbol} {s.direction} conf={s.confidence:.2f}" for s in ranked[:5]),
     )
+    metrics["ranked_signals"] = metrics.get("ranked_signals", 0) + len(ranked)
+    metrics["last_rank_latency_ms"] = (time.monotonic() - rank_phase_start) * 1000.0
+    signal_ready_ts = time.monotonic()
+    first_fill_signal_to_order_ms = -1.0
+    execution_phase_start = signal_ready_ts
 
     # ══════════════════════════════════════════════════════════════════════
     # PHASE 3: Execute best signals that pass council + risk validation
     # ══════════════════════════════════════════════════════════════════════
-    for signal_obj in ranked:
+    for i, signal_obj in enumerate(ranked):
 
         # ── Trading Council gate (3-expert algorithmic debate) ──────────
         if council is not None:
@@ -800,6 +987,7 @@ def _run_iteration(
                         f"🏛️ Council REJECTED {signal_obj.direction} {signal_obj.symbol} "
                         f"— {verdict.confidence:.0%} confidence\n{verdict.reasoning}"
                     )
+                    metrics["council_rejections"] = metrics.get("council_rejections", 0) + 1
                     continue
                 else:
                     logger.info(
@@ -816,13 +1004,42 @@ def _run_iteration(
         # ── Risk check (drawdown, spread, lot-size, etc.) ────────────────
         if _tui:
             _tui.set_agent_status("risk", f"validating {signal_obj.symbol} {signal_obj.direction}")
-        if not risk_agent.validate(signal_obj):
+        is_fast_lane = settings.FAST_LANE_ENABLED and i < settings.FAST_LANE_MAX_SIGNALS
+        validation_mode = "hard" if is_fast_lane else "full"
+        if is_fast_lane:
+            metrics["fast_lane_attempts"] = metrics.get("fast_lane_attempts", 0) + 1
+
+        if not risk_agent.validate(signal_obj, mode=validation_mode):
+            metrics["risk_rejections"] = metrics.get("risk_rejections", 0) + 1
             log_agent.log_risk_rejection(
                 signal_obj.symbol, signal_obj.direction,
-                signal_obj.strategy, "Failed risk validation")
+                signal_obj.strategy, f"Failed {validation_mode} risk validation")
             if _tui:
                 _tui.add_event("risk", "warn",
                                f"REJECT {signal_obj.symbol} {signal_obj.direction}")
+
+            if (
+                settings.DEFERRED_ENTRY_ENABLED
+                and signal_obj.confidence >= settings.DEFERRED_ENTRY_MIN_CONF
+            ):
+                ttl = max(30, int(settings.DEFERRED_ENTRY_TTL_SECONDS))
+                expires_at = time.time() + ttl
+                deferred_entries[:] = [
+                    entry for entry in deferred_entries
+                    if not (
+                        isinstance(entry.get("signal"), Signal)
+                        and cast(Signal, entry.get("signal")).symbol == signal_obj.symbol
+                        and cast(Signal, entry.get("signal")).direction == signal_obj.direction
+                    )
+                ]
+                deferred_entries.append(
+                    {
+                        "signal": signal_obj,
+                        "context": signal_contexts.get(id(signal_obj)),
+                        "expires_at": expires_at,
+                    }
+                )
+                metrics["deferred_added"] = metrics.get("deferred_added", 0) + 1
             continue
 
         # Execute
@@ -840,6 +1057,31 @@ def _run_iteration(
                                f"OPENED {trade.direction} {trade.symbol} @ {trade.entry_price:.5f}")
 
             # Score will happen when trade closes (in trade_manager.monitor)
+            if first_fill_signal_to_order_ms < 0.0:
+                first_fill_signal_to_order_ms = (time.monotonic() - signal_ready_ts) * 1000.0
+            if is_fast_lane:
+                metrics["fast_lane_fills"] = metrics.get("fast_lane_fills", 0) + 1
+                full_ok = risk_agent.validate(signal_obj, mode="full")
+                if not full_ok and settings.FAST_LANE_CLOSE_ON_FULL_REJECT:
+                    trade_manager.close_trade(trade.id, "FULL_VALIDATION_REJECT")
+                    metrics["fast_lane_closed"] = metrics.get("fast_lane_closed", 0) + 1
+            else:
+                metrics["full_lane_fills"] = metrics.get("full_lane_fills", 0) + 1
+
+    metrics["last_execution_latency_ms"] = (time.monotonic() - execution_phase_start) * 1000.0
+    metrics["last_signal_to_order_ms"] = first_fill_signal_to_order_ms
+
+    logger.debug(
+        "Loop %d timing | session=%s cooldown=%.0fs scan=%.1fms rank=%.1fms exec=%.1fms signal_to_order=%.1fms total=%.1fms",
+        loop_count,
+        session_profile,
+        scan_cooldown,
+        metrics["last_scan_latency_ms"],
+        metrics["last_rank_latency_ms"],
+        metrics["last_execution_latency_ms"],
+        metrics["last_signal_to_order_ms"],
+        (time.monotonic() - iter_start_ts) * 1000.0,
+    )
 
     if _tui:
         for name in ("market", "analysis", "strategy", "risk", "execution", "trade_mgr"):

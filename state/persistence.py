@@ -10,6 +10,7 @@ import logging
 from typing import Callable
 
 from broker.connector import BrokerConnector, PositionInfo
+from config.symbols import pip_value
 from database.db import Database
 from models.trade import Trade
 
@@ -108,7 +109,10 @@ class StatePersistence:
             if abs(trade.lot_size - pos.lot_size) > 0.001:
                 diffs.append(f"lot_size DB={trade.lot_size} broker={pos.lot_size}")
                 trade.lot_size = pos.lot_size
-            if abs(trade.stop_loss - pos.stop_loss) > 0.00001:
+            # Broker-side price normalization can round SL by a fraction of a pip.
+            # Use symbol-aware tolerance to prevent false-positive critical events.
+            sl_tolerance = max(pip_value(trade.symbol) * 0.5, 0.00001)
+            if abs(trade.stop_loss - pos.stop_loss) > sl_tolerance:
                 diffs.append(f"stop_loss DB={trade.stop_loss:.5f} broker={pos.stop_loss:.5f}")
                 trade.stop_loss = pos.stop_loss
             if diffs:

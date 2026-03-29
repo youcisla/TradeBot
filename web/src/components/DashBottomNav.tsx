@@ -4,17 +4,18 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const NAV = [
-  { href: "/dashboard",               label: "OVERVIEW",  icon: "grid_view"  },
+  { href: "/dashboard",               label: "HOME",      icon: "space_dashboard"  },
   { href: "/dashboard/trades",        label: "TRADES",    icon: "swap_horiz" },
-  { href: "/dashboard/strategy",      label: "STRATEGY",  icon: "psychology" },
-  { href: "/dashboard/agent_theater", label: "THEATER",   icon: "smart_toy"  },
+  { href: "/dashboard/analytics",     label: "ANALYTICS", icon: "bar_chart"  },
+  { href: "/dashboard/strategy",      label: "MODELS",    icon: "neurology"  },
+  { href: "/dashboard/settings",      label: "SETTINGS",  icon: "settings"   },
 ];
 
 export default function DashBottomNav() {
   const pathname = usePathname();
 
   return (
-    <nav className="fixed bottom-0 left-0 w-full flex justify-around items-center h-16 bg-surface border-t border-outline-variant/15 z-50">
+    <nav className="fixed bottom-0 left-0 w-full flex justify-around items-center h-16 bg-[#0a0a0aee] backdrop-blur-md border-t border-outline-variant/20 z-50">
       {NAV.map(({ href, label, icon }) => {
         const active =
           href === "/dashboard"
@@ -26,9 +27,9 @@ export default function DashBottomNav() {
             key={href}
             href={href}
             className={[
-              "flex flex-col items-center justify-center pt-2 duration-0",
+              "flex flex-col items-center justify-center pt-2 min-w-[62px] duration-0",
               active
-                ? "text-primary-fixed drop-shadow-[0_0_8px_rgba(0,253,135,0.4)] border-t-2 border-primary-fixed"
+                ? "text-primary-fixed drop-shadow-[0_0_8px_rgba(0,253,135,0.4)]"
                 : "text-on-surface-variant hover:text-secondary",
             ].join(" ")}
           >
@@ -36,12 +37,12 @@ export default function DashBottomNav() {
               className="material-symbols-outlined mb-1"
               style={{
                 fontVariationSettings: active ? "'FILL' 1" : "'FILL' 0",
-                fontSize: 22,
+                fontSize: 20,
               }}
             >
               {icon}
             </span>
-            <span className="font-mono text-[10px] font-bold uppercase">{label}</span>
+            <span className="font-mono text-[9px] font-bold uppercase tracking-wide">{label}</span>
           </Link>
         );
       })}

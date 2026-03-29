@@ -53,6 +53,21 @@ COUNCIL_ICT_WEIGHT: float    = float(os.getenv("COUNCIL_ICT_WEIGHT",    "0.50"))
 COUNCIL_DANIAL_WEIGHT: float = float(os.getenv("COUNCIL_DANIAL_WEIGHT", "0.17"))
 COUNCIL_TRAD_WEIGHT: float   = float(os.getenv("COUNCIL_TRAD_WEIGHT",   "0.17"))
 COUNCIL_WORLD_WEIGHT: float  = float(os.getenv("COUNCIL_WORLD_WEIGHT",  "0.16"))
+# DeepSeek-specific council weighting (must sum to 1.0).
+# Rationale: preserve ICT/SnR signal checks while giving more weight to
+# traditional + world-context agreement for LLM-originated signals.
+COUNCIL_DEEPSEEK_ICT_WEIGHT: float = float(
+    os.getenv("COUNCIL_DEEPSEEK_ICT_WEIGHT", "0.15")
+)
+COUNCIL_DEEPSEEK_DANIAL_WEIGHT: float = float(
+    os.getenv("COUNCIL_DEEPSEEK_DANIAL_WEIGHT", "0.15")
+)
+COUNCIL_DEEPSEEK_TRAD_WEIGHT: float = float(
+    os.getenv("COUNCIL_DEEPSEEK_TRAD_WEIGHT", "0.35")
+)
+COUNCIL_DEEPSEEK_WORLD_WEIGHT: float = float(
+    os.getenv("COUNCIL_DEEPSEEK_WORLD_WEIGHT", "0.35")
+)
 # Minimum candle count required before the council will vote.
 COUNCIL_MIN_CANDLES: int = int(os.getenv("COUNCIL_MIN_CANDLES", "20"))
 # Minimum candle count required before the neural strategy will infer.
@@ -110,6 +125,38 @@ MAX_SPREAD_PIPS_COMMODITY: float = float(os.getenv("MAX_SPREAD_PIPS_COMMODITY", 
 MAX_SPREAD_PIPS_EXOTIC: float = float(os.getenv("MAX_SPREAD_PIPS_EXOTIC", "15.0"))
 # Indices are quoted in points — allow up to 5 points spread (covers typical CFD spread)
 MAX_SPREAD_POINTS_INDEX: float = float(os.getenv("MAX_SPREAD_POINTS_INDEX", "5.0"))
+
+# ── Execution lanes (speed vs certainty) ─────────────────────────────────
+# Fast lane runs hard safety checks first to minimize signal-to-order latency.
+# Full lane then re-checks with all filters and can force-close if needed.
+FAST_LANE_ENABLED: bool = os.getenv("FAST_LANE_ENABLED", "true").lower() == "true"
+FAST_LANE_MAX_SIGNALS: int = int(os.getenv("FAST_LANE_MAX_SIGNALS", "1"))
+FAST_LANE_CLOSE_ON_FULL_REJECT: bool = (
+    os.getenv("FAST_LANE_CLOSE_ON_FULL_REJECT", "true").lower() == "true"
+)
+
+# Confidence-to-size mapping (borderline setups are sized down, not discarded).
+SIZE_SCALE_VERY_LOW_THRESHOLD: float = float(
+    os.getenv("SIZE_SCALE_VERY_LOW_THRESHOLD", "0.45")
+)
+SIZE_SCALE_LOW_THRESHOLD: float = float(
+    os.getenv("SIZE_SCALE_LOW_THRESHOLD", "0.60")
+)
+SIZE_SCALE_MEDIUM_THRESHOLD: float = float(
+    os.getenv("SIZE_SCALE_MEDIUM_THRESHOLD", "0.75")
+)
+SIZE_SCALE_VERY_LOW: float = float(os.getenv("SIZE_SCALE_VERY_LOW", "0.35"))
+SIZE_SCALE_LOW: float = float(os.getenv("SIZE_SCALE_LOW", "0.55"))
+SIZE_SCALE_MEDIUM: float = float(os.getenv("SIZE_SCALE_MEDIUM", "0.75"))
+SIZE_SCALE_FULL: float = float(os.getenv("SIZE_SCALE_FULL", "1.00"))
+
+# Dynamic confidence floors by regime and asset class.
+MIN_CONF_TRENDING: float = float(os.getenv("MIN_CONF_TRENDING", "0.48"))
+MIN_CONF_RANGING: float = float(os.getenv("MIN_CONF_RANGING", "0.58"))
+MIN_CONF_VOLATILE: float = float(os.getenv("MIN_CONF_VOLATILE", "0.62"))
+MIN_CONF_UNKNOWN: float = float(os.getenv("MIN_CONF_UNKNOWN", "0.55"))
+MIN_CONF_CRYPTO_BONUS: float = float(os.getenv("MIN_CONF_CRYPTO_BONUS", "0.03"))
+MIN_CONF_EXOTIC_BONUS: float = float(os.getenv("MIN_CONF_EXOTIC_BONUS", "0.04"))
 # ── Trade Execution ──────────────────────────────────────────────────────
 TP1_CLOSE_PERCENT: float = float(os.getenv("TP1_CLOSE_PERCENT", "0.40"))
 TP2_CLOSE_PERCENT: float = float(os.getenv("TP2_CLOSE_PERCENT", "0.30"))
@@ -140,6 +187,39 @@ RECONCILE_EVERY_N_LOOPS: int = int(os.getenv("RECONCILE_EVERY_N_LOOPS", "10"))
 CANDLE_SERVER_PORT: int = int(os.getenv("CANDLE_SERVER_PORT", "5555"))
 # Minimum wall-clock seconds between re-scanning the same symbol.
 SCAN_COOLDOWN_SECONDS: int = int(os.getenv("SCAN_COOLDOWN_SECONDS", "300"))
+# Session-profiled cooldown (London/NY scans faster, Asia scans slower).
+SCAN_COOLDOWN_SECONDS_LONDON_NY: int = int(
+    os.getenv("SCAN_COOLDOWN_SECONDS_LONDON_NY", "120")
+)
+SCAN_COOLDOWN_SECONDS_ASIA: int = int(
+    os.getenv("SCAN_COOLDOWN_SECONDS_ASIA", "300")
+)
+EVENT_DRIVEN_RESCAN_ON_NEW_CANDLE: bool = (
+    os.getenv("EVENT_DRIVEN_RESCAN_ON_NEW_CANDLE", "true").lower() == "true"
+)
+
+# MarketAgent higher-timeframe cache tuning by session profile.
+HTF_CACHE_TTL_M15_SECONDS: float = float(os.getenv("HTF_CACHE_TTL_M15_SECONDS", "20"))
+HTF_CACHE_TTL_M30_SECONDS: float = float(os.getenv("HTF_CACHE_TTL_M30_SECONDS", "30"))
+HTF_CACHE_TTL_H4_SECONDS: float = float(os.getenv("HTF_CACHE_TTL_H4_SECONDS", "120"))
+HTF_CACHE_TTL_D1_SECONDS: float = float(os.getenv("HTF_CACHE_TTL_D1_SECONDS", "300"))
+HTF_CACHE_TTL_MULTIPLIER_LONDON_NY: float = float(
+    os.getenv("HTF_CACHE_TTL_MULTIPLIER_LONDON_NY", "0.75")
+)
+HTF_CACHE_TTL_MULTIPLIER_ASIA: float = float(
+    os.getenv("HTF_CACHE_TTL_MULTIPLIER_ASIA", "1.35")
+)
+
+# Deferred-entry queue: keep quality setups warm until price revisits entry.
+DEFERRED_ENTRY_ENABLED: bool = os.getenv("DEFERRED_ENTRY_ENABLED", "true").lower() == "true"
+DEFERRED_ENTRY_MAX_AGE_SECONDS: int = int(
+    os.getenv("DEFERRED_ENTRY_MAX_AGE_SECONDS", "900")
+)
+DEFERRED_ENTRY_MAX_ATR_DISTANCE: float = float(
+    os.getenv("DEFERRED_ENTRY_MAX_ATR_DISTANCE", "0.35")
+)
+DEFERRED_ENTRY_MIN_CONF: float = float(os.getenv("DEFERRED_ENTRY_MIN_CONF", "0.60"))
+DEFERRED_ENTRY_TTL_SECONDS: int = int(os.getenv("DEFERRED_ENTRY_TTL_SECONDS", "900"))
 # Symbol auto-disable: after this many consecutive IPC failures the symbol is
 # suspended for SYMBOL_DISABLE_SECONDS to avoid wasting loop time.
 SYMBOL_MAX_FAIL_COUNT: int = int(os.getenv("SYMBOL_MAX_FAIL_COUNT", "3"))
@@ -157,6 +237,9 @@ CONFIDENCE_REDUCED: float = 0.5
 CONFIDENCE_FULL: float = 0.7
 CONFIDENCE_DISABLE_THRESHOLD: float = 0.2
 
+# KPI cadence for opportunity-capture telemetry in logs/agent feed.
+METRICS_LOG_EVERY_N_LOOPS: int = int(os.getenv("METRICS_LOG_EVERY_N_LOOPS", "5"))
+
 # ── Data Validation ──────────────────────────────────────────────────────
 STUCK_QUOTE_THRESHOLD: int = int(os.getenv("STUCK_QUOTE_THRESHOLD", "10"))
 SPIKE_PERCENT_THRESHOLD: float = float(os.getenv("SPIKE_PERCENT_THRESHOLD", "2.0"))
@@ -169,10 +252,18 @@ DEFAULT_TIMEFRAME: str = os.getenv("DEFAULT_TIMEFRAME", "H1")
 DEEPSEEK_API_KEY:        str   = os.getenv("DEEPSEEK_API_KEY", "")
 DEEPSEEK_MODEL:          str   = os.getenv("DEEPSEEK_MODEL", "deepseek-chat")
 DEEPSEEK_MIN_CONFIDENCE: float = float(os.getenv("DEEPSEEK_MIN_CONFIDENCE", "0.65"))
+DEEPSEEK_SCHEMA_VERSION: str = os.getenv("DEEPSEEK_SCHEMA_VERSION", "v1")
 # How long (minutes) to reuse a cached signal before re-querying the API.
 # One H1 bar = 60 min; default 30 min re-queries twice per bar if the loop
 # runs every 5 min but the symbol cooldown is also 5 min.
 DEEPSEEK_CACHE_MINUTES:  int   = int(os.getenv("DEEPSEEK_CACHE_MINUTES", "30"))
+# Allowed relative deviation for 1R/2R/3R TP checks from model output.
+# Example: 0.25 means +/-25% tolerance around expected R multiples.
+DEEPSEEK_R_MULT_TOLERANCE: float = float(
+    os.getenv("DEEPSEEK_R_MULT_TOLERANCE", "0.25")
+)
+# Quality telemetry cadence (in DeepSeek detect calls).
+DEEPSEEK_METRICS_LOG_EVERY: int = int(os.getenv("DEEPSEEK_METRICS_LOG_EVERY", "25"))
 
 # ── Analysis Agent indicator periods ────────────────────────────────────
 SMA_FAST_PERIOD: int = int(os.getenv("SMA_FAST_PERIOD", "10"))

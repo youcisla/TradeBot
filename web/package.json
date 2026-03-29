@@ -2,15 +2,19 @@
   "name": "trading-bot-ui",
   "version": "1.0.0",
   "private": true,
+  "engines": {
+    "node": ">=18.17 <25",
+    "npm": ">=10"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "tsc --noEmit"
   },
   "dependencies": {
-    "@react-three/drei": "^10.7.7",
-    "@react-three/fiber": "^9.5.0",
+    "@react-three/drei": "^9.122.0",
+    "@react-three/fiber": "^8.18.0",
     "bcryptjs": "^3.0.3",
     "dotenv": "^17.3.1",
     "lightweight-charts": "^4.2.3",
@@ -19,6 +23,7 @@
     "pg": "^8.13.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "react-is": "^18.3.1",
     "react-markdown": "^10.1.0",
     "recharts": "^3.8.0",
     "three": "^0.183.2"

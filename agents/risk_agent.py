@@ -112,9 +112,16 @@ class RiskAgent:
 
     # ── public API ───────────────────────────────────────────────────────
 
-    def validate(self, signal: Signal) -> bool:
-        """Return True only if ALL risk checks pass."""
+    def validate(self, signal: Signal, mode: str = "full") -> bool:
+        """Return True if risk checks pass for the selected mode.
+
+        Modes:
+        - ``hard``: ultra-fast safety checks for fast-lane execution
+        - ``full``: complete validation (default)
+        """
         try:
+            if mode == "hard":
+                return self._validate_hard(signal)
             return self._validate_inner(signal)
         except Exception:
             logger.exception("RiskAgent.validate crashed — rejecting signal")
@@ -149,11 +156,18 @@ class RiskAgent:
                 signal.symbol, raw_lot, lot_size, sl_distance,
             )
 
-        # Apply confidence scaling
-        if signal.confidence < settings.CONFIDENCE_REDUCED:
-            lot_size = round(lot_size * 0.5, 2)
-        elif signal.confidence < settings.CONFIDENCE_FULL:
-            lot_size = round(lot_size * 0.7, 2)
+        # Apply confidence scaling bands (borderline setups are sized down,
+        # not blindly rejected).
+        conf = signal.confidence
+        if conf < settings.SIZE_SCALE_VERY_LOW_THRESHOLD:
+            scale = settings.SIZE_SCALE_VERY_LOW
+        elif conf < settings.SIZE_SCALE_LOW_THRESHOLD:
+            scale = settings.SIZE_SCALE_LOW
+        elif conf < settings.SIZE_SCALE_MEDIUM_THRESHOLD:
+            scale = settings.SIZE_SCALE_MEDIUM
+        else:
+            scale = settings.SIZE_SCALE_FULL
+        lot_size = round(lot_size * scale, 2)
 
         # Macro risk scaling from Crucix
         if self._crucix:
@@ -172,6 +186,42 @@ class RiskAgent:
         return max(settings.MIN_LOT_SIZE, min(settings.MAX_LOT_SIZE, lot_size))
 
     # ── internal checks (ordered fail-fast) ──────────────────────────────
+
+    def _validate_hard(self, signal: Signal) -> bool:
+        """Fast-lane safety checks only.
+
+        Includes only the non-negotiable risk controls needed for rapid entry.
+        """
+        # 1. Drawdown circuit breaker
+        if self._check_drawdown():
+            self._emit("warn", "Drawdown breaker is ON — no trades allowed!")
+            return False
+
+        # 1b. Crucix macro blackout check
+        if self._crucix and self._crucix.is_blackout(signal.symbol):
+            self._emit("warn", f"MACRO BLACKOUT: FLASH alert active on {signal.symbol}")
+            return False
+
+        open_trades = self._get_open_trades()
+
+        # 2. Duplicate and correlation exposure guards
+        if self._check_duplicate(signal, open_trades):
+            self._emit("warn", f"DUPLICATE — {signal.symbol} {signal.direction} already open")
+            return False
+        if self._check_correlation(signal, open_trades):
+            self._emit("warn", f"CORRELATION — {signal.symbol} {signal.direction} blocked")
+            return False
+
+        # 3. Max concurrent trades
+        if len(open_trades) >= settings.MAX_OPEN_TRADES:
+            self._emit("warn", "MAX_TRADES — concurrent position cap reached")
+            return False
+
+        # 4. Spread check (fast path)
+        if not self._check_spread(signal):
+            return False
+
+        return True
 
     def _validate_inner(self, signal: Signal) -> bool:
         # 1. Drawdown circuit breaker
@@ -227,52 +277,8 @@ class RiskAgent:
             return False
 
         # 5. Live spread check (per-asset-class limits)
-        # Prefer a fresh tick over the stale snapshot captured at signal time.
-        live_spread = signal.entry_snapshot.spread
-        try:
-            tick = self._broker.get_tick(signal.symbol)
-            if tick and tick.get("spread", 0) > 0:
-                live_spread = tick["spread"]
-        except Exception:
-            pass  # broker unavailable — fall back to snapshot spread
-
-        ac = asset_class(signal.symbol)
-        if ac == "crypto":
-            # Percentage-of-price check for crypto
-            price = signal.entry_price or 1.0
-            spread_pct = (live_spread / price) * 100
-            if spread_pct > settings.MAX_SPREAD_PCT_CRYPTO:
-                logger.warning(
-                    "RISK REJECT [SPREAD]: %.3f%% > max %.1f%% for %s (crypto)",
-                    spread_pct, settings.MAX_SPREAD_PCT_CRYPTO, signal.symbol,
-                )
-                self._emit("warn",
-                           f"SPREAD — {signal.symbol} {spread_pct:.2f}% > max {settings.MAX_SPREAD_PCT_CRYPTO}%",
-                           {"symbol": signal.symbol, "check": "spread",
-                            "spread_pct": round(spread_pct, 3), "max": settings.MAX_SPREAD_PCT_CRYPTO})
-                return False
-        else:
-            pv = pip_value(signal.symbol)
-            spread_pips = live_spread / pv
-            if ac == "commodity":
-                max_spread = settings.MAX_SPREAD_PIPS_COMMODITY
-            elif ac == "index":
-                max_spread = settings.MAX_SPREAD_POINTS_INDEX
-            elif ac == "exotic":
-                max_spread = settings.MAX_SPREAD_PIPS_EXOTIC
-            else:
-                max_spread = settings.MAX_SPREAD_PIPS
-
-            if spread_pips > max_spread:
-                logger.warning(
-                    "RISK REJECT [SPREAD]: %.1f pips > max %.1f for %s (%s)",
-                    spread_pips, max_spread, signal.symbol, ac,
-                )
-                self._emit("warn",
-                           f"SPREAD — {signal.symbol} {spread_pips:.1f} pips > max {max_spread} ({ac})",
-                           {"symbol": signal.symbol, "check": "spread",
-                            "spread_pips": round(spread_pips, 1), "max": max_spread})
-                return False
+        if not self._check_spread(signal):
+            return False
 
         # 7. Position size sanity
         lot_size = self.calculate_position_size(signal)
@@ -291,6 +297,74 @@ class RiskAgent:
                    f"All clear — {signal.direction} {signal.symbol} approved (lot={lot_size:.2f})",
                    {"symbol": signal.symbol, "direction": signal.direction,
                     "lot_size": lot_size})
+        return True
+
+    def _check_spread(self, signal: Signal) -> bool:
+        """Return True if spread is within limits for the signal's asset class."""
+        live_spread = signal.entry_snapshot.spread
+        try:
+            tick = self._broker.get_tick(signal.symbol)
+            if tick and tick.get("spread", 0) > 0:
+                live_spread = tick["spread"]
+        except Exception:
+            pass
+
+        ac = asset_class(signal.symbol)
+        if ac == "crypto":
+            price = signal.entry_price or 1.0
+            spread_pct = (live_spread / price) * 100
+            if spread_pct > settings.MAX_SPREAD_PCT_CRYPTO:
+                logger.warning(
+                    "RISK REJECT [SPREAD]: %.3f%% > max %.1f%% for %s (crypto)",
+                    spread_pct, settings.MAX_SPREAD_PCT_CRYPTO, signal.symbol,
+                )
+                self._emit(
+                    "warn",
+                    (
+                        f"SPREAD — {signal.symbol} {spread_pct:.2f}% > "
+                        f"max {settings.MAX_SPREAD_PCT_CRYPTO}%"
+                    ),
+                    {
+                        "symbol": signal.symbol,
+                        "check": "spread",
+                        "spread_pct": round(spread_pct, 3),
+                        "max": settings.MAX_SPREAD_PCT_CRYPTO,
+                    },
+                )
+                return False
+            return True
+
+        pv = pip_value(signal.symbol)
+        spread_pips = live_spread / pv
+        if ac == "commodity":
+            max_spread = settings.MAX_SPREAD_PIPS_COMMODITY
+        elif ac == "index":
+            max_spread = settings.MAX_SPREAD_POINTS_INDEX
+        elif ac == "exotic":
+            max_spread = settings.MAX_SPREAD_PIPS_EXOTIC
+        else:
+            max_spread = settings.MAX_SPREAD_PIPS
+
+        if spread_pips > max_spread:
+            logger.warning(
+                "RISK REJECT [SPREAD]: %.1f pips > max %.1f for %s (%s)",
+                spread_pips, max_spread, signal.symbol, ac,
+            )
+            self._emit(
+                "warn",
+                (
+                    f"SPREAD — {signal.symbol} {spread_pips:.1f} pips > "
+                    f"max {max_spread} ({ac})"
+                ),
+                {
+                    "symbol": signal.symbol,
+                    "check": "spread",
+                    "spread_pips": round(spread_pips, 1),
+                    "max": max_spread,
+                },
+            )
+            return False
+
         return True
 
     def _emit(self, level: str, msg: str, data: dict | None = None) -> None:

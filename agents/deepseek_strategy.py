@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import time
 from datetime import UTC, datetime
 from typing import Optional
@@ -43,6 +44,13 @@ _PROMPT_INJECT_CHARS = str.maketrans("", "", "\n\r\x00\x1b")
 def _sanitize(value: str, max_len: int = 80) -> str:
     """Strip control characters and truncate to prevent prompt injection."""
     return str(value).translate(_PROMPT_INJECT_CHARS)[:max_len]
+
+
+def _ensure_utc(dt: datetime) -> datetime:
+    """Normalize a datetime to timezone-aware UTC."""
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=UTC)
+    return dt.astimezone(UTC)
 
 
 def _build_prompt(ctx: MarketContext) -> str:
@@ -84,6 +92,7 @@ Last 20 candles (H1, oldest → newest):
 
 Respond with ONLY a JSON object — no prose, no markdown:
 {{
+    "schema_version": "{settings.DEEPSEEK_SCHEMA_VERSION}",
   "direction": "BUY" | "SELL" | "HOLD",
   "confidence": <float 0.0–1.0>,
   "stop_loss": <price float>,
@@ -110,8 +119,20 @@ class DeepSeekStrategy(BaseStrategy):
 
     def __init__(self) -> None:
         self._client = None          # lazy-initialised on first call
-        self._cache:  dict[str, tuple[float, Optional[Signal]]] = {}
-        # symbol → (monotonic_time_of_last_call, signal_or_None)
+        self._cache: dict[str, tuple[float, Optional[Signal], tuple[str, str, str, str]]] = {}
+        # symbol → (monotonic_time_of_last_call, signal_or_None, context_signature)
+        self._metrics: dict[str, int] = {
+            "detect_calls": 0,
+            "cache_hits": 0,
+            "api_calls": 0,
+            "api_failures": 0,
+            "parse_failures": 0,
+            "schema_failures": 0,
+            "validation_failures": 0,
+            "below_confidence": 0,
+            "holds": 0,
+            "accepted": 0,
+        }
 
     # ── BaseStrategy abstract methods ─────────────────────────────────────
     # DeepSeek derives SL and TPs directly from the LLM response inside
@@ -157,34 +178,82 @@ class DeepSeekStrategy(BaseStrategy):
     # ── BaseStrategy interface ────────────────────────────────────────────
 
     def detect(self, context: MarketContext) -> Optional[Signal]:
+        self._metrics["detect_calls"] += 1
         if not settings.DEEPSEEK_API_KEY:
             logger.debug("DeepSeekStrategy: DEEPSEEK_API_KEY not set — skipping")
+            self._maybe_log_metrics()
             return None
 
         if not context.candles or len(context.candles) < 20:
+            self._maybe_log_metrics()
             return None
 
         # Cache check — avoid hammering the API every 30-second loop
         now_mono = time.monotonic()
-        cached_at, cached_signal = self._cache.get(context.symbol, (0.0, None))
+        sig = self._cache_signature(context)
+        cached_at, cached_signal, cached_sig = self._cache.get(
+            context.symbol,
+            (0.0, None, ("", "", "", "")),
+        )
         cache_ttl = settings.DEEPSEEK_CACHE_MINUTES * 60
-        if now_mono - cached_at < cache_ttl:
+        if now_mono - cached_at < cache_ttl and cached_sig == sig:
+            self._metrics["cache_hits"] += 1
             logger.debug("DeepSeekStrategy: %s cache hit (%.0fs remaining)",
                          context.symbol, cache_ttl - (now_mono - cached_at))
+            self._maybe_log_metrics()
             return cached_signal
+        if now_mono - cached_at < cache_ttl and cached_sig != sig:
+            logger.debug(
+                "DeepSeekStrategy: %s cache bypass (market signature changed)",
+                context.symbol,
+            )
 
         client = self._get_client()
         if client is None:
+            self._maybe_log_metrics()
             return None
 
         signal = self._call_api(client, context)
-        self._cache[context.symbol] = (now_mono, signal)
+        self._cache[context.symbol] = (now_mono, signal, sig)
+        self._maybe_log_metrics()
         return signal
+
+    @staticmethod
+    def _cache_signature(ctx: MarketContext) -> tuple[str, str, str, str]:
+        latest = _ensure_utc(ctx.candles[-1].timestamp).isoformat()
+        return (
+            latest,
+            _sanitize(ctx.session, 20),
+            _sanitize(ctx.regime, 20),
+            _sanitize(ctx.trend_direction, 20),
+        )
+
+    def _maybe_log_metrics(self) -> None:
+        every = max(1, settings.DEEPSEEK_METRICS_LOG_EVERY)
+        calls = self._metrics["detect_calls"]
+        if calls % every != 0:
+            return
+        m = self._metrics
+        logger.info(
+            "[deepseek-metrics] calls=%d cache_hits=%d api_calls=%d accepted=%d "
+            "holds=%d below_conf=%d parse_fail=%d schema_fail=%d validation_fail=%d api_fail=%d",
+            m["detect_calls"],
+            m["cache_hits"],
+            m["api_calls"],
+            m["accepted"],
+            m["holds"],
+            m["below_confidence"],
+            m["parse_failures"],
+            m["schema_failures"],
+            m["validation_failures"],
+            m["api_failures"],
+        )
 
     # ── Internal ─────────────────────────────────────────────────────────
 
     def _call_api(self, client, context: MarketContext) -> Optional[Signal]:
         try:
+            self._metrics["api_calls"] += 1
             prompt = _build_prompt(context)
             response = client.chat.completions.create(
                 model=settings.DEEPSEEK_MODEL,
@@ -201,6 +270,7 @@ class DeepSeekStrategy(BaseStrategy):
             return self._parse(raw, context)
 
         except Exception as exc:
+            self._metrics["api_failures"] += 1
             logger.warning("DeepSeekStrategy: API call failed for %s: %s",
                            context.symbol, exc)
             return None
@@ -209,17 +279,31 @@ class DeepSeekStrategy(BaseStrategy):
         try:
             data = json.loads(raw)
         except json.JSONDecodeError as exc:
+            self._metrics["parse_failures"] += 1
             logger.warning("DeepSeekStrategy: JSON parse error for %s: %s — raw=%r",
                            ctx.symbol, exc, raw[:200])
             return None
 
+        schema_version = str(data.get("schema_version", ""))
+        if schema_version != settings.DEEPSEEK_SCHEMA_VERSION:
+            self._metrics["schema_failures"] += 1
+            logger.warning(
+                "DeepSeekStrategy: %s schema mismatch got=%r expected=%r",
+                ctx.symbol,
+                schema_version,
+                settings.DEEPSEEK_SCHEMA_VERSION,
+            )
+            return None
+
         direction = str(data.get("direction", "HOLD")).upper()
         if direction not in ("BUY", "SELL"):
+            self._metrics["holds"] += 1
             logger.debug("DeepSeekStrategy: %s → HOLD", ctx.symbol)
             return None
 
         confidence = float(data.get("confidence", 0.0))
         if confidence < settings.DEEPSEEK_MIN_CONFIDENCE:
+            self._metrics["below_confidence"] += 1
             logger.debug("DeepSeekStrategy: %s confidence %.2f < threshold %.2f — skip",
                          ctx.symbol, confidence, settings.DEEPSEEK_MIN_CONFIDENCE)
             return None
@@ -241,7 +325,22 @@ class DeepSeekStrategy(BaseStrategy):
                            ctx.symbol, stop_loss, entry)
             return None
         if stop_loss == 0.0 or tp1 == 0.0:
+            self._metrics["validation_failures"] += 1
             logger.warning("DeepSeekStrategy: %s missing SL/TP in response — skip", ctx.symbol)
+            return None
+
+        valid, reason = self._validate_payload(
+            direction=direction,
+            entry=entry,
+            stop_loss=stop_loss,
+            tp1=tp1,
+            tp2=tp2,
+            tp3=tp3,
+            atr=ctx.atr,
+        )
+        if not valid:
+            self._metrics["validation_failures"] += 1
+            logger.warning("DeepSeekStrategy: %s invalid payload — %s", ctx.symbol, reason)
             return None
 
         rsi         = ctx.rsi or 50.0
@@ -263,6 +362,8 @@ class DeepSeekStrategy(BaseStrategy):
                     direction, ctx.symbol, confidence * 100, entry, stop_loss,
                     reasoning[:80])
 
+        self._metrics["accepted"] += 1
+
         return Signal(
             strategy=self.name,
             symbol=ctx.symbol,
@@ -277,3 +378,59 @@ class DeepSeekStrategy(BaseStrategy):
             reason=reasoning,
             entry_snapshot=snap,
         )
+
+    @staticmethod
+    def _on_correct_side(direction: str, entry: float, target: float) -> bool:
+        if direction == "BUY":
+            return target > entry
+        return target < entry
+
+    def _validate_payload(
+        self,
+        direction: str,
+        entry: float,
+        stop_loss: float,
+        tp1: float,
+        tp2: float,
+        tp3: float,
+        atr: float,
+    ) -> tuple[bool, str]:
+        values = [entry, stop_loss, tp1, tp2, tp3]
+        if any(not math.isfinite(v) for v in values):
+            return False, "non-finite numeric value"
+
+        risk = abs(entry - stop_loss)
+        if risk <= 0:
+            return False, "zero/negative risk distance"
+
+        # Enforce minimum SL distance requested in prompt: >= 2 * ATR.
+        if atr > 0 and risk < (2.0 * atr * 0.95):
+            return False, f"risk {risk:.5f} too small for ATR {atr:.5f}"
+
+        if not self._on_correct_side(direction, entry, tp1):
+            return False, "TP1 on wrong side of entry"
+        if not self._on_correct_side(direction, entry, tp2):
+            return False, "TP2 on wrong side of entry"
+        if not self._on_correct_side(direction, entry, tp3):
+            return False, "TP3 on wrong side of entry"
+
+        # Monotonic TP ladder away from entry.
+        if direction == "BUY" and not (tp1 < tp2 < tp3):
+            return False, "BUY TP ladder is not monotonic"
+        if direction == "SELL" and not (tp1 > tp2 > tp3):
+            return False, "SELL TP ladder is not monotonic"
+
+        tol = max(0.01, settings.DEEPSEEK_R_MULT_TOLERANCE)
+        expected_tp1 = entry + risk if direction == "BUY" else entry - risk
+        expected_tp2 = entry + 2 * risk if direction == "BUY" else entry - 2 * risk
+        expected_tp3 = entry + 3 * risk if direction == "BUY" else entry - 3 * risk
+
+        for idx, (actual, expected) in enumerate(
+            [(tp1, expected_tp1), (tp2, expected_tp2), (tp3, expected_tp3)],
+            start=1,
+        ):
+            rel_err = abs(actual - expected) / risk
+            if rel_err > tol:
+                return False, f"TP{idx} deviates from {idx}R by {rel_err:.2f}"
+
+        return True, "ok"
