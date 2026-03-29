@@ -20,8 +20,8 @@ def generate_report(closed_positions: list[PositionInfo],
 
     # ── Basic aggregates ─────────────────────────────────────────────────
     total = len(closed_positions)
-    wins  = [p for p in closed_positions if p.pnl > 0]
-    losses = [p for p in closed_positions if p.pnl <= 0]
+    wins  = [p for p in closed_positions if p.pnl >= 0]
+    losses = [p for p in closed_positions if p.pnl < 0]
 
     win_rate     = (len(wins) / total * 100.0) if total > 0 else 0.0
     gross_profit = sum(p.pnl for p in wins)
@@ -91,8 +91,8 @@ def generate_report(closed_positions: list[PositionInfo],
         models.setdefault(name, []).append(p)
 
     for name, trades in models.items():
-        m_wins   = [t for t in trades if t.pnl > 0]
-        m_losses = [t for t in trades if t.pnl <= 0]
+        m_wins   = [t for t in trades if t.pnl >= 0]
+        m_losses = [t for t in trades if t.pnl < 0]
         m_wr     = (len(m_wins) / len(trades) * 100.0) if trades else 0.0
         m_gp     = sum(t.pnl for t in m_wins)
         m_gl     = abs(sum(t.pnl for t in m_losses))

@@ -151,7 +151,7 @@ class BacktestEngine:
                         continue
                     sl_rec = next(
                         (p for p in self.broker.closed_positions
-                         if p.ticket == t and p.pnl <= 0),
+                         if p.ticket == t and p.pnl < 0),
                         None,
                     )
                     if sl_rec:

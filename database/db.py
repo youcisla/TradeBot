@@ -694,8 +694,8 @@ class Database:
             with conn.cursor() as cur:
                 cur.execute(
                     """SELECT COUNT(*),
-                              COUNT(*) FILTER (WHERE pnl > 0),
-                              COUNT(*) FILTER (WHERE pnl <= 0),
+                              COUNT(*) FILTER (WHERE pnl >= 0),
+                              COUNT(*) FILTER (WHERE pnl < 0),
                               COALESCE(SUM(pnl), 0),
                               COALESCE(AVG(score), 0)
                        FROM trade_scores

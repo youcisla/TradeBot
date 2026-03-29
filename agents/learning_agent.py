@@ -348,8 +348,8 @@ class LearningAgent:
         if not closed:
             return {"trades_today": 0}
 
-        wins      = [t for t in closed if (t.pnl or 0) > 0]
-        losses    = [t for t in closed if (t.pnl or 0) <= 0]
+        wins      = [t for t in closed if (t.pnl or 0) >= 0]
+        losses    = [t for t in closed if (t.pnl or 0) < 0]
         total_pnl = sum(t.pnl or 0 for t in closed)
 
         return {
@@ -368,7 +368,7 @@ class LearningAgent:
         pnl          = trade.pnl or 0.0
         initial_risk = self._initial_risk(trade)
 
-        if pnl > 0:
+        if pnl >= 0:
             r_multiple = pnl / initial_risk if initial_risk > 0 else 0
             base = self.SCORE_CLEAN_WIN if r_multiple >= 2 else self.SCORE_MESSY_WIN
         else:
