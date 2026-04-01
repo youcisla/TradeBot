@@ -112,7 +112,7 @@ class LearningAgent:
                        min(self.CONFIDENCE_MAX, current + delta))
         # EMA smoothing: blend proposed value with current to prevent per-trade oscillation
         new_conf = round(0.3 * proposed + 0.7 * current, 4)
-        self._db.upsert_confidence(trade.strategy, new_conf, 0, 0)
+        self._db.upsert_confidence(trade.strategy, new_conf, 1, int(score))
 
         # Log
         self._emit(

@@ -45,10 +45,15 @@ class TradeManagerAgent:
     # ── lifecycle ────────────────────────────────────────────────────────
 
     def load_open_trades(self) -> None:
-        """Load open trades from DB into memory (called on startup)."""
-        self._open_trades = self._state.get_open_trades()
-        self._emit("info", f"Loaded {len(self._open_trades)} open trades from DB")
-        logger.info("Loaded %d open trades from DB", len(self._open_trades))
+        """Load open trades from MT5 on startup — broker is the source of truth.
+
+        Runs a full reconciliation (broker vs DB) so any positions closed while
+        the bot was offline are marked closed, and any orphaned broker positions
+        are adopted, before we start monitoring.
+        """
+        self.reconcile()
+        self._emit("info", f"Loaded {len(self._open_trades)} open trades from MT5 (reconciled)")
+        logger.info("Loaded %d open trades from MT5 (reconciled)", len(self._open_trades))
 
     def _emit(self, level: str, msg: str, data: dict | None = None) -> None:
         if self._db:
@@ -183,6 +188,9 @@ class TradeManagerAgent:
 
             current_price = pos.current_price
             trade.pnl = pos.pnl
+            trade.current_price = current_price
+            if self._db:
+                self._db.update_live_state(trade.id, trade.pnl, trade.current_price)
 
             # ── Check TP1 ────────────────────────────────────────────────
             if not trade.tp1_hit:

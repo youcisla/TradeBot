@@ -217,6 +217,16 @@ BEGIN
 END $$;
 """
 
+_ALTER_TRADES_LIVE = """
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                   WHERE table_name='trades' AND column_name='current_price') THEN
+        ALTER TABLE trades ADD COLUMN current_price NUMERIC DEFAULT 0.0;
+    END IF;
+END $$;
+"""
+
 _ALTER_TRADES_COMMISSION = """
 DO $$
 BEGIN
@@ -267,16 +277,23 @@ CREATE TABLE IF NOT EXISTS symbol_fault (
 """
 
 _CREATE_INDEXES = """
-CREATE INDEX IF NOT EXISTS idx_agent_events_created_at   ON agent_events (created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_agent_events_agent         ON agent_events (agent);
-CREATE INDEX IF NOT EXISTS idx_trades_status              ON trades (status);
-CREATE INDEX IF NOT EXISTS idx_trades_open_time           ON trades (open_time DESC);
-CREATE INDEX IF NOT EXISTS idx_trades_symbol              ON trades (symbol);
-CREATE INDEX IF NOT EXISTS idx_trades_close_time          ON trades (close_time DESC);
-CREATE INDEX IF NOT EXISTS idx_ict_setups_created_at      ON ict_setups (created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_ict_setups_symbol          ON ict_setups (symbol);
-CREATE INDEX IF NOT EXISTS idx_bot_commands_status        ON bot_commands (status);
-CREATE INDEX IF NOT EXISTS idx_trade_scores_created_at    ON trade_scores (created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_agent_events_created_at        ON agent_events (created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_agent_events_agent             ON agent_events (agent);
+CREATE INDEX IF NOT EXISTS idx_agent_events_agent_time        ON agent_events (agent, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_agent_events_agent_level_time  ON agent_events (agent, level, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_trades_status                  ON trades (status);
+CREATE INDEX IF NOT EXISTS idx_trades_open_time               ON trades (open_time DESC);
+CREATE INDEX IF NOT EXISTS idx_trades_symbol                  ON trades (symbol);
+CREATE INDEX IF NOT EXISTS idx_trades_close_time              ON trades (close_time DESC);
+CREATE INDEX IF NOT EXISTS idx_trades_status_open_time        ON trades (status, open_time DESC);
+CREATE INDEX IF NOT EXISTS idx_trades_open_partial            ON trades (open_time DESC) WHERE status IN ('OPEN', 'PARTIAL');
+CREATE INDEX IF NOT EXISTS idx_ict_setups_created_at          ON ict_setups (created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_ict_setups_symbol              ON ict_setups (symbol);
+CREATE INDEX IF NOT EXISTS idx_ict_setups_symbol_created      ON ict_setups (symbol, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_bot_commands_status            ON bot_commands (status);
+CREATE INDEX IF NOT EXISTS idx_bot_commands_pending           ON bot_commands (created_at DESC) WHERE status = 'pending';
+CREATE INDEX IF NOT EXISTS idx_trade_scores_created_at        ON trade_scores (created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_trade_scores_strategy_time     ON trade_scores (strategy, created_at DESC);
 """
 
 _ALL_TABLES = [
@@ -383,9 +400,45 @@ class Database:
                     cur.execute(_ALTER_BOT_STATUS_BROKER)
                     cur.execute(_ALTER_TRADES_COMMISSION)
                     cur.execute(_ALTER_TRADES_TP4)
+                    cur.execute(_ALTER_TRADES_LIVE)
                     cur.execute(_ALTER_STRATEGY_CONFIDENCE_STREAK)
                     cur.execute(_CREATE_INDEXES)
             logger.info("Database tables verified")
+        finally:
+            self._put_conn(conn)
+        self.purge_old_data()
+
+    def purge_old_data(self) -> None:
+        """Delete stale rows to prevent unbounded table growth.
+
+        Retention policy (configurable via env vars):
+          - agent_events: 14 days  (~55k rows @ 4k/day)
+          - bot_commands (done): 7 days
+          - ict_setups: 30 days
+        """
+        conn = self._get_conn()
+        try:
+            with conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "DELETE FROM agent_events WHERE created_at < NOW() - INTERVAL '14 days'"
+                    )
+                    n_events = cur.rowcount
+                    cur.execute(
+                        "DELETE FROM bot_commands WHERE status='done' AND created_at < NOW() - INTERVAL '7 days'"
+                    )
+                    n_cmds = cur.rowcount
+                    cur.execute(
+                        "DELETE FROM ict_setups WHERE created_at < NOW() - INTERVAL '30 days'"
+                    )
+                    n_ict = cur.rowcount
+            if n_events or n_cmds or n_ict:
+                logger.info(
+                    "DB purge: removed %d agent_events, %d bot_commands, %d ict_setups",
+                    n_events, n_cmds, n_ict,
+                )
+        except Exception:
+            logger.exception("DB purge failed (non-fatal)")
         finally:
             self._put_conn(conn)
 
@@ -403,14 +456,14 @@ class Database:
                             stop_loss, take_profit_1, take_profit_2, take_profit_3,
                             take_profit_4, tp1_lots, tp2_lots, tp3_lots, tp4_lots,
                             tp1_hit, tp2_hit, tp3_hit, tp4_hit, structural_be, status,
-                            open_time, close_time, pnl, commission, close_reason,
-                            broker_ticket, spread_at_entry,
+                            open_time, close_time, pnl, current_price, commission,
+                            close_reason, broker_ticket, spread_at_entry,
                             snap_rsi_aligned, snap_trend_aligned,
                             snap_volume_sufficient, snap_near_news_event,
                             snap_market_condition, snap_session, snap_day_of_week
                         ) VALUES (
                             %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,
-                            %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s
+                            %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s
                         )
                         ON CONFLICT (id) DO UPDATE SET
                             stop_loss=EXCLUDED.stop_loss,
@@ -418,6 +471,7 @@ class Database:
                             tp3_hit=EXCLUDED.tp3_hit, tp4_hit=EXCLUDED.tp4_hit,
                             status=EXCLUDED.status,
                             close_time=EXCLUDED.close_time, pnl=EXCLUDED.pnl,
+                            current_price=EXCLUDED.current_price,
                             commission=EXCLUDED.commission,
                             close_reason=EXCLUDED.close_reason,
                             lot_size=EXCLUDED.lot_size,
@@ -430,11 +484,25 @@ class Database:
                             t.tp1_lots, t.tp2_lots, t.tp3_lots, t.tp4_lots,
                             t.tp1_hit, t.tp2_hit, t.tp3_hit, t.tp4_hit, t.structural_be,
                             t.status, t.open_time, t.close_time,
-                            t.pnl, t.commission, t.close_reason, t.broker_ticket, t.spread_at_entry,
+                            t.pnl, t.current_price, t.commission, t.close_reason,
+                            t.broker_ticket, t.spread_at_entry,
                             t.snap_rsi_aligned, t.snap_trend_aligned,
                             t.snap_volume_sufficient, t.snap_near_news_event,
                             t.snap_market_condition, t.snap_session, t.snap_day_of_week,
                         ),
+                    )
+        finally:
+            self._put_conn(conn)
+
+    def update_live_state(self, trade_id: str, pnl: float, current_price: float) -> None:
+        """Lightweight update called every monitor cycle — only writes pnl + current_price."""
+        conn = self._get_conn()
+        try:
+            with conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "UPDATE trades SET pnl=%s, current_price=%s WHERE id=%s",
+                        (pnl, current_price, trade_id),
                     )
         finally:
             self._put_conn(conn)
@@ -578,8 +646,8 @@ class Database:
                            VALUES (%s, %s, %s, %s, NOW())
                            ON CONFLICT (strategy) DO UPDATE SET
                                confidence=EXCLUDED.confidence,
-                               total_trades=EXCLUDED.total_trades,
-                               total_score=EXCLUDED.total_score,
+                               total_trades=strategy_confidence.total_trades + EXCLUDED.total_trades,
+                               total_score=strategy_confidence.total_score + EXCLUDED.total_score,
                                last_updated=NOW()""",
                         (strategy, confidence, total_trades, total_score),
                     )

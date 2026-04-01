@@ -13,6 +13,7 @@ import logging
 import os
 import signal
 import sys
+import threading
 import time
 
 # Enable ANSI colour codes on Windows CMD / PowerShell
@@ -952,12 +953,28 @@ def _run_iteration(
     execution_phase_start = signal_ready_ts
 
     # ══════════════════════════════════════════════════════════════════════
-    # PHASE 3: Execute best signals that pass council + risk validation
+    # PHASE 3: Execute best signals that pass risk validation
+    #
+    # Instant-entry mode (INSTANT_ENTRY_ENABLED=true, default):
+    #   Top signal → hard risk only → execute immediately → council advisory
+    #   post-entry (non-blocking) → full risk post-entry.
+    #
+    # Classic mode (INSTANT_ENTRY_ENABLED=false):
+    #   All signals → council gate (blocking) → risk → execute.
     # ══════════════════════════════════════════════════════════════════════
     for i, signal_obj in enumerate(ranked):
 
-        # ── Trading Council gate (3-expert algorithmic debate) ──────────
-        if council is not None:
+        is_instant = (
+            settings.INSTANT_ENTRY_ENABLED
+            and i == 0
+            and signal_obj.confidence >= settings.INSTANT_ENTRY_MIN_CONFIDENCE
+        )
+        is_fast_lane = settings.FAST_LANE_ENABLED and i < settings.FAST_LANE_MAX_SIGNALS
+
+        # ── Trading Council gate ─────────────────────────────────────────
+        # In instant-entry mode the top signal skips this gate entirely.
+        # Council still runs for i>0 signals as a blocking quality filter.
+        if council is not None and not is_instant:
             ctx = signal_contexts.get(id(signal_obj))
             if ctx is not None:
                 if _tui:
@@ -1004,10 +1021,12 @@ def _run_iteration(
         # ── Risk check (drawdown, spread, lot-size, etc.) ────────────────
         if _tui:
             _tui.set_agent_status("risk", f"validating {signal_obj.symbol} {signal_obj.direction}")
-        is_fast_lane = settings.FAST_LANE_ENABLED and i < settings.FAST_LANE_MAX_SIGNALS
-        validation_mode = "hard" if is_fast_lane else "full"
+        # Instant entry and fast-lane both run hard checks only pre-entry.
+        validation_mode = "hard" if (is_instant or is_fast_lane) else "full"
         if is_fast_lane:
             metrics["fast_lane_attempts"] = metrics.get("fast_lane_attempts", 0) + 1
+        if is_instant:
+            metrics["instant_entry_attempts"] = metrics.get("instant_entry_attempts", 0) + 1
 
         if not risk_agent.validate(signal_obj, mode=validation_mode):
             metrics["risk_rejections"] = metrics.get("risk_rejections", 0) + 1
@@ -1042,7 +1061,7 @@ def _run_iteration(
                 metrics["deferred_added"] = metrics.get("deferred_added", 0) + 1
             continue
 
-        # Execute
+        # ── Execute ──────────────────────────────────────────────────────
         if _tui:
             _tui.set_agent_status("execution", f"opening {signal_obj.direction} {signal_obj.symbol}")
         trade = execution_agent.open_trade(signal_obj)
@@ -1056,12 +1075,56 @@ def _run_iteration(
                 _tui.add_event("execution", "info",
                                f"OPENED {trade.direction} {trade.symbol} @ {trade.entry_price:.5f}")
 
-            # Score will happen when trade closes (in trade_manager.monitor)
             if first_fill_signal_to_order_ms < 0.0:
                 first_fill_signal_to_order_ms = (time.monotonic() - signal_ready_ts) * 1000.0
-            if is_fast_lane:
+
+            # ── Post-entry council (advisory, instant-entry mode) ────────
+            # Runs in a daemon thread — verdict never blocks or closes the trade.
+            if is_instant and council is not None:
+                ctx = signal_contexts.get(id(signal_obj))
+                if ctx is not None:
+                    def _run_advisory(
+                        _council=council, _sig=signal_obj, _ctx=ctx, _tui=_tui
+                    ) -> None:
+                        try:
+                            verdict = _council.review(_sig, _ctx)
+                            conf_str = f"{verdict.confidence:.0%}"
+                            if verdict.approved:
+                                logger.info(
+                                    "Council ADVISORY (post-entry) APPROVED %s %s (%s)",
+                                    _sig.symbol, _sig.direction, conf_str,
+                                )
+                                if _tui:
+                                    _tui.add_event(
+                                        "council", "info",
+                                        f"ADVISORY approved {_sig.symbol} {conf_str}",
+                                    )
+                            else:
+                                logger.warning(
+                                    "Council ADVISORY (post-entry) flagged %s %s (%s) — %s",
+                                    _sig.symbol, _sig.direction,
+                                    conf_str, verdict.reasoning,
+                                )
+                                if _tui:
+                                    _tui.add_event(
+                                        "council", "warn",
+                                        f"ADVISORY flag {_sig.symbol} {conf_str}",
+                                    )
+                                from utils import telegram_bot as _tg
+                                _tg.send_message(
+                                    f"⚠️ Council advisory (post-entry): {_sig.direction} "
+                                    f"{_sig.symbol} — {conf_str} confidence\n"
+                                    f"{verdict.reasoning}"
+                                )
+                        except Exception:
+                            logger.exception("Advisory council thread failed")
+
+                    threading.Thread(target=_run_advisory, daemon=True).start()
+
+            # ── Post-entry full risk check ───────────────────────────────
+            if is_instant or is_fast_lane:
                 metrics["fast_lane_fills"] = metrics.get("fast_lane_fills", 0) + 1
-                full_ok = risk_agent.validate(signal_obj, mode="full")
+                full_ok = risk_agent.validate(signal_obj, mode="full", post_entry=True)
                 if not full_ok and settings.FAST_LANE_CLOSE_ON_FULL_REJECT:
                     trade_manager.close_trade(trade.id, "FULL_VALIDATION_REJECT")
                     metrics["fast_lane_closed"] = metrics.get("fast_lane_closed", 0) + 1

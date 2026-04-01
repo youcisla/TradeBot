@@ -181,6 +181,28 @@ class MT5Connector(BrokerConnector):
         from config.symbols import contract_size as _cfg_cs
         return _cfg_cs(symbol)
 
+    def get_tick_size(self, symbol: str) -> float:
+        """Return the broker's actual minimum price movement (trade_tick_size)."""
+        broker_sym = self.resolve(symbol)
+        info = mt5.symbol_info(broker_sym)
+        if info is not None:
+            return float(info.trade_tick_size)
+        from config.symbols import pip_value as _pv
+        return _pv(symbol)
+
+    def get_tick_value(self, symbol: str) -> float:
+        """Return trade_tick_value from MT5 — P&L in account currency per tick per lot.
+
+        MT5 converts cross-currency instruments automatically so this value is
+        always in the account's own currency (e.g. EUR on a EUR-denominated demo).
+        """
+        broker_sym = self.resolve(symbol)
+        info = mt5.symbol_info(broker_sym)
+        if info is not None:
+            return float(info.trade_tick_value)
+        from config.symbols import pip_value as _pv, contract_size as _cs
+        return _pv(symbol) * _cs(symbol)
+
     def disconnect(self) -> None:
         if self._connected:
             mt5.shutdown()
@@ -297,22 +319,71 @@ class MT5Connector(BrokerConnector):
             return OrderResult(success=False, message=f"No tick for {symbol}")
 
         order_type = mt5.ORDER_TYPE_BUY if direction == "BUY" else mt5.ORDER_TYPE_SELL
-        price = tick.ask if direction == "BUY" else tick.bid
+        # Use the live fill price — market may have moved since signal detection.
+        fill_price = tick.ask if direction == "BUY" else tick.bid
+
+        # ── Pre-validate SL/TP to prevent MT5 error 10016 ────────────────
+        # 10016 fires when SL/TP is on the wrong side of the current price or
+        # within the broker's stops_level distance.  We detect this before
+        # sending so the error message is actionable instead of cryptic.
+        si = mt5.symbol_info(broker_sym)
+        point = float(si.point) if si is not None else 0.00001
+        # stops_level=0 on PU Prime; enforce at least 1 point minimum distance
+        # so floating-point equality doesn't trigger a rejection.
+        raw_stops = float(si.trade_stops_level) if si is not None else 0.0
+        min_dist = max(raw_stops, 1.0) * point
+
+        if sl > 0:
+            if direction == "BUY" and sl >= fill_price - min_dist:
+                return OrderResult(
+                    success=False,
+                    message=(
+                        f"10016: BUY stop_loss={sl:.5f} is at or above "
+                        f"fill_price={fill_price:.5f} (min_dist={min_dist:.5f}) "
+                        f"— signal stale, market moved"
+                    ),
+                )
+            if direction == "SELL" and sl <= fill_price + min_dist:
+                return OrderResult(
+                    success=False,
+                    message=(
+                        f"10016: SELL stop_loss={sl:.5f} is at or below "
+                        f"fill_price={fill_price:.5f} (min_dist={min_dist:.5f}) "
+                        f"— signal stale, market moved"
+                    ),
+                )
+
+        # TP is the broker crash-safety net; trade_manager handles real partials.
+        # If TP is already past fill_price (market moved), omit it rather than
+        # let it invalidate the whole order.
+        if tp is not None and tp > 0:
+            if direction == "BUY" and tp <= fill_price + min_dist:
+                logger.warning(
+                    "Omitting broker TP for BUY %s: tp=%.5f <= fill=%.5f (stale)",
+                    symbol, tp, fill_price,
+                )
+                tp = None
+            elif direction == "SELL" and tp >= fill_price - min_dist:
+                logger.warning(
+                    "Omitting broker TP for SELL %s: tp=%.5f >= fill=%.5f (stale)",
+                    symbol, tp, fill_price,
+                )
+                tp = None
 
         request = {
             "action": mt5.TRADE_ACTION_DEAL,
             "symbol": broker_sym,
             "volume": float(round(lot_size, 2)),
             "type": order_type,
-            "price": price,
-            "sl": float(sl),
+            "price": fill_price,
+            "sl": float(sl) if sl > 0 else 0.0,
             "deviation": 20,
             "magic": 202603,
             "comment": self._sanitize_comment(comment),
             "type_time": mt5.ORDER_TIME_GTC,
             "type_filling": mt5.ORDER_FILLING_IOC,
         }
-        if tp is not None:
+        if tp is not None and tp > 0:
             request["tp"] = float(tp)
 
         result = mt5.order_send(request)

@@ -23,6 +23,20 @@ from utils.helpers import day_of_week
 logger = logging.getLogger(__name__)
 
 
+def _candle_volume_sufficient(candles: list, lookback: int = 20, threshold: float = 0.5) -> bool:
+    """True if the most recent candle's volume >= threshold × average of last `lookback` candles.
+
+    MT5 tick volume (symbol_info_tick().volume) is often 0 for non-exchange instruments
+    and cannot be used as a volume confirmation.  Candle volume (from get_rates_from_pos)
+    is the tick count per bar and is always populated — this is the correct source.
+    """
+    if not candles or len(candles) < 2:
+        return False
+    recent = candles[-lookback:] if len(candles) >= lookback else candles
+    avg = sum(c.volume for c in recent[:-1]) / max(1, len(recent) - 1)
+    return avg > 0 and candles[-1].volume >= avg * threshold
+
+
 class ICTStrategy(BaseStrategy):
     """ICT / Smart Money Concepts strategy.
 
@@ -224,7 +238,7 @@ class ICTStrategy(BaseStrategy):
             spread=ctx.spread,
             rsi_aligned=True,  # ICT doesn't use RSI directly
             trend_aligned=best.htf_bias_aligned,
-            volume_sufficient=ctx.volume > 0,
+            volume_sufficient=_candle_volume_sufficient(ctx.candles),
             near_news_event=ctx.near_news_event,
             market_condition=ict_ctx.htf_regime.value,
             session=ict_ctx.session_info.session.value,

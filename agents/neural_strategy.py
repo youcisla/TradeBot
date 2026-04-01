@@ -33,6 +33,14 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def _candle_volume_sufficient(candles: list, lookback: int = 20, threshold: float = 0.5) -> bool:
+    if not candles or len(candles) < 2:
+        return False
+    recent = candles[-lookback:] if len(candles) >= lookback else candles
+    avg = sum(c.volume for c in recent[:-1]) / max(1, len(recent) - 1)
+    return avg > 0 and candles[-1].volume >= avg * threshold
+
+
 class NeuralStrategy(BaseStrategy):
     """LSTM-based strategy.  Generates BUY/SELL signals from candle sequences."""
 
@@ -97,7 +105,7 @@ class NeuralStrategy(BaseStrategy):
             rsi_aligned=rsi_aligned,
             trend_aligned=(context.trend_direction == "bullish" and direction == "BUY")
                         or (context.trend_direction == "bearish" and direction == "SELL"),
-            volume_sufficient=context.volume > 0,
+            volume_sufficient=_candle_volume_sufficient(context.candles),
             near_news_event=context.near_news_event,
             market_condition=context.regime,
             session=context.session,

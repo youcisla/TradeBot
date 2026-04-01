@@ -112,6 +112,31 @@ class BrokerConnector(ABC):
         from config.symbols import contract_size as _cs
         return _cs(symbol)
 
+    def get_tick_size(self, symbol: str) -> float:
+        """Return the minimum price movement (tick size) for *symbol*.
+
+        MT5Connector overrides this with symbol_info.trade_tick_size so the
+        value matches the broker exactly.  The config pip_value is used as a
+        fallback for mock/test connectors.
+        """
+        from config.symbols import pip_value as _pv
+        return _pv(symbol)
+
+    def get_tick_value(self, symbol: str) -> float:
+        """Return the account-currency P&L per 1 tick move per 1 lot.
+
+        MT5 calculates this in the account's own currency, automatically
+        converting cross-currency instruments (e.g. BTCUSD on a EUR account
+        returns a EUR value).  Using this instead of sl_distance × contract_size
+        eliminates the account-currency / instrument-currency mismatch.
+
+        MT5Connector overrides with symbol_info.trade_tick_value.
+        The fallback estimate (pip × contract_size) is USD-based and only
+        correct when account currency == instrument profit currency.
+        """
+        from config.symbols import pip_value as _pv, contract_size as _cs
+        return _pv(symbol) * _cs(symbol)
+
     def get_closed_pnl(self, ticket: int) -> float | None:
         """Return the realised P&L for a closed position by broker ticket.
 

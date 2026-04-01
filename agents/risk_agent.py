@@ -25,6 +25,7 @@ from config.symbols import pip_value, asset_class
 from models.signal import Signal
 from models.trade import Trade
 from utils import telegram_bot
+from utils.helpers import current_session, day_of_week
 
 if TYPE_CHECKING:
     from agents.crucix_agent import CrucixAgent
@@ -117,20 +118,29 @@ class RiskAgent:
         # to catch real equity changes between loops.
         self._equity_cache: tuple[float, float] = (0.0, 0.0)  # (monotonic_ts, value)
         self._tick_cache: dict[str, tuple[float, dict]] = {}  # symbol → (monotonic_ts, tick)
+        # Tick spec cache (tick_size, tick_value) — refreshed every 60s.
+        # tick_value is in account currency (MT5 converts automatically), so
+        # this is the source of truth for EUR/USD and other cross-currency accounts.
+        self._tick_spec_cache: dict[str, tuple[float, float, float]] = {}  # symbol → (ts, size, value)
 
     # ── public API ───────────────────────────────────────────────────────
 
-    def validate(self, signal: Signal, mode: str = "full") -> bool:
+    def validate(self, signal: Signal, mode: str = "full",
+                 post_entry: bool = False) -> bool:
         """Return True if risk checks pass for the selected mode.
 
         Modes:
-        - ``hard``: ultra-fast safety checks for fast-lane execution
+        - ``hard``: ultra-fast safety checks for fast-lane / instant-entry
         - ``full``: complete validation (default)
+
+        ``post_entry=True``: skips the duplicate and correlation guards.
+        Use this for the post-entry full check so the trade we JUST opened
+        doesn't trigger "DUPLICATE" and get immediately closed.
         """
         try:
             if mode == "hard":
                 return self._validate_hard(signal)
-            return self._validate_inner(signal)
+            return self._validate_inner(signal, skip_duplicate=post_entry)
         except Exception:
             logger.exception("RiskAgent.validate crashed — rejecting signal")
             return False
@@ -138,23 +148,44 @@ class RiskAgent:
     def calculate_position_size(self, signal: Signal) -> float:
         """Return lot size based on risk parameters.
 
-        Formula: lot_size = risk_usd / (sl_distance × contract_size)
+        Uses MT5's trade_tick_value (account currency per tick per lot) so the
+        formula is correct regardless of account denomination.  For a EUR account
+        trading BTCUSD, balance is in EUR and tick_value is also in EUR — no
+        manual EUR/USD conversion needed.
 
-        contract_size is the number of base-currency units per 1 standard lot.
-        For USD-quoted instruments the dollar risk per lot is directly:
-            sl_distance_in_price × contract_size
-        Examples:
-          EURUSD: sl_distance=0.0007, contract=100,000 → risk/lot=$70
-          BTCUSD: sl_distance=500.0,  contract=1       → risk/lot=$500
-          BCHUSD: sl_distance=1.77,   contract=1       → risk/lot=$1.77
+        Formula: lot_size = risk_amount / risk_per_lot
+          risk_amount  = balance × MAX_RISK_PER_TRADE            (account currency)
+          risk_per_lot = (sl_distance / tick_size) × tick_value  (account currency)
+
+        Falls back to sl_distance × contract_size if tick data is unavailable
+        (mock connector, symbol not in MT5).
         """
         balance = self._broker.get_balance()
         risk_amount = balance * settings.MAX_RISK_PER_TRADE
         sl_distance = abs(signal.entry_price - signal.stop_loss)
         if sl_distance == 0:
             return settings.MIN_LOT_SIZE
-        cs = self._broker.get_contract_size(signal.symbol)
-        risk_per_lot = sl_distance * cs
+
+        # Tick spec — cached 60s to avoid an extra IPC call per signal.
+        _now_mono = time.monotonic()
+        _spec = self._tick_spec_cache.get(signal.symbol)
+        if _spec is None or _now_mono - _spec[0] > 60.0:
+            _tick_sz  = self._broker.get_tick_size(signal.symbol)
+            _tick_val = self._broker.get_tick_value(signal.symbol)
+            self._tick_spec_cache[signal.symbol] = (_now_mono, _tick_sz, _tick_val)
+        else:
+            _, _tick_sz, _tick_val = _spec
+
+        if _tick_sz > 0 and _tick_val > 0:
+            # MT5-accurate: account currency on both sides — no FX mismatch.
+            risk_per_lot = (sl_distance / _tick_sz) * _tick_val
+        else:
+            # Fallback: original formula (mock connector / missing symbol info).
+            cs = self._broker.get_contract_size(signal.symbol)
+            risk_per_lot = sl_distance * cs
+
+        if risk_per_lot == 0:
+            return settings.MIN_LOT_SIZE
         lot_size = risk_amount / risk_per_lot
         raw_lot = round(lot_size, 2)
         lot_size = max(settings.MIN_LOT_SIZE, min(settings.MAX_LOT_SIZE, raw_lot))
@@ -210,6 +241,27 @@ class RiskAgent:
             self._emit("warn", f"MACRO BLACKOUT: FLASH alert active on {signal.symbol}")
             return False
 
+        # 1c. Session gate — only enter in allowed sessions (data-driven)
+        if settings.ENTRY_ALLOWED_SESSIONS:
+            sess = current_session()
+            if sess not in settings.ENTRY_ALLOWED_SESSIONS:
+                self._emit("warn",
+                           f"SESSION GATE: {signal.symbol} blocked — session={sess} "
+                           f"not in {settings.ENTRY_ALLOWED_SESSIONS}",
+                           {"symbol": signal.symbol, "session": sess,
+                            "allowed": settings.ENTRY_ALLOWED_SESSIONS})
+                return False
+
+        # 1d. Day-of-week gate — block systematic losing days
+        if settings.ENTRY_BLOCKED_DAYS:
+            today = day_of_week()
+            if today in settings.ENTRY_BLOCKED_DAYS:
+                self._emit("warn",
+                           f"DAY GATE: {signal.symbol} blocked — {today} in blocked days",
+                           {"symbol": signal.symbol, "day": today,
+                            "blocked": settings.ENTRY_BLOCKED_DAYS})
+                return False
+
         open_trades = self._get_open_trades()
 
         # 2. Duplicate and correlation exposure guards
@@ -231,7 +283,7 @@ class RiskAgent:
 
         return True
 
-    def _validate_inner(self, signal: Signal) -> bool:
+    def _validate_inner(self, signal: Signal, skip_duplicate: bool = False) -> bool:
         # 1. Drawdown circuit breaker
         if self._check_drawdown():
             logger.warning("RISK REJECT [DRAWDOWN]: circuit breaker active")
@@ -245,10 +297,42 @@ class RiskAgent:
                        {"symbol": signal.symbol, "check": "crucix_blackout"})
             return False
 
+        # 1c. Session gate — only allow new entries in proven sessions.
+        # skip_duplicate=True means this is a post-entry check; don't close
+        # a trade simply because the session changed after entry.
+        if not skip_duplicate and settings.ENTRY_ALLOWED_SESSIONS:
+            sess = signal.entry_snapshot.session or current_session()
+            if sess not in settings.ENTRY_ALLOWED_SESSIONS:
+                logger.warning(
+                    "RISK REJECT [SESSION]: %s blocked — session=%s not in %s",
+                    signal.symbol, sess, settings.ENTRY_ALLOWED_SESSIONS,
+                )
+                self._emit("warn",
+                           f"SESSION GATE: {signal.symbol} blocked — "
+                           f"session={sess} not in {settings.ENTRY_ALLOWED_SESSIONS}",
+                           {"symbol": signal.symbol, "session": sess,
+                            "check": "session_gate"})
+                return False
+
+        # 1d. Day-of-week gate — skip on post-entry checks for same reason.
+        if not skip_duplicate and settings.ENTRY_BLOCKED_DAYS:
+            today = signal.entry_snapshot.day_of_week or day_of_week()
+            if today in settings.ENTRY_BLOCKED_DAYS:
+                logger.warning(
+                    "RISK REJECT [DAY_GATE]: %s blocked — %s in blocked days",
+                    signal.symbol, today,
+                )
+                self._emit("warn",
+                           f"DAY GATE: {signal.symbol} blocked — {today} in blocked days",
+                           {"symbol": signal.symbol, "day": today,
+                            "check": "day_gate"})
+                return False
+
         open_trades = self._get_open_trades()
 
-        # 2. Duplicate signal guard
-        if self._check_duplicate(signal, open_trades):
+        # 2. Duplicate signal guard — skipped on post-entry validation because
+        # the trade we just opened would always trigger this as a false positive.
+        if not skip_duplicate and self._check_duplicate(signal, open_trades):
             logger.warning(
                 "RISK REJECT [DUPLICATE]: %s %s %s already open",
                 signal.symbol, signal.direction, signal.strategy,
@@ -259,7 +343,7 @@ class RiskAgent:
             return False
 
         # 3. Correlation guard (same symbol or correlated pair, same direction)
-        if self._check_correlation(signal, open_trades):
+        if not skip_duplicate and self._check_correlation(signal, open_trades):
             logger.warning(
                 "RISK REJECT [CORRELATION]: %s %s blocked by existing exposure",
                 signal.symbol, signal.direction,

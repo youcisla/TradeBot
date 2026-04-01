@@ -135,6 +135,13 @@ FAST_LANE_CLOSE_ON_FULL_REJECT: bool = (
     os.getenv("FAST_LANE_CLOSE_ON_FULL_REJECT", "true").lower() == "true"
 )
 
+# Instant entry: enter on signal detection, skip council gate entirely.
+# Council runs post-entry as advisory only (non-blocking).
+# Only applies when signal confidence >= INSTANT_ENTRY_MIN_CONFIDENCE.
+# Signals below that threshold always go through the council gate first.
+INSTANT_ENTRY_ENABLED: bool = os.getenv("INSTANT_ENTRY_ENABLED", "true").lower() == "true"
+INSTANT_ENTRY_MIN_CONFIDENCE: float = float(os.getenv("INSTANT_ENTRY_MIN_CONFIDENCE", "0.78"))
+
 # Confidence-to-size mapping (borderline setups are sized down, not discarded).
 SIZE_SCALE_VERY_LOW_THRESHOLD: float = float(
     os.getenv("SIZE_SCALE_VERY_LOW_THRESHOLD", "0.45")
@@ -277,6 +284,25 @@ DB_PATH: str = os.getenv("DB_PATH", str(Path(__file__).resolve().parent.parent /
 # Used for log timestamps, day-of-week labels, and daily summary scheduling.
 # Must be a valid IANA timezone name.  Defaults to Europe/Paris (CET/CEST).
 TIMEZONE: str = os.getenv("TIMEZONE", "Europe/Paris")
+
+# ── Session / Day quality gates ─────────────────────────────────────────
+# Comma-separated sessions to ALLOW entries in.  Empty string = no gate.
+# Winning session pattern (from trade history): asian, overlap.
+# London and New York have 0% win rate in observed data.
+# Valid values: asian, london, new_york, overlap, off_hours
+ENTRY_ALLOWED_SESSIONS: list = [
+    s.strip() for s in os.getenv("ENTRY_ALLOWED_SESSIONS", "asian,overlap").split(",")
+    if s.strip()
+]
+# Days to BLOCK entries.  Saturday and Sunday show 0–11% win rates.
+ENTRY_BLOCKED_DAYS: list = [
+    d.strip() for d in os.getenv("ENTRY_BLOCKED_DAYS", "Saturday,Sunday").split(",")
+    if d.strip()
+]
+# Minimum MTF alignment fraction (0.0–1.0) required for entry.
+# 0.75 = at least 3 of 4 analysis timeframes must agree with signal direction.
+# Set 0.0 to disable.
+MTF_MIN_ALIGNMENT: float = float(os.getenv("MTF_MIN_ALIGNMENT", "0.0"))
 
 # ── Weekend / Crypto-only mode ───────────────────────────────────────────
 # Symbols scanned during the forex weekend (Friday 22:00 – Sunday 22:00 UTC).

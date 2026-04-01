@@ -32,7 +32,11 @@ class StatePersistence:
         logger.debug("State persisted: trade=%s status=%s", trade.id, trade.status)
 
     def get_open_trades(self) -> list[Trade]:
-        """Load all non-closed trades from DB."""
+        """Internal use only — called by reconcile() to diff DB vs broker.
+
+        External callers must use broker.get_open_positions() for live state.
+        DB is a metadata/audit store, not a source of truth for open positions.
+        """
         return self._db.get_open_trades()
 
     def get_trade(self, trade_id: str) -> Trade | None:

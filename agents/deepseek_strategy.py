@@ -28,6 +28,14 @@ from strategies.base_strategy import BaseStrategy
 logger = logging.getLogger(__name__)
 
 
+def _candle_volume_sufficient(candles: list, lookback: int = 20, threshold: float = 0.5) -> bool:
+    if not candles or len(candles) < 2:
+        return False
+    recent = candles[-lookback:] if len(candles) >= lookback else candles
+    avg = sum(c.volume for c in recent[:-1]) / max(1, len(recent) - 1)
+    return avg > 0 and candles[-1].volume >= avg * threshold
+
+
 # ── Prompt builder ────────────────────────────────────────────────────────
 
 _SYSTEM_PROMPT = """\
@@ -351,7 +359,7 @@ class DeepSeekStrategy(BaseStrategy):
             rsi_aligned=rsi_aligned,
             trend_aligned=(ctx.trend_direction == "bullish" and direction == "BUY")
                         or (ctx.trend_direction == "bearish" and direction == "SELL"),
-            volume_sufficient=ctx.volume > 0,
+            volume_sufficient=_candle_volume_sufficient(ctx.candles),
             near_news_event=ctx.near_news_event,
             market_condition=ctx.regime,
             session=ctx.session,

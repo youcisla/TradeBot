@@ -14,6 +14,14 @@ async function emergencyCloseAll() {
   });
 }
 
+function fmtPrice(price: number): string {
+  if (!price || price === 0) return "—";
+  if (price >= 1000) return price.toFixed(2);          // BTC, ETH
+  if (price >= 100)  return price.toFixed(2);          // BCH, BNB, LTC
+  if (price >= 1)    return price.toFixed(4);          // forex majors, SOL, DOT
+  return price.toFixed(5);                             // XRP, ADA, XLM, TRX
+}
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function LiveMonitoringPage() {
@@ -126,6 +134,8 @@ export default function LiveMonitoringPage() {
             ) : (
               openTrades.map((t) => {
                 const pnl = Number(t.pnl);
+                const currentPrice = Number(t.current_price);
+                const entryPrice = Number(t.entry_price);
                 return (
                   <div key={t.id} className={`bg-surface p-3 border-l-2 ${t.direction === "BUY" ? "border-primary-container" : "border-error"}`}>
                     <div className="flex justify-between mb-1">
@@ -134,10 +144,14 @@ export default function LiveMonitoringPage() {
                         {t.direction}
                       </span>
                     </div>
+                    <div className="flex justify-between text-[10px] text-on-surface-variant mb-1">
+                      <span>Entry: <span className="font-mono text-on-surface">{fmtPrice(entryPrice)}</span></span>
+                      <span>Now: <span className="font-mono text-on-surface">{fmtPrice(currentPrice)}</span></span>
+                    </div>
                     <div className="flex justify-between text-[10px] text-on-surface-variant mb-2">
                       <span>Lots: {t.lot_size}</span>
-                      <span className={`font-mono ${pnl >= 0 ? "text-primary-container" : "text-error"}`}>
-                        PnL: {pnl >= 0 ? "+" : ""}${pnl.toFixed(2)}
+                      <span className={`font-mono font-bold ${pnl >= 0 ? "text-primary-container" : "text-error"}`}>
+                        {pnl >= 0 ? "+" : ""}${pnl.toFixed(2)}
                       </span>
                     </div>
                     {t.tp1_hit && (

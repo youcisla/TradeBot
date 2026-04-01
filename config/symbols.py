@@ -103,20 +103,20 @@ PIP_VALUES: dict[str, float] = {
     "COPPERUSD": 0.0001,
     # Indices — price-point based (1 point = 1 index unit)
     **{s: 1.0 for s in INDICES},
-    # Crypto
+    # Crypto — confirmed from PU Prime MT5 trade_tick_size (2026-04-01)
     "BTCUSD":  0.01,
     "ETHUSD":  0.01,
     "BNBUSD":  0.01,
     "SOLUSD":  0.01,
     "XRPUSD":  0.0001,
     "ADAUSD":  0.0001,
-    "DOTUSD":  0.01,
+    "DOTUSD":  0.001,    # MT5: 0.001  (was 0.01)
     "DOGEUSD": 0.00001,
     "LTCUSD":  0.01,
     "LINKUSD": 0.001,
     "BCHUSD":  0.01,
-    "EOSUSD":  0.001,
-    "XLMUSD":  0.00001,
+    "EOSUSD":  0.0001,   # MT5: 0.0001 (was 0.001)
+    "XLMUSD":  0.0001,   # MT5: 0.0001 (was 0.00001)
     "TRXUSD":  0.00001,
     "AVAXUSD": 0.01,
 }
@@ -154,21 +154,21 @@ CONTRACT_SIZES: dict[str, float] = {
     "COPPERUSD": 25_000.0,   # 25,000 lbs
     # Indices — 1 contract = 1 index unit (price × contract = dollar value)
     **{s: 1.0 for s in INDICES},
-    # Crypto
+    # Crypto — confirmed from PU Prime MT5 trade_contract_size (2026-04-01)
     "BTCUSD":  1.0,
     "ETHUSD":  1.0,
-    "BNBUSD":  1.0,
-    "SOLUSD":  1.0,
-    "XRPUSD":  1_000.0,
-    "ADAUSD":  1_000.0,
-    "DOTUSD":  1.0,
+    "BNBUSD":  10.0,        # MT5: 10   (was 1)
+    "SOLUSD":  10.0,        # MT5: 10   (was 1)
+    "XRPUSD":  10_000.0,    # MT5: 10k  (was 1k)
+    "ADAUSD":  10_000.0,    # MT5: 10k  (was 1k)
+    "DOTUSD":  100.0,       # MT5: 100  (was 1)
     "DOGEUSD": 1_000.0,
-    "LTCUSD":  1.0,
+    "LTCUSD":  100.0,       # MT5: 100  (was 1)
     "LINKUSD": 1.0,
-    "BCHUSD":  1.0,
-    "EOSUSD":  1.0,
-    "XLMUSD":  1_000.0,
-    "TRXUSD":  1_000.0,
+    "BCHUSD":  10.0,        # MT5: 10   (was 1)
+    "EOSUSD":  10_000.0,    # MT5: 10k  (was 1)
+    "XLMUSD":  10_000.0,    # MT5: 10k  (was 1k)
+    "TRXUSD":  100_000.0,   # MT5: 100k (was 1k)
     "AVAXUSD": 1.0,
 }
 

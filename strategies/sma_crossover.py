@@ -20,6 +20,14 @@ from utils.helpers import current_session, day_of_week
 logger = logging.getLogger(__name__)
 
 
+def _candle_volume_sufficient(candles: list, lookback: int = 20, threshold: float = 0.5) -> bool:
+    if not candles or len(candles) < 2:
+        return False
+    recent = candles[-lookback:] if len(candles) >= lookback else candles
+    avg = sum(c.volume for c in recent[:-1]) / max(1, len(recent) - 1)
+    return avg > 0 and candles[-1].volume >= avg * threshold
+
+
 class SmaCrossoverStrategy(BaseStrategy):
     name = "sma_crossover"
 
@@ -65,7 +73,7 @@ class SmaCrossoverStrategy(BaseStrategy):
             rsi_aligned=(direction == "BUY" and ctx.rsi < 70) or (direction == "SELL" and ctx.rsi > 30),
             trend_aligned=(direction == "BUY" and ctx.trend_direction == "bullish")
                           or (direction == "SELL" and ctx.trend_direction == "bearish"),
-            volume_sufficient=ctx.volume > 0,
+            volume_sufficient=_candle_volume_sufficient(ctx.candles),
             near_news_event=ctx.near_news_event,
             market_condition=ctx.regime,
             session=current_session(),

@@ -60,15 +60,16 @@ class ExecutionAgent:
             self._db.log_agent_event("execution", level, msg, data)
 
     def _open_inner(self, signal: Signal) -> Trade | None:
-        open_trades = self._state.get_open_trades()
-        for t in open_trades:
-            if (t.symbol == signal.symbol
-                    and t.direction == signal.direction
-                    and t.strategy == signal.strategy
-                    and t.is_open()):
+        # Duplicate guard: fetch live positions directly from MT5.
+        # Avoids DB-lag where a freshly-opened trade isn't yet committed.
+        live_positions = self._broker.get_open_positions()
+        for pos in live_positions:
+            if (pos.symbol == signal.symbol
+                    and pos.direction == signal.direction
+                    and (pos.comment or "") == signal.strategy):
                 logger.warning(
-                    "EXEC REJECT [DUPLICATE]: %s %s %s already open (trade %s)",
-                    signal.symbol, signal.direction, signal.strategy, t.id,
+                    "EXEC REJECT [DUPLICATE]: %s %s %s already open (ticket %s)",
+                    signal.symbol, signal.direction, signal.strategy, pos.ticket,
                 )
                 return None
 
@@ -104,10 +105,21 @@ class ExecutionAgent:
             comment=signal.strategy,
         )
         if not result.success:
-            logger.error("Order failed: %s", result.message)
+            msg = result.message or ""
+            # Stale-signal rejection: market moved between detection and execution.
+            # Pre-validated in place_order before MT5 sees it — not a real error,
+            # just a missed entry. Log at warning, no Telegram noise.
+            if "signal stale" in msg:
+                logger.warning("Order skipped (stale signal): %s", msg)
+                self._emit("warn",
+                           f"Entry skipped — market moved past SL before execution "
+                           f"({signal.symbol} {signal.direction})",
+                           {"symbol": signal.symbol, "reason": "stale_signal"})
+                return None
+            logger.error("Order failed: %s", msg)
             # Error 10017 = trade disabled in MT5 terminal (autotrading off).
             # This is terminal-level, not symbol-level — pause the bot immediately.
-            if "10017" in (result.message or ""):
+            if "10017" in msg:
                 telegram_bot.send_message(
                     "⛔ MT5 Trade Disabled (error 10017) — autotrading is OFF in the terminal.\n"
                     "Re-enable 'Algo Trading' in MT5 and use /resume to continue."
@@ -115,10 +127,10 @@ class ExecutionAgent:
                 telegram_bot.pause()
                 self._emit("error",
                            "MT5 autotrading is disabled (10017) — bot paused",
-                           {"error": result.message})
+                           {"error": msg})
             else:
                 telegram_bot.send_message(
-                    f"❌ Order failed: {signal.symbol} {signal.direction} — {result.message}"
+                    f"❌ Order failed: {signal.symbol} {signal.direction} — {msg}"
                 )
             return None
 

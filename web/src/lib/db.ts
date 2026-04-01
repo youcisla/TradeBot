@@ -84,6 +84,8 @@ export interface Trade {
   open_time: string;
   close_time: string | null;
   pnl: number;
+  current_price: number;
+  broker_ticket: number;
   close_reason: string;
 }
 
