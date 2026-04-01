@@ -17,6 +17,7 @@ If COUNCIL_ENABLED=False (default), signals pass through unchanged.
 
 from __future__ import annotations
 
+import concurrent.futures
 import logging
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -577,10 +578,16 @@ class CouncilAgent:
                 reasoning="Insufficient candle data for Council review",
             )
 
-        ict = self._ict.analyse(signal, context)
-        danial = self._danial.analyse(signal, context)
-        traditional = self._traditional.analyse(signal, context)
-        world = self._world.analyse(signal, context)
+        # Run four independent experts in parallel — none mutate shared state.
+        with concurrent.futures.ThreadPoolExecutor(max_workers=4) as _pool:
+            _fut_ict  = _pool.submit(self._ict.analyse, signal, context)
+            _fut_dan  = _pool.submit(self._danial.analyse, signal, context)
+            _fut_trad = _pool.submit(self._traditional.analyse, signal, context)
+            _fut_wld  = _pool.submit(self._world.analyse, signal, context)
+            ict         = _fut_ict.result()
+            danial      = _fut_dan.result()
+            traditional = _fut_trad.result()
+            world       = _fut_wld.result()
 
         # Strategy-aware weighting: adapt expert weights to signal origin.
         #

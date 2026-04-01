@@ -15,6 +15,7 @@ Implements (in order):
 from __future__ import annotations
 
 import logging
+import time
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Callable
 
@@ -109,6 +110,13 @@ class RiskAgent:
         self._day_date: str = ""
         self._circuit_breaker_active = False
         self._circuit_breaker_until: datetime | None = None
+
+        # Short-lived caches to avoid redundant broker IPC calls inside the
+        # hot path (risk validation is called once per ranked signal per loop).
+        # TTL = 10s — stale enough to survive a multi-signal loop, fresh enough
+        # to catch real equity changes between loops.
+        self._equity_cache: tuple[float, float] = (0.0, 0.0)  # (monotonic_ts, value)
+        self._tick_cache: dict[str, tuple[float, dict]] = {}  # symbol → (monotonic_ts, tick)
 
     # ── public API ───────────────────────────────────────────────────────
 
@@ -302,12 +310,21 @@ class RiskAgent:
     def _check_spread(self, signal: Signal) -> bool:
         """Return True if spread is within limits for the signal's asset class."""
         live_spread = signal.entry_snapshot.spread
-        try:
-            tick = self._broker.get_tick(signal.symbol)
-            if tick and tick.get("spread", 0) > 0:
-                live_spread = tick["spread"]
-        except Exception:
-            pass
+        # Reuse tick fetched by MarketAgent earlier in the same loop iteration
+        # if it is still fresh (< 10s old), avoiding a redundant MT5 IPC call.
+        _now_mono = time.monotonic()
+        _tick_ts, _cached_tick = self._tick_cache.get(signal.symbol, (0.0, {}))
+        if _now_mono - _tick_ts < 10.0 and _cached_tick:
+            if _cached_tick.get("spread", 0) > 0:
+                live_spread = _cached_tick["spread"]
+        else:
+            try:
+                tick = self._broker.get_tick(signal.symbol)
+                if tick and tick.get("spread", 0) > 0:
+                    live_spread = tick["spread"]
+                    self._tick_cache[signal.symbol] = (_now_mono, tick)
+            except Exception:
+                pass
 
         ac = asset_class(signal.symbol)
         if ac == "crypto":
@@ -394,7 +411,16 @@ class RiskAgent:
         if self._day_start_equity <= 0:
             return False
 
-        current_equity = self._broker.get_equity()
+        # Use cached equity to avoid a redundant MT5 IPC call for every signal
+        # in the ranked list.  10s TTL is safe — drawdown changes slowly.
+        _now_mono = time.monotonic()
+        _cache_ts, _cached_eq = self._equity_cache
+        if _now_mono - _cache_ts < 10.0 and _cached_eq > 0:
+            current_equity = _cached_eq
+        else:
+            current_equity = self._broker.get_equity()
+            self._equity_cache = (_now_mono, current_equity)
+
         drawdown = (self._day_start_equity - current_equity) / self._day_start_equity
 
         if drawdown >= settings.MAX_DAILY_LOSS:

@@ -182,17 +182,17 @@ LIMIT_ENTRY_MAX_DISTANCE_ATR: float = float(os.getenv("LIMIT_ENTRY_MAX_DISTANCE_
 LIMIT_ENTRY_MAX_DISTANCE_ATR_CRYPTO: float = float(os.getenv("LIMIT_ENTRY_MAX_DISTANCE_ATR_CRYPTO", "2.0"))
 
 # ── Bot Loop ─────────────────────────────────────────────────────────────
-LOOP_INTERVAL_SECONDS: int = int(os.getenv("LOOP_INTERVAL_SECONDS", "30"))
+LOOP_INTERVAL_SECONDS: int = int(os.getenv("LOOP_INTERVAL_SECONDS", "5"))
 RECONCILE_EVERY_N_LOOPS: int = int(os.getenv("RECONCILE_EVERY_N_LOOPS", "10"))
 CANDLE_SERVER_PORT: int = int(os.getenv("CANDLE_SERVER_PORT", "5555"))
 # Minimum wall-clock seconds between re-scanning the same symbol.
 SCAN_COOLDOWN_SECONDS: int = int(os.getenv("SCAN_COOLDOWN_SECONDS", "300"))
 # Session-profiled cooldown (London/NY scans faster, Asia scans slower).
 SCAN_COOLDOWN_SECONDS_LONDON_NY: int = int(
-    os.getenv("SCAN_COOLDOWN_SECONDS_LONDON_NY", "120")
+    os.getenv("SCAN_COOLDOWN_SECONDS_LONDON_NY", "60")
 )
 SCAN_COOLDOWN_SECONDS_ASIA: int = int(
-    os.getenv("SCAN_COOLDOWN_SECONDS_ASIA", "300")
+    os.getenv("SCAN_COOLDOWN_SECONDS_ASIA", "120")
 )
 EVENT_DRIVEN_RESCAN_ON_NEW_CANDLE: bool = (
     os.getenv("EVENT_DRIVEN_RESCAN_ON_NEW_CANDLE", "true").lower() == "true"
