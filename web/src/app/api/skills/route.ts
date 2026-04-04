@@ -1,6 +1,4 @@
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
 import fs from "fs/promises";
 import path from "path";
 
@@ -47,9 +45,6 @@ async function resolveSkillFile(slug: string): Promise<string | null> {
 // GET /api/skills        → list all skills
 // GET /api/skills?name=  → read one skill
 export async function GET(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
   const { searchParams } = new URL(request.url);
   const name = searchParams.get("name");
 
@@ -108,9 +103,6 @@ export async function GET(request: Request) {
 
 // POST /api/skills  → create a new skill
 export async function POST(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
   const body = await request.json();
   const { name, description, content } = body;
   if (!name || !description || !content) {
@@ -135,9 +127,6 @@ export async function POST(request: Request) {
 
 // PUT /api/skills  → update an existing skill
 export async function PUT(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
   const body = await request.json();
   const { name, content, description } = body;
   if (!name || !content) {
@@ -172,9 +161,6 @@ export async function PUT(request: Request) {
 
 // DELETE /api/skills?name=  → delete a skill
 export async function DELETE(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
   const { searchParams } = new URL(request.url);
   const name = searchParams.get("name");
   if (!name) {

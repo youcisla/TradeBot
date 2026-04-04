@@ -1,6 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
 import {
   updateBrokerAccount,
   deleteBrokerAccount,
@@ -16,19 +14,12 @@ export async function PUT(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await getServerSession(authOptions);
-  if (!session)
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const userId = (session.user as Record<string, unknown>)?.id as number | undefined;
   const { id: idStr } = await params;
   const id = Number(idStr);
   if (!id) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
 
   const account = await getBrokerAccountById(id);
   if (!account) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  if (account.user_id !== null && account.user_id !== userId)
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   try {
     const body = await req.json();
@@ -61,19 +52,12 @@ export async function DELETE(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await getServerSession(authOptions);
-  if (!session)
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const userId = (session.user as Record<string, unknown>)?.id as number | undefined;
   const { id: idStr } = await params;
   const id = Number(idStr);
   if (!id) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
 
   const account = await getBrokerAccountById(id);
   if (!account) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  if (account.user_id !== null && account.user_id !== userId)
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   try {
     await deleteBrokerAccount(id);
@@ -89,19 +73,12 @@ export async function PATCH(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await getServerSession(authOptions);
-  if (!session)
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const userId = (session.user as Record<string, unknown>)?.id as number | undefined;
   const { id: idStr } = await params;
   const id = Number(idStr);
   if (!id) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
 
   const account = await getBrokerAccountById(id);
   if (!account) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  if (account.user_id !== null && account.user_id !== userId)
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   try {
     await activateBrokerAccount(id);

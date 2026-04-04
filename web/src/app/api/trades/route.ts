@@ -1,6 +1,4 @@
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
 import { getOpenTrades, getAllTrades } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
@@ -8,9 +6,6 @@ export const dynamic = "force-dynamic";
 const MAX_LIMIT = 500;
 
 export async function GET(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
   try {
     const { searchParams } = new URL(request.url);
     const all = searchParams.get("all") === "true";

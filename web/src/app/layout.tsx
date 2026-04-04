@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import Providers from "@/app/providers";
 
 export const metadata: Metadata = {
   title: "NeuralFX",
@@ -20,7 +19,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         />
       </head>
       <body className="bg-surface-container-lowest text-on-surface font-mono antialiased">
-        <Providers>{children}</Providers>
+        {children}
       </body>
     </html>
   );
