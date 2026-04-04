@@ -3,13 +3,6 @@ import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { getUserByUsername } from "@/lib/db";
 
-if (!process.env.NEXTAUTH_SECRET) {
-  throw new Error(
-    "NEXTAUTH_SECRET is not set. Set this environment variable to a random 32+ character string. " +
-    "Run: openssl rand -base64 32"
-  );
-}
-
 export const authOptions: NextAuthOptions = {
   providers: [
     CredentialsProvider({
@@ -19,6 +12,13 @@ export const authOptions: NextAuthOptions = {
         password: { label: "Password", type: "password" },
       },
       async authorize(credentials) {
+        if (!process.env.NEXTAUTH_SECRET) {
+          throw new Error(
+            "NEXTAUTH_SECRET is not set. Add it to your Vercel environment variables. " +
+            "Generate one with: openssl rand -base64 32"
+          );
+        }
+
         if (!credentials?.username || !credentials?.password) return null;
 
         const username = credentials.username.trim().toLowerCase();
