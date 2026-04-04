@@ -15,6 +15,7 @@ Implements (in order):
 from __future__ import annotations
 
 import logging
+import math
 import time
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Callable
@@ -25,7 +26,7 @@ from config.symbols import pip_value, asset_class
 from models.signal import Signal
 from models.trade import Trade
 from utils import telegram_bot
-from utils.helpers import current_session, day_of_week
+from utils.helpers import current_session, day_of_week, is_weekend
 
 if TYPE_CHECKING:
     from agents.crucix_agent import CrucixAgent
@@ -138,6 +139,8 @@ class RiskAgent:
         doesn't trigger "DUPLICATE" and get immediately closed.
         """
         try:
+            if not self._check_signal_geometry(signal):
+                return False
             if mode == "hard":
                 return self._validate_hard(signal)
             return self._validate_inner(signal, skip_duplicate=post_entry)
@@ -255,7 +258,10 @@ class RiskAgent:
         # 1d. Day-of-week gate — block systematic losing days
         if settings.ENTRY_BLOCKED_DAYS:
             today = day_of_week()
-            if today in settings.ENTRY_BLOCKED_DAYS:
+            weekend_crypto = (
+                asset_class(signal.symbol) == "crypto" and is_weekend()
+            )
+            if today in settings.ENTRY_BLOCKED_DAYS and not weekend_crypto:
                 self._emit("warn",
                            f"DAY GATE: {signal.symbol} blocked — {today} in blocked days",
                            {"symbol": signal.symbol, "day": today,
@@ -317,7 +323,10 @@ class RiskAgent:
         # 1d. Day-of-week gate — skip on post-entry checks for same reason.
         if not skip_duplicate and settings.ENTRY_BLOCKED_DAYS:
             today = signal.entry_snapshot.day_of_week or day_of_week()
-            if today in settings.ENTRY_BLOCKED_DAYS:
+            weekend_crypto = (
+                asset_class(signal.symbol) == "crypto" and is_weekend()
+            )
+            if today in settings.ENTRY_BLOCKED_DAYS and not weekend_crypto:
                 logger.warning(
                     "RISK REJECT [DAY_GATE]: %s blocked — %s in blocked days",
                     signal.symbol, today,
@@ -389,6 +398,103 @@ class RiskAgent:
                    f"All clear — {signal.direction} {signal.symbol} approved (lot={lot_size:.2f})",
                    {"symbol": signal.symbol, "direction": signal.direction,
                     "lot_size": lot_size})
+        return True
+
+    def _check_signal_geometry(self, signal: Signal) -> bool:
+        """Validate direction/SL/TP geometry before any risk or execution checks."""
+        direction = signal.direction.upper().strip()
+        entry = signal.entry_price
+        sl = signal.stop_loss
+        tp1 = signal.take_profit_1
+        tp2 = signal.take_profit_2
+        tp3 = signal.take_profit_3
+        tp4 = signal.take_profit_4
+
+        numeric = {
+            "entry": entry,
+            "stop_loss": sl,
+            "take_profit_1": tp1,
+            "take_profit_2": tp2,
+            "take_profit_3": tp3,
+            "take_profit_4": tp4,
+        }
+
+        if direction not in {"BUY", "SELL"}:
+            self._emit(
+                "warn",
+                f"GEOMETRY INVALID: {signal.symbol} direction={signal.direction!r}",
+                {"symbol": signal.symbol, "check": "signal_geometry"},
+            )
+            return False
+
+        for name, value in numeric.items():
+            if value <= 0:
+                continue
+            if not math.isfinite(value):
+                self._emit(
+                    "warn",
+                    f"GEOMETRY INVALID: {signal.symbol} {name} not finite ({value})",
+                    {
+                        "symbol": signal.symbol,
+                        "check": "signal_geometry",
+                        "field": name,
+                        "value": value,
+                    },
+                )
+                return False
+
+        if entry <= 0 or sl <= 0 or tp1 <= 0:
+            self._emit(
+                "warn",
+                (
+                    f"GEOMETRY INVALID: {signal.symbol} missing core levels "
+                    f"(entry={entry}, sl={sl}, tp1={tp1})"
+                ),
+                {
+                    "symbol": signal.symbol,
+                    "check": "signal_geometry",
+                    "entry": entry,
+                    "sl": sl,
+                    "tp1": tp1,
+                },
+            )
+            return False
+
+        if direction == "BUY":
+            if sl >= entry or tp1 <= entry:
+                self._emit(
+                    "warn",
+                    (
+                        f"GEOMETRY INVALID: BUY {signal.symbol} requires sl < entry < tp1 "
+                        f"(entry={entry}, sl={sl}, tp1={tp1})"
+                    ),
+                    {"symbol": signal.symbol, "check": "signal_geometry"},
+                )
+                return False
+            if tp2 > 0 and tp2 < tp1:
+                return False
+            if tp3 > 0 and tp2 > 0 and tp3 < tp2:
+                return False
+            if tp4 > 0 and tp3 > 0 and tp4 < tp3:
+                return False
+        else:
+            if sl <= entry or tp1 >= entry:
+                self._emit(
+                    "warn",
+                    (
+                        f"GEOMETRY INVALID: SELL {signal.symbol} requires sl > entry > tp1 "
+                        f"(entry={entry}, sl={sl}, tp1={tp1})"
+                    ),
+                    {"symbol": signal.symbol, "check": "signal_geometry"},
+                )
+                return False
+            if tp2 > 0 and tp2 > tp1:
+                return False
+            if tp3 > 0 and tp2 > 0 and tp3 > tp2:
+                return False
+            if tp4 > 0 and tp3 > 0 and tp4 > tp3:
+                return False
+
         return True
 
     def _check_spread(self, signal: Signal) -> bool:

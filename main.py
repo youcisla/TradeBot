@@ -706,6 +706,13 @@ def _run_iteration(
     skipped_cooldown: list[str] = []
     ipc_fail_symbols: list[str] = []   # IPC failures in this iteration only
 
+    # Priority scan order: always evaluate BTC first (if tradable), then
+    # continue through the full active universe so no symbol is forgotten.
+    scan_symbols = _active_symbols[:]
+    btc_symbol = settings.BTC_PRIORITY_SYMBOL
+    if btc_symbol in scan_symbols:
+        scan_symbols = [btc_symbol] + [s for s in scan_symbols if s != btc_symbol]
+
     def _process_single_symbol(symbol: str):
         if not is_market_open(symbol):
             return (symbol, "skip", False, None, None, None, False)
@@ -722,11 +729,15 @@ def _run_iteration(
             else:
                 is_re_enabled = True
 
+        symbol_cooldown = scan_cooldown
+        if symbol == btc_symbol:
+            symbol_cooldown = max(0, settings.BTC_PRIORITY_SCAN_COOLDOWN_SECONDS)
+
         is_cooldown = False
-        if now_mono - last_scan_ts.get(symbol, 0.0) < scan_cooldown:
+        if now_mono - last_scan_ts.get(symbol, 0.0) < symbol_cooldown:
             if settings.EVENT_DRIVEN_RESCAN_ON_NEW_CANDLE:
                 last_candle_ts = symbol_event_tracker.get(symbol, "last_candle")
-                if last_candle_ts <= 0 or time.time() - last_candle_ts > scan_cooldown:
+                if last_candle_ts <= 0 or time.time() - last_candle_ts > symbol_cooldown:
                     is_cooldown = True
             else:
                 is_cooldown = True
@@ -759,12 +770,12 @@ def _run_iteration(
     scan_results: list[tuple[str, str, bool, MarketContext | None, list[Signal] | None, str | None, bool]] = []
 
     if is_mt5_broker:
-        for symbol in _active_symbols:
+        for symbol in scan_symbols:
             scan_results.append(_process_single_symbol(symbol))
     else:
         futures = []
-        with concurrent.futures.ThreadPoolExecutor(max_workers=min(10, max(1, len(_active_symbols)))) as executor:
-            for symbol in _active_symbols:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=min(10, max(1, len(scan_symbols)))) as executor:
+            for symbol in scan_symbols:
                 futures.append(executor.submit(_process_single_symbol, symbol))
         for future in concurrent.futures.as_completed(futures):
             scan_results.append(future.result())

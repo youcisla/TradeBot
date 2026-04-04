@@ -1,7 +1,6 @@
 """All configurable parameters for the trading bot.
 
-Values are loaded from `.env` where appropriate.  DEMO_MODE is hardcoded
-True for Phase 1 — it is NOT read from the environment.
+Values are loaded from `.env` where appropriate.
 """
 
 from __future__ import annotations
@@ -16,7 +15,7 @@ _env_path = Path(__file__).resolve().parent.parent / ".env"
 load_dotenv(_env_path)
 
 # ── Mode ─────────────────────────────────────────────────────────────────
-DEMO_MODE: bool = False  # Hardcoded for Phase 1 — never change via .env
+DEMO_MODE: bool = os.getenv("DEMO_MODE", "false").lower() == "true"
 
 # ── Broker ───────────────────────────────────────────────────────────────
 BROKER_ACCOUNT: str = os.getenv("BROKER_ACCOUNT", "")
@@ -200,6 +199,12 @@ SCAN_COOLDOWN_SECONDS_LONDON_NY: int = int(
 )
 SCAN_COOLDOWN_SECONDS_ASIA: int = int(
     os.getenv("SCAN_COOLDOWN_SECONDS_ASIA", "120")
+)
+# BTC priority scheduler: scan this symbol first and more frequently while
+# still scanning the full symbol universe.
+BTC_PRIORITY_SYMBOL: str = os.getenv("BTC_PRIORITY_SYMBOL", "BTCUSD")
+BTC_PRIORITY_SCAN_COOLDOWN_SECONDS: int = int(
+    os.getenv("BTC_PRIORITY_SCAN_COOLDOWN_SECONDS", "15")
 )
 EVENT_DRIVEN_RESCAN_ON_NEW_CANDLE: bool = (
     os.getenv("EVENT_DRIVEN_RESCAN_ON_NEW_CANDLE", "true").lower() == "true"

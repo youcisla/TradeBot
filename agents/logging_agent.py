@@ -165,7 +165,9 @@ class LoggingAgent:
         if root.handlers:
             return  # already configured
 
-        root.setLevel(logging.DEBUG)
+        log_level_name = settings.LOG_LEVEL.upper()
+        log_level = getattr(logging, log_level_name, logging.INFO)
+        root.setLevel(log_level)
 
         file_fmt = _LocalTimeFormatter(
             "%(asctime)s | %(levelname)-8s | %(name)s | %(message)s",
@@ -184,8 +186,13 @@ class LoggingAgent:
         fh = logging.handlers.RotatingFileHandler(
             log_file, maxBytes=5_000_000, backupCount=5, encoding="utf-8",
         )
-        fh.setLevel(logging.DEBUG)
+        fh.setLevel(log_level)
         fh.setFormatter(file_fmt)
         root.addHandler(fh)
 
-        logger.info("Logging configured → %s", log_file)
+        # Reduce third-party transport noise unless explicitly debugging.
+        if log_level > logging.DEBUG:
+            for noisy_logger in ("openai", "httpx", "httpcore"):
+                logging.getLogger(noisy_logger).setLevel(logging.WARNING)
+
+        logger.info("Logging configured → %s (level=%s)", log_file, log_level_name)

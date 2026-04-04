@@ -9,6 +9,7 @@ pipeline, and returns a Signal compatible with StrategyAgent.
 from __future__ import annotations
 
 import logging
+import math
 from datetime import UTC, datetime
 from typing import Optional
 
@@ -314,6 +315,17 @@ class ICTStrategy(BaseStrategy):
             entry_snapshot=snapshot,
         )
 
+        if not self._is_signal_geometry_valid(signal):
+            self._emit(
+                "warn",
+                (
+                    f"ICT {ctx.symbol}: invalid signal geometry "
+                    f"({signal.direction} entry={signal.entry_price:.5f} "
+                    f"sl={signal.stop_loss:.5f} tp1={signal.take_profit_1:.5f}) — skipped"
+                ),
+            )
+            return None
+
         # Persist setup to DB for dashboard analytics
         self._log_setup(best, ict_ctx)
 
@@ -475,3 +487,40 @@ class ICTStrategy(BaseStrategy):
             })
         except Exception:
             logger.debug("Failed to log ICT setup to DB", exc_info=True)
+
+    def _is_signal_geometry_valid(self, signal: Signal) -> bool:
+        """Validate basic directional geometry for SL/TP levels."""
+        direction = signal.direction.upper().strip()
+        entry = signal.entry_price
+        sl = signal.stop_loss
+        tp1 = signal.take_profit_1
+        tp2 = signal.take_profit_2
+        tp3 = signal.take_profit_3
+        tp4 = signal.take_profit_4
+
+        if direction not in {"BUY", "SELL"}:
+            return False
+        for value in (entry, sl, tp1):
+            if value <= 0 or not math.isfinite(value):
+                return False
+
+        if direction == "BUY":
+            if sl >= entry or tp1 <= entry:
+                return False
+            if tp2 > 0 and tp2 < tp1:
+                return False
+            if tp3 > 0 and tp2 > 0 and tp3 < tp2:
+                return False
+            if tp4 > 0 and tp3 > 0 and tp4 < tp3:
+                return False
+            return True
+
+        if sl <= entry or tp1 >= entry:
+            return False
+        if tp2 > 0 and tp2 > tp1:
+            return False
+        if tp3 > 0 and tp2 > 0 and tp3 > tp2:
+            return False
+        if tp4 > 0 and tp3 > 0 and tp4 > tp3:
+            return False
+        return True

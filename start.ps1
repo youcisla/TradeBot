@@ -8,6 +8,10 @@
     - Press Ctrl+C to stop all processes cleanly
 #>
 
+param(
+    [switch]$AuditMode
+)
+
 $ErrorActionPreference = "Stop"
 $Root = $PSScriptRoot
 
@@ -16,6 +20,12 @@ Write-Host "========================================" -ForegroundColor Cyan
 Write-Host "   NEURAL FX  -  LOCAL LAUNCHER"        -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
+
+if ($AuditMode) {
+    # Child processes inherit this env var from the launcher process.
+    $env:DEMO_MODE = "true"
+    Write-Host "[SAFE MODE] Audit mode enabled: forcing DEMO_MODE=true" -ForegroundColor Yellow
+}
 
 # 1. Preflight checks
 
@@ -43,6 +53,32 @@ if (-not (Test-Path $envFile)) {
     exit 1
 }
 
+# Prevent duplicate launcher sessions that can create duplicate trades.
+$existingBot = Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
+    Where-Object {
+        $_.Name -match '^python(\.exe)?$' -and
+        $_.CommandLine -like "*$Root*" -and
+        $_.CommandLine -like "*main.py*"
+    }
+
+$existingWeb = Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
+    Where-Object {
+        $_.Name -eq 'node.exe' -and
+        $_.CommandLine -like "*$Root*web*" -and
+        $_.CommandLine -like "*next dev*"
+    }
+
+if ($existingBot -or $existingWeb) {
+    Write-Host "[ERROR] Existing TradeBot processes detected. Stop them before launching again." -ForegroundColor Red
+    if ($existingBot) {
+        Write-Host "  Running bot PID(s): $($existingBot.ProcessId -join ', ')" -ForegroundColor Yellow
+    }
+    if ($existingWeb) {
+        Write-Host "  Running web PID(s): $($existingWeb.ProcessId -join ', ')" -ForegroundColor Yellow
+    }
+    exit 1
+}
+
 # 2. Launch Crucix intelligence server (optional)
 
 $crucixDir    = Join-Path $Root "crucix"
@@ -58,7 +94,24 @@ if (Test-Path $crucixServer) {
         -PassThru `
         -NoNewWindow
     Write-Host "    PID: $($crucixJob.Id)" -ForegroundColor DarkGray
-    Start-Sleep -Seconds 5
+    $crucixHealthy = $false
+    for ($i = 0; $i -lt 15; $i++) {
+        try {
+            $resp = Invoke-WebRequest -Uri "http://localhost:3117/api/health" -UseBasicParsing -TimeoutSec 2
+            if ($resp.StatusCode -eq 200) {
+                $crucixHealthy = $true
+                break
+            }
+        } catch {
+            # Crucix is still booting.
+        }
+        Start-Sleep -Seconds 2
+    }
+    if ($crucixHealthy) {
+        Write-Host "[OK] Crucix health check passed." -ForegroundColor Green
+    } else {
+            Write-Host "[WARN] Crucix health check timed out - bot may start with safe defaults." -ForegroundColor Yellow
+    }
 } else {
     Write-Host "[*] crucix/server.mjs not found - skipping (bot runs without it)" -ForegroundColor DarkGray
 }
