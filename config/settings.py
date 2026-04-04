@@ -252,6 +252,52 @@ CONFIDENCE_DISABLE_THRESHOLD: float = 0.2
 # KPI cadence for opportunity-capture telemetry in logs/agent feed.
 METRICS_LOG_EVERY_N_LOOPS: int = int(os.getenv("METRICS_LOG_EVERY_N_LOOPS", "5"))
 
+# ── Multi-agent orchestration optimization ──────────────────────────────
+# Non-MT5 brokers can safely parallelize symbol scans. Keep MT5 sequential
+# because the MT5 bridge is thread-sensitive.
+ORCHESTRATION_SCAN_WORKERS_MIN: int = int(
+    os.getenv("ORCHESTRATION_SCAN_WORKERS_MIN", "2")
+)
+ORCHESTRATION_SCAN_WORKERS_MAX: int = int(
+    os.getenv("ORCHESTRATION_SCAN_WORKERS_MAX", "10")
+)
+ORCHESTRATION_SCAN_WORKERS_DEFAULT: int = int(
+    os.getenv("ORCHESTRATION_SCAN_WORKERS_DEFAULT", "6")
+)
+# Adaptive tuning is reversible and bounded by min/max workers.
+ORCHESTRATION_ADAPTIVE_WORKERS_ENABLED: bool = (
+    os.getenv("ORCHESTRATION_ADAPTIVE_WORKERS_ENABLED", "true").lower() == "true"
+)
+# Performance goals (ms) used for feedback control and bottleneck alerts.
+ORCHESTRATION_TARGET_SCAN_MS: float = float(
+    os.getenv("ORCHESTRATION_TARGET_SCAN_MS", "1500")
+)
+ORCHESTRATION_TARGET_RANK_MS: float = float(
+    os.getenv("ORCHESTRATION_TARGET_RANK_MS", "200")
+)
+ORCHESTRATION_TARGET_EXEC_MS: float = float(
+    os.getenv("ORCHESTRATION_TARGET_EXEC_MS", "800")
+)
+ORCHESTRATION_TARGET_TOTAL_MS: float = float(
+    os.getenv("ORCHESTRATION_TARGET_TOTAL_MS", "3500")
+)
+# Hard cap on ranked signals processed per loop to prevent runaway loops.
+ORCHESTRATION_MAX_SIGNALS_PER_ITERATION: int = int(
+    os.getenv("ORCHESTRATION_MAX_SIGNALS_PER_ITERATION", "20")
+)
+# Emit traceable iteration lifecycle events to DB logs.
+ORCHESTRATION_ENABLE_ITERATION_TRACE: bool = (
+    os.getenv("ORCHESTRATION_ENABLE_ITERATION_TRACE", "true").lower() == "true"
+)
+# Graceful degradation: if scan failures exceed this ratio in one loop,
+# skip ranking/execution for that loop and retry next cycle.
+ORCHESTRATION_SCAN_ERROR_RATE_ABORT: float = float(
+    os.getenv("ORCHESTRATION_SCAN_ERROR_RATE_ABORT", "0.70")
+)
+ORCHESTRATION_SCAN_ERROR_MIN_SAMPLES: int = int(
+    os.getenv("ORCHESTRATION_SCAN_ERROR_MIN_SAMPLES", "5")
+)
+
 # ── Data Validation ──────────────────────────────────────────────────────
 STUCK_QUOTE_THRESHOLD: int = int(os.getenv("STUCK_QUOTE_THRESHOLD", "10"))
 SPIKE_PERCENT_THRESHOLD: float = float(os.getenv("SPIKE_PERCENT_THRESHOLD", "2.0"))

@@ -54,6 +54,7 @@ from utils import telegram_bot
 from utils import candle_server
 from utils import terminal_ui as tui
 from utils.helpers import current_session, is_market_open, is_any_market_open, is_weekend, local_now
+from utils.orchestration_profiler import OrchestrationProfiler, OrchestrationTargets
 from utils.symbol_event_tracker import SymbolEventTracker
 
 logger = logging.getLogger(__name__)
@@ -274,6 +275,21 @@ def main() -> None:
         "last_execution_latency_ms": 0.0,
         "last_signal_to_order_ms": -1.0,
     }
+    profiler = OrchestrationProfiler(
+        OrchestrationTargets(
+            scan_ms=settings.ORCHESTRATION_TARGET_SCAN_MS,
+            rank_ms=settings.ORCHESTRATION_TARGET_RANK_MS,
+            exec_ms=settings.ORCHESTRATION_TARGET_EXEC_MS,
+            total_ms=settings.ORCHESTRATION_TARGET_TOTAL_MS,
+        )
+    )
+    scan_workers = max(
+        settings.ORCHESTRATION_SCAN_WORKERS_MIN,
+        min(
+            settings.ORCHESTRATION_SCAN_WORKERS_DEFAULT,
+            settings.ORCHESTRATION_SCAN_WORKERS_MAX,
+        ),
+    )
 
     # ── Symbol fault tracking ────────────────────────────────────────────
     # Symbols with repeated IPC / data errors are temporarily disabled to
@@ -300,6 +316,7 @@ def main() -> None:
     while not _shutdown:
         loop_start = time.monotonic()
         loop_count += 1
+        scanned_before = _metrics.get("scanned_symbols", 0)
         _active_session = current_session(datetime.now(UTC))
         if _active_session in {"london", "newyork", "overlap"}:
             _active_scan_cooldown = float(settings.SCAN_COOLDOWN_SECONDS_LONDON_NY)
@@ -354,9 +371,36 @@ def main() -> None:
                 symbol_disable_secs=_SYMBOL_DISABLE_SECS,
                 session_profile=_active_session,
                 weekend_symbols=_weekend_symbols if _weekend else None,
+                scan_workers=scan_workers,
             )
         except Exception:
             logger.exception("Unhandled error in main loop iteration %d", loop_count)
+
+        loop_elapsed_ms = (time.monotonic() - loop_start) * 1000.0
+        profiler.record(
+            scan_ms=_metrics.get("last_scan_latency_ms", 0.0),
+            rank_ms=_metrics.get("last_rank_latency_ms", 0.0),
+            exec_ms=_metrics.get("last_execution_latency_ms", 0.0),
+            total_ms=loop_elapsed_ms,
+        )
+        if settings.ORCHESTRATION_ADAPTIVE_WORKERS_ENABLED:
+            scanned_this_loop = int(_metrics.get("scanned_symbols", 0) - scanned_before)
+            suggested = profiler.recommend_workers(
+                current_workers=scan_workers,
+                min_workers=settings.ORCHESTRATION_SCAN_WORKERS_MIN,
+                max_workers=settings.ORCHESTRATION_SCAN_WORKERS_MAX,
+                scanned_symbol_count=max(0, scanned_this_loop),
+            )
+            if suggested != scan_workers:
+                logger.info(
+                    "Adaptive scan workers: %d -> %d (scanned=%d, avg_scan=%.1fms, target=%.1fms)",
+                    scan_workers,
+                    suggested,
+                    max(0, scanned_this_loop),
+                    profiler.snapshot()["avg_scan_ms"],
+                    settings.ORCHESTRATION_TARGET_SCAN_MS,
+                )
+                scan_workers = suggested
 
         # ── Periodic reconciliation ──────────────────────────────────────
         if loop_count % settings.RECONCILE_EVERY_N_LOOPS == 0:
@@ -370,10 +414,13 @@ def main() -> None:
             logger.warning("Heartbeat update failed — continuing")
 
         if settings.METRICS_LOG_EVERY_N_LOOPS > 0 and loop_count % settings.METRICS_LOG_EVERY_N_LOOPS == 0:
+            profile = profiler.snapshot()
+            bottleneck = profiler.primary_bottleneck()
             logger.info(
                 "KPI snapshot @loop %d | scanned=%d raw=%d ranked=%d council_rej=%d risk_rej=%d "
                 "fast_attempts=%d fast_fills=%d fast_closed=%d full_fills=%d deferred_added=%d deferred_promoted=%d "
-                "session=%s cooldown=%.0fs scan_ms=%.1f rank_ms=%.1f exec_ms=%.1f signal_to_order_ms=%.1f",
+                "session=%s cooldown=%.0fs scan_ms=%.1f rank_ms=%.1f exec_ms=%.1f signal_to_order_ms=%.1f "
+                "avg_scan=%.1f avg_rank=%.1f avg_exec=%.1f avg_total=%.1f workers=%d bottleneck=%s",
                 loop_count,
                 _metrics["scanned_symbols"],
                 _metrics["raw_signals"],
@@ -392,6 +439,12 @@ def main() -> None:
                 _metrics["last_rank_latency_ms"],
                 _metrics["last_execution_latency_ms"],
                 _metrics["last_signal_to_order_ms"],
+                profile["avg_scan_ms"],
+                profile["avg_rank_ms"],
+                profile["avg_exec_ms"],
+                profile["avg_total_ms"],
+                scan_workers,
+                bottleneck,
             )
             db.log_agent_event(
                 "logging",
@@ -401,7 +454,9 @@ def main() -> None:
                     f"scan={_metrics['last_scan_latency_ms']:.1f}ms "
                     f"rank={_metrics['last_rank_latency_ms']:.1f}ms "
                     f"exec={_metrics['last_execution_latency_ms']:.1f}ms "
-                    f"signal_to_order={_metrics['last_signal_to_order_ms']:.1f}ms"
+                    f"signal_to_order={_metrics['last_signal_to_order_ms']:.1f}ms "
+                    f"avg_total={profile['avg_total_ms']:.1f}ms workers={scan_workers} "
+                    f"bottleneck={bottleneck}"
                 ),
                 {
                     "loop": loop_count,
@@ -411,6 +466,12 @@ def main() -> None:
                     "rank_latency_ms": _metrics["last_rank_latency_ms"],
                     "execution_latency_ms": _metrics["last_execution_latency_ms"],
                     "signal_to_order_latency_ms": _metrics["last_signal_to_order_ms"],
+                    "scan_workers": scan_workers,
+                    "avg_scan_latency_ms": profile["avg_scan_ms"],
+                    "avg_rank_latency_ms": profile["avg_rank_ms"],
+                    "avg_execution_latency_ms": profile["avg_exec_ms"],
+                    "avg_total_latency_ms": profile["avg_total_ms"],
+                    "bottleneck": bottleneck,
                 },
             )
 
@@ -622,6 +683,7 @@ def _run_iteration(
     symbol_disable_secs: float,
     session_profile: str,
     weekend_symbols: list[str] | None = None,
+    scan_workers: int = 6,
 ) -> None:
     """Single iteration of the trading loop.
 
@@ -652,6 +714,20 @@ def _run_iteration(
         )
 
     iter_start_ts = time.monotonic()
+    iter_trace_id = f"iter-{loop_count}-{int(time.time())}"
+
+    if settings.ORCHESTRATION_ENABLE_ITERATION_TRACE:
+        db.log_agent_event(
+            "logging",
+            "debug",
+            "Iteration started",
+            {
+                "trace_id": iter_trace_id,
+                "loop": loop_count,
+                "session": session_profile,
+                "scan_workers": scan_workers,
+            },
+        )
 
     # ── Crucix macro sweep (once per iteration, logs to DB) ──────────────
     crucix_agent.run()
@@ -705,6 +781,7 @@ def _run_iteration(
     scanned: list[str] = []
     skipped_cooldown: list[str] = []
     ipc_fail_symbols: list[str] = []   # IPC failures in this iteration only
+    scan_error_symbols: list[str] = []
 
     # Priority scan order: always evaluate BTC first (if tradable), then
     # continue through the full active universe so no symbol is forgotten.
@@ -774,7 +851,8 @@ def _run_iteration(
             scan_results.append(_process_single_symbol(symbol))
     else:
         futures = []
-        with concurrent.futures.ThreadPoolExecutor(max_workers=min(10, max(1, len(scan_symbols)))) as executor:
+        worker_count = max(1, min(scan_workers, len(scan_symbols)))
+        with concurrent.futures.ThreadPoolExecutor(max_workers=worker_count) as executor:
             for symbol in scan_symbols:
                 futures.append(executor.submit(_process_single_symbol, symbol))
         for future in concurrent.futures.as_completed(futures):
@@ -800,6 +878,7 @@ def _run_iteration(
             continue
 
         if status == "error":
+            scan_error_symbols.append(symbol)
             is_stuck_quote = bool(err_str) and "Stuck quote" in err_str
 
             if is_ipc or is_stuck_quote:
@@ -854,6 +933,40 @@ def _run_iteration(
     metrics["scanned_symbols"] = metrics.get("scanned_symbols", 0) + len(scanned)
     metrics["raw_signals"] = metrics.get("raw_signals", 0) + len(all_signals)
     metrics["last_scan_latency_ms"] = (time.monotonic() - scan_phase_start) * 1000.0
+
+    # Graceful degradation: abort ranking/execution when scan quality is poor.
+    sampled = len(scanned) + len(scan_error_symbols)
+    scan_error_rate = (len(scan_error_symbols) / sampled) if sampled > 0 else 0.0
+    if (
+        sampled >= settings.ORCHESTRATION_SCAN_ERROR_MIN_SAMPLES
+        and scan_error_rate >= settings.ORCHESTRATION_SCAN_ERROR_RATE_ABORT
+    ):
+        logger.warning(
+            "Degraded loop mode: scan error rate %.0f%% (%d/%d) >= %.0f%%. "
+            "Skipping ranking/execution this iteration.",
+            scan_error_rate * 100.0,
+            len(scan_error_symbols),
+            sampled,
+            settings.ORCHESTRATION_SCAN_ERROR_RATE_ABORT * 100.0,
+        )
+        db.log_agent_event(
+            "logging",
+            "warn",
+            "Degraded loop mode activated",
+            {
+                "trace_id": iter_trace_id,
+                "loop": loop_count,
+                "scan_error_rate": scan_error_rate,
+                "scan_errors": len(scan_error_symbols),
+                "sampled_symbols": sampled,
+                "threshold": settings.ORCHESTRATION_SCAN_ERROR_RATE_ABORT,
+                "action": "skip_rank_and_execute",
+            },
+        )
+        metrics["last_rank_latency_ms"] = 0.0
+        metrics["last_execution_latency_ms"] = 0.0
+        metrics["last_signal_to_order_ms"] = -1.0
+        return
 
     if skipped_cooldown:
         logger.debug("Cooldown active for: %s", ", ".join(skipped_cooldown))
@@ -961,6 +1074,16 @@ def _run_iteration(
         len(all_signals), len(ranked),
         ", ".join(f"{s.symbol} {s.direction} conf={s.confidence:.2f}" for s in ranked[:5]),
     )
+
+    max_ranked = max(1, settings.ORCHESTRATION_MAX_SIGNALS_PER_ITERATION)
+    if len(ranked) > max_ranked:
+        logger.info(
+            "Signal processing bounded: %d -> %d (top-confidence only)",
+            len(ranked),
+            max_ranked,
+        )
+        ranked = ranked[:max_ranked]
+
     metrics["ranked_signals"] = metrics.get("ranked_signals", 0) + len(ranked)
     metrics["last_rank_latency_ms"] = (time.monotonic() - rank_phase_start) * 1000.0
     signal_ready_ts = time.monotonic()
@@ -1160,6 +1283,24 @@ def _run_iteration(
         metrics["last_signal_to_order_ms"],
         (time.monotonic() - iter_start_ts) * 1000.0,
     )
+
+    if settings.ORCHESTRATION_ENABLE_ITERATION_TRACE:
+        db.log_agent_event(
+            "logging",
+            "debug",
+            "Iteration completed",
+            {
+                "trace_id": iter_trace_id,
+                "loop": loop_count,
+                "scanned": len(scanned),
+                "scan_errors": len(scan_error_symbols),
+                "ranked_processed": len(ranked),
+                "scan_latency_ms": metrics["last_scan_latency_ms"],
+                "rank_latency_ms": metrics["last_rank_latency_ms"],
+                "exec_latency_ms": metrics["last_execution_latency_ms"],
+                "signal_to_order_ms": metrics["last_signal_to_order_ms"],
+            },
+        )
 
     if _tui:
         for name in ("market", "analysis", "strategy", "risk", "execution", "trade_mgr"):
