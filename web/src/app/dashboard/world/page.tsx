@@ -4,181 +4,465 @@ import { useEffect, useState } from "react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type Tier = "FLASH" | "PRIORITY" | "ROUTINE" | "CLEAR";
+type RiskTier = "CLEAR" | "ROUTINE" | "PRIORITY" | "FLASH";
+
+interface WorldAlert {
+  tier:      string;
+  title:     string;
+  source?:   string;
+  timestamp?: string;
+}
+
+interface WorldData {
+  available:           boolean;
+  riskTier:            RiskTier;
+  vix:                 number | string;
+  yieldCurveInverted:  boolean;
+  osintSentiment:      string;
+  sweepAgeMinutes:     number;
+  alerts:              WorldAlert[];
+  sourceCount:         number;
+}
+
+// ── Constants ─────────────────────────────────────────────────────────────────
+
+const FONT = `-apple-system, BlinkMacSystemFont, "SF Pro Display", system-ui, sans-serif`;
+const MONO = `"SF Mono", SFMono-Regular, ui-monospace, Menlo, monospace`;
 
 const TIER_COLOR: Record<string, string> = {
-  FLASH:    "#ff716c",
-  PRIORITY: "#ffb86c",
-  ROUTINE:  "#00d2fd",
-  CLEAR:    "#00fd87",
+  CLEAR:    "#30D158",
+  ROUTINE:  "#64D2FF",
+  PRIORITY: "#FF9F0A",
+  FLASH:    "#FF453A",
 };
 
 const TIER_DESC: Record<string, string> = {
-  FLASH:    "Critical — trading halted by macro blackout",
-  PRIORITY: "Significant event — lot sizes reduced 50%",
-  ROUTINE:  "Background signals — lot sizes reduced 25%",
   CLEAR:    "All clear — normal trading conditions",
+  ROUTINE:  "Background signals — lot sizes reduced 25%",
+  PRIORITY: "Significant event — lot sizes reduced 50%",
+  FLASH:    "Critical — trading halted by macro blackout",
 };
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function alertTierColor(tier: string): string {
+  return TIER_COLOR[String(tier ?? "ROUTINE").toUpperCase()] ?? "#8E8E93";
+}
+
+// ── Stat Card ─────────────────────────────────────────────────────────────────
+
+function StatCard({
+  label,
+  value,
+  color,
+  icon,
+}: {
+  label: string;
+  value: string | number;
+  color?: string;
+  icon?: string;
+}) {
+  return (
+    <div
+      style={{
+        background:    "#1C1C1E",
+        borderRadius:  12,
+        padding:       "14px 16px",
+        display:       "flex",
+        flexDirection: "column",
+        gap:           4,
+        flex:          1,
+        minWidth:      120,
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+        {icon && (
+          <span
+            className="material-symbols-outlined"
+            style={{ fontSize: 15, color: color ?? "rgba(235,235,245,0.4)" }}
+          >
+            {icon}
+          </span>
+        )}
+        <span style={{ fontSize: 11, color: "rgba(235,235,245,0.4)", fontFamily: FONT }}>
+          {label}
+        </span>
+      </div>
+      <span
+        style={{
+          fontSize:   20,
+          fontWeight: 700,
+          color:      color ?? "#FFFFFF",
+          fontFamily: FONT,
+        }}
+      >
+        {value}
+      </span>
+    </div>
+  );
+}
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
-export default function WorldIntelPage() {
-  const [data, setData]       = useState<Record<string, unknown> | null>(null);
+export default function WorldPage() {
+  const [data,    setData]    = useState<WorldData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [lastUpdated, setLastUpdated] = useState<string>("");
 
   useEffect(() => {
     let active = true;
     const load = () =>
       fetch("/api/world")
         .then((r) => r.json())
-        .then((d) => { if (active) { setData(d); setLoading(false); } })
+        .then((d) => {
+          if (active) {
+            setData(d);
+            setLoading(false);
+            setLastUpdated(new Date().toLocaleTimeString());
+          }
+        })
         .catch(() => { if (active) setLoading(false); });
     load();
     const id = setInterval(load, 60_000);
     return () => { active = false; clearInterval(id); };
   }, []);
 
-  const available  = data?.available === true;
-  const tier       = data ? (String(data.riskTier || "CLEAR") as Tier) : null;
-  const tierColor  = tier ? (TIER_COLOR[tier] || "#adaaaa") : "#adaaaa";
+  const available = data?.available === true;
+  const tier      = data ? (String(data.riskTier || "CLEAR") as RiskTier) : null;
+  const tierColor = tier ? (TIER_COLOR[tier] ?? "#8E8E93") : "#8E8E93";
 
   return (
-    <div className="flex flex-col gap-6 mt-6">
+    <div
+      style={{
+        paddingTop:    20,
+        paddingBottom: 40,
+        fontFamily:    FONT,
+        minHeight:     "100vh",
+        background:    "#000000",
+      }}
+    >
+      {/* Title */}
+      <h1
+        style={{
+          fontSize:     28,
+          fontWeight:   700,
+          color:        "#FFFFFF",
+          margin:       "0 0 20px",
+          letterSpacing:"-0.5px",
+          fontFamily:   FONT,
+        }}
+      >
+        Macro Intel
+      </h1>
 
-      {/* ── Page Header ── */}
-      <div className="border-l-4 border-secondary pl-6 py-2 bg-surface-container-low">
-        <div className="flex items-center gap-2 mb-1">
-          <span className="text-secondary text-[10px] font-bold tracking-[0.2em] uppercase">OSINT · MACRO · GEOPOLITICAL</span>
-          <span className="w-2 h-2 rounded-full bg-secondary animate-pulse" />
-        </div>
-        <h1 className="text-3xl md:text-5xl font-extrabold tracking-tighter uppercase mb-2">
-          World Intelligence
-        </h1>
-        <p className="text-on-surface-variant text-sm font-mono">
-          Powered by Crucix — live geopolitical + macro risk feed
-        </p>
-      </div>
-
-      {/* ── Loading ── */}
+      {/* Loading */}
       {loading && (
-        <div className="flex flex-col items-center justify-center py-20 gap-4">
-          <div className="w-6 h-6 border-2 border-outline-variant border-t-primary-fixed rounded-full animate-spin" />
-          <span className="text-[9px] text-outline tracking-[0.3em] uppercase">Connecting to Crucix…</span>
+        <div
+          style={{
+            display:        "flex",
+            alignItems:     "center",
+            justifyContent: "center",
+            padding:        "80px 0",
+            color:          "rgba(235,235,245,0.4)",
+            fontSize:       14,
+            fontFamily:     FONT,
+          }}
+        >
+          Connecting to Crucix…
         </div>
       )}
 
-      {/* ── Crucix Offline ── */}
+      {/* Crucix offline */}
       {!loading && !available && (
-        <div className="bg-surface-container-low border border-outline-variant/10 border-l-4 border-l-error p-6">
-          <div className="text-error font-bold text-sm mb-2">Crucix not running</div>
-          <div className="text-on-surface-variant text-[11px] leading-relaxed">
+        <div
+          style={{
+            background:   "#1C1C1E",
+            borderRadius: 12,
+            padding:      "24px 20px",
+            borderLeft:   "4px solid #FF453A",
+            display:      "flex",
+            flexDirection:"column",
+            gap:          10,
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span
+              className="material-symbols-outlined"
+              style={{ fontSize: 20, color: "#FF453A" }}
+            >
+              wifi_off
+            </span>
+            <span style={{ fontSize: 15, fontWeight: 600, color: "#FF453A", fontFamily: FONT }}>
+              Crucix offline
+            </span>
+          </div>
+          <p style={{ margin: 0, fontSize: 13, color: "rgba(235,235,245,0.5)", lineHeight: 1.6, fontFamily: FONT }}>
             Start it with:{" "}
-            <span className="text-primary-fixed font-bold">cd crucix && node server.mjs</span>
+            <code
+              style={{
+                fontFamily:   MONO,
+                color:        "#64D2FF",
+                background:   "#2C2C2E",
+                padding:      "1px 6px",
+                borderRadius: 5,
+              }}
+            >
+              cd crucix &amp;&amp; node server.mjs
+            </code>
             <br />
             The trading bot continues normally without it.
-          </div>
+          </p>
         </div>
       )}
 
-      {/* ── Data ── */}
+      {/* Main content */}
       {!loading && available && (
-        <>
-          {/* Risk Tier Banner */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+
+          {/* Risk Tier Hero Card */}
           <div
-            className="p-6 border-t-4 bg-surface-container-low flex items-start gap-8"
-            style={{ borderTopColor: tierColor }}
+            style={{
+              background:   "#1C1C1E",
+              borderRadius: 12,
+              padding:      20,
+              display:      "flex",
+              flexDirection:"column",
+              gap:          16,
+            }}
           >
-            <div>
-              <div className="text-[9px] text-outline tracking-[0.2em] uppercase mb-2">MACRO RISK TIER</div>
-              <div className="text-5xl font-extrabold tracking-tighter" style={{ color: tierColor }}>
-                {tier}
+            {/* Tier display */}
+            <div style={{ display: "flex", alignItems: "flex-start", gap: 20, flexWrap: "wrap" }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                <span
+                  style={{
+                    fontSize:     11,
+                    color:        "rgba(235,235,245,0.4)",
+                    letterSpacing:"0.08em",
+                    textTransform:"uppercase",
+                    fontFamily:   FONT,
+                  }}
+                >
+                  Macro Risk Tier
+                </span>
+                <span
+                  style={{
+                    fontSize:   34,
+                    fontWeight: 700,
+                    color:      tierColor,
+                    fontFamily: FONT,
+                    lineHeight: 1.1,
+                  }}
+                >
+                  {tier ?? "—"}
+                </span>
+              </div>
+
+              <div style={{ flex: 1, paddingTop: 6 }}>
+                <p style={{ margin: "0 0 10px", fontSize: 13, color: "rgba(235,235,245,0.6)", lineHeight: 1.6, fontFamily: FONT }}>
+                  {tier ? TIER_DESC[tier] : "—"}
+                </p>
+                <div
+                  style={{
+                    display:     "inline-flex",
+                    alignItems:  "center",
+                    gap:         6,
+                    background:  `${tierColor}15`,
+                    border:      `1px solid ${tierColor}40`,
+                    borderRadius: 8,
+                    padding:     "4px 12px",
+                  }}
+                >
+                  <span
+                    className="material-symbols-outlined"
+                    style={{ fontSize: 14, color: tierColor }}
+                  >
+                    sensors
+                  </span>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: tierColor, fontFamily: FONT }}>
+                    {data?.sourceCount ?? 0} intelligence sources
+                  </span>
+                </div>
               </div>
             </div>
-            <div className="flex-1 pt-2">
-              <p className="text-on-surface-variant text-sm leading-relaxed">
-                {tier ? TIER_DESC[tier] : "—"}
-              </p>
+
+            {/* Sub-row stats */}
+            <div
+              style={{
+                borderTop: "0.5px solid rgba(84,84,88,0.65)",
+                paddingTop: 14,
+                display:   "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))",
+                gap:       10,
+              }}
+            >
+              <StatCard
+                label="VIX"
+                value={data?.vix ?? "—"}
+                color={(Number(data?.vix) || 0) > 30 ? "#FF453A" : "#30D158"}
+                icon="show_chart"
+              />
+              <StatCard
+                label="Yield Curve"
+                value={data?.yieldCurveInverted ? "INVERTED" : "Normal"}
+                color={data?.yieldCurveInverted ? "#FF453A" : "#30D158"}
+                icon="trending_down"
+              />
+              <StatCard
+                label="OSINT Sentiment"
+                value={String(data?.osintSentiment ?? "neutral")}
+                color="#FFFFFF"
+                icon="language"
+              />
+              <StatCard
+                label="Sweep Age"
+                value={`${data?.sweepAgeMinutes ?? "?"}m`}
+                color={Number(data?.sweepAgeMinutes) > 20 ? "#FF9F0A" : "#30D158"}
+                icon="schedule"
+              />
+            </div>
+
+            {/* Last updated */}
+            <div
+              style={{
+                textAlign:  "right",
+                fontSize:   11,
+                color:      "rgba(235,235,245,0.3)",
+                fontFamily: MONO,
+                marginTop:  -8,
+              }}
+            >
+              Updated {lastUpdated} · refreshes every 60s
+            </div>
+          </div>
+
+          {/* Alert feed */}
+          {Array.isArray(data?.alerts) && data.alerts.length > 0 && (
+            <div
+              style={{
+                background:   "#1C1C1E",
+                borderRadius: 12,
+                overflow:     "hidden",
+              }}
+            >
+              {/* Alert header */}
               <div
-                className="mt-4 inline-block text-[10px] font-bold px-3 py-1 border"
                 style={{
-                  color: tierColor,
-                  borderColor: `${tierColor}40`,
-                  background: `${tierColor}10`,
+                  padding:      "12px 16px",
+                  borderBottom: "0.5px solid rgba(84,84,88,0.65)",
+                  display:      "flex",
+                  alignItems:   "center",
+                  gap:          8,
                 }}
               >
-                {String(data?.sourceCount ?? 27)} INTELLIGENCE SOURCES
+                <span
+                  className="material-symbols-outlined"
+                  style={{ fontSize: 17, color: "#FF9F0A" }}
+                >
+                  warning
+                </span>
+                <span style={{ fontSize: 13, fontWeight: 600, color: "#FFFFFF", fontFamily: FONT }}>
+                  Active Alerts
+                </span>
+                <span
+                  style={{
+                    marginLeft:   "auto",
+                    background:   "rgba(255,159,10,0.15)",
+                    border:       "1px solid rgba(255,159,10,0.4)",
+                    color:        "#FF9F0A",
+                    fontSize:     11,
+                    fontWeight:   600,
+                    padding:      "1px 8px",
+                    borderRadius: 6,
+                    fontFamily:   FONT,
+                  }}
+                >
+                  {data.alerts.length}
+                </span>
               </div>
-            </div>
-          </div>
 
-          {/* KPI Grid */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-1 bg-outline-variant/10">
-            {[
-              {
-                label: "VIX",
-                value: String(data?.vix ?? "—"),
-                color: (Number(data?.vix) || 0) > 30 ? "#ff716c" : "#00fd87",
-              },
-              {
-                label: "YIELD CURVE",
-                value: data?.yieldCurveInverted ? "INVERTED" : "Normal",
-                color: data?.yieldCurveInverted ? "#ff716c" : "#00fd87",
-              },
-              {
-                label: "OSINT SENTIMENT",
-                value: String(data?.osintSentiment ?? "neutral"),
-                color: "#adaaaa",
-              },
-              {
-                label: "SWEEP AGE",
-                value: `${data?.sweepAgeMinutes ?? "?"}m`,
-                color: Number(data?.sweepAgeMinutes) > 20 ? "#ffb86c" : "#00fd87",
-              },
-            ].map(({ label, value, color }) => (
-              <div key={label} className="bg-surface p-5">
-                <div className="text-[9px] text-outline tracking-[0.2em] uppercase mb-1">{label}</div>
-                <div className="text-2xl font-extrabold" style={{ color }}>{value}</div>
-              </div>
-            ))}
-          </div>
-
-          {/* Active Alerts */}
-          {Array.isArray(data?.alerts) && (data.alerts as unknown[]).length > 0 && (
-            <div className="bg-surface-container-low border border-outline-variant/10 p-6">
-              <h3 className="text-[9px] font-bold tracking-[0.3em] text-outline uppercase mb-4 pb-3 border-b border-outline-variant/15">
-                Active Alerts
-              </h3>
-              <div className="flex flex-col gap-2">
-                {(data.alerts as Array<{ tier: string; title: string }>).slice(0, 8).map((a, i) => {
-                  const ac = TIER_COLOR[String(a.tier || "ROUTINE").toUpperCase()] || "#adaaaa";
-                  return (
-                    <div
-                      key={i}
-                      className="flex items-center gap-4 p-2.5 border-l-2"
+              {/* Alert rows */}
+              {data.alerts.slice(0, 10).map((a, i) => {
+                const ac = alertTierColor(a.tier);
+                return (
+                  <div
+                    key={i}
+                    style={{
+                      display:     "flex",
+                      alignItems:  "flex-start",
+                      gap:         12,
+                      padding:     "12px 16px",
+                      borderLeft:  `3px solid ${ac}`,
+                      borderBottom: i < data.alerts.length - 1
+                        ? "0.5px solid rgba(84,84,88,0.3)"
+                        : "none",
+                      background:  `${ac}08`,
+                    }}
+                  >
+                    <span
                       style={{
-                        borderLeftColor: ac,
-                        background: `${ac}0a`,
+                        fontSize:     10,
+                        fontWeight:   700,
+                        color:        ac,
+                        letterSpacing:"0.07em",
+                        textTransform:"uppercase",
+                        flexShrink:   0,
+                        paddingTop:   2,
+                        minWidth:     56,
+                        fontFamily:   FONT,
                       }}
                     >
-                      <span
-                        className="text-[9px] font-bold tracking-[0.1em] shrink-0 w-16"
-                        style={{ color: ac }}
-                      >
-                        {String(a.tier || "ROUTINE").toUpperCase()}
-                      </span>
-                      <span className="text-[11px] text-on-surface-variant">{a.title || "Unnamed alert"}</span>
+                      {String(a.tier || "ROUTINE").toUpperCase()}
+                    </span>
+
+                    <div style={{ flex: 1 }}>
+                      <p style={{ margin: 0, fontSize: 13, color: "rgba(235,235,245,0.85)", lineHeight: 1.5, fontFamily: FONT }}>
+                        {a.title || "Unnamed alert"}
+                      </p>
+                      {a.source && (
+                        <span style={{ fontSize: 11, color: "rgba(235,235,245,0.35)", fontFamily: MONO }}>
+                          {a.source}
+                        </span>
+                      )}
                     </div>
-                  );
-                })}
-              </div>
+
+                    {a.timestamp && (
+                      <span style={{ fontSize: 11, color: "rgba(235,235,245,0.3)", fontFamily: MONO, flexShrink: 0 }}>
+                        {(() => {
+                          try { return new Date(a.timestamp!).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }); }
+                          catch { return ""; }
+                        })()}
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
 
-          {/* Footer */}
-          <div className="text-right text-[9px] text-outline tracking-widest">
-            Refreshes every 60s
-          </div>
-        </>
+          {/* No alerts empty state */}
+          {Array.isArray(data?.alerts) && data.alerts.length === 0 && (
+            <div
+              style={{
+                background:   "#1C1C1E",
+                borderRadius: 12,
+                padding:      "24px 20px",
+                display:      "flex",
+                alignItems:   "center",
+                gap:          12,
+              }}
+            >
+              <span
+                className="material-symbols-outlined"
+                style={{ fontSize: 20, color: "#30D158" }}
+              >
+                check_circle
+              </span>
+              <span style={{ fontSize: 13, color: "rgba(235,235,245,0.6)", fontFamily: FONT }}>
+                No active alerts — all clear
+              </span>
+            </div>
+          )}
+        </div>
       )}
     </div>
   );

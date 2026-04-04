@@ -14,41 +14,39 @@ const SYMBOL_GROUPS: Record<string, string[]> = {
   "Exotics": ["USDZAR", "USDTRY"],
 };
 
+const SF: React.CSSProperties = {
+  fontFamily: `-apple-system, BlinkMacSystemFont, "SF Pro Display", system-ui, sans-serif`,
+};
+
 interface Props {
   value: string;
   onChange: (symbol: string) => void;
 }
 
 function SymBtn({ sym, active, onClick }: { sym: string; active: boolean; onClick: () => void }) {
+  const [hovered, setHovered] = useState(false);
   return (
     <button
       onClick={onClick}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
       style={{
-        padding: "5px 6px",
-        fontFamily: "'JetBrains Mono', monospace",
-        fontSize: 9, fontWeight: 700, letterSpacing: "0.02em",
-        background: active ? "rgba(0,255,136,0.15)" : "transparent",
-        border: `1px solid ${active ? "rgba(0,255,136,0.4)" : "#1c1c28"}`,
-        borderRadius: 3,
-        color: active ? "#00ff88" : "#607888",
+        ...SF,
+        padding: "6px 4px",
+        fontSize: 11,
+        fontWeight: active ? 600 : 400,
+        background: active
+          ? "rgba(10,132,255,0.2)"
+          : hovered
+          ? "rgba(120,120,128,0.18)"
+          : "transparent",
+        border: `1px solid ${active ? "rgba(10,132,255,0.5)" : "rgba(84,84,88,0.3)"}`,
+        borderRadius: 6,
+        color: active ? "#0A84FF" : hovered ? "#FFFFFF" : "rgba(235,235,245,0.6)",
         cursor: "pointer",
         width: "100%",
         textAlign: "center",
-        transition: "background 0.1s, color 0.1s, border-color 0.1s",
-      }}
-      onMouseEnter={(e) => {
-        if (!active) {
-          const btn = e.currentTarget as HTMLButtonElement;
-          btn.style.color = "#c0ccd8";
-          btn.style.borderColor = "#607888";
-        }
-      }}
-      onMouseLeave={(e) => {
-        if (!active) {
-          const btn = e.currentTarget as HTMLButtonElement;
-          btn.style.color = "#607888";
-          btn.style.borderColor = "#1c1c28";
-        }
+        transition: "background 0.12s, color 0.12s, border-color 0.12s",
       }}
     >
       {sym}
@@ -71,26 +69,36 @@ export default function ChartSymbolSelector({ value, onChange }: Props) {
       <button
         onClick={() => setOpen(!open)}
         style={{
-          display: "flex", alignItems: "center", gap: 8,
-          padding: "6px 14px",
-          background: "#0a0a12",
-          border: "1px solid #1c1c28",
-          borderRadius: 5,
-          fontFamily: "'JetBrains Mono', monospace",
-          fontSize: 12, fontWeight: 700,
-          color: "#00d4ff",
+          ...SF,
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          height: 44,
+          padding: "0 14px",
+          background: "#1C1C1E",
+          border: "1px solid rgba(84,84,88,0.65)",
+          borderRadius: 10,
+          fontSize: 15,
+          fontWeight: 600,
+          color: "#FFFFFF",
           cursor: "pointer",
           transition: "border-color 0.12s",
+          minWidth: 120,
         }}
-        onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.borderColor = "rgba(0,212,255,0.4)"; }}
-        onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.borderColor = "#1c1c28"; }}
+        onMouseEnter={(e) => {
+          (e.currentTarget as HTMLButtonElement).style.borderColor = "rgba(10,132,255,0.6)";
+        }}
+        onMouseLeave={(e) => {
+          (e.currentTarget as HTMLButtonElement).style.borderColor = "rgba(84,84,88,0.65)";
+        }}
       >
-        {value}
+        <span style={{ color: "#64D2FF", fontSize: 13, fontWeight: 400 }}>Pair</span>
+        <span>{value}</span>
         <svg
           width="10" height="10" viewBox="0 0 24 24"
-          fill="none" stroke="#607888" strokeWidth={2.5}
+          fill="none" stroke="rgba(235,235,245,0.4)" strokeWidth={2.5}
           strokeLinecap="round" strokeLinejoin="round"
-          style={{ transform: open ? "rotate(180deg)" : "none", transition: "transform 0.15s" }}
+          style={{ transform: open ? "rotate(180deg)" : "none", transition: "transform 0.15s", marginLeft: 2 }}
         >
           <path d="M19 9l-7 7-7-7" />
         </svg>
@@ -100,19 +108,19 @@ export default function ChartSymbolSelector({ value, onChange }: Props) {
       {open && (
         <div style={{
           position: "absolute",
-          top: "calc(100% + 4px)",
+          top: "calc(100% + 6px)",
           left: 0,
           zIndex: 50,
-          width: 300,
-          maxHeight: 380,
+          width: 320,
+          maxHeight: 420,
           overflowY: "auto",
-          background: "#0a0a12",
-          border: "1px solid #1c1c28",
-          borderRadius: 6,
-          boxShadow: "0 8px 32px rgba(0,0,0,0.6)",
+          background: "#2C2C2E",
+          border: "1px solid rgba(84,84,88,0.65)",
+          borderRadius: 12,
+          boxShadow: "0 12px 40px rgba(0,0,0,0.7)",
         }}>
           {/* Search */}
-          <div style={{ padding: "8px 10px", borderBottom: "1px solid #1c1c28" }}>
+          <div style={{ padding: "10px 12px", borderBottom: "1px solid rgba(84,84,88,0.4)" }}>
             <input
               type="text"
               value={search}
@@ -120,13 +128,15 @@ export default function ChartSymbolSelector({ value, onChange }: Props) {
               placeholder="Search symbol…"
               autoFocus
               style={{
+                ...SF,
                 width: "100%",
-                background: "#06060c",
-                border: "1px solid #1c1c28",
-                borderRadius: 4,
-                padding: "5px 10px",
-                fontFamily: "'JetBrains Mono', monospace",
-                fontSize: 10.5, color: "#c0ccd8",
+                height: 36,
+                background: "rgba(120,120,128,0.24)",
+                border: "1px solid transparent",
+                borderRadius: 8,
+                padding: "0 12px",
+                fontSize: 15,
+                color: "#FFFFFF",
                 outline: "none",
                 boxSizing: "border-box",
               }}
@@ -135,15 +145,18 @@ export default function ChartSymbolSelector({ value, onChange }: Props) {
 
           {/* Results */}
           {filtered ? (
-            <div style={{ padding: "8px 10px", display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 4 }}>
+            <div style={{ padding: "10px 12px", display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 5 }}>
               {filtered.map((sym) => (
                 <SymBtn key={sym} sym={sym} active={sym === value} onClick={() => { onChange(sym); close(); }} />
               ))}
               {filtered.length === 0 && (
                 <div style={{
-                  gridColumn: "1 / -1", textAlign: "center",
-                  fontFamily: "'JetBrains Mono', monospace",
-                  fontSize: 9.5, color: "#607888", padding: "12px 0",
+                  ...SF,
+                  gridColumn: "1 / -1",
+                  textAlign: "center",
+                  fontSize: 13,
+                  color: "rgba(235,235,245,0.3)",
+                  padding: "16px 0",
                 }}>
                   No symbols found
                 </div>
@@ -151,18 +164,23 @@ export default function ChartSymbolSelector({ value, onChange }: Props) {
             </div>
           ) : (
             Object.entries(SYMBOL_GROUPS).map(([group, symbols], gi, arr) => (
-              <div key={group} style={{ borderBottom: gi < arr.length - 1 ? "1px solid #1c1c28" : "none" }}>
+              <div key={group} style={{ borderBottom: gi < arr.length - 1 ? "1px solid rgba(84,84,88,0.3)" : "none" }}>
                 <div style={{
-                  padding: "6px 12px 2px",
-                  fontFamily: "'JetBrains Mono', monospace",
-                  fontSize: 8, fontWeight: 700, letterSpacing: "0.18em",
-                  textTransform: "uppercase", color: "#607888",
+                  ...SF,
+                  padding: "8px 14px 4px",
+                  fontSize: 12,
+                  fontWeight: 600,
+                  letterSpacing: "0.04em",
+                  textTransform: "uppercase",
+                  color: "rgba(235,235,245,0.3)",
                 }}>
                   {group}
                 </div>
                 <div style={{
-                  padding: "4px 10px 8px",
-                  display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 4,
+                  padding: "4px 12px 10px",
+                  display: "grid",
+                  gridTemplateColumns: "repeat(4, 1fr)",
+                  gap: 5,
                 }}>
                   {symbols.map((sym) => (
                     <SymBtn key={sym} sym={sym} active={sym === value} onClick={() => { onChange(sym); close(); }} />

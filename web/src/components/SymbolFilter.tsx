@@ -1,81 +1,101 @@
 "use client";
 
-const SYMBOLS = [
-  "EURUSD", "USDJPY", "GBPUSD", "AUDUSD", "USDCAD", "USDCHF",
-  "EURJPY", "GBPJPY", "EURGBP", "AUDJPY", "EURAUD", "EURCAD",
-  "GBPCHF", "GBPAUD", "CADJPY", "CHFJPY", "EURCHF", "NZDJPY",
-  "XAUUSD", "XAGUSD", "USOUSD", "UKOUSD",
-  "BTCUSD", "ETHUSD", "XRPUSD", "LTCUSD", "BCHUSD",
-  "USDZAR", "USDTRY",
-];
+import { useMemo, useState } from "react";
 
-function Chip({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      style={{
-        padding: "3px 9px",
-        background: active ? "rgba(0,212,255,0.12)" : "transparent",
-        border: `1px solid ${active ? "rgba(0,212,255,0.4)" : "#1c1c28"}`,
-        borderRadius: 4,
-        fontFamily: "'JetBrains Mono', monospace",
-        fontSize: 9.5, fontWeight: 700, letterSpacing: "0.06em",
-        textTransform: "uppercase",
-        color: active ? "#00d4ff" : "#607888",
-        cursor: "pointer",
-        whiteSpace: "nowrap",
-        transition: "border-color 0.15s, color 0.15s, background 0.15s",
-        boxShadow: active ? "0 0 8px rgba(0,212,255,0.2)" : "none",
-      }}
-      onMouseEnter={(e) => {
-        if (!active) {
-          const btn = e.currentTarget as HTMLButtonElement;
-          btn.style.borderColor = "#607888";
-          btn.style.color = "#9aa8b8";
-        }
-      }}
-      onMouseLeave={(e) => {
-        if (!active) {
-          const btn = e.currentTarget as HTMLButtonElement;
-          btn.style.borderColor = "#1c1c28";
-          btn.style.color = "#607888";
-        }
-      }}
-    >
-      {children}
-    </button>
-  );
+interface SymbolFilterProps {
+  symbols: string[];
+  selected: string | null;
+  onSelect: (s: string | null) => void;
 }
 
-export default function SymbolFilter({
-  value,
-  onChange,
-}: {
-  value: string | null;
-  onChange: (symbol: string | null) => void;
-}) {
+export default function SymbolFilter({ symbols, selected, onSelect }: SymbolFilterProps) {
+  const [search, setSearch] = useState("");
+
+  const visibleSymbols = useMemo(() => {
+    const q = search.trim().toUpperCase();
+    if (!q) return symbols;
+    return symbols.filter((symbol) => symbol.toUpperCase().includes(q));
+  }, [symbols, search]);
+
   return (
-    <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
-      <Chip active={value === null} onClick={() => onChange(null)}>
-        All
-      </Chip>
-      {SYMBOLS.map((s) => (
-        <Chip
-          key={s}
-          active={value === s}
-          onClick={() => onChange(value === s ? null : s)}
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      <input
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        placeholder="Filter symbols..."
+        style={{
+          height: 34,
+          borderRadius: 10,
+          border: "1px solid rgba(84,84,88,0.65)",
+          background: "rgba(118,118,128,0.2)",
+          color: "#FFFFFF",
+          padding: "0 12px",
+          fontSize: 13,
+          fontWeight: 500,
+          fontFamily: `-apple-system, BlinkMacSystemFont, "SF Pro Display", system-ui, sans-serif`,
+          outline: "none",
+        }}
+      />
+
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "row",
+          gap: 8,
+          overflowX: "auto",
+          paddingBottom: 4,
+          scrollbarWidth: "none",
+        }}
+      >
+        {/* All pill */}
+        <button
+          onClick={() => onSelect(null)}
+          style={{
+            height: 32,
+            padding: "0 14px",
+            borderRadius: 10,
+            border: "none",
+            fontSize: 13,
+            fontWeight: 600,
+            fontFamily: `-apple-system, BlinkMacSystemFont, "SF Pro Display", system-ui, sans-serif`,
+            cursor: "pointer",
+            whiteSpace: "nowrap",
+            flexShrink: 0,
+            background: selected === null ? "#0A84FF" : "rgba(118,118,128,0.24)",
+            color: selected === null ? "#FFFFFF" : "rgba(235,235,245,0.6)",
+            transition: "background 0.15s, color 0.15s",
+          }}
         >
-          {s}
-        </Chip>
-      ))}
+          All
+        </button>
+
+        {visibleSymbols.map((s) => {
+          const active = selected === s;
+          return (
+            <button
+              key={s}
+              onClick={() => onSelect(active ? null : s)}
+              style={{
+                height: 32,
+                padding: "0 14px",
+                borderRadius: 10,
+                border: "none",
+                fontSize: 13,
+                fontWeight: 600,
+                fontFamily: `-apple-system, BlinkMacSystemFont, "SF Pro Display", system-ui, sans-serif`,
+                cursor: "pointer",
+                whiteSpace: "nowrap",
+                flexShrink: 0,
+                background: active ? "#0A84FF" : "rgba(118,118,128,0.24)",
+                color: active ? "#FFFFFF" : "rgba(235,235,245,0.6)",
+                transition: "background 0.15s, color 0.15s",
+              }}
+            >
+              {s}
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }

@@ -1,52 +1,49 @@
-// Shown instantly when navigating between dashboard pages,
-// while the next page's server components stream in.
 export default function DashboardLoading() {
   return (
-    <div style={{
-      display: "flex",
-      flexDirection: "column",
-      gap: 16,
-      marginTop: 24,
-      animation: "fadeIn 80ms ease-out",
-    }}>
-      {/* Page header skeleton */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        <div style={{ width: 80, height: 10, background: "#1a1a1a", borderRadius: 2 }} />
-        <div style={{ width: 260, height: 28, background: "#1a1a1a", borderRadius: 2 }} />
+    <>
+      <div
+        style={{
+          position: "fixed",
+          inset: 0,
+          background: "#000000",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 16,
+          fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", system-ui, sans-serif',
+          zIndex: 9999,
+        }}
+      >
+        {/* Spinning circle */}
+        <div
+          style={{
+            width: 36,
+            height: 36,
+            borderRadius: "50%",
+            border: "2.5px solid rgba(235,235,245,0.12)",
+            borderTopColor: "#0A84FF",
+            animation: "iosSpinner 0.75s linear infinite",
+          }}
+        />
+
+        {/* Label */}
+        <span
+          style={{
+            fontSize: 15,
+            color: "rgba(235,235,245,0.4)",
+            letterSpacing: "0.01em",
+          }}
+        >
+          NeuralFX
+        </span>
       </div>
 
-      {/* Card row skeleton */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
-        {[0, 1, 2].map((i) => (
-          <div key={i} style={{
-            height: 180,
-            background: "#0e0e0e",
-            borderLeft: "2px solid #1a1a1a",
-            padding: 20,
-            display: "flex",
-            flexDirection: "column",
-            gap: 12,
-          }}>
-            <div style={{ width: 100, height: 8, background: "#1a1a1a", borderRadius: 2 }} />
-            <div style={{ width: "60%", height: 28, background: "#1a1a1a", borderRadius: 2, marginTop: 16 }} />
-            <div style={{ width: "40%", height: 12, background: "#1a1a1a", borderRadius: 2 }} />
-          </div>
-        ))}
-      </div>
-
-      {/* Wide card skeleton */}
-      <div style={{
-        height: 120,
-        background: "#0e0e0e",
-        border: "1px solid #1a1a1a",
-        padding: 20,
-        display: "flex",
-        gap: 12,
-      }}>
-        {[0, 1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
-          <div key={i} style={{ flex: 1, height: "100%", background: "#1a1a1a", borderRadius: 2 }} />
-        ))}
-      </div>
-    </div>
+      <style>{`
+        @keyframes iosSpinner {
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
+    </>
   );
 }

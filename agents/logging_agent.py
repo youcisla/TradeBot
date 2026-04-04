@@ -14,6 +14,7 @@ from __future__ import annotations
 import csv
 import logging
 import logging.handlers
+import time
 from datetime import date, datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -89,6 +90,8 @@ class LoggingAgent:
         self._log_dir = Path(log_dir)
         self._log_dir.mkdir(exist_ok=True)
         self._trade_csv = self._log_dir / "trade_journal.csv"
+        self._risk_reject_throttle_seconds = 300.0
+        self._risk_reject_cache: dict[tuple[str, str, str, str], tuple[float, int]] = {}
         self._configure_logging()
         self._ensure_csv_header()
 
@@ -146,9 +149,23 @@ class LoggingAgent:
     def log_risk_rejection(self, symbol: str, direction: str,
                            strategy: str, reason: str) -> None:
         """Record a risk rejection to DB + log for analysis."""
-        self.record("RISK_REJECT",
-                     f"{symbol} {direction} {strategy} — {reason}",
-                     level="WARNING")
+        key = (symbol, direction, strategy, reason)
+        now = time.monotonic()
+        last_ts, suppressed = self._risk_reject_cache.get(key, (0.0, 0))
+
+        if last_ts > 0 and now - last_ts < self._risk_reject_throttle_seconds:
+            self._risk_reject_cache[key] = (last_ts, suppressed + 1)
+            return
+
+        if suppressed > 0:
+            reason = f"{reason} (+{suppressed} similar rejects suppressed)"
+
+        self.record(
+            "RISK_REJECT",
+            f"{symbol} {direction} {strategy} — {reason}",
+            level="WARNING",
+        )
+        self._risk_reject_cache[key] = (now, 0)
 
     # ── internal ─────────────────────────────────────────────────────────
 

@@ -27,10 +27,11 @@ def local_now() -> datetime:
 def current_session(dt: datetime | None = None) -> str:
     """Return the forex session name based on UTC hour.
 
-    London   07:00 – 16:00 UTC
-    New York 12:00 – 21:00 UTC
-    Asian    00:00 – 09:00 UTC
-    Overlap  12:00 – 16:00 UTC (London + NY)
+    Returns one of: "asian", "london", "overlap", "newyork"
+    London   07:00 – 11:59 UTC  → "london"
+    Overlap  12:00 – 15:59 UTC  → "overlap"  (London + NY)
+    New York 16:00 – 20:59 UTC  → "newyork"
+    Asian    00:00 – 06:59 + 21:00 – 23:59 UTC  → "asian"
 
     Parameters
     ----------

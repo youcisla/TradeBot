@@ -1,368 +1,546 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import {
-  AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
-  XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend,
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
 } from "recharts";
-import { formatChartDate } from "@/lib/time";
-import type { Trade } from "@/lib/db";
+import EquityCurve from "@/components/EquityCurve";
+import SymbolFilter from "@/components/SymbolFilter";
+import PaginationControls from "@/components/PaginationControls";
 
-// ── Types ─────────────────────────────────────────────────────────────────────
 interface SymbolStat {
-  symbol: string; total: number; wins: number; losses: number;
-  total_pnl: number; avg_pnl: number; avg_win: number; avg_loss: number;
+  symbol: string;
+  total: number;
+  wins: number;
+  losses: number;
+  total_pnl: number;
+  avg_pnl: number;
 }
-interface DirStat { direction: string; total: number; total_pnl: number; }
-interface DayPnl  { day: string; trades: number; pnl: number; }
-interface Kpis {
-  total_trades: number; wins: number; losses: number; total_pnl: number;
-  avg_pnl: number; best_trade: number; worst_trade: number; avg_duration_min: number;
-}
-type Range = "24h" | "7d" | "30d" | "all";
 
-function sinceDate(r: Range): string | undefined {
-  if (r === "all") return undefined;
+interface DayPnl {
+  day: string;
+  pnl: number;
+  trades: number;
+}
+
+interface Kpis {
+  total_trades: number;
+  wins: number;
+  losses: number;
+  total_pnl: number;
+  avg_pnl: number;
+  best_trade: number;
+  worst_trade: number;
+  avg_duration_min: number;
+}
+
+type Period = "1D" | "1W" | "1M" | "3M" | "All";
+
+const FONT =
+  `-apple-system, BlinkMacSystemFont, "SF Pro Display", system-ui, sans-serif`;
+const MONO =
+  `"SF Mono", SFMono-Regular, ui-monospace, Menlo, monospace`;
+
+function sinceDate(p: Period): string | undefined {
+  if (p === "All") return undefined;
   const d = new Date();
-  if (r === "24h") d.setHours(d.getHours() - 24);
-  else if (r === "7d") d.setDate(d.getDate() - 7);
-  else d.setDate(d.getDate() - 30);
+  if (p === "1D") d.setDate(d.getDate() - 1);
+  else if (p === "1W") d.setDate(d.getDate() - 7);
+  else if (p === "1M") d.setMonth(d.getMonth() - 1);
+  else d.setMonth(d.getMonth() - 3);
   return d.toISOString();
 }
 
-const SYM_COLORS = ["#00fd87","#00d2fd","#e966ff","#ffb86c","#ff716c","#79dfff","#a4ffb9","#1cd5ff","#d501f9","#ffffff"];
-const TOOLTIP_STYLE = { background: "#0e0e0e", border: "1px solid #494847", fontSize: 11, fontFamily: "'JetBrains Mono', monospace", color: "#ffffff" };
-
-// ── Sub-components ────────────────────────────────────────────────────────────
-
-function KpiCard({ label, value, sub, color = "#00fd87" }: { label: string; value: string; sub?: string; color?: string }) {
-  return (
-    <div className="bg-surface border-l-2 p-4 relative overflow-hidden" style={{ borderLeftColor: color }}>
-      <div className="text-[9px] text-on-surface-variant uppercase tracking-[0.18em] mb-2">{label}</div>
-      <div className="text-2xl font-bold font-mono" style={{ color }}>{value}</div>
-      {sub && <div className="text-[10px] text-on-surface-variant mt-1">{sub}</div>}
-    </div>
-  );
+interface KpiCardProps {
+  label: string;
+  value: string;
+  sub?: string;
+  color?: string;
 }
 
-function ChartCard({ title, accent = "#494847", children }: { title: string; accent?: string; children: React.ReactNode }) {
+function KpiCard({ label, value, sub, color = "#FFFFFF" }: KpiCardProps) {
   return (
-    <div className="bg-surface p-4 border border-outline-variant/10">
-      <div className="text-[9px] font-bold uppercase tracking-[0.2em] mb-4" style={{ color: accent }}>{title}</div>
-      {children}
-    </div>
-  );
-}
-
-function NoData() {
-  return (
-    <div className="h-44 flex items-center justify-center text-on-surface-variant text-[11px] uppercase tracking-widest">
-      no data yet
-    </div>
-  );
-}
-
-function SymbolPill({ value, options, onChange }: { value: string | null; options: string[]; onChange: (v: string | null) => void }) {
-  return (
-    <div className="flex gap-2 flex-wrap">
-      <button
-        onClick={() => onChange(null)}
-        className={`px-3 py-1 text-[10px] font-bold uppercase tracking-wider duration-0 ${!value ? "bg-primary-fixed/10 text-primary-fixed border border-primary-fixed/30" : "text-on-surface-variant border border-outline-variant/20 hover:text-on-surface"}`}
+    <div
+      style={{
+        background: "#1C1C1E",
+        borderRadius: 12,
+        padding: 16,
+        minWidth: 130,
+        flexShrink: 0,
+      }}
+    >
+      <div
+        style={{
+          fontSize: 12,
+          color: "rgba(235,235,245,0.6)",
+          marginBottom: 8,
+          fontWeight: 500,
+          fontFamily: FONT,
+        }}
       >
-        All
-      </button>
-      {options.map((s) => (
-        <button
-          key={s}
-          onClick={() => onChange(s === value ? null : s)}
-          className={`px-3 py-1 text-[10px] font-bold uppercase tracking-wider duration-0 ${value === s ? "bg-secondary/10 text-secondary border border-secondary/30" : "text-on-surface-variant border border-outline-variant/20 hover:text-on-surface"}`}
+        {label}
+      </div>
+      <div
+        style={{
+          fontSize: 20,
+          fontWeight: 700,
+          color,
+          fontFamily: MONO,
+        }}
+      >
+        {value}
+      </div>
+      {sub && (
+        <div
+          style={{
+            fontSize: 12,
+            color: "rgba(235,235,245,0.3)",
+            marginTop: 4,
+            fontFamily: FONT,
+          }}
         >
-          {s}
-        </button>
-      ))}
+          {sub}
+        </div>
+      )}
     </div>
   );
 }
 
-// ── Page ──────────────────────────────────────────────────────────────────────
+interface BarTooltipProps {
+  active?: boolean;
+  payload?: { value?: number }[];
+  label?: string;
+}
+
+function DailyTooltip({ active, payload, label }: BarTooltipProps) {
+  if (!active || !payload?.length) return null;
+  const val = payload[0]?.value ?? 0;
+  return (
+    <div
+      style={{
+        background: "#2C2C2E",
+        borderRadius: 8,
+        padding: "8px 12px",
+        fontFamily: FONT,
+        fontSize: 12,
+        color: "#FFFFFF",
+        boxShadow: "0 4px 16px rgba(0,0,0,0.4)",
+      }}
+    >
+      <div style={{ color: "rgba(235,235,245,0.6)", marginBottom: 4 }}>{label}</div>
+      <div style={{ fontWeight: 700, color: Number(val) >= 0 ? "#30D158" : "#FF453A" }}>
+        {Number(val) >= 0 ? "+" : ""}${Number(val).toFixed(2)}
+      </div>
+    </div>
+  );
+}
 
 export default function AnalyticsPage() {
-  const [range, setRange]             = useState<Range>("all");
-  const [symbol, setSymbol]           = useState<string | null>(null);
-  const [kpis, setKpis]               = useState<Kpis | null>(null);
-  const [dailyPnl, setDailyPnl]       = useState<DayPnl[]>([]);
+  const [period, setPeriod] = useState<Period>("All");
+  const [symbolFilter, setSymbolFilter] = useState<string | null>(null);
+  const [kpis, setKpis] = useState<Kpis | null>(null);
+  const [dailyPnl, setDailyPnl] = useState<DayPnl[]>([]);
   const [symbolStats, setSymbolStats] = useState<SymbolStat[]>([]);
-  const [dirStats, setDirStats]       = useState<DirStat[]>([]);
-  const [closedTrades, setClosedTrades] = useState<Trade[]>([]);
-  const [loading, setLoading]           = useState(true);
+  const [tableSearch, setTableSearch] = useState("");
+  const [tablePage, setTablePage] = useState(1);
+  const [tablePageSize, setTablePageSize] = useState(10);
+  const [loading, setLoading] = useState(true);
 
   const load = useCallback(() => {
     setLoading(true);
-    const since = sinceDate(range);
+    const since = sinceDate(period);
     const params = new URLSearchParams();
     if (since) params.set("since", since);
-    if (symbol) params.set("symbol", symbol);
+    if (symbolFilter) params.set("symbol", symbolFilter);
     const qs = params.toString() ? `?${params.toString()}` : "";
     fetch(`/api/analytics${qs}`)
-      .then((r) => { if (!r.ok) throw new Error(); return r.json(); })
+      .then((r) => r.json())
       .then((d) => {
         setKpis(d.kpis ?? null);
         setDailyPnl(d.dailyPnl ?? []);
         setSymbolStats(d.symbolStats ?? []);
-        setDirStats(d.directionStats ?? []);
-        setClosedTrades(d.closedTrades ?? []);
       })
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [range, symbol]);
+  }, [period, symbolFilter]);
 
   useEffect(() => { load(); }, [load]);
 
-  // Derived — closedTrades is already filtered by the server when symbol is set
-  const filteredTrades = closedTrades;
-  const fWins    = filteredTrades.filter((t) => Number(t.pnl) > 0).length;
-  const fTotal   = filteredTrades.length;
-  const fTotalPnl = filteredTrades.reduce((s, t) => s + Number(t.pnl), 0);
-  const fAvgPnl  = fTotal > 0 ? fTotalPnl / fTotal : 0;
-  const fBest    = fTotal > 0 ? Math.max(...filteredTrades.map((t) => Number(t.pnl))) : 0;
-  const fWorst   = fTotal > 0 ? Math.min(...filteredTrades.map((t) => Number(t.pnl))) : 0;
-  const winRate  = fTotal > 0 ? (fWins / fTotal) * 100 : 0;
-  const winRateColor = winRate >= 55 ? "#00fd87" : winRate >= 45 ? "#ffb86c" : "#ff716c";
+  const winRate = kpis && kpis.total_trades > 0
+    ? (kpis.wins / kpis.total_trades) * 100
+    : 0;
+  const winRateColor =
+    winRate >= 55 ? "#30D158" : winRate >= 45 ? "#FF9F0A" : "#FF453A";
 
-  const displayKpis: Kpis | null = (symbol && kpis)
-    ? { total_trades: fTotal, wins: fWins, losses: fTotal - fWins, total_pnl: fTotalPnl, avg_pnl: fAvgPnl, best_trade: fBest, worst_trade: fWorst, avg_duration_min: kpis.avg_duration_min }
-    : kpis;
+  const equityCurveData = useMemo(() => dailyPnl.map((d) => ({ day: d.day, pnl: d.pnl })), [dailyPnl]);
 
-  const equityCurve = filteredTrades.reduce<{ date: string; cum: number }[]>((acc, t) => {
-    const prev = acc.length > 0 ? acc[acc.length - 1].cum : 0;
-    acc.push({ date: t.close_time ?? t.open_time, cum: prev + Number(t.pnl) });
-    return acc;
-  }, []);
+  const allSymbols = useMemo(
+    () => symbolStats.map((s) => s.symbol).sort(),
+    [symbolStats]
+  );
 
-  let peak = 0;
-  const drawdownCurve = equityCurve.map((p) => {
-    if (p.cum > peak) peak = p.cum;
-    return { date: p.date, drawdown: Math.min(0, peak > 0 ? ((p.cum - peak) / peak) * 100 : 0) };
-  });
+  const filteredSymbolStats = useMemo(() => {
+    const query = tableSearch.trim().toLowerCase();
+    if (!query) return symbolStats;
+    return symbolStats.filter((stat) => stat.symbol.toLowerCase().includes(query));
+  }, [symbolStats, tableSearch]);
 
-  // symbolStats and directionStats are also server-filtered when symbol is set
-  const symbolPie  = symbolStats.map((s) => ({ name: s.symbol, value: Math.abs(Number(s.total_pnl)), pnl: Number(s.total_pnl) }));
-  const symbolBars = symbolStats.map((s) => ({ symbol: s.symbol, wins: Number(s.wins), losses: Number(s.losses) }));
-  const filteredDirStats = symbol
-    ? (() => {
-        const buys  = filteredTrades.filter((t) => t.direction === "BUY");
-        const sells = filteredTrades.filter((t) => t.direction === "SELL");
-        return [...(buys.length ? [{ name: "BUY", value: buys.length }] : []),
-                ...(sells.length ? [{ name: "SELL", value: sells.length }] : [])];
-      })()
-    : dirStats.map((d) => ({ name: d.direction, value: Number(d.total) }));
+  const pagedSymbolStats = useMemo(() => {
+    const start = (tablePage - 1) * tablePageSize;
+    return filteredSymbolStats.slice(start, start + tablePageSize);
+  }, [filteredSymbolStats, tablePage, tablePageSize]);
 
-  const filteredDailyPnl = symbol
-    ? (() => {
-        const byDay: Record<string, number> = {};
-        for (const t of filteredTrades) {
-          const day = (t.close_time ?? t.open_time).slice(0, 10);
-          byDay[day] = (byDay[day] ?? 0) + Number(t.pnl);
-        }
-        return Object.entries(byDay).sort(([a],[b]) => a.localeCompare(b)).map(([day, pnl]) => ({ day, pnl, trades: 0 }));
-      })()
-    : dailyPnl;
+  useEffect(() => {
+    setTablePage(1);
+  }, [tableSearch, tablePageSize, symbolFilter]);
 
-  const allSymbols = [...new Set(closedTrades.map((t) => t.symbol))].sort();
+  useEffect(() => {
+    const totalPages = Math.max(1, Math.ceil(filteredSymbolStats.length / tablePageSize));
+    setTablePage((prev) => Math.min(prev, totalPages));
+  }, [filteredSymbolStats.length, tablePageSize]);
+
+  const PERIODS: Period[] = ["1D", "1W", "1M", "3M", "All"];
 
   return (
-    <div className="flex flex-col gap-5">
+    <div
+      style={{
+        fontFamily: FONT,
+        paddingTop: 20,
+        paddingLeft: 20,
+        paddingRight: 20,
+        paddingBottom: 40,
+        maxWidth: 1400,
+        margin: "0 auto",
+      }}
+    >
+      {/* Header */}
+      <div style={{ marginBottom: 24, display: "flex", alignItems: "flex-end", justifyContent: "space-between", flexWrap: "wrap", gap: 16 }}>
+        <h1 style={{ fontSize: 28, fontWeight: 700, color: "#FFFFFF", margin: 0 }}>
+          Analytics
+        </h1>
+        {loading && (
+          <span style={{ fontSize: 13, color: "rgba(235,235,245,0.3)" }}>
+            Loading...
+          </span>
+        )}
+      </div>
 
-      {/* ── Page Header ── */}
-      <div className="flex items-end justify-between gap-4 flex-wrap">
-        <div>
-          <span className="text-[10px] font-bold tracking-widest text-on-surface-variant uppercase block mb-1">PERFORMANCE</span>
-          <h1 className="text-3xl font-extrabold uppercase tracking-tighter">Analytics</h1>
+      {/* Period Selector */}
+      <div
+        style={{
+          display: "inline-flex",
+          background: "rgba(118,118,128,0.24)",
+          borderRadius: 10,
+          padding: 2,
+          marginBottom: 24,
+          gap: 2,
+        }}
+      >
+        {PERIODS.map((p) => (
+          <button
+            key={p}
+            onClick={() => setPeriod(p)}
+            style={{
+              padding: "6px 16px",
+              borderRadius: 8,
+              border: "none",
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: "pointer",
+              fontFamily: FONT,
+              background: period === p ? "#2C2C2E" : "transparent",
+              color: period === p ? "#FFFFFF" : "rgba(235,235,245,0.6)",
+              transition: "background 0.15s, color 0.15s",
+            }}
+          >
+            {p}
+          </button>
+        ))}
+      </div>
+
+      {/* KPI Cards Row */}
+      {kpis && (
+        <div
+          style={{
+            display: "flex",
+            gap: 12,
+            marginBottom: 24,
+            overflowX: "auto",
+            paddingBottom: 4,
+            scrollbarWidth: "none",
+          }}
+        >
+          <KpiCard
+            label="Win Rate"
+            value={`${winRate.toFixed(1)}%`}
+            sub={`${kpis.wins}W / ${kpis.losses}L`}
+            color={winRateColor}
+          />
+          <KpiCard
+            label="Total PnL"
+            value={`${Number(kpis.total_pnl) >= 0 ? "+" : ""}$${Number(kpis.total_pnl).toFixed(2)}`}
+            color={Number(kpis.total_pnl) >= 0 ? "#30D158" : "#FF453A"}
+          />
+          <KpiCard
+            label="Best Trade"
+            value={`+$${Number(kpis.best_trade).toFixed(2)}`}
+            color="#30D158"
+          />
+          <KpiCard
+            label="Worst Trade"
+            value={`$${Number(kpis.worst_trade).toFixed(2)}`}
+            color="#FF453A"
+          />
+          <KpiCard
+            label="Avg Duration"
+            value={`${Math.floor(Number(kpis.avg_duration_min))}m`}
+            sub="per trade"
+            color="rgba(235,235,245,0.6)"
+          />
+          <KpiCard
+            label="Total Trades"
+            value={String(kpis.total_trades)}
+            color="rgba(235,235,245,0.6)"
+          />
         </div>
-        <div className="flex items-center gap-4 flex-wrap">
-          {/* Range selector */}
-          <div className="flex gap-1">
-            {(["24h","7d","30d","all"] as Range[]).map((r) => (
-              <button
-                key={r}
-                onClick={() => setRange(r)}
-                className={`px-3 py-1 text-[10px] font-bold uppercase tracking-wider duration-0 ${range === r ? "bg-secondary/10 text-secondary border border-secondary/30" : "text-on-surface-variant border border-outline-variant/20 hover:text-on-surface"}`}
-              >
-                {r === "all" ? "All Time" : r}
-              </button>
-            ))}
+      )}
+
+      {/* Symbol Filter */}
+      {allSymbols.length > 0 && (
+        <div style={{ marginBottom: 24 }}>
+          <SymbolFilter
+            symbols={allSymbols}
+            selected={symbolFilter}
+            onSelect={setSymbolFilter}
+          />
+        </div>
+      )}
+
+      {/* Equity Curve */}
+      <div
+        style={{
+          background: "#1C1C1E",
+          borderRadius: 12,
+          padding: "16px 20px",
+          marginBottom: 20,
+        }}
+      >
+        <div
+          style={{
+            fontSize: 12,
+            fontWeight: 600,
+            color: "rgba(235,235,245,0.6)",
+            textTransform: "uppercase",
+            letterSpacing: "0.08em",
+            marginBottom: 12,
+          }}
+        >
+          Equity Curve
+        </div>
+        <EquityCurve data={equityCurveData} />
+      </div>
+
+      {/* Daily PnL Bar Chart */}
+      <div
+        style={{
+          background: "#1C1C1E",
+          borderRadius: 12,
+          padding: "16px 20px",
+          marginBottom: 20,
+        }}
+      >
+        <div
+          style={{
+            fontSize: 12,
+            fontWeight: 600,
+            color: "rgba(235,235,245,0.6)",
+            textTransform: "uppercase",
+            letterSpacing: "0.08em",
+            marginBottom: 12,
+          }}
+        >
+          Daily PnL
+        </div>
+        {dailyPnl.length === 0 ? (
+          <div
+            style={{
+              height: 160,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              color: "rgba(235,235,245,0.3)",
+              fontSize: 14,
+            }}
+          >
+            No data
           </div>
-          {loading && (
-            <div className="flex items-center gap-2 text-[10px] text-on-surface-variant">
-              <div className="w-3 h-3 border border-outline-variant border-t-primary-fixed rounded-full animate-spin" />
-              Loading…
+        ) : (
+          <ResponsiveContainer width="100%" height={160}>
+            <BarChart data={dailyPnl.map((d) => ({ ...d, pnl: Number(d.pnl) }))}>
+              <XAxis
+                dataKey="day"
+                tick={{ fill: "rgba(235,235,245,0.3)", fontSize: 11, fontFamily: FONT }}
+                axisLine={false}
+                tickLine={false}
+              />
+              <YAxis
+                tick={{ fill: "rgba(235,235,245,0.3)", fontSize: 11, fontFamily: FONT }}
+                axisLine={false}
+                tickLine={false}
+                width={50}
+                tickFormatter={(v: number) => `$${v}`}
+              />
+              <Tooltip content={<DailyTooltip />} />
+              <Bar dataKey="pnl" radius={[4, 4, 0, 0]}>
+                {dailyPnl.map((d, i) => (
+                  <Cell
+                    key={i}
+                    fill={Number(d.pnl) >= 0 ? "#30D158" : "#FF453A"}
+                    fillOpacity={0.85}
+                  />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        )}
+      </div>
+
+      {/* Symbol Performance Table */}
+      {symbolStats.length > 0 && (
+        <div
+          style={{
+            background: "#1C1C1E",
+            borderRadius: 12,
+            overflow: "hidden",
+          }}
+        >
+          <div
+            style={{
+              padding: "16px 20px 12px",
+              fontSize: 12,
+              fontWeight: 600,
+              color: "rgba(235,235,245,0.6)",
+              textTransform: "uppercase",
+              letterSpacing: "0.08em",
+            }}
+          >
+            Symbol Performance
+          </div>
+          <div style={{ padding: "0 12px 12px" }}>
+            <input
+              value={tableSearch}
+              onChange={(e) => setTableSearch(e.target.value)}
+              placeholder="Filter symbols..."
+              style={{
+                width: "100%",
+                height: 34,
+                borderRadius: 10,
+                border: "1px solid rgba(84,84,88,0.65)",
+                background: "rgba(118,118,128,0.2)",
+                color: "#FFFFFF",
+                padding: "0 12px",
+                fontSize: 13,
+                fontWeight: 500,
+                fontFamily: FONT,
+                outline: "none",
+              }}
+            />
+          </div>
+          <table
+            style={{ width: "100%", borderCollapse: "collapse", fontFamily: FONT }}
+          >
+            <thead>
+              <tr style={{ borderTop: "0.5px solid rgba(84,84,88,0.65)" }}>
+                {["Symbol", "Win Rate", "Trades", "Total PnL"].map((h) => (
+                  <th
+                    key={h}
+                    style={{
+                      padding: "10px 20px",
+                      textAlign: h === "Total PnL" ? "right" : "left",
+                      fontSize: 11,
+                      fontWeight: 600,
+                      letterSpacing: "0.06em",
+                      textTransform: "uppercase",
+                      color: "rgba(235,235,245,0.3)",
+                      borderBottom: "0.5px solid rgba(84,84,88,0.65)",
+                    }}
+                  >
+                    {h}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {pagedSymbolStats.map((s, idx) => {
+                const wr = s.total > 0 ? (Number(s.wins) / Number(s.total)) * 100 : 0;
+                const pnl = Number(s.total_pnl);
+                const isLast = idx === pagedSymbolStats.length - 1;
+                return (
+                  <tr key={s.symbol}>
+                    <td
+                      style={{
+                        padding: "13px 20px",
+                        fontSize: 15,
+                        fontWeight: 700,
+                        color: "#FFFFFF",
+                        borderBottom: isLast ? "none" : "0.5px solid rgba(84,84,88,0.3)",
+                      }}
+                    >
+                      {s.symbol}
+                    </td>
+                    <td
+                      style={{
+                        padding: "13px 20px",
+                        fontSize: 14,
+                        fontWeight: 600,
+                        color: wr >= 50 ? "#30D158" : "#FF453A",
+                        borderBottom: isLast ? "none" : "0.5px solid rgba(84,84,88,0.3)",
+                      }}
+                    >
+                      {wr.toFixed(0)}%
+                    </td>
+                    <td
+                      style={{
+                        padding: "13px 20px",
+                        fontSize: 14,
+                        color: "rgba(235,235,245,0.6)",
+                        borderBottom: isLast ? "none" : "0.5px solid rgba(84,84,88,0.3)",
+                      }}
+                    >
+                      {s.total}
+                    </td>
+                    <td
+                      style={{
+                        padding: "13px 20px",
+                        fontSize: 14,
+                        fontFamily: MONO,
+                        fontWeight: 700,
+                        color: pnl >= 0 ? "#30D158" : "#FF453A",
+                        textAlign: "right",
+                        borderBottom: isLast ? "none" : "0.5px solid rgba(84,84,88,0.3)",
+                      }}
+                    >
+                      {pnl >= 0 ? "+" : ""}${pnl.toFixed(2)}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          {filteredSymbolStats.length > 0 && (
+            <div style={{ padding: "0 12px 12px" }}>
+              <PaginationControls
+                page={tablePage}
+                totalItems={filteredSymbolStats.length}
+                pageSize={tablePageSize}
+                onPageChange={setTablePage}
+                onPageSizeChange={setTablePageSize}
+                label="symbols"
+              />
             </div>
           )}
         </div>
-      </div>
-
-      {/* Symbol filter */}
-      <SymbolPill value={symbol} options={allSymbols} onChange={setSymbol} />
-
-      {/* KPI rows */}
-      {displayKpis && (
-        <>
-          <div className="grid grid-cols-4 xl:grid-cols-8 gap-3">
-            <KpiCard label="Total Trades" value={String(displayKpis.total_trades)} color="#adaaaa" />
-            <KpiCard label="Win Rate"     value={`${winRate.toFixed(1)}%`} color={winRateColor} />
-            <KpiCard
-              label="Total P&L"
-              value={`${Number(displayKpis.total_pnl) >= 0 ? "+" : ""}$${Number(displayKpis.total_pnl).toFixed(2)}`}
-              color={Number(displayKpis.total_pnl) >= 0 ? "#00fd87" : "#ff716c"}
-              sub={`${displayKpis.wins}W / ${displayKpis.losses}L`}
-            />
-            <KpiCard label="Avg P&L"     value={`${Number(displayKpis.avg_pnl) >= 0 ? "+" : ""}$${Number(displayKpis.avg_pnl).toFixed(2)}`} color={Number(displayKpis.avg_pnl) >= 0 ? "#00fd87" : "#ff716c"} />
-            <KpiCard label="Best Trade"  value={`+$${Number(displayKpis.best_trade).toFixed(2)}`}  color="#00fd87" />
-            <KpiCard label="Worst Trade" value={`$${Number(displayKpis.worst_trade).toFixed(2)}`} color="#ff716c" />
-            <KpiCard label="Avg Duration" value={`${Math.floor(Number(displayKpis.avg_duration_min))}m`} color="#adaaaa" sub="per trade" />
-            <KpiCard label="Total Closed" value={String(filteredTrades.length)} color="#00d2fd" />
-          </div>
-        </>
       )}
-
-      {/* Charts row 1 */}
-      <div className="grid grid-cols-2 gap-4">
-        <ChartCard title="Cumulative P&L" accent="#00fd87">
-          {equityCurve.length < 2 ? <NoData /> : (
-            <ResponsiveContainer width="100%" height={200}>
-              <AreaChart data={equityCurve}>
-                <defs>
-                  <linearGradient id="gCum" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%"  stopColor="#00fd87" stopOpacity={0.2} />
-                    <stop offset="95%" stopColor="#00fd87" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#494847" strokeOpacity={0.2} />
-                <XAxis dataKey="date" tickFormatter={formatChartDate} tick={{ fill: "#777575", fontSize: 9, fontFamily: "JetBrains Mono" }} />
-                <YAxis tick={{ fill: "#777575", fontSize: 9, fontFamily: "JetBrains Mono" }} />
-                <Tooltip contentStyle={TOOLTIP_STYLE} labelFormatter={(l) => formatChartDate(String(l))} formatter={(v) => [`$${Number(v).toFixed(2)}`, "Cum PnL"]} />
-                <Area type="monotone" dataKey="cum" stroke="#00fd87" fill="url(#gCum)" strokeWidth={2} />
-              </AreaChart>
-            </ResponsiveContainer>
-          )}
-        </ChartCard>
-
-        <ChartCard title="Drawdown %" accent="#ff716c">
-          {drawdownCurve.length < 2 ? <NoData /> : (
-            <ResponsiveContainer width="100%" height={200}>
-              <AreaChart data={drawdownCurve}>
-                <defs>
-                  <linearGradient id="gDD" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%"  stopColor="#ff716c" stopOpacity={0.2} />
-                    <stop offset="95%" stopColor="#ff716c" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#494847" strokeOpacity={0.2} />
-                <XAxis dataKey="date" tickFormatter={formatChartDate} tick={{ fill: "#777575", fontSize: 9, fontFamily: "JetBrains Mono" }} />
-                <YAxis tick={{ fill: "#777575", fontSize: 9, fontFamily: "JetBrains Mono" }} />
-                <Tooltip contentStyle={TOOLTIP_STYLE} labelFormatter={(l) => formatChartDate(String(l))} formatter={(v) => [`${Number(v).toFixed(2)}%`, "Drawdown"]} />
-                <Area type="monotone" dataKey="drawdown" stroke="#ff716c" fill="url(#gDD)" strokeWidth={2} />
-              </AreaChart>
-            </ResponsiveContainer>
-          )}
-        </ChartCard>
-      </div>
-
-      {/* Charts row 2 */}
-      <div className="grid grid-cols-3 gap-4">
-        <ChartCard title="Daily P&L" accent="#00d2fd">
-          {filteredDailyPnl.length === 0 ? <NoData /> : (
-            <ResponsiveContainer width="100%" height={200}>
-              <BarChart data={filteredDailyPnl.map((d) => ({ ...d, pnl: Number(d.pnl) }))}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#494847" strokeOpacity={0.2} />
-                <XAxis dataKey="day" tickFormatter={formatChartDate} tick={{ fill: "#777575", fontSize: 9, fontFamily: "JetBrains Mono" }} />
-                <YAxis tick={{ fill: "#777575", fontSize: 9, fontFamily: "JetBrains Mono" }} />
-                <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v) => [`$${Number(v).toFixed(2)}`, "PnL"]} />
-                <Bar dataKey="pnl">
-                  {filteredDailyPnl.map((d, i) => <Cell key={i} fill={Number(d.pnl) >= 0 ? "#00fd87" : "#ff716c"} />)}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          )}
-        </ChartCard>
-
-        <ChartCard title="Trades by Symbol" accent="#e966ff">
-          {symbolBars.length === 0 ? <NoData /> : (
-            <ResponsiveContainer width="100%" height={200}>
-              <BarChart data={symbolBars} layout="vertical">
-                <CartesianGrid strokeDasharray="3 3" stroke="#494847" strokeOpacity={0.2} />
-                <XAxis type="number" tick={{ fill: "#777575", fontSize: 9, fontFamily: "JetBrains Mono" }} />
-                <YAxis dataKey="symbol" type="category" tick={{ fill: "#adaaaa", fontSize: 9, fontFamily: "JetBrains Mono" }} width={64} />
-                <Tooltip contentStyle={TOOLTIP_STYLE} />
-                <Legend wrapperStyle={{ fontSize: 9, fontFamily: "JetBrains Mono", color: "#adaaaa" }} />
-                <Bar dataKey="wins"   stackId="a" fill="#00fd87" name="Wins" />
-                <Bar dataKey="losses" stackId="a" fill="#ff716c" name="Losses" />
-              </BarChart>
-            </ResponsiveContainer>
-          )}
-        </ChartCard>
-
-        {/* Symbol ranking */}
-        <ChartCard title="Symbol Ranking" accent="#ffb86c">
-          {symbolStats.length === 0 ? <NoData /> : (
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="border-b border-outline-variant/20">
-                  {["Symbol","Trades","Win%","PnL"].map((h) => (
-                    <th key={h} className="pb-2 text-[9px] uppercase tracking-widest text-outline font-normal text-left last:text-right">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {symbolStats.map((s) => {
-                  const wr  = s.total > 0 ? ((Number(s.wins) / Number(s.total)) * 100).toFixed(0) : "0";
-                  const pnl = Number(s.total_pnl);
-                  return (
-                    <tr key={s.symbol} className="border-b border-outline-variant/10 hover:bg-surface-bright duration-0">
-                      <td className="py-2 text-secondary font-bold">{s.symbol}</td>
-                      <td className="py-2 text-on-surface-variant">{s.total}</td>
-                      <td className="py-2" style={{ color: Number(wr) >= 50 ? "#00fd87" : "#ff716c" }}>{wr}%</td>
-                      <td className="py-2 text-right font-bold" style={{ color: pnl >= 0 ? "#00fd87" : "#ff716c" }}>
-                        {pnl >= 0 ? "+" : ""}${pnl.toFixed(2)}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          )}
-        </ChartCard>
-      </div>
-
-      {/* Pie row */}
-      <div className="grid grid-cols-2 gap-4">
-        <ChartCard title="P&L by Symbol">
-          {symbolPie.length === 0 ? <NoData /> : (
-            <ResponsiveContainer width="100%" height={220}>
-              <PieChart>
-                <Pie data={symbolPie} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label={({ name }) => name} labelLine={{ stroke: "#777575" }}>
-                  {symbolPie.map((_, i) => <Cell key={i} fill={SYM_COLORS[i % SYM_COLORS.length]} />)}
-                </Pie>
-                <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(_v, _n, e) => [`${(e.payload?.pnl ?? 0) >= 0 ? "+" : ""}$${Number(e.payload?.pnl ?? 0).toFixed(2)}`, "PnL"]} />
-              </PieChart>
-            </ResponsiveContainer>
-          )}
-        </ChartCard>
-
-        <ChartCard title="Buy vs Sell">
-          {filteredDirStats.length === 0 ? <NoData /> : (
-            <ResponsiveContainer width="100%" height={220}>
-              <PieChart>
-                <Pie data={filteredDirStats} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label={({ name, value }) => `${name}: ${value}`} labelLine={{ stroke: "#777575" }}>
-                  <Cell fill="#00fd87" />
-                  <Cell fill="#ff716c" />
-                </Pie>
-                <Tooltip contentStyle={TOOLTIP_STYLE} />
-              </PieChart>
-            </ResponsiveContainer>
-          )}
-        </ChartCard>
-      </div>
     </div>
   );
 }

@@ -78,7 +78,10 @@
       "Bash(python -m ruff check agents/learning_agent.py agents/reflector.py utils/memory.py)",
       "Bash(python -m pytest tests/test_learning_agent.py tests/test_memory.py -v)",
       "Bash(python -m pytest tests/test_learning_agent.py -v)",
-      "Bash(python -c \"from utils.memory import AgentMemory; from agents.reflector import Reflector; print\\(''imports OK''\\)\")"
+      "Bash(python -c \"from utils.memory import AgentMemory; from agents.reflector import Reflector; print\\(''imports OK''\\)\")",
+      "Bash(.venv/Scripts/python.exe main.py)",
+      "Bash(echo \"EXIT:$?\")",
+      "Bash(grep -E \"\\\\.\\(ts|tsx\\)$\")"
     ],
     "deny": []
   },

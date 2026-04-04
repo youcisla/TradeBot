@@ -2,6 +2,10 @@
 
 const TIMEFRAMES = ["M1", "M5", "M15", "M30", "H1", "H4", "D1"];
 
+const SF: React.CSSProperties = {
+  fontFamily: `-apple-system, BlinkMacSystemFont, "SF Pro Display", system-ui, sans-serif`,
+};
+
 interface Props {
   value: string;
   onChange: (tf: string) => void;
@@ -9,7 +13,14 @@ interface Props {
 
 export default function TimeframeSelector({ value, onChange }: Props) {
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+    <div style={{
+      display: "flex",
+      alignItems: "center",
+      background: "rgba(116,116,128,0.18)",
+      borderRadius: 9,
+      padding: 2,
+      gap: 1,
+    }}>
       {TIMEFRAMES.map((tf) => {
         const active = tf === value;
         return (
@@ -17,29 +28,28 @@ export default function TimeframeSelector({ value, onChange }: Props) {
             key={tf}
             onClick={() => onChange(tf)}
             style={{
-              padding: "5px 10px",
-              fontFamily: "'JetBrains Mono', monospace",
-              fontSize: 10, fontWeight: 700, letterSpacing: "0.04em",
-              background: active ? "rgba(0,255,136,0.15)" : "transparent",
-              border: `1px solid ${active ? "rgba(0,255,136,0.4)" : "#1c1c28"}`,
-              borderRadius: 4,
-              color: active ? "#00ff88" : "#607888",
+              ...SF,
+              height: 32,
+              padding: "0 10px",
+              fontSize: 13,
+              fontWeight: active ? 600 : 400,
+              background: active ? "#2C2C2E" : "transparent",
+              border: "none",
+              borderRadius: 7,
+              color: active ? "#FFFFFF" : "rgba(235,235,245,0.4)",
               cursor: "pointer",
-              boxShadow: active ? "0 0 8px rgba(0,255,136,0.25)" : "none",
-              transition: "background 0.12s, color 0.12s, border-color 0.12s, box-shadow 0.12s",
+              boxShadow: active ? "0 1px 4px rgba(0,0,0,0.3)" : "none",
+              transition: "background 0.15s, color 0.15s, box-shadow 0.15s",
+              whiteSpace: "nowrap",
             }}
             onMouseEnter={(e) => {
               if (!active) {
-                const btn = e.currentTarget as HTMLButtonElement;
-                btn.style.color = "#c0ccd8";
-                btn.style.borderColor = "#607888";
+                (e.currentTarget as HTMLButtonElement).style.color = "rgba(235,235,245,0.7)";
               }
             }}
             onMouseLeave={(e) => {
               if (!active) {
-                const btn = e.currentTarget as HTMLButtonElement;
-                btn.style.color = "#607888";
-                btn.style.borderColor = "#1c1c28";
+                (e.currentTarget as HTMLButtonElement).style.color = "rgba(235,235,245,0.4)";
               }
             }}
           >

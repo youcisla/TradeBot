@@ -273,16 +273,24 @@ class DanialFXExpert:
             return False
 
         if signal.direction == "BUY":
-            # Retracement from high: golden zone sits between 61.8% and 70.5%
-            # measured from the top downward
-            fib_top = swing_high - rng * self._FIBO_LOW    # higher price
-            fib_bot = swing_high - rng * self._FIBO_HIGH   # lower price
-            return fib_bot <= signal.entry_price <= fib_top
+            # Primary check: classic Fibonacci 61.8%–70.5% retracement from high
+            fib_top = swing_high - rng * self._FIBO_LOW
+            fib_bot = swing_high - rng * self._FIBO_HIGH
+            if fib_bot <= signal.entry_price <= fib_top:
+                return True
+            # ICT extension: entry in the lower 30% of range = discount zone
+            # (ICT limit entries at FVG CE / OB midpoint in discount, not retracements)
+            discount_ceil = swing_low + rng * 0.30
+            return signal.entry_price <= discount_ceil
         else:
-            # Retracement from low
+            # Primary check: classic Fibonacci retracement from low
             fib_bot = swing_low + rng * self._FIBO_LOW
             fib_top = swing_low + rng * self._FIBO_HIGH
-            return fib_bot <= signal.entry_price <= fib_top
+            if fib_bot <= signal.entry_price <= fib_top:
+                return True
+            # ICT extension: entry in the upper 30% of range = premium zone
+            premium_floor = swing_high - rng * 0.30
+            return signal.entry_price >= premium_floor
 
     def _sd_zone_aligned(self, signal: Signal, context: "MarketContext") -> bool:
         """Supply/Demand zone: 3+ candles with small bodies (consolidation)

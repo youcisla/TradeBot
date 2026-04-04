@@ -800,19 +800,23 @@ def _run_iteration(
             continue
 
         if status == "error":
-            if is_ipc:
-                ipc_fail_symbols.append(symbol)
+            is_stuck_quote = bool(err_str) and "Stuck quote" in err_str
+
+            if is_ipc or is_stuck_quote:
+                if is_ipc:
+                    ipc_fail_symbols.append(symbol)
                 count = symbol_fail_count.get(symbol, 0) + 1
                 symbol_fail_count[symbol] = count
                 if count >= symbol_max_fails:
                     symbol_disabled_until[symbol] = now_mono + symbol_disable_secs
+                    fail_label = "IPC" if is_ipc else "stuck-quote"
                     logger.warning(
-                        "Auto-disabling %s for 1h after %d consecutive IPC failures",
-                        symbol, count,
+                        "Auto-disabling %s for 1h after %d consecutive %s failures",
+                        symbol, count, fail_label,
                     )
                     log_agent.record(
                         "market",
-                        f"{symbol} auto-disabled for 1h — {count} consecutive IPC failures",
+                        f"{symbol} auto-disabled for 1h — {count} consecutive {fail_label} failures",
                     )
                     try:
                         from datetime import timedelta

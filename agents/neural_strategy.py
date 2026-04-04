@@ -61,17 +61,30 @@ class NeuralStrategy(BaseStrategy):
 
         direction, confidence = result
 
-        # ── MTF D1 veto: D1 must not directly contradict the signal ──────
-        # D1 bearish + BUY signal = trading against the daily trend → skip
+        # ── MTF D1 veto: veto only when BOTH D1 and H4 oppose the signal ──
+        # A solo D1 opposition is a regime context issue (ICT trades against
+        # D1 all the time — selling into premium, buying at discount).
+        # Only veto when the two higher timeframes agree against the trade.
         if settings.MTF_D1_VETO:
             d1 = getattr(context, "d1_trend", "neutral")
-            if (direction == "BUY"  and d1 == "bearish") or \
-               (direction == "SELL" and d1 == "bullish"):
+            h4 = getattr(context, "h4_trend", "neutral")
+            d1_against = (direction == "BUY" and d1 == "bearish") or \
+                         (direction == "SELL" and d1 == "bullish")
+            h4_against = (direction == "BUY" and h4 == "bearish") or \
+                         (direction == "SELL" and h4 == "bullish")
+            if d1_against and h4_against:
                 logger.info(
-                    "[neural] %s %s vetoed — D1 trend (%s) contradicts signal",
-                    direction, context.symbol, d1,
+                    "[neural] %s %s vetoed — D1 (%s) + H4 (%s) both contradict signal",
+                    direction, context.symbol, d1, h4,
                 )
                 return None
+            if d1_against:
+                # Solo D1 opposition: penalise confidence instead of vetoing
+                confidence -= 0.06
+                logger.debug(
+                    "[neural] %s %s D1 (%s) opposes — confidence -0.06 (H4=%s supports)",
+                    direction, context.symbol, d1, h4,
+                )
 
         # ── MTF alignment boost/penalty ───────────────────────────────────
         mtf_bias      = getattr(context, "mtf_bias",      "unknown")

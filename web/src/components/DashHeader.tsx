@@ -1,74 +1,193 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { nowParis } from "@/lib/time";
 
-const QUICK_LINKS = [
-  { href: "/dashboard", label: "Overview" },
-  { href: "/dashboard/trades", label: "Trades" },
-  { href: "/dashboard/analytics", label: "Analytics" },
-  { href: "/dashboard/strategy", label: "Strategy" },
-  { href: "/dashboard/settings", label: "Settings" },
-];
+interface StatusData {
+  state: string;
+  equity: number;
+  daily_pnl: number;
+  balance: number;
+}
 
 export default function DashHeader() {
-  const [localTime, setLocalTime] = useState("--:--:--");
-  const pathname = usePathname();
+  const [status, setStatus] = useState<StatusData | null>(null);
 
   useEffect(() => {
-    const tick = () => setLocalTime(nowParis());
-    tick();
-    const id = setInterval(tick, 1000);
-    return () => clearInterval(id);
+    let active = true;
+    const load = () =>
+      fetch("/api/status")
+        .then((r) => { if (!r.ok) throw new Error(r.statusText); return r.json(); })
+        .then((data: StatusData) => { if (active) setStatus(data); })
+        .catch(() => {});
+    load();
+    const id = setInterval(load, 8_000);
+    return () => { active = false; clearInterval(id); };
   }, []);
 
+  const isRunning = status?.state === "running";
+  const equity = status ? Number(status.equity) : null;
+  const dailyPnl = status ? Number(status.daily_pnl) : null;
+  const pnlPositive = dailyPnl !== null && dailyPnl >= 0;
+
   return (
-    <header className="fixed top-0 left-0 w-full z-50 backdrop-blur-md border-b border-outline-variant/20 bg-[#090909cc]">
-      <div className="flex items-center justify-between px-3 sm:px-4 lg:px-6 py-2.5 gap-3">
-        <div className="flex items-center gap-3 min-w-0">
-          <div className="w-7 h-7 rounded-md border border-primary-fixed/35 bg-primary-fixed/10 flex items-center justify-center shrink-0">
-            <span className="material-symbols-outlined text-primary-fixed" style={{ fontSize: 15 }}>
-              network_node
+    <>
+      <header
+        style={{
+          position: "fixed",
+          top: 0,
+          left: 0,
+          right: 0,
+          height: 52,
+          zIndex: 100,
+          background: "rgba(28,28,30,0.9)",
+          backdropFilter: "blur(20px) saturate(180%)",
+          WebkitBackdropFilter: "blur(20px) saturate(180%)",
+          borderBottom: "0.5px solid rgba(84,84,88,0.5)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          padding: "0 16px",
+          fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", system-ui, sans-serif',
+        }}
+      >
+        {/* Left: wordmark + status */}
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <span
+            style={{
+              fontSize: 17,
+              fontWeight: 700,
+              color: "#FFFFFF",
+              letterSpacing: "-0.01em",
+            }}
+          >
+            NeuralFX
+          </span>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              padding: "3px 8px",
+              background: isRunning ? "rgba(48,209,88,0.12)" : "rgba(142,142,147,0.15)",
+              borderRadius: 6,
+            }}
+          >
+            <span
+              style={{
+                width: 6,
+                height: 6,
+                borderRadius: "50%",
+                background: isRunning ? "#30D158" : "#8E8E93",
+                display: "inline-block",
+                boxShadow: isRunning ? "0 0 6px #30D158" : undefined,
+                animation: isRunning ? "headerDotPulse 2s ease-in-out infinite" : undefined,
+              }}
+            />
+            <span
+              style={{
+                fontSize: 12,
+                fontWeight: 600,
+                color: isRunning ? "#30D158" : "#8E8E93",
+                letterSpacing: "0.02em",
+              }}
+            >
+              {status ? (isRunning ? "LIVE" : status.state?.toUpperCase() ?? "—") : "—"}
             </span>
           </div>
-          <div className="min-w-0">
-            <p className="text-[9px] tracking-[0.16em] uppercase text-on-surface-variant font-semibold">NeuralFX Control Surface</p>
-            <p className="text-[14px] font-bold text-on-surface truncate">Multi-Agent Trading Dashboard</p>
-          </div>
         </div>
 
-        <nav className="hidden xl:flex items-center gap-1 bg-surface-container-low/70 border border-outline-variant/20 rounded-lg p-1">
-          {QUICK_LINKS.map((item) => {
-            const active = item.href === "/dashboard" ? pathname === "/dashboard" : pathname.startsWith(item.href);
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={[
-                  "px-3 py-1.5 rounded-md text-[11px] font-semibold",
-                  active
-                    ? "bg-primary-fixed/15 text-primary-fixed"
-                    : "text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high/70",
-                ].join(" ")}
+        {/* Right: equity, PnL, avatar */}
+        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+          {equity !== null && (
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 1 }}>
+              <span
+                style={{
+                  fontSize: 11,
+                  color: "rgba(235,235,245,0.4)",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.05em",
+                }}
               >
-                {item.label}
-              </Link>
-            );
-          })}
-        </nav>
+                Equity
+              </span>
+              <span
+                style={{
+                  fontSize: 15,
+                  fontWeight: 600,
+                  color: "#FFFFFF",
+                  fontFamily: "ui-monospace, 'SF Mono', monospace",
+                  letterSpacing: "-0.01em",
+                }}
+              >
+                {equity.toLocaleString("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2 })}
+              </span>
+            </div>
+          )}
 
-        <div className="flex items-center gap-2 shrink-0">
-          <div className="hidden sm:flex items-center gap-2 px-2.5 py-1.5 rounded-md border border-secondary-fixed/30 bg-secondary-fixed/10">
-            <span className="w-1.5 h-1.5 rounded-full bg-secondary-fixed animate-pulse" />
-            <span className="text-[10px] tracking-wider uppercase font-semibold text-secondary-fixed">Live</span>
-          </div>
-          <div className="px-2.5 py-1.5 rounded-md border border-primary-fixed/30 bg-primary-fixed/10 text-primary-fixed font-mono text-[11px]">
-            {localTime}
-          </div>
+          {dailyPnl !== null && (
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "flex-end",
+                gap: 1,
+              }}
+            >
+              <span
+                style={{
+                  fontSize: 11,
+                  color: "rgba(235,235,245,0.4)",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.05em",
+                }}
+              >
+                Daily P&L
+              </span>
+              <span
+                style={{
+                  fontSize: 15,
+                  fontWeight: 600,
+                  color: pnlPositive ? "#30D158" : "#FF453A",
+                  fontFamily: "ui-monospace, 'SF Mono', monospace",
+                  letterSpacing: "-0.01em",
+                }}
+              >
+                {pnlPositive ? "+" : ""}
+                {dailyPnl.toFixed(2)}
+              </span>
+            </div>
+          )}
+
+          {/* Avatar / settings button */}
+          <button
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: "50%",
+              background: "rgba(120,120,128,0.36)",
+              border: "none",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              color: "rgba(235,235,245,0.6)",
+              flexShrink: 0,
+            }}
+            aria-label="Settings"
+          >
+            <span className="material-symbols-outlined" style={{ fontSize: 16 }}>
+              person
+            </span>
+          </button>
         </div>
-      </div>
-    </header>
+      </header>
+
+      <style>{`
+        @keyframes headerDotPulse {
+          0%, 100% { opacity: 1; box-shadow: 0 0 6px #30D158; }
+          50% { opacity: 0.5; box-shadow: 0 0 12px #30D158; }
+        }
+      `}</style>
+    </>
   );
 }

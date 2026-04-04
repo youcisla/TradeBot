@@ -1,9 +1,16 @@
 import { NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
 import { insertCommand } from "@/lib/db";
+import { authOptions } from "@/lib/auth";
 
-const ALLOWED_COMMANDS = new Set(["kill", "pause", "resume", "close_trade"]);
+const ALLOWED_COMMANDS = new Set(["kill", "pause", "resume", "close_trade", "close_all"]);
 
 export async function POST(request: Request) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const body = await request.json();
   const command = String(body.command ?? "");
   if (!ALLOWED_COMMANDS.has(command)) {
@@ -11,5 +18,6 @@ export async function POST(request: Request) {
   }
 
   await insertCommand(command, body.payload ?? undefined);
-  return NextResponse.json({ ok: true, command });
+  const username = String((session.user as Record<string, unknown>).username ?? session.user.name ?? "unknown");
+  return NextResponse.json({ ok: true, command, executedBy: username });
 }

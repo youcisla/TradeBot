@@ -2,234 +2,289 @@
 
 import { useEffect, useRef, useState } from "react";
 
-type BotStatus = "running" | "paused" | "unknown";
+// ── Types ─────────────────────────────────────────────────────────────────────
+
+interface Props {
+  onCommand?: (cmd: string) => void;
+}
 
 interface Feedback {
   msg: string;
-  ok: boolean;
+  ok:  boolean;
 }
 
-const COMMANDS = [
+// ── Icons (inline SVG) ────────────────────────────────────────────────────────
+
+function IconPause() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+      <rect x="6"  y="4" width="4" height="16" rx="1.5" />
+      <rect x="14" y="4" width="4" height="16" rx="1.5" />
+    </svg>
+  );
+}
+
+function IconPlay() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+      <polygon points="5,3 19,12 5,21" />
+    </svg>
+  );
+}
+
+function IconStop() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+      <rect x="4" y="4" width="16" height="16" rx="2" />
+    </svg>
+  );
+}
+
+function IconClose() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+      <line x1="18" y1="6"  x2="6"  y2="18" />
+      <line x1="6"  y1="6"  x2="18" y2="18" />
+    </svg>
+  );
+}
+
+function IconSpinner() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+      <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83">
+        <animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur="0.75s" repeatCount="indefinite" />
+      </path>
+    </svg>
+  );
+}
+
+// ── Button definitions ────────────────────────────────────────────────────────
+
+const ACTIONS = [
   {
-    cmd:   "pause",
-    label: "PAUSE",
-    icon: (
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
-        <rect x="6" y="4" width="4" height="16" rx="1" />
-        <rect x="14" y="4" width="4" height="16" rx="1" />
-      </svg>
-    ),
-    color:   "#f5c518",
+    cmd:     "pause",
+    label:   "Pause",
+    icon:    <IconPause />,
+    color:   "#FF9F0A",
+    bg:      "rgba(255,159,10,0.12)",
+    border:  "rgba(255,159,10,0.25)",
     danger:  false,
   },
   {
-    cmd:   "resume",
-    label: "RESUME",
-    icon: (
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
-        <polygon points="5,3 19,12 5,21" />
-      </svg>
-    ),
-    color:   "#00ff88",
+    cmd:     "resume",
+    label:   "Resume",
+    icon:    <IconPlay />,
+    color:   "#30D158",
+    bg:      "rgba(48,209,88,0.12)",
+    border:  "rgba(48,209,88,0.25)",
     danger:  false,
   },
   {
-    cmd:   "kill",
-    label: "KILL ALL",
-    icon: (
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-        <line x1="18" y1="6" x2="6" y2="18" />
-        <line x1="6" y1="6" x2="18" y2="18" />
-      </svg>
-    ),
-    color:   "#ff4455",
+    cmd:     "kill",
+    label:   "Kill Bot",
+    icon:    <IconStop />,
+    color:   "#FF453A",
+    bg:      "rgba(255,69,58,0.12)",
+    border:  "rgba(255,69,58,0.25)",
+    danger:  true,
+  },
+  {
+    cmd:     "close_all",
+    label:   "Close All",
+    icon:    <IconClose />,
+    color:   "#FF453A",
+    bg:      "rgba(255,69,58,0.12)",
+    border:  "rgba(255,69,58,0.25)",
     danger:  true,
   },
 ] as const;
 
-export default function CommandPanel() {
-  const [loading,    setLoading]    = useState<string | null>(null);
-  const [feedback,   setFeedback]   = useState<Feedback | null>(null);
-  const [botStatus,  setBotStatus]  = useState<BotStatus>("unknown");
-  const [armKill,    setArmKill]    = useState(false);
+// ── Keyframes ─────────────────────────────────────────────────────────────────
 
-  const feedTO  = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const armTO   = useRef<ReturnType<typeof setTimeout> | null>(null);
+const KEYFRAMES = `
+  @keyframes toastFadeIn {
+    from { opacity: 0; transform: translateY(4px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes statusPulse {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0.4; }
+  }
+`;
 
-  // Poll bot status from /api/status
+// ── Component ─────────────────────────────────────────────────────────────────
+
+export default function CommandPanel({ onCommand }: Props) {
+  const [loading,   setLoading]   = useState<string | null>(null);
+  const [feedback,  setFeedback]  = useState<Feedback | null>(null);
+  const [botState,  setBotState]  = useState<"running" | "paused" | "unknown">("unknown");
+  const feedTO                    = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Poll bot state
   useEffect(() => {
-    async function fetchStatus() {
+    let active = true;
+    const poll = async () => {
       try {
-        const res  = await fetch("/api/status");
-        const data = await res.json();
-        const s    = (data?.status ?? data?.bot_status ?? "").toLowerCase();
-        if (s === "paused")  setBotStatus("paused");
-        else if (s === "running" || s === "active") setBotStatus("running");
-        else setBotStatus("unknown");
-      } catch { /* ignore */ }
-    }
-    fetchStatus();
-    const id = setInterval(fetchStatus, 5000);
-    return () => clearInterval(id);
+        const r = await fetch("/api/status");
+        const d = await r.json();
+        if (!active) return;
+        const s = (d?.state ?? d?.status ?? "").toLowerCase();
+        if (s === "running" || s === "active") setBotState("running");
+        else if (s === "paused") setBotState("paused");
+        else setBotState("unknown");
+      } catch { /* silent */ }
+    };
+    poll();
+    const id = setInterval(poll, 5_000);
+    return () => { active = false; clearInterval(id); };
   }, []);
 
   function showFeedback(msg: string, ok: boolean) {
     setFeedback({ msg, ok });
     if (feedTO.current) clearTimeout(feedTO.current);
-    feedTO.current = setTimeout(() => setFeedback(null), 4000);
+    feedTO.current = setTimeout(() => setFeedback(null), 4_000);
   }
 
-  async function send(command: string) {
-    // KILL requires arm → confirm two-tap
-    if (command === "kill" && !armKill) {
-      setArmKill(true);
-      if (armTO.current) clearTimeout(armTO.current);
-      armTO.current = setTimeout(() => setArmKill(false), 3500);
-      return;
-    }
-    setArmKill(false);
-    setLoading(command);
+  async function send(cmd: string, danger: boolean) {
+    if (danger && !window.confirm(`Are you sure you want to ${cmd.replace("_", " ")}?`)) return;
+    setLoading(cmd);
     try {
-      const res  = await fetch("/api/commands", {
+      const r = await fetch("/api/commands", {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ command }),
+        body:    JSON.stringify({ command: cmd }),
       });
-      const data = await res.json();
-      if (data.ok) {
-        showFeedback(`✓ ${command} acknowledged`, true);
-        if (command === "pause")  setBotStatus("paused");
-        if (command === "resume") setBotStatus("running");
+      const d = await r.json();
+      if (d?.ok !== false) {
+        showFeedback(`${cmd} acknowledged`, true);
+        if (cmd === "pause")  setBotState("paused");
+        if (cmd === "resume") setBotState("running");
+        onCommand?.(cmd);
       } else {
-        showFeedback(`✗ ${data.error ?? "error"}`, false);
+        showFeedback(d.error ?? "Command failed", false);
       }
     } catch {
-      showFeedback("✗ network error", false);
+      showFeedback("Network error", false);
     } finally {
       setLoading(null);
     }
   }
 
-  const statusColor =
-    botStatus === "running" ? "#00ff88"
-    : botStatus === "paused" ? "#f5c518"
-    : "#607888";
+  const stateColor =
+    botState === "running" ? "#30D158"
+    : botState === "paused" ? "#FF9F0A"
+    : "#8E8E93";
 
-  const statusLabel =
-    botStatus === "running" ? "RUNNING"
-    : botStatus === "paused" ? "PAUSED"
-    : "UNKNOWN";
+  const stateLabel =
+    botState === "running" ? "Running"
+    : botState === "paused" ? "Paused"
+    : "Unknown";
 
   return (
     <div style={{
-      background: "#0a0a12", border: "1px solid #1c1c28",
-      borderTop: "2px solid #1c1c28",
-      borderRadius: 8, padding: "14px 16px",
-      display: "flex", flexDirection: "column", gap: 12,
+      background:    "#1C1C1E",
+      borderRadius:  12,
+      padding:       16,
+      fontFamily:    '-apple-system, BlinkMacSystemFont, "SF Pro Display", system-ui, sans-serif',
     }}>
+      <style>{KEYFRAMES}</style>
 
-      {/* Header + status */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <span style={{
-          fontFamily: "'JetBrains Mono', monospace",
-          fontSize: 9, fontWeight: 700, letterSpacing: "0.18em",
-          textTransform: "uppercase", color: "#607888",
-        }}>
-          Command Panel
+      {/* Header row */}
+      <div style={{
+        display:        "flex",
+        alignItems:     "center",
+        justifyContent: "space-between",
+        marginBottom:   16,
+      }}>
+        <span style={{ fontSize: 15, fontWeight: 700, color: "#FFFFFF" }}>
+          Bot Controls
         </span>
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <span
-            style={{
-              display: "inline-block",
-              width: 7,
-              height: 7,
-              borderRadius: "50%",
-              background: statusColor,
-              boxShadow: botStatus !== "unknown" ? `0 0 6px ${statusColor}` : undefined,
-              animation: botStatus === "running" ? "cpulse 2s ease-in-out infinite" : undefined,
-            }}
-          />
-          <span style={{ fontSize: 10, color: statusColor, fontFamily: "'JetBrains Mono', monospace", letterSpacing: 1 }}>
-            {statusLabel}
+          <span style={{
+            width:        7,
+            height:       7,
+            borderRadius: "50%",
+            background:   stateColor,
+            display:      "inline-block",
+            flexShrink:   0,
+            animation:    botState === "running" ? "statusPulse 2s ease-in-out infinite" : undefined,
+          }} />
+          <span style={{ fontSize: 13, color: stateColor, fontWeight: 600 }}>
+            {stateLabel}
           </span>
         </div>
       </div>
 
-      {/* Buttons */}
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        {COMMANDS.map((b) => {
-          const isLoading = loading === b.cmd;
-          const isArmed   = b.cmd === "kill" && armKill;
-          const bg        = isArmed ? b.color : "transparent";
-          const textColor = isArmed ? "#000" : b.color;
-          const border    = b.color;
+      {/* 2×2 button grid */}
+      <div style={{
+        display:             "grid",
+        gridTemplateColumns: "1fr 1fr",
+        gap:                 10,
+      }}>
+        {ACTIONS.map((action) => {
+          const isLoading = loading === action.cmd;
+          const disabled  = loading !== null;
 
           return (
             <button
-              key={b.cmd}
-              disabled={loading !== null}
-              onClick={() => send(b.cmd)}
-              title={isArmed ? "Click again to confirm" : undefined}
+              key={action.cmd}
+              disabled={disabled}
+              onClick={() => !disabled && send(action.cmd, action.danger)}
               style={{
-                display:         "flex",
-                alignItems:      "center",
-                gap:             6,
-                padding:         "5px 14px",
-                border:          `1px solid ${border}`,
-                borderRadius:    4,
-                background:      bg,
-                color:           textColor,
-                fontSize:        11,
-                fontFamily:      "'JetBrains Mono', monospace",
-                fontWeight:      700,
-                letterSpacing:   1,
-                cursor:          loading !== null ? "not-allowed" : "pointer",
-                opacity:         loading !== null && !isLoading ? 0.35 : 1,
-                transition:      "background 0.2s, color 0.2s, box-shadow 0.2s",
-                boxShadow:       isArmed ? `0 0 10px ${b.color}` : undefined,
-                textTransform:   "uppercase",
+                display:        "flex",
+                flexDirection:  "column",
+                alignItems:     "center",
+                justifyContent: "center",
+                gap:            6,
+                height:         56,
+                background:     disabled && !isLoading ? "rgba(44,44,46,0.5)" : action.bg,
+                border:         `0.5px solid ${disabled && !isLoading ? "rgba(84,84,88,0.3)" : action.border}`,
+                borderRadius:   10,
+                color:          disabled && !isLoading ? "rgba(235,235,245,0.25)" : action.color,
+                cursor:         disabled ? "not-allowed" : "pointer",
+                fontSize:       13,
+                fontWeight:     600,
+                fontFamily:     "inherit",
+                transition:     "opacity 0.15s, transform 0.1s",
+                opacity:        disabled && !isLoading ? 0.5 : 1,
+              }}
+              onMouseEnter={(e) => {
+                if (!disabled) (e.currentTarget as HTMLButtonElement).style.opacity = "0.75";
+              }}
+              onMouseLeave={(e) => {
+                (e.currentTarget as HTMLButtonElement).style.opacity = disabled && !isLoading ? "0.5" : "1";
+              }}
+              onMouseDown={(e) => {
+                if (!disabled) (e.currentTarget as HTMLButtonElement).style.transform = "scale(0.97)";
+              }}
+              onMouseUp={(e) => {
+                (e.currentTarget as HTMLButtonElement).style.transform = "scale(1)";
               }}
             >
-              {isLoading ? (
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                  <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83">
-                    <animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur="0.7s" repeatCount="indefinite" />
-                  </path>
-                </svg>
-              ) : b.icon}
-              {isArmed ? "CONFIRM?" : b.label}
+              {isLoading ? <IconSpinner /> : action.icon}
+              <span>{isLoading ? "..." : action.label}</span>
             </button>
           );
         })}
       </div>
 
-      {/* Arm countdown hint */}
-      {armKill && (
-        <div style={{ fontSize: 10, color: "#ff4455", fontFamily: "'JetBrains Mono', monospace", letterSpacing: 0.5 }}>
-          ⚠ Click CONFIRM? again to close all trades — arms for 3.5 s
-        </div>
-      )}
-
-      {/* Feedback */}
+      {/* Feedback toast */}
       {feedback && (
-        <div
-          style={{
-            fontSize:    11,
-            fontFamily:  "'JetBrains Mono', monospace",
-            color:       feedback.ok ? "#00ff88" : "#ff4455",
-            borderLeft:  `2px solid ${feedback.ok ? "#00ff88" : "#ff4455"}`,
-            paddingLeft: 8,
-            transition:  "opacity 0.3s",
-            letterSpacing: 0.3,
-          }}
-        >
-          {feedback.msg}
+        <div style={{
+          marginTop:    12,
+          padding:      "10px 14px",
+          background:   feedback.ok ? "rgba(48,209,88,0.12)" : "rgba(255,69,58,0.12)",
+          borderRadius: 8,
+          border:       `0.5px solid ${feedback.ok ? "rgba(48,209,88,0.3)" : "rgba(255,69,58,0.3)"}`,
+          fontSize:     13,
+          fontWeight:   500,
+          color:        feedback.ok ? "#30D158" : "#FF453A",
+          animation:    "toastFadeIn 0.2s ease",
+        }}>
+          {feedback.ok ? "✓ " : "✗ "}{feedback.msg}
         </div>
       )}
-
-      <style>{`
-        @keyframes cpulse { 0%,100%{opacity:1} 50%{opacity:0.35} }
-      `}</style>
     </div>
   );
 }

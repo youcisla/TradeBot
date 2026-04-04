@@ -74,7 +74,6 @@ export default function TradingChart({ symbol, timeframe, count = 500 }: Props) 
   const lastTimeRef = useRef<number>(0);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [status, setStatus] = useState<"loading" | "ok" | "error">("loading");
-  // Ref mirrors state so interval callbacks can read current value (closures capture stale state)
   const statusRef = useRef<"loading" | "ok" | "error">("loading");
   const errorReasonRef = useRef<"server_down" | "no_data">("server_down");
   const setStatusSync = (s: "loading" | "ok" | "error") => {
@@ -82,7 +81,6 @@ export default function TradingChart({ symbol, timeframe, count = 500 }: Props) 
     setStatus(s);
   };
 
-  // Fetch candles from API
   const fetchCandles = useCallback(async () => {
     try {
       const res = await fetch(
@@ -95,7 +93,6 @@ export default function TradingChart({ symbol, timeframe, count = 500 }: Props) 
     }
   }, [symbol, timeframe, count]);
 
-  // Fetch trade overlays
   const fetchOverlays = useCallback(async () => {
     try {
       const res = await fetch(
@@ -111,7 +108,6 @@ export default function TradingChart({ symbol, timeframe, count = 500 }: Props) 
     }
   }, [symbol]);
 
-  // Fetch Fibonacci levels
   const fetchFibonacci = useCallback(async () => {
     try {
       const res = await fetch(
@@ -130,7 +126,6 @@ export default function TradingChart({ symbol, timeframe, count = 500 }: Props) 
   useEffect(() => {
     if (!containerRef.current) return;
 
-    // Clean up previous chart
     if (chartRef.current) {
       chartRef.current.remove();
       chartRef.current = null;
@@ -138,38 +133,38 @@ export default function TradingChart({ symbol, timeframe, count = 500 }: Props) 
 
     const chart = createChart(containerRef.current, {
       layout: {
-        background: { type: ColorType.Solid, color: "#0a0a0a" },
-        textColor: "#00cc33",
-        fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+        background: { type: ColorType.Solid, color: "#1C1C1E" },
+        textColor: "rgba(235,235,245,0.5)",
+        fontFamily: `-apple-system, BlinkMacSystemFont, "SF Pro Display", system-ui, sans-serif`,
         fontSize: 11,
       },
       grid: {
-        vertLines: { color: "#1a1a1a" },
-        horzLines: { color: "#1a1a1a" },
+        vertLines: { color: "rgba(84,84,88,0.2)" },
+        horzLines: { color: "rgba(84,84,88,0.2)" },
       },
       crosshair: {
         mode: CrosshairMode.Normal,
-        vertLine: { color: "#00ff8880", labelBackgroundColor: "#111111" },
-        horzLine: { color: "#00ff8880", labelBackgroundColor: "#111111" },
+        vertLine: { color: "rgba(10,132,255,0.6)", labelBackgroundColor: "#2C2C2E" },
+        horzLine: { color: "rgba(10,132,255,0.6)", labelBackgroundColor: "#2C2C2E" },
       },
       rightPriceScale: {
-        borderColor: "#1a1a1a",
+        borderColor: "rgba(84,84,88,0.3)",
         scaleMargins: { top: 0.1, bottom: 0.25 },
       },
       timeScale: {
-        borderColor: "#1a1a1a",
+        borderColor: "rgba(84,84,88,0.3)",
         timeVisible: true,
         secondsVisible: false,
       },
     });
 
     const candleSeries = chart.addCandlestickSeries({
-      upColor: "#00ff88",
-      downColor: "#ff4444",
-      borderUpColor: "#00ff88",
-      borderDownColor: "#ff4444",
-      wickUpColor: "#00cc33",
-      wickDownColor: "#cc3333",
+      upColor: "#30D158",
+      downColor: "#FF453A",
+      borderUpColor: "#30D158",
+      borderDownColor: "#FF453A",
+      wickUpColor: "#30D158",
+      wickDownColor: "#FF453A",
     });
 
     const volumeSeries = chart.addHistogramSeries({
@@ -184,7 +179,6 @@ export default function TradingChart({ symbol, timeframe, count = 500 }: Props) 
     candleSeriesRef.current = candleSeries;
     volumeSeriesRef.current = volumeSeries;
 
-    // Handle resize
     const ro = new ResizeObserver((entries) => {
       for (const entry of entries) {
         const { width, height } = entry.contentRect;
@@ -199,7 +193,7 @@ export default function TradingChart({ symbol, timeframe, count = 500 }: Props) 
       chart.remove();
       chartRef.current = null;
     };
-  }, []); // Mount once
+  }, []);
 
   // Load data when symbol/timeframe changes
   useEffect(() => {
@@ -211,7 +205,6 @@ export default function TradingChart({ symbol, timeframe, count = 500 }: Props) 
     let active = true;
     lastTimeRef.current = 0;
 
-    // Clear previous interval
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
       intervalRef.current = null;
@@ -219,7 +212,6 @@ export default function TradingChart({ symbol, timeframe, count = 500 }: Props) 
 
     const loadCandles = async (candles: CandleRaw[]) => {
       try {
-        // Sort ascending + deduplicate — LWC throws if timestamps are not strictly ascending
         const sorted = candles
           .filter((c) => c.time > 0)
           .sort((a, b) => a.time - b.time)
@@ -241,7 +233,7 @@ export default function TradingChart({ symbol, timeframe, count = 500 }: Props) 
         const volumeData: HistogramData<Time>[] = sorted.map((c) => ({
           time: c.time as Time,
           value: c.volume,
-          color: c.close >= c.open ? "#00ff8830" : "#ff444430",
+          color: c.close >= c.open ? "rgba(48,209,88,0.25)" : "rgba(255,69,58,0.25)",
         }));
         candleSeries.setData(candleData);
         volumeSeries.setData(volumeData);
@@ -272,10 +264,8 @@ export default function TradingChart({ symbol, timeframe, count = 500 }: Props) 
 
       await loadCandles(candles);
 
-      // Load trade overlays
       const overlays = await fetchOverlays();
       if (overlays && active) {
-        // Apply markers
         if (overlays.markers.length > 0) {
           const sorted = overlays.markers
             .filter((m) => m.time > 0)
@@ -290,7 +280,6 @@ export default function TradingChart({ symbol, timeframe, count = 500 }: Props) 
           candleSeries.setMarkers(sorted);
         }
 
-        // Apply price lines for open trades
         for (const pl of overlays.priceLines) {
           candleSeries.createPriceLine({
             price: pl.price,
@@ -303,17 +292,15 @@ export default function TradingChart({ symbol, timeframe, count = 500 }: Props) 
         }
       }
 
-      // Load Fibonacci levels
       const fibData = await fetchFibonacci();
       if (fibData && active) {
-        // Golden Zone — amber highlight lines
         if (fibData.golden_zone) {
           const gzLabel =
             (fibData.confluence.gz_fvg ? " + CE" : "") +
             (fibData.confluence.gz_ob ? " + OB" : "");
           candleSeries.createPriceLine({
             price: fibData.golden_zone.top,
-            color: "#f59e0b",
+            color: "#FF9F0A",
             lineWidth: 2 as 1 | 2 | 3 | 4,
             lineStyle: LineStyle.Solid,
             axisLabelVisible: true,
@@ -321,7 +308,7 @@ export default function TradingChart({ symbol, timeframe, count = 500 }: Props) 
           });
           candleSeries.createPriceLine({
             price: fibData.golden_zone.bottom,
-            color: "#f59e0b",
+            color: "#FF9F0A",
             lineWidth: 2 as 1 | 2 | 3 | 4,
             lineStyle: LineStyle.Solid,
             axisLabelVisible: true,
@@ -329,12 +316,11 @@ export default function TradingChart({ symbol, timeframe, count = 500 }: Props) 
           });
         }
 
-        // Individual Fib levels (non-GZ ones as gray dashed)
         for (const level of fibData.levels) {
-          if (level.ratio === 0.618 || level.ratio === 0.705) continue; // already drawn as GZ
+          if (level.ratio === 0.618 || level.ratio === 0.705) continue;
           candleSeries.createPriceLine({
             price: level.price,
-            color: "#666666",
+            color: "rgba(142,142,147,0.5)",
             lineWidth: 1 as 1 | 2 | 3 | 4,
             lineStyle: LineStyle.Dashed,
             axisLabelVisible: true,
@@ -346,19 +332,16 @@ export default function TradingChart({ symbol, timeframe, count = 500 }: Props) 
 
     loadInitial();
 
-    // Poll for new candles every 5 seconds
     intervalRef.current = setInterval(async () => {
       if (!active) return;
       const candles = await fetchCandles();
       if (!candles || candles.length === 0) return;
 
-      // Auto-recover: if chart is in error/loading state but candles are now available, full reload
       if (statusRef.current !== "ok") {
         await loadCandles(candles);
         return;
       }
 
-      // Normal live update — append/update the latest bar only
       const latest = candles[candles.length - 1];
       if (latest.time >= lastTimeRef.current) {
         candleSeries.update({
@@ -371,7 +354,7 @@ export default function TradingChart({ symbol, timeframe, count = 500 }: Props) 
         volumeSeries.update({
           time: latest.time as Time,
           value: latest.volume,
-          color: latest.close >= latest.open ? "#00ff8830" : "#ff444430",
+          color: latest.close >= latest.open ? "rgba(48,209,88,0.25)" : "rgba(255,69,58,0.25)",
         });
         lastTimeRef.current = latest.time;
       }
@@ -390,28 +373,58 @@ export default function TradingChart({ symbol, timeframe, count = 500 }: Props) 
     <div style={{ position: "relative", width: "100%", height: "100%", minHeight: 400 }}>
       <div
         ref={containerRef}
-        style={{ width: "100%", height: "100%", minHeight: 400, borderRadius: 6, border: "1px solid #1c1c28" }}
+        style={{ width: "100%", height: "100%", minHeight: 400 }}
       />
       {status !== "ok" && (
         <div style={{
-          position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
+          position: "absolute",
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
           zIndex: 10,
-          display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-          background: "#0a0a0a",
-          borderRadius: 6,
-          border: "1px solid #1c1c28",
-          gap: 10,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          background: "#1C1C1E",
+          borderRadius: 12,
+          gap: 12,
         }}>
           {status === "loading" ? (
             <>
-              <div style={{ width: 32, height: 32, border: "2px solid #1c1c28", borderTop: "2px solid #00ff88", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
-              <span style={{ color: "#607888", fontSize: 12, fontFamily: "'JetBrains Mono', monospace", letterSpacing: "0.06em" }}>Loading chart data…</span>
+              <div style={{
+                width: 28,
+                height: 28,
+                border: "2px solid rgba(84,84,88,0.4)",
+                borderTop: "2px solid #0A84FF",
+                borderRadius: "50%",
+                animation: "spin 0.8s linear infinite",
+              }} />
+              <span style={{
+                fontFamily: `-apple-system, BlinkMacSystemFont, "SF Pro Display", system-ui, sans-serif`,
+                fontSize: 13,
+                color: "rgba(235,235,245,0.4)",
+              }}>
+                Loading chart data…
+              </span>
             </>
           ) : (
             <>
-              <span style={{ color: "#ff4455", fontSize: 20 }}>⚠</span>
-              <span style={{ color: "#ff4455", fontSize: 13, fontFamily: "'JetBrains Mono', monospace", fontWeight: 700 }}>Chart unavailable</span>
-              <span style={{ color: "#607888", fontSize: 11, fontFamily: "'JetBrains Mono', monospace" }}>
+              <span style={{ fontSize: 28, color: "#FF453A" }}>⚠</span>
+              <span style={{
+                fontFamily: `-apple-system, BlinkMacSystemFont, "SF Pro Display", system-ui, sans-serif`,
+                fontSize: 15,
+                fontWeight: 600,
+                color: "#FF453A",
+              }}>
+                Chart unavailable
+              </span>
+              <span style={{
+                fontFamily: `-apple-system, BlinkMacSystemFont, "SF Pro Display", system-ui, sans-serif`,
+                fontSize: 13,
+                color: "rgba(235,235,245,0.4)",
+              }}>
                 {errorReasonRef.current === "no_data"
                   ? "No candle data for this symbol / timeframe"
                   : "Bot candle server not reachable"}

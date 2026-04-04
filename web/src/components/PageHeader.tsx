@@ -1,38 +1,64 @@
 "use client";
 
-export default function PageHeader({
-  subsystem,
-  title,
-  accent = "#00ff88",
-}: {
-  subsystem: string;
+import { ReactNode } from "react";
+
+interface PageHeaderProps {
   title: string;
-  accent?: string;
-}) {
-  const [r, g, b] = hexToRgb(accent);
-  return (
-    <div style={{ marginBottom: 20 }}>
-      <div style={{
-        fontSize: 9, fontFamily: "'JetBrains Mono', monospace",
-        color: "#607888", letterSpacing: "0.2em", textTransform: "uppercase",
-      }}>
-        {subsystem}
-      </div>
-      <h1 style={{
-        fontSize: 20, fontFamily: "'JetBrains Mono', monospace",
-        fontWeight: 700, color: accent,
-        textShadow: `0 0 20px rgba(${r},${g},${b},0.3)`,
-        marginTop: 2, marginBottom: 0,
-      }}>
-        {title}
-      </h1>
-    </div>
-  );
+  subtitle?: string;
+  action?: ReactNode;
 }
 
-function hexToRgb(hex: string): [number, number, number] {
-  const r = parseInt(hex.slice(1,3),16);
-  const g = parseInt(hex.slice(3,5),16);
-  const b = parseInt(hex.slice(5,7),16);
-  return [r, g, b];
+export default function PageHeader({ title, subtitle, action }: PageHeaderProps) {
+  return (
+    <div
+      style={{
+        paddingBottom: 20,
+        borderBottom: "0.5px solid rgba(84,84,88,0.35)",
+        marginBottom: 20,
+        fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", system-ui, sans-serif',
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          alignItems: "flex-start",
+          justifyContent: "space-between",
+          gap: 16,
+        }}
+      >
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <h1
+            style={{
+              margin: 0,
+              fontSize: 28,
+              fontWeight: 700,
+              color: "#FFFFFF",
+              letterSpacing: "-0.015em",
+              lineHeight: 1.15,
+            }}
+          >
+            {title}
+          </h1>
+          {subtitle && (
+            <p
+              style={{
+                margin: "6px 0 0",
+                fontSize: 15,
+                color: "rgba(235,235,245,0.6)",
+                lineHeight: 1.4,
+              }}
+            >
+              {subtitle}
+            </p>
+          )}
+        </div>
+
+        {action && (
+          <div style={{ flexShrink: 0, alignSelf: "center" }}>
+            {action}
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }

@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { formatShort } from "@/lib/time";
+import PaginationControls from "@/components/PaginationControls";
 
 interface Trade {
   id: string;
@@ -12,153 +13,383 @@ interface Trade {
   lot_size: number;
   stop_loss: number;
   take_profit_1: number;
+  take_profit_2?: number;
+  take_profit_3?: number;
+  tp1_hit?: boolean;
+  tp2_hit?: boolean;
+  tp3_hit?: boolean;
   status: string;
   pnl: number;
   open_time: string;
+  current_price?: number;
 }
 
-export default function OpenTradesTable({ symbol }: { symbol?: string | null }) {
-  const [trades, setTrades] = useState<Trade[]>([]);
+interface OpenTradesTableProps {
+  trades: Trade[];
+  onClose?: (id: string) => void;
+}
+
+function fmtPrice(price: number): string {
+  if (!price || price === 0) return "—";
+  if (price >= 1000) return price.toFixed(2);
+  if (price >= 100) return price.toFixed(2);
+  if (price >= 1) return price.toFixed(4);
+  return price.toFixed(5);
+}
+
+const FONT =
+  `-apple-system, BlinkMacSystemFont, "SF Pro Display", system-ui, sans-serif`;
+const MONO =
+  `"SF Mono", SFMono-Regular, ui-monospace, Menlo, monospace`;
+
+export default function OpenTradesTable({ trades, onClose }: OpenTradesTableProps) {
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+
+  const filteredTrades = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    if (!query) return trades;
+
+    return trades.filter((trade) => {
+      const haystack = [
+        trade.symbol,
+        trade.direction,
+        trade.strategy,
+        trade.status,
+      ]
+        .join(" ")
+        .toLowerCase();
+      return haystack.includes(query);
+    });
+  }, [trades, search]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredTrades.length / pageSize));
 
   useEffect(() => {
-    let active = true;
-    const load = () =>
-      fetch("/api/trades")
-        .then((r) => { if (!r.ok) throw new Error(r.statusText); return r.json(); })
-        .then((data) => { if (active) setTrades(data); })
-        .catch(() => {});
-    load();
-    const id = setInterval(load, 15_000);
-    return () => { active = false; clearInterval(id); };
-  }, []);
+    setPage((prev) => Math.min(prev, totalPages));
+  }, [totalPages]);
 
-  async function closeTrade(tradeId: string) {
-    await fetch("/api/commands", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ command: "close_trade", payload: { trade_id: tradeId } }),
-    });
-  }
+  useEffect(() => {
+    setPage(1);
+  }, [search, pageSize]);
 
-  const filtered = symbol ? trades.filter((t) => t.symbol === symbol) : trades;
+  const pagedTrades = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    return filteredTrades.slice(start, start + pageSize);
+  }, [filteredTrades, page, pageSize]);
 
-  if (filtered.length === 0) {
+  if (trades.length === 0) {
     return (
-      <div style={{
-        background: "#0a0a12", border: "1px solid #1c1c28",
-        borderRadius: 8, padding: "20px 24px",
-        fontFamily: "'JetBrains Mono', monospace",
-        fontSize: 11, color: "#607888",
-        textAlign: "center",
-      }}>
-        {symbol ? `No open trades for ${symbol}.` : "No open positions."}
+      <div
+        style={{
+          background: "#1C1C1E",
+          borderRadius: 12,
+          padding: "48px 24px",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 12,
+        }}
+      >
+        <span
+          className="material-symbols-outlined"
+          style={{ fontSize: 40, color: "rgba(235,235,245,0.3)" }}
+        >
+          shield
+        </span>
+        <span
+          style={{
+            fontFamily: FONT,
+            fontSize: 15,
+            color: "rgba(235,235,245,0.3)",
+          }}
+        >
+          No open positions
+        </span>
       </div>
     );
   }
 
+  const HEADERS = [
+    "Symbol", "Direction", "Entry", "Current", "SL", "TP", "PnL", "Lot", "Time", "",
+  ];
+
   return (
-    <div style={{
-      background: "#0e0e10", border: "1px solid #1c1c28",
-      borderRadius: 8, overflow: "auto",
-    }}>
-      <table style={{
-        width: "100%", borderCollapse: "collapse",
-        fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5,
-      }}>
-        <thead>
-          <tr style={{ borderBottom: "1px solid #1c1c28" }}>
-            {["Symbol","Dir","Strategy","Entry","Lots","SL","TP1","PnL","Status","Opened",""].map((h) => (
-              <th key={h} style={{
-                padding: "9px 10px",
-                textAlign: h === "Entry" || h === "Lots" || h === "SL" || h === "TP1" || h === "PnL" ? "right" : "left",
-                fontSize: 8.5, letterSpacing: "0.12em", textTransform: "uppercase",
-                color: "#607888", fontWeight: 600, whiteSpace: "nowrap",
-              }}>{h}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {filtered.map((t) => {
-            const pnl = Number(t.pnl);
-            return (
-              <tr
-                key={t.id}
-                style={{ borderBottom: "1px solid rgba(28,28,40,0.5)", transition: "background 0.1s" }}
-                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(0,255,65,0.02)"; }}
-                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = ""; }}
-              >
-                <td style={{ padding: "7px 10px", color: "#00d4ff", fontWeight: 700 }}>{t.symbol}</td>
-                <td style={{ padding: "7px 10px" }}>
-                  <span style={{
-                    display: "inline-block", padding: "1px 7px", borderRadius: 3,
-                    fontSize: 9, fontWeight: 700, letterSpacing: "0.06em",
-                    background: t.direction === "BUY" ? "rgba(0,255,136,0.12)" : "rgba(255,68,85,0.12)",
-                    color: t.direction === "BUY" ? "#00ff88" : "#ff4455",
-                    border: `1px solid ${t.direction === "BUY" ? "rgba(0,255,136,0.3)" : "rgba(255,68,85,0.3)"}`,
-                  }}>
-                    {t.direction}
-                  </span>
-                </td>
-                <td style={{ padding: "7px 10px", color: "#7a8a9a", fontSize: 9.5 }}>{t.strategy}</td>
-                <td style={{ padding: "7px 10px", textAlign: "right", color: "#9aa8b8", fontFamily: "monospace" }}>
-                  {Number(t.entry_price).toFixed(5)}
-                </td>
-                <td style={{ padding: "7px 10px", textAlign: "right", color: "#7a8a9a" }}>{t.lot_size}</td>
-                <td style={{ padding: "7px 10px", textAlign: "right", color: "#ff4455", fontFamily: "monospace" }}>
-                  {Number(t.stop_loss).toFixed(5)}
-                </td>
-                <td style={{ padding: "7px 10px", textAlign: "right", color: "#607888", fontFamily: "monospace" }}>
-                  {Number(t.take_profit_1).toFixed(5)}
-                </td>
-                <td style={{
-                  padding: "7px 10px", textAlign: "right",
-                  fontWeight: 700, color: pnl >= 0 ? "#00ff88" : "#ff4455",
-                  textShadow: pnl > 0 ? "0 0 8px rgba(0,255,136,0.4)" : pnl < 0 ? "0 0 8px rgba(255,68,85,0.4)" : "none",
-                }}>
-                  {pnl >= 0 ? "+" : ""}{pnl.toFixed(2)}
-                </td>
-                <td style={{ padding: "7px 10px" }}>
-                  <span style={{
-                    display: "inline-flex", alignItems: "center", gap: 4,
-                    fontSize: 9, fontFamily: "'JetBrains Mono', monospace",
-                    color: t.status === "OPEN" ? "#00ff88" : "#f5c518",
-                  }}>
-                    <span style={{
-                      width: 5, height: 5, borderRadius: "50%",
-                      background: t.status === "OPEN" ? "#00ff88" : "#f5c518",
-                      boxShadow: `0 0 4px ${t.status === "OPEN" ? "#00ff88" : "#f5c518"}`,
-                    }} />
-                    {t.status}
-                  </span>
-                </td>
-                <td style={{ padding: "7px 10px", color: "#607888", fontSize: 9.5, whiteSpace: "nowrap" }}>
-                  {formatShort(t.open_time)}
-                </td>
-                <td style={{ padding: "7px 10px", textAlign: "right" }}>
-                  <button
-                    onClick={() => closeTrade(t.id)}
+    <div
+      style={{
+        background: "#1C1C1E",
+        borderRadius: 12,
+        overflow: "hidden",
+      }}
+    >
+      <div style={{ padding: "12px 12px 0" }}>
+        <input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Filter open trades..."
+          style={{
+            width: "100%",
+            height: 34,
+            borderRadius: 10,
+            border: "1px solid rgba(84,84,88,0.65)",
+            background: "rgba(118,118,128,0.2)",
+            color: "#FFFFFF",
+            padding: "0 12px",
+            fontSize: 13,
+            fontWeight: 500,
+            fontFamily: FONT,
+            outline: "none",
+          }}
+        />
+      </div>
+
+      <div style={{ overflowX: "auto" }}>
+        <table
+          style={{
+            width: "100%",
+            borderCollapse: "collapse",
+            fontFamily: FONT,
+          }}
+        >
+          <thead>
+            <tr>
+              {HEADERS.map((h) => (
+                <th
+                  key={h}
+                  style={{
+                    padding: "12px 16px",
+                    textAlign: h === "PnL" || h === "Entry" || h === "Current" || h === "SL" ? "right" : "left",
+                    fontSize: 11,
+                    fontWeight: 600,
+                    letterSpacing: "0.06em",
+                    textTransform: "uppercase",
+                    color: "rgba(235,235,245,0.3)",
+                    borderBottom: "0.5px solid rgba(84,84,88,0.65)",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {h}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {pagedTrades.map((trade, idx) => {
+              const pnl = Number(trade.pnl);
+              const pnlPositive = pnl >= 0;
+              const isLast = idx === pagedTrades.length - 1;
+
+              return (
+                <tr key={trade.id}>
+                  {/* Symbol */}
+                  <td
                     style={{
-                      padding: "3px 10px",
-                      background: "rgba(255,68,85,0.08)",
-                      border: "1px solid rgba(255,68,85,0.3)",
-                      borderRadius: 3,
-                      fontFamily: "'JetBrains Mono', monospace",
-                      fontSize: 9, fontWeight: 700, letterSpacing: "0.08em",
-                      color: "#ff4455",
-                      cursor: "pointer",
-                      transition: "background 0.15s",
+                      padding: "14px 16px",
+                      fontSize: 15,
+                      fontWeight: 700,
+                      color: "#FFFFFF",
+                      borderBottom: isLast ? "none" : "0.5px solid rgba(84,84,88,0.3)",
+                      whiteSpace: "nowrap",
+                      minHeight: 52,
                     }}
-                    onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "rgba(255,68,85,0.2)"; }}
-                    onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "rgba(255,68,85,0.08)"; }}
                   >
-                    CLOSE
-                  </button>
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+                    {trade.symbol}
+                  </td>
+
+                  {/* Direction */}
+                  <td
+                    style={{
+                      padding: "14px 16px",
+                      borderBottom: isLast ? "none" : "0.5px solid rgba(84,84,88,0.3)",
+                    }}
+                  >
+                    <span
+                      style={{
+                        display: "inline-block",
+                        padding: "3px 10px",
+                        borderRadius: 6,
+                        fontSize: 12,
+                        fontWeight: 700,
+                        background:
+                          trade.direction === "BUY"
+                            ? "rgba(10,132,255,0.18)"
+                            : "rgba(255,69,58,0.18)",
+                        color:
+                          trade.direction === "BUY" ? "#0A84FF" : "#FF453A",
+                      }}
+                    >
+                      {trade.direction}
+                    </span>
+                  </td>
+
+                  {/* Entry */}
+                  <td
+                    style={{
+                      padding: "14px 16px",
+                      fontSize: 13,
+                      fontFamily: MONO,
+                      color: "rgba(235,235,245,0.6)",
+                      textAlign: "right",
+                      borderBottom: isLast ? "none" : "0.5px solid rgba(84,84,88,0.3)",
+                    }}
+                  >
+                    {fmtPrice(Number(trade.entry_price))}
+                  </td>
+
+                  {/* Current */}
+                  <td
+                    style={{
+                      padding: "14px 16px",
+                      fontSize: 13,
+                      fontFamily: MONO,
+                      color: "#FFFFFF",
+                      textAlign: "right",
+                      borderBottom: isLast ? "none" : "0.5px solid rgba(84,84,88,0.3)",
+                    }}
+                  >
+                    {trade.current_price ? fmtPrice(Number(trade.current_price)) : "—"}
+                  </td>
+
+                  {/* SL */}
+                  <td
+                    style={{
+                      padding: "14px 16px",
+                      fontSize: 13,
+                      fontFamily: MONO,
+                      color: "#FF453A",
+                      textAlign: "right",
+                      borderBottom: isLast ? "none" : "0.5px solid rgba(84,84,88,0.3)",
+                    }}
+                  >
+                    {fmtPrice(Number(trade.stop_loss))}
+                  </td>
+
+                  {/* TP dots */}
+                  <td
+                    style={{
+                      padding: "14px 16px",
+                      borderBottom: isLast ? "none" : "0.5px solid rgba(84,84,88,0.3)",
+                    }}
+                  >
+                    <div style={{ display: "flex", gap: 5, alignItems: "center" }}>
+                      {[trade.tp1_hit, trade.tp2_hit, trade.tp3_hit].map((hit, i) => (
+                        <div
+                          key={i}
+                          style={{
+                            width: 8,
+                            height: 8,
+                            borderRadius: "50%",
+                            background: hit ? "#30D158" : "#3A3A3C",
+                          }}
+                        />
+                      ))}
+                    </div>
+                  </td>
+
+                  {/* PnL */}
+                  <td
+                    style={{
+                      padding: "14px 16px",
+                      fontSize: 13,
+                      fontFamily: MONO,
+                      fontWeight: 700,
+                      color: pnlPositive ? "#30D158" : "#FF453A",
+                      textAlign: "right",
+                      borderBottom: isLast ? "none" : "0.5px solid rgba(84,84,88,0.3)",
+                    }}
+                  >
+                    {pnlPositive ? "+" : ""}${pnl.toFixed(2)}
+                  </td>
+
+                  {/* Lot */}
+                  <td
+                    style={{
+                      padding: "14px 16px",
+                      fontSize: 13,
+                      color: "rgba(235,235,245,0.6)",
+                      borderBottom: isLast ? "none" : "0.5px solid rgba(84,84,88,0.3)",
+                    }}
+                  >
+                    {trade.lot_size}
+                  </td>
+
+                  {/* Time */}
+                  <td
+                    style={{
+                      padding: "14px 16px",
+                      fontSize: 13,
+                      color: "rgba(235,235,245,0.3)",
+                      whiteSpace: "nowrap",
+                      borderBottom: isLast ? "none" : "0.5px solid rgba(84,84,88,0.3)",
+                    }}
+                  >
+                    {formatShort(trade.open_time)}
+                  </td>
+
+                  {/* Close button */}
+                  <td
+                    style={{
+                      padding: "14px 16px",
+                      textAlign: "right",
+                      borderBottom: isLast ? "none" : "0.5px solid rgba(84,84,88,0.3)",
+                    }}
+                  >
+                    {onClose && (
+                      <button
+                        onClick={() => onClose(trade.id)}
+                        style={{
+                          width: 32,
+                          height: 32,
+                          borderRadius: "50%",
+                          background: "rgba(255,69,58,0.15)",
+                          border: "none",
+                          cursor: "pointer",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          color: "#FF453A",
+                          transition: "background 0.15s",
+                        }}
+                        onMouseEnter={(e) => {
+                          (e.currentTarget as HTMLButtonElement).style.background =
+                            "rgba(255,69,58,0.3)";
+                        }}
+                        onMouseLeave={(e) => {
+                          (e.currentTarget as HTMLButtonElement).style.background =
+                            "rgba(255,69,58,0.15)";
+                        }}
+                        title="Close trade"
+                      >
+                        <span
+                          className="material-symbols-outlined"
+                          style={{ fontSize: 16 }}
+                        >
+                          close
+                        </span>
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {filteredTrades.length > 0 && (
+        <div style={{ padding: "0 12px 12px" }}>
+          <PaginationControls
+            page={page}
+            totalItems={filteredTrades.length}
+            pageSize={pageSize}
+            onPageChange={setPage}
+            onPageSizeChange={setPageSize}
+            label="open trades"
+          />
+        </div>
+      )}
     </div>
   );
 }

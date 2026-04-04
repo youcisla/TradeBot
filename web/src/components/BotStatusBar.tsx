@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { timeSince, timeAgo } from "@/lib/time";
+import { timeSince } from "@/lib/time";
 
 interface BotStatus {
   state: string;
@@ -17,31 +17,108 @@ interface BotStatus {
   leverage: number;
 }
 
-function Metric({ label, value, color = "#7a8a9a", glow }: {
-  label: string; value: string; color?: string; glow?: boolean;
-}) {
+interface ChipProps {
+  label: string;
+  value: string;
+  valueColor?: string;
+}
+
+function Chip({ label, value, valueColor = "#FFFFFF" }: ChipProps) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-      <span style={{
-        fontSize: 8.5, fontFamily: "'JetBrains Mono', monospace",
-        color: "#607888", letterSpacing: "0.15em", textTransform: "uppercase",
-      }}>
+    <div
+      style={{
+        background: "#1C1C1E",
+        borderRadius: 10,
+        padding: "8px 14px",
+        display: "flex",
+        flexDirection: "column",
+        gap: 3,
+        flexShrink: 0,
+      }}
+    >
+      <span
+        style={{
+          fontSize: 11,
+          fontWeight: 600,
+          textTransform: "uppercase",
+          letterSpacing: "0.06em",
+          color: "rgba(235,235,245,0.4)",
+          fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", system-ui, sans-serif',
+        }}
+      >
         {label}
       </span>
-      <span style={{
-        fontSize: 13, fontFamily: "'JetBrains Mono', monospace",
-        fontWeight: 700, color,
-        textShadow: glow ? `0 0 10px ${color}88` : undefined,
-      }}>
+      <span
+        style={{
+          fontSize: 15,
+          fontWeight: 600,
+          color: valueColor,
+          fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", system-ui, sans-serif',
+          letterSpacing: "-0.01em",
+        }}
+      >
         {value}
       </span>
     </div>
   );
 }
 
-function Divider() {
+function StateChip({ state }: { state: string }) {
+  const isRunning = state === "running";
+  const isPaused = state === "paused";
+  const dotColor = isRunning ? "#30D158" : isPaused ? "#FF9F0A" : "#8E8E93";
+  const label = state?.toUpperCase() ?? "—";
+
   return (
-    <div style={{ width: 1, alignSelf: "stretch", background: "#1c1c28", flexShrink: 0, margin: "0 4px" }} />
+    <div
+      style={{
+        background: "#1C1C1E",
+        borderRadius: 10,
+        padding: "8px 14px",
+        display: "flex",
+        flexDirection: "column",
+        gap: 3,
+        flexShrink: 0,
+      }}
+    >
+      <span
+        style={{
+          fontSize: 11,
+          fontWeight: 600,
+          textTransform: "uppercase",
+          letterSpacing: "0.06em",
+          color: "rgba(235,235,245,0.4)",
+          fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", system-ui, sans-serif',
+        }}
+      >
+        State
+      </span>
+      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+        <span
+          style={{
+            width: 6,
+            height: 6,
+            borderRadius: "50%",
+            background: dotColor,
+            display: "inline-block",
+            flexShrink: 0,
+            boxShadow: isRunning ? `0 0 6px ${dotColor}` : undefined,
+            animation: isRunning ? "statusDotPulse 2s ease-in-out infinite" : undefined,
+          }}
+        />
+        <span
+          style={{
+            fontSize: 15,
+            fontWeight: 600,
+            color: dotColor,
+            fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", system-ui, sans-serif',
+            letterSpacing: "0.01em",
+          }}
+        >
+          {label}
+        </span>
+      </div>
+    </div>
   );
 }
 
@@ -53,7 +130,7 @@ export default function BotStatusBar() {
     const load = () =>
       fetch("/api/status")
         .then((r) => { if (!r.ok) throw new Error(r.statusText); return r.json(); })
-        .then((data) => { if (active) setStatus(data); })
+        .then((data: BotStatus) => { if (active) setStatus(data); })
         .catch(() => {});
     load();
     const id = setInterval(load, 8_000);
@@ -62,153 +139,80 @@ export default function BotStatusBar() {
 
   if (!status) {
     return (
-      <div style={{
-        border: "1px solid #1c1c28", borderRadius: 8,
-        background: "#0e0e10", padding: "14px 18px",
-        fontFamily: "'JetBrains Mono', monospace",
-        fontSize: 11, color: "#607888",
-        display: "flex", alignItems: "center", gap: 8,
-      }}>
-        <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#607888", display: "inline-block" }} />
-        Loading system status…
+      <div
+        style={{
+          background: "#1C1C1E",
+          borderRadius: 10,
+          padding: "10px 16px",
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", system-ui, sans-serif',
+        }}
+      >
+        <span
+          style={{
+            width: 6,
+            height: 6,
+            borderRadius: "50%",
+            background: "#8E8E93",
+            display: "inline-block",
+          }}
+        />
+        <span style={{ fontSize: 14, color: "rgba(235,235,245,0.4)" }}>
+          Loading status…
+        </span>
       </div>
     );
   }
 
-  const isRunning  = status.state === "running";
-  const isPaused   = status.state === "paused";
-  // Show STALE if last_tick is older than 2 minutes while state claims running
-  const lastTickMs = status.last_tick ? new Date(status.last_tick).getTime() : 0;
-  const isStale    = isRunning && lastTickMs > 0 && Date.now() - lastTickMs > 2 * 60 * 1000;
-  const stateColor = isStale ? "#f5c518" : isRunning ? "#00ff88" : isPaused ? "#f5c518" : "#ff4455";
-  const stateLabel = isStale ? "STALE" : status.state?.toUpperCase() ?? "UNKNOWN";
-  const connected  = !!status.broker_account;
-  const dailyPnl   = Number(status.daily_pnl);
-  const pnlColor   = dailyPnl >= 0 ? "#00ff88" : "#ff4455";
+  const dailyPnl = Number(status.daily_pnl);
+  const pnlPositive = dailyPnl >= 0;
+  const pnlColor = pnlPositive ? "#30D158" : "#FF453A";
+  const pnlFormatted = `${pnlPositive ? "+" : ""}${dailyPnl.toFixed(2)}`;
+
+  const equity = Number(status.equity).toLocaleString("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 2,
+  });
+
+  const balance = Number(status.balance || 0).toLocaleString("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 2,
+  });
 
   return (
-    <div style={{
-      border: "1px solid #1c1c28",
-      borderRadius: 8,
-      background: "linear-gradient(135deg, #0c0c14 0%, #0e0e10 100%)",
-      overflow: "hidden",
-      position: "relative",
-    }}>
-      {/* Top accent line */}
-      <div style={{
-        height: 2,
-        background: `linear-gradient(90deg, transparent 0%, ${stateColor}44 20%, ${stateColor}88 50%, ${stateColor}44 80%, transparent 100%)`,
-      }} />
-
-      <div style={{ padding: "12px 20px", display: "flex", flexWrap: "wrap", gap: 0, alignItems: "center" }}>
-
-        {/* State indicator */}
-        <div style={{ display: "flex", alignItems: "center", gap: 10, paddingRight: 20 }}>
-          <div style={{
-            width: 8, height: 8, borderRadius: "50%",
-            background: stateColor,
-            boxShadow: `0 0 8px ${stateColor}, 0 0 16px ${stateColor}55`,
-            animation: isRunning ? "statusPulse 2s ease-in-out infinite" : undefined,
-          }} />
-          <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
-            <span style={{
-              fontSize: 7.5, color: "#607888",
-              fontFamily: "'JetBrains Mono', monospace",
-              letterSpacing: "0.15em", textTransform: "uppercase",
-            }}>State</span>
-            <span style={{
-              fontSize: 12, fontWeight: 700, color: stateColor,
-              fontFamily: "'JetBrains Mono', monospace",
-              textShadow: `0 0 8px ${stateColor}88`,
-              letterSpacing: "0.05em",
-            }}>
-              {stateLabel}
-            </span>
-          </div>
-        </div>
-
-        <Divider />
-
-        {/* Broker */}
-        <div style={{ paddingLeft: 20, paddingRight: 20 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            {connected ? (
-              <>
-                <Metric label="Broker" value={status.broker_server} color="#9aa8b8" />
-                <Metric label="Account" value={status.broker_account} color="#00d4ff" glow />
-                {status.broker_name && <Metric label="Name" value={status.broker_name} color="#7a8a9a" />}
-                <Metric label="Leverage" value={`1:${status.leverage}`} color="#7a8a9a" />
-              </>
-            ) : (
-              <Metric label="Broker" value="DISCONNECTED" color="#ff4455" glow />
-            )}
-          </div>
-        </div>
-
-        <Divider />
-
-        {/* Financial metrics */}
-        <div style={{
-          paddingLeft: 20, paddingRight: 20,
-          display: "flex", gap: 20, alignItems: "center", flexWrap: "wrap",
-        }}>
-          <Metric label="Balance" value={`$${Number(status.balance || 0).toLocaleString("en", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} color="#00ff88" glow />
-          <Metric label="Equity"  value={`$${Number(status.equity).toLocaleString("en", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}  color="#00ff88" />
-          <Metric
-            label="Daily P&L"
-            value={`${dailyPnl >= 0 ? "+" : ""}${dailyPnl.toFixed(2)}`}
-            color={pnlColor}
-            glow
-          />
-          <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-            <span style={{ fontSize: 8.5, fontFamily: "'JetBrains Mono', monospace", color: "#607888", letterSpacing: "0.15em", textTransform: "uppercase" }}>
-              Open
-            </span>
-            <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-              <span style={{ fontSize: 13, fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, color: status.open_trades > 0 ? "#f5c518" : "#7a8a9a" }}>
-                {status.open_trades}
-              </span>
-              <span style={{ fontSize: 8.5, color: "#607888", fontFamily: "'JetBrains Mono', monospace" }}>trades</span>
-            </div>
-          </div>
-        </div>
-
-        <Divider />
-
-        {/* Time metrics */}
-        <div style={{
-          paddingLeft: 20,
-          display: "flex", gap: 20, alignItems: "center",
-        }}>
-          <Metric label="Uptime" value={timeSince(status.uptime_start)} color="#7a8a9a" />
-          <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-            <span style={{ fontSize: 8.5, fontFamily: "'JetBrains Mono', monospace", color: "#607888", letterSpacing: "0.15em", textTransform: "uppercase" }}>
-              Last Tick
-            </span>
-            <span style={{
-              fontSize: 13, fontFamily: "'JetBrains Mono', monospace", fontWeight: 700,
-              color: status.last_tick ? "#7a8a9a" : "#ff4455",
-            }}>
-              {timeAgo(status.last_tick)}
-            </span>
-          </div>
-        </div>
-
+    <>
+      <div
+        style={{
+          display: "flex",
+          gap: 8,
+          overflowX: "auto",
+          paddingBottom: 2,
+          scrollbarWidth: "none",
+          WebkitOverflowScrolling: "touch",
+        } as React.CSSProperties}
+      >
+        <StateChip state={status.state} />
+        <Chip label="Equity" value={equity} />
+        <Chip label="Balance" value={balance} />
+        <Chip
+          label="Open Trades"
+          value={String(status.open_trades)}
+          valueColor={status.open_trades > 0 ? "#FF9F0A" : "#FFFFFF"}
+        />
+        <Chip label="Daily P&L" value={pnlFormatted} valueColor={pnlColor} />
+        <Chip label="Uptime" value={timeSince(status.uptime_start)} valueColor="rgba(235,235,245,0.6)" />
       </div>
 
-      {/* Bottom scanline */}
-      <div style={{
-        height: 1,
-        background: "repeating-linear-gradient(90deg, transparent, transparent 4px, #1c1c28 4px, #1c1c28 5px)",
-        opacity: 0.5,
-      }} />
-
       <style>{`
-        @keyframes statusPulse {
-          0%,100% { box-shadow: 0 0 8px #00ff88, 0 0 16px #00ff8855; }
-          50%      { box-shadow: 0 0 16px #00ff88, 0 0 32px #00ff8888; }
+        @keyframes statusDotPulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.4; }
         }
       `}</style>
-    </div>
+    </>
   );
 }

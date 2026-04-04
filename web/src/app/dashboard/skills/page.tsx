@@ -3,6 +3,8 @@
 import { useEffect, useState, useCallback } from "react";
 import ReactMarkdown from "react-markdown";
 
+// ── Types ─────────────────────────────────────────────────────────────────────
+
 interface Skill {
   name: string;
   description: string;
@@ -12,151 +14,272 @@ interface Skill {
   last_modified?: string;
 }
 
+// ── Design tokens ─────────────────────────────────────────────────────────────
+
+const SF: React.CSSProperties = {
+  fontFamily: `-apple-system, BlinkMacSystemFont, "SF Pro Display", system-ui, sans-serif`,
+};
+
 const MONO: React.CSSProperties = {
-  fontFamily: "'JetBrains Mono', monospace",
+  fontFamily: `"SF Mono", SFMono-Regular, ui-monospace, Menlo, monospace`,
 };
 
-const PANEL: React.CSSProperties = {
-  background: "#0a0a12",
-  border: "1px solid #1c1c28",
-  borderRadius: 8,
-  padding: 20,
-};
+// ── Sub-components ────────────────────────────────────────────────────────────
 
-function TerminalInput({
-  value,
-  onChange,
-  placeholder,
-  style,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-  placeholder?: string;
-  style?: React.CSSProperties;
-}) {
+function SearchBar({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   const [focused, setFocused] = useState(false);
   return (
-    <input
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      onFocus={() => setFocused(true)}
-      onBlur={() => setFocused(false)}
-      placeholder={placeholder}
-      style={{
-        ...MONO,
-        fontSize: 11.5,
-        padding: "8px 12px",
-        background: "#06060c",
-        border: `1px solid ${focused ? "#00ff88" : "#1c1c28"}`,
-        borderRadius: 4,
-        color: "#c0ccd8",
-        width: "100%",
-        outline: "none",
-        boxSizing: "border-box",
-        boxShadow: focused ? "0 0 0 2px rgba(0,255,136,0.14)" : "none",
-        transition: "border-color 0.15s, box-shadow 0.15s",
-        ...style,
-      }}
-    />
+    <div style={{ position: "relative", marginBottom: 12 }}>
+      <span style={{
+        position: "absolute",
+        left: 12,
+        top: "50%",
+        transform: "translateY(-50%)",
+        color: "rgba(235,235,245,0.4)",
+        fontSize: 16,
+        pointerEvents: "none",
+      }}>
+        ⌕
+      </span>
+      <input
+        type="text"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
+        placeholder="Search skills…"
+        style={{
+          ...SF,
+          width: "100%",
+          height: 36,
+          background: "rgba(120,120,128,0.24)",
+          border: `1px solid ${focused ? "#0A84FF" : "transparent"}`,
+          borderRadius: 10,
+          padding: "0 12px 0 34px",
+          fontSize: 15,
+          color: "#FFFFFF",
+          outline: "none",
+          boxSizing: "border-box",
+          boxShadow: focused ? "0 0 0 3px rgba(10,132,255,0.2)" : "none",
+          transition: "border-color 0.15s, box-shadow 0.15s",
+        }}
+      />
+    </div>
   );
 }
 
-function TerminalTextarea({
-  value,
-  onChange,
-  rows = 8,
-  placeholder,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-  rows?: number;
-  placeholder?: string;
-}) {
-  const [focused, setFocused] = useState(false);
+function TypeBadge({ isCore, userInvocable }: { isCore: boolean; userInvocable: boolean }) {
+  if (isCore) return (
+    <span style={{
+      ...SF,
+      fontSize: 11,
+      fontWeight: 600,
+      background: "rgba(100,210,255,0.15)",
+      color: "#64D2FF",
+      border: "1px solid rgba(100,210,255,0.3)",
+      borderRadius: 4,
+      padding: "2px 7px",
+      whiteSpace: "nowrap",
+    }}>
+      Project
+    </span>
+  );
+  if (userInvocable) return (
+    <span style={{
+      ...SF,
+      fontSize: 11,
+      fontWeight: 600,
+      background: "rgba(191,90,242,0.15)",
+      color: "#BF5AF2",
+      border: "1px solid rgba(191,90,242,0.3)",
+      borderRadius: 4,
+      padding: "2px 7px",
+      whiteSpace: "nowrap",
+    }}>
+      Global
+    </span>
+  );
   return (
-    <textarea
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      onFocus={() => setFocused(true)}
-      onBlur={() => setFocused(false)}
-      rows={rows}
-      placeholder={placeholder}
-      style={{
-        ...MONO,
-        fontSize: 11.5,
-        padding: "8px 12px",
-        background: "#06060c",
-        border: `1px solid ${focused ? "#00ff88" : "#1c1c28"}`,
-        borderRadius: 4,
-        color: "#c0ccd8",
-        width: "100%",
-        outline: "none",
-        resize: "vertical",
-        boxSizing: "border-box",
-        boxShadow: focused ? "0 0 0 2px rgba(0,255,136,0.14)" : "none",
-        transition: "border-color 0.15s, box-shadow 0.15s",
-      }}
-    />
+    <span style={{
+      ...SF,
+      fontSize: 11,
+      fontWeight: 600,
+      background: "rgba(142,142,147,0.15)",
+      color: "#8E8E93",
+      border: "1px solid rgba(142,142,147,0.3)",
+      borderRadius: 4,
+      padding: "2px 7px",
+      whiteSpace: "nowrap",
+    }}>
+      Skill
+    </span>
   );
 }
 
-function ActionButton({
+function SkillRow({
+  skill,
+  expanded,
+  selected,
+  expandedContent,
   onClick,
-  color = "#00ff88",
-  children,
-  fullWidth,
-  disabled,
+  onDelete,
+  last,
 }: {
+  skill: Skill;
+  expanded: boolean;
+  selected: boolean;
+  expandedContent: string;
   onClick: () => void;
-  color?: string;
-  children: React.ReactNode;
-  fullWidth?: boolean;
-  disabled?: boolean;
+  onDelete: (name: string) => void;
+  last: boolean;
 }) {
-  const [hovered, setHovered] = useState(false);
-  const bg = color === "#ff4455" ? "rgba(255,68,85,0.08)" : "rgba(0,255,136,0.08)";
-  const bgHover = color === "#ff4455" ? "rgba(255,68,85,0.15)" : "rgba(0,255,136,0.15)";
-  const border = color === "#ff4455" ? "rgba(255,68,85,0.3)" : "rgba(0,255,136,0.3)";
   return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      style={{
-        ...MONO,
-        fontSize: 10,
-        fontWeight: 700,
-        letterSpacing: "0.08em",
-        textTransform: "uppercase",
-        padding: "7px 14px",
-        background: hovered ? bgHover : bg,
-        border: `1px solid ${border}`,
-        borderRadius: 4,
-        color,
-        cursor: disabled ? "not-allowed" : "pointer",
-        opacity: disabled ? 0.5 : 1,
-        width: fullWidth ? "100%" : undefined,
-        transition: "background 0.15s",
-      }}
-    >
-      {children}
-    </button>
+    <>
+      <div
+        onClick={onClick}
+        style={{
+          display: "flex",
+          alignItems: "center",
+          minHeight: 52,
+          padding: "10px 16px",
+          cursor: "pointer",
+          gap: 12,
+          background: selected ? "rgba(10,132,255,0.08)" : "transparent",
+          transition: "background 0.1s",
+        }}
+        onMouseEnter={(e) => {
+          if (!selected) (e.currentTarget as HTMLDivElement).style.background = "rgba(120,120,128,0.12)";
+        }}
+        onMouseLeave={(e) => {
+          if (!selected) (e.currentTarget as HTMLDivElement).style.background = "transparent";
+        }}
+      >
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 3 }}>
+            <span style={{
+              ...SF,
+              fontSize: 15,
+              fontWeight: 600,
+              color: selected ? "#0A84FF" : "#FFFFFF",
+            }}>
+              {skill.name}
+            </span>
+            <TypeBadge isCore={skill.is_core} userInvocable={skill.user_invocable} />
+          </div>
+          <div style={{
+            ...SF,
+            fontSize: 13,
+            color: "rgba(235,235,245,0.4)",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          }}>
+            {skill.description || "No description"}
+          </div>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+          {!skill.is_core && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onDelete(skill.name); }}
+              style={{
+                width: 28,
+                height: 28,
+                borderRadius: "50%",
+                background: "rgba(255,69,58,0.1)",
+                border: "1px solid rgba(255,69,58,0.25)",
+                color: "#FF453A",
+                fontSize: 14,
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                flexShrink: 0,
+                transition: "background 0.12s",
+              }}
+              onMouseEnter={(e) => {
+                (e.currentTarget as HTMLButtonElement).style.background = "rgba(255,69,58,0.2)";
+              }}
+              onMouseLeave={(e) => {
+                (e.currentTarget as HTMLButtonElement).style.background = "rgba(255,69,58,0.1)";
+              }}
+            >
+              ×
+            </button>
+          )}
+          <svg
+            width="8" height="13" viewBox="0 0 8 13" fill="none"
+            style={{
+              opacity: 0.3,
+              transform: expanded ? "rotate(90deg)" : "none",
+              transition: "transform 0.2s",
+            }}
+          >
+            <path d="M1 1l6 5.5L1 12" stroke="#FFFFFF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </div>
+      </div>
+
+      {/* Expanded content */}
+      {expanded && expandedContent && (
+        <div style={{
+          background: "#2C2C2E",
+          margin: "0 12px 12px",
+          borderRadius: 10,
+          padding: "14px 16px",
+          fontSize: 13,
+          color: "rgba(235,235,245,0.7)",
+          lineHeight: 1.6,
+          maxHeight: 300,
+          overflowY: "auto",
+        }}>
+          <ReactMarkdown
+            components={{
+              h1: ({ children }) => <h1 style={{ ...SF, fontSize: 15, fontWeight: 700, color: "#FFFFFF", marginTop: 0, marginBottom: 10 }}>{children}</h1>,
+              h2: ({ children }) => <h2 style={{ ...SF, fontSize: 14, fontWeight: 600, color: "#64D2FF", marginTop: 14, marginBottom: 8 }}>{children}</h2>,
+              h3: ({ children }) => <h3 style={{ ...SF, fontSize: 13, fontWeight: 600, color: "rgba(235,235,245,0.7)", marginTop: 10, marginBottom: 6 }}>{children}</h3>,
+              p: ({ children }) => <p style={{ marginTop: 0, marginBottom: 8 }}>{children}</p>,
+              ul: ({ children }) => <ul style={{ paddingLeft: 18, marginBottom: 8 }}>{children}</ul>,
+              ol: ({ children }) => <ol style={{ paddingLeft: 18, marginBottom: 8 }}>{children}</ol>,
+              li: ({ children }) => <li style={{ marginBottom: 3 }}>{children}</li>,
+              code: ({ children, className }) => {
+                const isBlock = className?.startsWith("language-");
+                return isBlock ? (
+                  <pre style={{ ...MONO, fontSize: 11, background: "#1C1C1E", borderRadius: 8, padding: "10px 12px", overflowX: "auto", marginBottom: 10, color: "#64D2FF" }}>
+                    <code>{children}</code>
+                  </pre>
+                ) : (
+                  <code style={{ ...MONO, fontSize: 11, background: "#1C1C1E", borderRadius: 4, padding: "1px 5px", color: "#30D158" }}>{children}</code>
+                );
+              },
+              strong: ({ children }) => <strong style={{ color: "#FFFFFF", fontWeight: 600 }}>{children}</strong>,
+              a: ({ href, children }) => <a href={href} target="_blank" rel="noreferrer" style={{ color: "#0A84FF", textDecoration: "none" }}>{children}</a>,
+            }}
+          >
+            {expandedContent}
+          </ReactMarkdown>
+        </div>
+      )}
+
+      {!last && (
+        <div style={{ height: "0.5px", background: "rgba(84,84,88,0.65)", marginLeft: 16 }} />
+      )}
+    </>
   );
 }
+
+// ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function SkillsPage() {
   const [skills, setSkills] = useState<Skill[]>([]);
-  const [selected, setSelected] = useState<string | null>(null);
-  const [content, setContent] = useState("");
+  const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
+  const [selected, setSelected] = useState<string | null>(null);
+  const [expandedContent, setExpandedContent] = useState<Record<string, string>>({});
   const [creating, setCreating] = useState(false);
-  const [editing, setEditing] = useState(false);
-  const [editContent, setEditContent] = useState("");
-  const [saving, setSaving] = useState(false);
   const [newName, setNewName] = useState("");
   const [newDesc, setNewDesc] = useState("");
   const [newContent, setNewContent] = useState("");
+  const [createFocused, setCreateFocused] = useState<string | null>(null);
 
   const fetchSkills = useCallback(async () => {
     try {
@@ -164,7 +287,7 @@ export default function SkillsPage() {
       const data = await res.json();
       setSkills(data.skills || []);
     } catch {
-      console.error("Failed to fetch skills");
+      // silent
     } finally {
       setLoading(false);
     }
@@ -172,16 +295,32 @@ export default function SkillsPage() {
 
   useEffect(() => { fetchSkills(); }, [fetchSkills]);
 
-  const selectSkill = async (name: string) => {
-    setEditing(false);
+  const handleSelect = async (name: string) => {
+    if (selected === name) { setSelected(null); return; }
     setSelected(name);
-    try {
-      const res = await fetch(`/api/skills?name=${encodeURIComponent(name)}`);
-      const data = await res.json();
-      setContent(data.content || "");
-    } catch {
-      setContent("Failed to load skill content.");
+    if (!expandedContent[name]) {
+      try {
+        const res = await fetch(`/api/skills?name=${encodeURIComponent(name)}`);
+        const data = await res.json();
+        setExpandedContent((prev) => ({ ...prev, [name]: data.content || "" }));
+      } catch {
+        setExpandedContent((prev) => ({ ...prev, [name]: "Failed to load content." }));
+      }
     }
+  };
+
+  const handleDelete = async (name: string) => {
+    if (!confirm(`Delete skill "${name}"?`)) return;
+    try {
+      const res = await fetch(`/api/skills?name=${encodeURIComponent(name)}`, { method: "DELETE" });
+      if (res.ok) {
+        if (selected === name) setSelected(null);
+        await fetchSkills();
+      } else {
+        const data = await res.json();
+        alert(data.error || "Delete failed");
+      }
+    } catch { alert("Failed to delete skill"); }
   };
 
   const handleCreate = async () => {
@@ -193,295 +332,262 @@ export default function SkillsPage() {
         body: JSON.stringify({ name: newName, description: newDesc, content: newContent }),
       });
       if (res.ok) {
-        setCreating(false);
-        setNewName(""); setNewDesc(""); setNewContent("");
+        setCreating(false); setNewName(""); setNewDesc(""); setNewContent("");
         await fetchSkills();
       } else {
         const data = await res.json();
         alert(data.error || "Creation failed");
       }
-    } catch {
-      alert("Failed to create skill");
-    }
+    } catch { alert("Failed to create skill"); }
   };
 
-  const handleSave = async () => {
-    if (!selected) return;
-    setSaving(true);
-    try {
-      const res = await fetch("/api/skills", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: selected, content: editContent }),
-      });
-      if (res.ok) {
-        setContent(editContent);
-        setEditing(false);
-        await fetchSkills();
-      } else {
-        const data = await res.json();
-        alert(data.error || "Save failed");
-      }
-    } catch {
-      alert("Failed to save skill");
-    } finally {
-      setSaving(false);
-    }
-  };
+  // Filter & group
+  const filtered = search
+    ? skills.filter((s) => s.name.toLowerCase().includes(search.toLowerCase()) || s.description.toLowerCase().includes(search.toLowerCase()))
+    : skills;
 
-  const handleDelete = async (name: string) => {
-    if (!confirm(`Delete skill "${name}"?`)) return;
-    try {
-      const res = await fetch(`/api/skills?name=${encodeURIComponent(name)}`, {
-        method: "DELETE",
-      });
-      if (res.ok) {
-        if (selected === name) { setSelected(null); setContent(""); setEditing(false); }
-        await fetchSkills();
-      } else {
-        const data = await res.json();
-        alert(data.error || "Delete failed");
-      }
-    } catch {
-      alert("Failed to delete skill");
-    }
-  };
-
-  const startEdit = () => {
-    setEditContent(content);
-    setEditing(true);
-  };
-
-  const cancelEdit = () => {
-    setEditing(false);
-    setEditContent("");
-  };
-
-  const selectedSkill = skills.find((s) => s.name === selected);
+  const projectSkills = filtered.filter((s) => s.is_core);
+  const globalSkills = filtered.filter((s) => !s.is_core);
 
   if (loading) {
     return (
-      <div style={{ ...MONO, color: "#607888", fontSize: 13, padding: 40 }}>
-        Loading skills…
+      <div style={{
+        ...SF,
+        paddingTop: 20,
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        height: 300,
+        gap: 12,
+      }}>
+        <div style={{
+          width: 28,
+          height: 28,
+          border: "2px solid rgba(84,84,88,0.4)",
+          borderTop: "2px solid #0A84FF",
+          borderRadius: "50%",
+          animation: "spin 0.8s linear infinite",
+        }} />
+        <span style={{ fontSize: 15, color: "rgba(235,235,245,0.4)" }}>Loading skills…</span>
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       </div>
     );
   }
 
+  const inputStyle = (field: string): React.CSSProperties => ({
+    ...SF,
+    width: "100%",
+    background: "rgba(120,120,128,0.24)",
+    border: `1px solid ${createFocused === field ? "#0A84FF" : "transparent"}`,
+    borderRadius: 10,
+    padding: "10px 12px",
+    fontSize: 15,
+    color: "#FFFFFF",
+    outline: "none",
+    boxSizing: "border-box",
+    boxShadow: createFocused === field ? "0 0 0 3px rgba(10,132,255,0.2)" : "none",
+    transition: "border-color 0.15s, box-shadow 0.15s",
+    resize: "vertical" as const,
+  });
+
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+    <div style={{ ...SF, paddingTop: 20, paddingBottom: 40 }}>
       {/* Header */}
-      <div>
-        <div style={{ ...MONO, fontSize: 9, color: "#607888", letterSpacing: "0.2em", textTransform: "uppercase" }}>
-          Claude Code
-        </div>
-        <h1 style={{ ...MONO, fontSize: 20, fontWeight: 700, color: "#00ff88", textShadow: "0 0 20px rgba(0,255,136,0.3)", marginTop: 2 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
+        <h1 style={{
+          fontSize: 34,
+          fontWeight: 700,
+          color: "#FFFFFF",
+          margin: 0,
+          letterSpacing: "-0.02em",
+        }}>
           Skills
         </h1>
+        <button
+          onClick={() => setCreating(!creating)}
+          style={{
+            width: 36,
+            height: 36,
+            borderRadius: "50%",
+            background: creating ? "rgba(255,69,58,0.15)" : "rgba(10,132,255,0.15)",
+            border: `1px solid ${creating ? "rgba(255,69,58,0.4)" : "rgba(10,132,255,0.4)"}`,
+            color: creating ? "#FF453A" : "#0A84FF",
+            fontSize: 22,
+            fontWeight: 300,
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            transition: "background 0.15s",
+            lineHeight: 1,
+          }}
+        >
+          {creating ? "×" : "+"}
+        </button>
       </div>
 
-      <div style={{ display: "flex", gap: 18, minHeight: "calc(100vh - 180px)" }}>
-        {/* Left: Skill list */}
-        <div style={{ ...PANEL, width: 300, flexShrink: 0, overflowY: "auto", display: "flex", flexDirection: "column", gap: 0 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-            <div style={{ ...MONO, fontSize: 9, color: "#607888", letterSpacing: "0.16em", textTransform: "uppercase", fontWeight: 700 }}>
-              Skills ({skills.length})
+      {/* Search */}
+      <SearchBar value={search} onChange={setSearch} />
+
+      {/* Create form */}
+      {creating && (
+        <div style={{
+          background: "#1C1C1E",
+          borderRadius: 12,
+          padding: "20px 16px",
+          marginBottom: 24,
+        }}>
+          <div style={{ fontSize: 17, fontWeight: 600, color: "#FFFFFF", marginBottom: 16 }}>New Skill</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <div>
+              <div style={{ fontSize: 13, color: "rgba(235,235,245,0.6)", marginBottom: 6 }}>Slug name</div>
+              <input
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                onFocus={() => setCreateFocused("name")}
+                onBlur={() => setCreateFocused(null)}
+                placeholder="my-new-skill"
+                style={inputStyle("name")}
+              />
             </div>
-            <ActionButton onClick={() => setCreating(!creating)} color={creating ? "#ff4455" : "#00ff88"}>
-              {creating ? "✕ Cancel" : "+ New"}
-            </ActionButton>
-          </div>
-
-          {creating && (
-            <div style={{ ...PANEL, padding: 14, marginBottom: 14, background: "#06060c" }}>
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                <div>
-                  <div style={{ ...MONO, fontSize: 9, color: "#607888", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 4 }}>Name (slug)</div>
-                  <TerminalInput value={newName} onChange={setNewName} placeholder="my-new-skill" />
-                </div>
-                <div>
-                  <div style={{ ...MONO, fontSize: 9, color: "#607888", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 4 }}>Description</div>
-                  <TerminalInput value={newDesc} onChange={setNewDesc} placeholder="Brief description" />
-                </div>
-                <div>
-                  <div style={{ ...MONO, fontSize: 9, color: "#607888", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 4 }}>Content</div>
-                  <TerminalTextarea value={newContent} onChange={setNewContent} rows={4} placeholder="# Skill content (markdown)" />
-                </div>
-                <ActionButton onClick={handleCreate} fullWidth>Create Skill</ActionButton>
-              </div>
+            <div>
+              <div style={{ fontSize: 13, color: "rgba(235,235,245,0.6)", marginBottom: 6 }}>Description</div>
+              <input
+                value={newDesc}
+                onChange={(e) => setNewDesc(e.target.value)}
+                onFocus={() => setCreateFocused("desc")}
+                onBlur={() => setCreateFocused(null)}
+                placeholder="Brief description of what this skill does"
+                style={inputStyle("desc")}
+              />
             </div>
-          )}
-
-          {skills.map((skill) => (
-            <div
-              key={skill.name}
-              onClick={() => selectSkill(skill.name)}
-              style={{
-                padding: "10px 12px",
-                marginBottom: 2,
-                borderRadius: 4,
-                cursor: "pointer",
-                background: selected === skill.name ? "rgba(0,255,136,0.06)" : "transparent",
-                borderLeft: selected === skill.name ? "2px solid #00ff88" : "2px solid transparent",
-                transition: "background 0.15s",
-              }}
-            >
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <span style={{ ...MONO, fontSize: 11, color: selected === skill.name ? "#00ff88" : "#c0ccd8", fontWeight: selected === skill.name ? 700 : 400 }}>
-                  {skill.name}
-                </span>
-                <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                  {skill.is_core && (
-                    <span style={{ ...MONO, fontSize: 8, color: "#607888", padding: "2px 5px", background: "#0a0a14", borderRadius: 3, border: "1px solid #1c1c28", textTransform: "uppercase", letterSpacing: "0.1em" }}>
-                      core
-                    </span>
-                  )}
-                  {!skill.is_core && (
-                    <button
-                      onClick={(e) => { e.stopPropagation(); handleDelete(skill.name); }}
-                      style={{ ...MONO, padding: "2px 6px", fontSize: 9, background: "transparent", color: "#607888", border: "none", cursor: "pointer", transition: "color 0.15s" }}
-                      onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#ff4455"; }}
-                      onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#607888"; }}
-                    >
-                      ✕
-                    </button>
-                  )}
-                </div>
-              </div>
-              <div style={{ ...MONO, fontSize: 10, color: "#9aa8b8", marginTop: 3, lineHeight: 1.4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                {skill.description}
-              </div>
+            <div>
+              <div style={{ fontSize: 13, color: "rgba(235,235,245,0.6)", marginBottom: 6 }}>Content (Markdown)</div>
+              <textarea
+                value={newContent}
+                onChange={(e) => setNewContent(e.target.value)}
+                onFocus={() => setCreateFocused("content")}
+                onBlur={() => setCreateFocused(null)}
+                rows={6}
+                placeholder="# Skill title&#10;Describe what Claude should do..."
+                style={{ ...inputStyle("content"), ...MONO, fontSize: 13 }}
+              />
             </div>
-          ))}
-        </div>
-
-        {/* Right: Skill content / editor */}
-        <div style={{ ...PANEL, flex: 1, overflow: "auto", display: "flex", flexDirection: "column" }}>
-          {selected ? (
-            <>
-              {/* Header bar */}
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14, paddingBottom: 12, borderBottom: "1px solid #1c1c28" }}>
-                <div>
-                  <div style={{ ...MONO, fontSize: 14, fontWeight: 700, color: "#00ff88" }}>{selected}</div>
-                  {selectedSkill?.description && (
-                    <div style={{ ...MONO, fontSize: 10, color: "#9aa8b8", marginTop: 3 }}>{selectedSkill.description}</div>
-                  )}
-                </div>
-                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                  {selectedSkill?.last_modified && !editing && (
-                    <span style={{ ...MONO, fontSize: 9, color: "#607888", letterSpacing: "0.08em" }}>
-                      {new Date(selectedSkill.last_modified).toLocaleDateString()}
-                    </span>
-                  )}
-                  {!editing && (
-                    <ActionButton onClick={startEdit}>Edit</ActionButton>
-                  )}
-                  {editing && (
-                    <>
-                      <ActionButton onClick={handleSave} disabled={saving}>
-                        {saving ? "Saving…" : "Save"}
-                      </ActionButton>
-                      <ActionButton onClick={cancelEdit} color="#ff4455">Cancel</ActionButton>
-                    </>
-                  )}
-                </div>
-              </div>
-
-              {/* Content or editor */}
-              {editing ? (
-                <TerminalTextarea
-                  value={editContent}
-                  onChange={setEditContent}
-                  rows={28}
-                  placeholder="# Skill content (markdown)"
-                />
-              ) : (
-                <div style={{
-                  background: "#06060c",
-                  padding: 16,
-                  borderRadius: 6,
-                  border: "1px solid #1c1c28",
+            <div style={{ display: "flex", gap: 10 }}>
+              <button
+                onClick={handleCreate}
+                disabled={!newName || !newDesc || !newContent}
+                style={{
+                  ...SF,
                   flex: 1,
-                  overflow: "auto",
-                  color: "#a0b0c0",
-                  lineHeight: 1.7,
-                  fontSize: 13,
-                }}>
-                  <ReactMarkdown
-                    components={{
-                      h1: ({ children }) => (
-                        <h1 style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 18, fontWeight: 700, color: "#00ff88", borderBottom: "1px solid #1c1c28", paddingBottom: 8, marginBottom: 14, marginTop: 0 }}>{children}</h1>
-                      ),
-                      h2: ({ children }) => (
-                        <h2 style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 14, fontWeight: 700, color: "#c0e8ff", marginTop: 22, marginBottom: 8 }}>{children}</h2>
-                      ),
-                      h3: ({ children }) => (
-                        <h3 style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 700, color: "#9aa8b8", marginTop: 16, marginBottom: 6 }}>{children}</h3>
-                      ),
-                      p: ({ children }) => (
-                        <p style={{ marginTop: 0, marginBottom: 10, color: "#a0b0c0" }}>{children}</p>
-                      ),
-                      ul: ({ children }) => (
-                        <ul style={{ paddingLeft: 20, marginBottom: 10, color: "#a0b0c0" }}>{children}</ul>
-                      ),
-                      ol: ({ children }) => (
-                        <ol style={{ paddingLeft: 20, marginBottom: 10, color: "#a0b0c0" }}>{children}</ol>
-                      ),
-                      li: ({ children }) => (
-                        <li style={{ marginBottom: 4 }}>{children}</li>
-                      ),
-                      code: ({ children, className }) => {
-                        const isBlock = className?.startsWith("language-");
-                        return isBlock ? (
-                          <pre style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, background: "#0a0a14", border: "1px solid #1c1c28", borderRadius: 4, padding: "10px 14px", overflowX: "auto", marginBottom: 12, color: "#c0e8ff" }}>
-                            <code>{children}</code>
-                          </pre>
-                        ) : (
-                          <code style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, background: "#0a0a14", border: "1px solid #1c1c28", borderRadius: 3, padding: "1px 5px", color: "#00ff88" }}>{children}</code>
-                        );
-                      },
-                      blockquote: ({ children }) => (
-                        <blockquote style={{ borderLeft: "3px solid #00ff88", paddingLeft: 12, marginLeft: 0, color: "#607888", fontStyle: "italic" }}>{children}</blockquote>
-                      ),
-                      a: ({ href, children }) => (
-                        <a href={href} target="_blank" rel="noreferrer" style={{ color: "#00aaff", textDecoration: "none" }}>{children}</a>
-                      ),
-                      strong: ({ children }) => (
-                        <strong style={{ color: "#c0e8ff", fontWeight: 700 }}>{children}</strong>
-                      ),
-                      em: ({ children }) => (
-                        <em style={{ color: "#9aa8b8" }}>{children}</em>
-                      ),
-                      hr: () => (
-                        <hr style={{ border: "none", borderTop: "1px solid #1c1c28", margin: "18px 0" }} />
-                      ),
-                      table: ({ children }) => (
-                        <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 12, fontSize: 12 }}>{children}</table>
-                      ),
-                      th: ({ children }) => (
-                        <th style={{ fontFamily: "'JetBrains Mono', monospace", textAlign: "left", padding: "5px 10px", borderBottom: "1px solid #1c1c28", color: "#607888", fontSize: 10, letterSpacing: "0.08em", textTransform: "uppercase" }}>{children}</th>
-                      ),
-                      td: ({ children }) => (
-                        <td style={{ padding: "5px 10px", borderBottom: "1px solid #0d0d1a", color: "#a0b0c0" }}>{children}</td>
-                      ),
-                    }}
-                  >
-                    {content}
-                  </ReactMarkdown>
-                </div>
-              )}
-            </>
-          ) : (
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", minHeight: 300 }}>
-              <div style={{ textAlign: "center" }}>
-                <div style={{ fontSize: 28, marginBottom: 10, opacity: 0.2 }}>◈</div>
-                <div style={{ ...MONO, fontSize: 11, color: "#607888", letterSpacing: "0.12em", textTransform: "uppercase" }}>
-                  Select a skill to view
-                </div>
-              </div>
+                  height: 44,
+                  background: "#0A84FF",
+                  border: "none",
+                  borderRadius: 12,
+                  fontSize: 17,
+                  fontWeight: 600,
+                  color: "#FFFFFF",
+                  cursor: (!newName || !newDesc || !newContent) ? "not-allowed" : "pointer",
+                  opacity: (!newName || !newDesc || !newContent) ? 0.5 : 1,
+                }}
+              >
+                Create Skill
+              </button>
+              <button
+                onClick={() => setCreating(false)}
+                style={{
+                  ...SF,
+                  flex: 1,
+                  height: 44,
+                  background: "rgba(120,120,128,0.24)",
+                  border: "none",
+                  borderRadius: 12,
+                  fontSize: 17,
+                  fontWeight: 600,
+                  color: "#FFFFFF",
+                  cursor: "pointer",
+                }}
+              >
+                Cancel
+              </button>
             </div>
-          )}
+          </div>
         </div>
-      </div>
+      )}
+
+      {/* Project skills group */}
+      {projectSkills.length > 0 && (
+        <div style={{ marginBottom: 24 }}>
+          <div style={{
+            fontSize: 13,
+            color: "rgba(235,235,245,0.6)",
+            textTransform: "uppercase",
+            letterSpacing: "0.04em",
+            marginBottom: 8,
+            paddingLeft: 4,
+          }}>
+            Project Skills ({projectSkills.length})
+          </div>
+          <div style={{ background: "#1C1C1E", borderRadius: 12, overflow: "hidden" }}>
+            {projectSkills.map((skill, i) => (
+              <SkillRow
+                key={skill.name}
+                skill={skill}
+                expanded={selected === skill.name}
+                selected={selected === skill.name}
+                expandedContent={expandedContent[skill.name] || ""}
+                onClick={() => handleSelect(skill.name)}
+                onDelete={handleDelete}
+                last={i === projectSkills.length - 1}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Global skills group */}
+      {globalSkills.length > 0 && (
+        <div style={{ marginBottom: 24 }}>
+          <div style={{
+            fontSize: 13,
+            color: "rgba(235,235,245,0.6)",
+            textTransform: "uppercase",
+            letterSpacing: "0.04em",
+            marginBottom: 8,
+            paddingLeft: 4,
+          }}>
+            Global Skills ({globalSkills.length})
+          </div>
+          <div style={{ background: "#1C1C1E", borderRadius: 12, overflow: "hidden" }}>
+            {globalSkills.map((skill, i) => (
+              <SkillRow
+                key={skill.name}
+                skill={skill}
+                expanded={selected === skill.name}
+                selected={selected === skill.name}
+                expandedContent={expandedContent[skill.name] || ""}
+                onClick={() => handleSelect(skill.name)}
+                onDelete={handleDelete}
+                last={i === globalSkills.length - 1}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {filtered.length === 0 && !loading && (
+        <div style={{
+          textAlign: "center",
+          padding: "60px 20px",
+          color: "rgba(235,235,245,0.3)",
+          fontSize: 15,
+        }}>
+          No skills found{search ? ` for "${search}"` : ""}
+        </div>
+      )}
+
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   );
 }

@@ -2,247 +2,501 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ── Base ──────────────────────────────────────────────────────────────────── */
-* {
-  box-sizing: border-box;
-}
+/* ── iOS Design System — NeuralFX TradingBot ─────────────────────────────── */
 
-body {
-  font-family: 'IBM Plex Sans', 'Segoe UI Variable', 'Segoe UI', sans-serif;
-  background:
-    radial-gradient(circle at 12% -10%, rgba(28, 213, 255, 0.12) 0%, rgba(28, 213, 255, 0) 35%),
-    radial-gradient(circle at 88% 120%, rgba(0, 253, 135, 0.10) 0%, rgba(0, 253, 135, 0) 40%),
-    #050505;
-  color: #f5f6f8;
-  min-height: 100dvh;
-  line-height: 1.45;
-}
-
-/* ── Material Symbols ──────────────────────────────────────────────────────── */
-.material-symbols-outlined {
-  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
-}
-
-/* ── Scrollbar ──────────────────────────────────────────────────────────────── */
-::-webkit-scrollbar       { width: 4px; height: 4px; }
-::-webkit-scrollbar-track { background: #0e0e0e; }
-::-webkit-scrollbar-thumb { background: #494847; }
-::-webkit-scrollbar-thumb:hover { background: #00fd87; }
-
-/* ── Utility: Glass Panel (Glassmorphism — design system: backdrop blur + light reflection) */
-.glass-panel {
-  background: linear-gradient(
-    135deg,
-    rgba(255, 255, 255, 0.04) 0%,
-    rgba(255, 255, 255, 0.01) 100%
-  );
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  box-shadow:
-    0 8px 32px rgba(0, 0, 0, 0.4),
-    inset 0 1px 0 rgba(255, 255, 255, 0.06);
-}
-
-/* ── Utility: Glass Card (elevated glassmorphism — for interactive cards) ─────── */
-.glass-card {
-  background: linear-gradient(
-    135deg,
-    rgba(255, 255, 255, 0.06) 0%,
-    rgba(255, 255, 255, 0.02) 100%
-  );
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.10);
-  box-shadow:
-    0 4px 24px rgba(0, 0, 0, 0.35),
-    0 1px 2px rgba(0, 0, 0, 0.2),
-    inset 0 1px 0 rgba(255, 255, 255, 0.08);
-  transition: box-shadow 200ms ease-out, border-color 200ms ease-out;
-}
-.glass-card:hover {
-  border-color: rgba(255, 255, 255, 0.16);
-  box-shadow:
-    0 8px 32px rgba(0, 0, 0, 0.45),
-    0 1px 2px rgba(0, 0, 0, 0.2),
-    inset 0 1px 0 rgba(255, 255, 255, 0.10);
-}
-
-/* ── Utility: Neon Glow ─────────────────────────────────────────────────────── */
-.neon-glow-primary {
-  box-shadow: 0 0 15px rgba(0, 253, 135, 0.15);
-}
-.neon-text-primary {
-  text-shadow: 0 0 8px rgba(0, 253, 135, 0.6);
-}
-.neon-glow-primary-bar {
-  box-shadow: 0 0 8px #00fd87;
-}
-
-/* ── Utility: Smooth transitions (design system: 150–300ms ease-out) ─────────── */
-.transition-smooth {
-  transition: all 200ms ease-out;
-}
-.transition-colors-smooth {
-  transition: color 200ms ease-out, background-color 200ms ease-out,
-              border-color 200ms ease-out, opacity 200ms ease-out;
-}
-
-/* ── Interactive element baseline (design system: cursor-pointer + hover feedback) */
-button,
-[role="button"],
-[role="tab"],
-[role="option"],
-select,
-label[for],
-.interactive {
-  cursor: pointer;
-}
-a { cursor: pointer; }
-
-/* ── Page entry animation ───────────────────────────────────────────────────── */
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(4px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-
-/* Applied to main page content so every nav transition feels instant */
-main > * {
-  animation: fadeIn 120ms ease-out;
-}
-
-/* ── Accessibility: respect reduced-motion preference (design system requirement) */
-@media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-  }
-  .animate-pulse, .animate-spin, .animate-bounce { animation: none !important; }
-}
-
-/* ── Utility: Instantaneous transitions ─────────────────────────────────────── */
-.duration-0 { transition-duration: 0ms !important; }
-
-/* Readability helpers for information-dense pages */
-.dashboard-eyebrow {
-  font-size: 10px;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  font-weight: 700;
-  color: #9aa0a8;
-}
-
-.dashboard-title {
-  font-family: 'Space Grotesk', 'IBM Plex Sans', sans-serif;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-}
-
-.dashboard-panel {
-  border: 1px solid rgba(154, 160, 168, 0.16);
-  background: linear-gradient(
-    180deg,
-    rgba(255, 255, 255, 0.03) 0%,
-    rgba(255, 255, 255, 0.01) 100%
-  );
-  backdrop-filter: blur(6px);
-}
-
-/* ── Terminal log row ───────────────────────────────────────────────────────── */
-.log-row {
-  display: flex;
-  gap: 12px;
-  padding: 4px 8px;
-  font-size: 12px;
-  font-family: 'JetBrains Mono', monospace;
-  transition: background 0ms;
-}
-.log-row:hover { background: #2c2c2c; }
-
-/* ── Legacy CSS vars (kept for non-migrated pages) ──────────────────────────── */
+/* System fonts — SF Pro (iOS/macOS native rendering) */
 :root {
-  --matrix:          #00fd87;
-  --matrix-dim:      #00ed7e;
-  --terminal:        #000000;
-  --terminal-surface:#0e0e0e;
-  --terminal-border: #494847;
+  --font-system: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text",
+    system-ui, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "SF Mono", SFMono-Regular, ui-monospace, Menlo, Monaco,
+    "Courier New", monospace;
 
-  /* Agent accent colors — new palette */
-  --agent-crucix:        #1cd5ff;
-  --agent-market:        #00d2fd;
-  --agent-analysis:      #ffffff;
-  --agent-strategy:      #00fd87;
-  --agent-deepseek:      #e966ff;
-  --agent-council:       #ffb86c;
-  --agent-risk:          #ff716c;
-  --agent-execution:     #ffffff;
-  --agent-trade-manager: #a4ffb9;
-  --agent-learning:      #79dfff;
-  --agent-logging:       #494847;
-}
+  /* ── iOS Dark Mode System Colors ──────────────────────────────────────── */
+  --ios-bg:           #000000;
+  --ios-bg-2:         #1C1C1E;
+  --ios-bg-3:         #2C2C2E;
+  --ios-bg-4:         #3A3A3C;
+  --ios-separator:    rgba(84, 84, 88, 0.65);
+  --ios-separator-opaque: #38383A;
 
-/* ── Legacy component classes (kept for non-migrated pages) ──────────────────── */
-.chip {
-  display: inline-flex; align-items: center;
-  padding: 2px 8px;
-  font-size: 9px; font-weight: 700;
-  letter-spacing: 0.08em; text-transform: uppercase;
-  font-family: 'JetBrains Mono', monospace;
-}
-.chip-green  { background: rgba(0,253,135,0.10); color: #00fd87; border: 1px solid rgba(0,253,135,0.25); }
-.chip-red    { background: rgba(255,113,108,0.10); color: #ff716c; border: 1px solid rgba(255,113,108,0.25); }
-.chip-yellow { background: rgba(245,197,24,0.10); color: #f5c518; border: 1px solid rgba(245,197,24,0.25); }
-.chip-cyan   { background: rgba(0,210,253,0.10); color: #00d2fd; border: 1px solid rgba(0,210,253,0.25); }
-.chip-purple { background: rgba(233,102,255,0.10); color: #e966ff; border: 1px solid rgba(233,102,255,0.25); }
+  /* Labels */
+  --ios-label:        #FFFFFF;
+  --ios-label-2:      rgba(235, 235, 245, 0.6);
+  --ios-label-3:      rgba(235, 235, 245, 0.3);
+  --ios-label-4:      rgba(235, 235, 245, 0.18);
 
-.data-table { width: 100%; border-collapse: collapse; font-size: 11px; font-family: 'JetBrains Mono', monospace; }
-.data-table thead tr { border-bottom: 1px solid #494847; }
-.data-table thead th { padding: 8px 10px; text-align: left; font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase; color: #777575; font-weight: 600; }
-.data-table tbody tr { border-bottom: 1px solid rgba(73,72,71,0.3); }
-.data-table tbody tr:hover { background: #2c2c2c; }
-.data-table tbody td { padding: 7px 10px; color: #adaaaa; }
+  /* System Colors — Dark Mode */
+  --ios-blue:         #0A84FF;
+  --ios-green:        #30D158;
+  --ios-red:          #FF453A;
+  --ios-orange:       #FF9F0A;
+  --ios-yellow:       #FFD60A;
+  --ios-teal:         #64D2FF;
+  --ios-cyan:         #32ADE6;
+  --ios-purple:       #BF5AF2;
+  --ios-indigo:       #5E5CE6;
+  --ios-pink:         #FF375F;
+  --ios-mint:         #63E6E2;
 
-.terminal-input {
-  background: #131313; border: 1px solid #494847;
-  padding: 8px 12px; color: #00fd87;
-  font-family: 'JetBrains Mono', monospace; font-size: 12px;
-  outline: none; width: 100%;
-}
-.terminal-input:focus { border-color: rgba(0,253,135,0.4); box-shadow: 0 0 0 2px rgba(0,253,135,0.08); }
+  /* Grays */
+  --ios-gray:         #8E8E93;
+  --ios-gray-2:       #636366;
+  --ios-gray-3:       #48484A;
+  --ios-gray-4:       #3A3A3C;
+  --ios-gray-5:       #2C2C2E;
+  --ios-gray-6:       #1C1C1E;
 
-/* ── Design System: Fira Code as heading font ────────────────────────────────── */
-/* Use font-headline / font-code Tailwind classes to apply Fira Code.             */
-/* Body text remains JetBrains Mono (technical terminal feel).                   */
-h1, h2, h3 { font-family: 'Fira Code', 'JetBrains Mono', monospace; }
+  /* Fills */
+  --ios-fill:              rgba(120, 120, 128, 0.36);
+  --ios-fill-2:            rgba(120, 120, 128, 0.32);
+  --ios-fill-3:            rgba(118, 118, 128, 0.24);
+  --ios-fill-4:            rgba(116, 116, 128, 0.18);
 
-/* ── Design System: Skeleton loader (design system: skeleton screens over blank) */
-@keyframes shimmer {
-  0%   { background-position: -200% 0; }
-  100% { background-position:  200% 0; }
-}
-.skeleton {
-  background: linear-gradient(
-    90deg,
-    rgba(255, 255, 255, 0.03) 25%,
-    rgba(255, 255, 255, 0.07) 50%,
-    rgba(255, 255, 255, 0.03) 75%
-  );
-  background-size: 200% 100%;
-  animation: shimmer 1.5s ease-in-out infinite;
-}
+  /* Agent accent colors (preserved, mapped to iOS palette) */
+  --agent-crucix:        #64D2FF;
+  --agent-market:        #32ADE6;
+  --agent-analysis:      #FFFFFF;
+  --agent-strategy:      #30D158;
+  --agent-neural:        #BF5AF2;
+  --agent-council:       #FF9F0A;
+  --agent-risk:          #FF453A;
+  --agent-execution:     #FFFFFF;
+  --agent-trade-manager: #63E6E2;
+  --agent-learning:      #64D2FF;
+  --agent-logging:       #636366;
+  --agent-model-manager: #5E5CE6;
 
-/* ── Design System: Focus states (keyboard nav accessibility) ────────────────── */
-:focus-visible {
-  outline: 2px solid rgba(0, 253, 135, 0.6);
-  outline-offset: 2px;
-}
-
-/* ── Design System: Z-depth layering scale ───────────────────────────────────── */
-:root {
+  /* Z-index scale */
   --z-base:    10;
   --z-float:   20;
   --z-overlay: 30;
   --z-modal:   50;
   --z-top:     100;
 }
+
+/* ── Base Reset ──────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+
+body {
+  font-family: var(--font-system);
+  background: var(--ios-bg);
+  color: var(--ios-label);
+  min-height: 100dvh;
+  line-height: 1.5;
+  font-size: 17px;
+  overflow-x: hidden;
+}
+
+/* ── Material Symbols ────────────────────────────────────────────────────── */
+.material-symbols-outlined {
+  font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24;
+  user-select: none;
+  line-height: 1;
+}
+
+/* ── Scrollbar ───────────────────────────────────────────────────────────── */
+::-webkit-scrollbar       { width: 3px; height: 3px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--ios-gray-3); border-radius: 2px; }
+::-webkit-scrollbar-thumb:hover { background: var(--ios-gray-2); }
+
+/* ── iOS Card ────────────────────────────────────────────────────────────── */
+.ios-card {
+  background: var(--ios-bg-2);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.ios-card-inset {
+  background: var(--ios-bg-3);
+  border-radius: 10px;
+}
+
+/* ── iOS Grouped List ────────────────────────────────────────────────────── */
+.ios-grouped {
+  background: var(--ios-bg-2);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.ios-grouped-row {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 16px;
+  border-bottom: 0.5px solid var(--ios-separator);
+}
+
+.ios-grouped-row:last-child {
+  border-bottom: none;
+}
+
+/* ── iOS Section Header ──────────────────────────────────────────────────── */
+.ios-section-header {
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--ios-label-2);
+  padding: 6px 16px 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+/* ── iOS Nav Item ────────────────────────────────────────────────────────── */
+.ios-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--ios-label-2);
+  cursor: pointer;
+  transition: background 150ms ease, color 150ms ease;
+  text-decoration: none;
+}
+
+.ios-nav-item:hover {
+  background: var(--ios-fill-3);
+  color: var(--ios-label);
+}
+
+.ios-nav-item.active {
+  background: var(--ios-fill);
+  color: var(--ios-label);
+}
+
+/* ── iOS Button ──────────────────────────────────────────────────────────── */
+.ios-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 44px;
+  padding: 0 20px;
+  border-radius: 12px;
+  font-family: var(--font-system);
+  font-size: 17px;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  transition: opacity 150ms ease, transform 100ms ease;
+  user-select: none;
+}
+
+.ios-btn:active { opacity: 0.75; transform: scale(0.97); }
+
+.ios-btn-primary {
+  background: var(--ios-blue);
+  color: #fff;
+}
+
+.ios-btn-secondary {
+  background: var(--ios-fill-3);
+  color: var(--ios-blue);
+}
+
+.ios-btn-danger {
+  background: rgba(255, 69, 58, 0.15);
+  color: var(--ios-red);
+}
+
+.ios-btn-sm {
+  height: 34px;
+  padding: 0 14px;
+  font-size: 15px;
+  border-radius: 10px;
+}
+
+/* ── iOS Badge / Chip ────────────────────────────────────────────────────── */
+.ios-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 8px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.ios-badge-green  { background: rgba(48, 209, 88, 0.15);  color: var(--ios-green);  }
+.ios-badge-red    { background: rgba(255, 69, 58, 0.15);   color: var(--ios-red);    }
+.ios-badge-blue   { background: rgba(10, 132, 255, 0.15);  color: var(--ios-blue);   }
+.ios-badge-orange { background: rgba(255, 159, 10, 0.15);  color: var(--ios-orange); }
+.ios-badge-gray   { background: var(--ios-fill-3);          color: var(--ios-gray);   }
+.ios-badge-purple { background: rgba(191, 90, 242, 0.15);  color: var(--ios-purple); }
+.ios-badge-teal   { background: rgba(100, 210, 255, 0.15); color: var(--ios-teal);   }
+
+/* ── iOS Input ───────────────────────────────────────────────────────────── */
+.ios-input {
+  background: var(--ios-fill-4);
+  border: none;
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-family: var(--font-system);
+  font-size: 17px;
+  color: var(--ios-label);
+  outline: none;
+  width: 100%;
+  transition: background 150ms ease;
+}
+
+.ios-input:focus {
+  background: var(--ios-fill-3);
+  box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.3);
+}
+
+.ios-input::placeholder {
+  color: var(--ios-label-3);
+}
+
+/* ── iOS Search Bar ──────────────────────────────────────────────────────── */
+.ios-search {
+  background: var(--ios-fill-4);
+  border-radius: 10px;
+  padding: 8px 12px;
+  font-family: var(--font-system);
+  font-size: 15px;
+  color: var(--ios-label);
+  border: none;
+  outline: none;
+  width: 100%;
+}
+
+.ios-search:focus { box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.3); }
+
+/* ── iOS Sheet / Modal ───────────────────────────────────────────────────── */
+.ios-sheet {
+  background: var(--ios-bg-2);
+  border-radius: 20px 20px 0 0;
+  box-shadow: 0 -4px 40px rgba(0, 0, 0, 0.5);
+}
+
+/* ── iOS Status Bar ──────────────────────────────────────────────────────── */
+.ios-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+/* ── Frosted Glass (iOS vibrancy) ────────────────────────────────────────── */
+.ios-frosted {
+  background: rgba(28, 28, 30, 0.85);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+}
+
+.ios-frosted-heavy {
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(40px) saturate(200%);
+  -webkit-backdrop-filter: blur(40px) saturate(200%);
+}
+
+/* ── Typography Scale ────────────────────────────────────────────────────── */
+.ios-large-title  { font-size: 34px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.2; }
+.ios-title-1      { font-size: 28px; font-weight: 700; letter-spacing: -0.015em; line-height: 1.25; }
+.ios-title-2      { font-size: 22px; font-weight: 700; letter-spacing: -0.01em; line-height: 1.3; }
+.ios-title-3      { font-size: 20px; font-weight: 600; line-height: 1.35; }
+.ios-headline     { font-size: 17px; font-weight: 600; line-height: 1.4; }
+.ios-body         { font-size: 17px; font-weight: 400; line-height: 1.5; }
+.ios-callout      { font-size: 16px; font-weight: 400; line-height: 1.5; }
+.ios-subhead      { font-size: 15px; font-weight: 400; line-height: 1.45; }
+.ios-footnote     { font-size: 13px; font-weight: 400; line-height: 1.4; }
+.ios-caption-1    { font-size: 12px; font-weight: 400; line-height: 1.35; }
+.ios-caption-2    { font-size: 11px; font-weight: 400; line-height: 1.3; }
+
+/* ── Mono / Data Display ─────────────────────────────────────────────────── */
+.ios-mono {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  letter-spacing: -0.01em;
+}
+
+.ios-mono-lg {
+  font-family: var(--font-mono);
+  font-size: 15px;
+}
+
+/* ── Divider ─────────────────────────────────────────────────────────────── */
+.ios-divider {
+  height: 0.5px;
+  background: var(--ios-separator);
+}
+
+.ios-divider-inset {
+  height: 0.5px;
+  background: var(--ios-separator);
+  margin-left: 56px;
+}
+
+/* ── Skeleton / Loading ──────────────────────────────────────────────────── */
+@keyframes ios-shimmer {
+  0%   { background-position: -400px 0; }
+  100% { background-position:  400px 0; }
+}
+
+.ios-skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--ios-bg-3) 25%,
+    var(--ios-bg-4) 50%,
+    var(--ios-bg-3) 75%
+  );
+  background-size: 800px 100%;
+  animation: ios-shimmer 1.4s ease-in-out infinite;
+  border-radius: 6px;
+}
+
+/* ── Animations ──────────────────────────────────────────────────────────── */
+@keyframes ios-fade-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes ios-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes ios-scale-in {
+  from { opacity: 0; transform: scale(0.95); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+@keyframes ios-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.4; }
+}
+
+.ios-animate-up     { animation: ios-fade-up 220ms cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+.ios-animate-in     { animation: ios-fade-in 180ms ease-out both; }
+.ios-animate-scale  { animation: ios-scale-in 200ms cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+.ios-pulse          { animation: ios-pulse 2s ease-in-out infinite; }
+
+/* Staggered children */
+.ios-animate-up > *:nth-child(1)  { animation-delay: 0ms; }
+.ios-animate-up > *:nth-child(2)  { animation-delay: 40ms; }
+.ios-animate-up > *:nth-child(3)  { animation-delay: 80ms; }
+.ios-animate-up > *:nth-child(4)  { animation-delay: 120ms; }
+.ios-animate-up > *:nth-child(5)  { animation-delay: 160ms; }
+.ios-animate-up > *:nth-child(6)  { animation-delay: 200ms; }
+
+/* ── Page transition ─────────────────────────────────────────────────────── */
+main > * { animation: ios-fade-up 200ms cubic-bezier(0.25, 0.46, 0.45, 0.94) both; }
+
+/* ── Focus ───────────────────────────────────────────────────────────────── */
+:focus-visible {
+  outline: 3px solid rgba(10, 132, 255, 0.5);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* ── Cursor ──────────────────────────────────────────────────────────────── */
+button, [role="button"], [role="tab"], select, label[for], a, .interactive {
+  cursor: pointer;
+}
+
+/* ── Reduced motion ──────────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ── iOS Segment Control ─────────────────────────────────────────────────── */
+.ios-segment {
+  display: inline-flex;
+  background: var(--ios-fill-4);
+  border-radius: 9px;
+  padding: 2px;
+  gap: 2px;
+}
+
+.ios-segment-item {
+  padding: 5px 16px;
+  border-radius: 7px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ios-label-2);
+  cursor: pointer;
+  transition: all 120ms ease;
+  border: none;
+  background: transparent;
+  font-family: var(--font-system);
+}
+
+.ios-segment-item.active {
+  background: var(--ios-bg-3);
+  color: var(--ios-label);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+/* ── iOS Toggle ──────────────────────────────────────────────────────────── */
+.ios-toggle {
+  width: 51px;
+  height: 31px;
+  border-radius: 16px;
+  background: var(--ios-gray-3);
+  position: relative;
+  cursor: pointer;
+  transition: background 200ms ease;
+  border: none;
+  outline: none;
+  flex-shrink: 0;
+}
+
+.ios-toggle.on { background: var(--ios-green); }
+
+.ios-toggle-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 27px;
+  height: 27px;
+  border-radius: 50%;
+  background: white;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+  transition: transform 200ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.ios-toggle.on .ios-toggle-thumb { transform: translateX(20px); }
+
+/* ── iOS Table ───────────────────────────────────────────────────────────── */
+.ios-table { width: 100%; border-collapse: collapse; }
+
+.ios-table th {
+  padding: 8px 16px;
+  text-align: left;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ios-label-3);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-bottom: 0.5px solid var(--ios-separator);
+}
+
+.ios-table td {
+  padding: 12px 16px;
+  font-size: 15px;
+  color: var(--ios-label);
+  border-bottom: 0.5px solid rgba(84, 84, 88, 0.3);
+}
+
+.ios-table tr:last-child td { border-bottom: none; }
+.ios-table tr:hover td { background: rgba(255, 255, 255, 0.03); }
+
+/* ── Utility classes ─────────────────────────────────────────────────────── */
+.text-green  { color: var(--ios-green);  }
+.text-red    { color: var(--ios-red);    }
+.text-blue   { color: var(--ios-blue);   }
+.text-orange { color: var(--ios-orange); }
+.text-teal   { color: var(--ios-teal);   }
+.text-purple { color: var(--ios-purple); }
+.text-muted  { color: var(--ios-label-2); }
+.text-dim    { color: var(--ios-label-3); }

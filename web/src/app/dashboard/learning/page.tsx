@@ -1,57 +1,71 @@
 "use client";
 
-import { useEffect, useState } from "react";
-
-// ── Types ─────────────────────────────────────────────────────────────────────
+import { useEffect, useState, useMemo } from "react";
+import SymbolFilter from "@/components/SymbolFilter";
+import PaginationControls from "@/components/PaginationControls";
 
 interface StrategyConfidence {
-  strategy: string; confidence: number;
-  total_trades: number; total_score: number; last_updated: string;
+  strategy: string;
+  confidence: number;
+  total_trades: number;
+  total_score: number;
+  last_updated: string;
 }
 
 interface TradeScore {
-  id: number; trade_id: string; strategy: string; symbol: string;
-  session: string; market_condition: string;
-  score: number; pnl: number; created_at: string;
+  id: number;
+  trade_id: string;
+  strategy: string;
+  symbol: string;
+  session: string;
+  market_condition: string;
+  score: number;
+  pnl: number;
+  created_at: string;
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+const FONT =
+  `-apple-system, BlinkMacSystemFont, "SF Pro Display", system-ui, sans-serif`;
+const MONO =
+  `"SF Mono", SFMono-Regular, ui-monospace, Menlo, monospace`;
 
 function formatStrategy(raw: string): string {
   const model = raw.includes(":") ? raw.split(":").pop()! : raw;
   return model.toLowerCase().replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-function confColor(conf: number): string {
-  if (conf >= 0.7) return "#00fd87";
-  if (conf >= 0.5) return "#ffb86c";
-  return "#ff716c";
-}
-
-function confLabel(conf: number): string {
-  if (conf >= 0.7) return "FULL";
-  if (conf >= 0.5) return "NORMAL";
-  if (conf >= 0.2) return "LOW";
-  return "DISABLED";
+function confBarColor(conf: number): string {
+  if (conf > 0.7) return "#30D158";
+  if (conf > 0.4) return "#FF9F0A";
+  return "#FF453A";
 }
 
 function scoreColor(score: number): string {
-  if (score >= 3) return "#00fd87";
-  if (score > 0)  return "#a4ffb9";
-  if (score >= -2) return "#ffb86c";
-  return "#ff716c";
+  if (score > 0) return "#30D158";
+  if (score < 0) return "#FF453A";
+  return "rgba(235,235,245,0.3)";
 }
 
 function fmtTime(iso: string): string {
-  try { return new Date(iso).toLocaleString(); } catch { return "—"; }
+  try {
+    return new Date(iso).toLocaleString("en-US", {
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  } catch {
+    return "—";
+  }
 }
-
-// ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function LearningPage() {
   const [confidences, setConfidences] = useState<StrategyConfidence[]>([]);
-  const [scores, setScores]           = useState<TradeScore[]>([]);
-  const [symbol, setSymbol]           = useState<string | null>(null);
+  const [scores, setScores] = useState<TradeScore[]>([]);
+  const [symbolFilter, setSymbolFilter] = useState<string | null>(null);
+  const [scoreSearch, setScoreSearch] = useState("");
+  const [scorePage, setScorePage] = useState(1);
+  const [scorePageSize, setScorePageSize] = useState(10);
 
   useEffect(() => {
     let active = true;
@@ -66,152 +80,203 @@ export default function LearningPage() {
         .catch(() => {});
     load();
     const id = setInterval(load, 15_000);
-    return () => { active = false; clearInterval(id); };
+    return () => {
+      active = false;
+      clearInterval(id);
+    };
   }, []);
 
-  const symbols = Array.from(new Set(scores.map((s) => s.symbol))).filter(Boolean);
-  const filtered = symbol ? scores.filter((s) => s.symbol === symbol) : scores;
+  const allSymbols = useMemo(
+    () => Array.from(new Set(scores.map((s) => s.symbol))).filter(Boolean).sort(),
+    [scores]
+  );
 
-  const totalWins   = filtered.filter((s) => Number(s.score) > 0).length;
-  const totalLosses = filtered.filter((s) => Number(s.score) <= 0).length;
-  const avgScore    = filtered.length > 0
-    ? filtered.reduce((a, t) => a + Number(t.score), 0) / filtered.length
-    : 0;
+  const filteredScores = useMemo(
+    () => (symbolFilter ? scores.filter((s) => s.symbol === symbolFilter) : scores),
+    [scores, symbolFilter]
+  );
+
+  const filteredScoresBySearch = useMemo(() => {
+    const query = scoreSearch.trim().toLowerCase();
+    if (!query) return filteredScores;
+    return filteredScores.filter((score) => {
+      const haystack = [
+        score.symbol,
+        score.strategy,
+        score.session,
+        score.market_condition,
+      ]
+        .join(" ")
+        .toLowerCase();
+      return haystack.includes(query);
+    });
+  }, [filteredScores, scoreSearch]);
+
+  const pagedScores = useMemo(() => {
+    const start = (scorePage - 1) * scorePageSize;
+    return filteredScoresBySearch.slice(start, start + scorePageSize);
+  }, [filteredScoresBySearch, scorePage, scorePageSize]);
+
+  useEffect(() => {
+    setScorePage(1);
+  }, [scoreSearch, scorePageSize, symbolFilter]);
+
+  useEffect(() => {
+    const totalPages = Math.max(1, Math.ceil(filteredScoresBySearch.length / scorePageSize));
+    setScorePage((prev) => Math.min(prev, totalPages));
+  }, [filteredScoresBySearch.length, scorePageSize]);
 
   return (
-    <div className="flex flex-col gap-6 mt-6">
-
-      {/* ── Page Header ── */}
-      <div className="border-l-4 border-secondary pl-6 py-2 bg-surface-container-low">
-        <div className="flex items-center gap-2 mb-1">
-          <span className="text-secondary text-[10px] font-bold tracking-[0.2em] uppercase">FEEDBACK LOOP</span>
-          <span className="w-2 h-2 rounded-full bg-secondary animate-pulse" />
-        </div>
-        <h1 className="text-3xl md:text-5xl font-extrabold tracking-tighter uppercase mb-2">
-          Learning System
+    <div
+      style={{
+        fontFamily: FONT,
+        paddingTop: 20,
+        paddingLeft: 20,
+        paddingRight: 20,
+        paddingBottom: 40,
+        maxWidth: 1400,
+        margin: "0 auto",
+      }}
+    >
+      {/* Header */}
+      <div style={{ marginBottom: 24 }}>
+        <h1
+          style={{
+            fontSize: 28,
+            fontWeight: 700,
+            color: "#FFFFFF",
+            margin: 0,
+            marginBottom: 4,
+          }}
+        >
+          Learning
         </h1>
-        <p className="text-on-surface-variant text-sm font-mono">
-          Reinforcement loop — strategy confidence adjusts on every scored trade
-        </p>
-      </div>
-
-      {/* ── Symbol Filter ── */}
-      {symbols.length > 0 && (
-        <div className="flex flex-wrap gap-2">
-          <button
-            onClick={() => setSymbol(null)}
-            className={[
-              "text-[10px] font-bold tracking-widest uppercase px-3 py-1 border duration-0",
-              !symbol
-                ? "border-secondary text-secondary bg-secondary/10"
-                : "border-outline-variant/30 text-on-surface-variant hover:border-outline",
-            ].join(" ")}
-          >
-            ALL
-          </button>
-          {symbols.map((s) => (
-            <button
-              key={s}
-              onClick={() => setSymbol(s === symbol ? null : s)}
-              className={[
-                "text-[10px] font-bold tracking-widest uppercase px-3 py-1 border duration-0",
-                symbol === s
-                  ? "border-secondary text-secondary bg-secondary/10"
-                  : "border-outline-variant/30 text-on-surface-variant hover:border-outline",
-              ].join(" ")}
-            >
-              {s}
-            </button>
-          ))}
+        <div style={{ fontSize: 15, color: "rgba(235,235,245,0.6)" }}>
+          Strategy confidence &amp; trade reward scores
         </div>
-      )}
-
-      {/* ── Stats Strip ── */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-1 bg-outline-variant/10">
-        {[
-          { label: "SCORED",    value: filtered.length,                      color: "text-on-surface" },
-          { label: "WINS",      value: totalWins,                             color: "text-primary-fixed" },
-          { label: "LOSSES",    value: totalLosses,                          color: "text-error" },
-          { label: "AVG SCORE", value: `${avgScore >= 0 ? "+" : ""}${avgScore.toFixed(1)}`, color: avgScore >= 0 ? "text-primary-fixed" : "text-error" },
-        ].map(({ label, value, color }) => (
-          <div key={label} className="bg-surface p-4">
-            <div className="text-[9px] text-on-surface-variant tracking-[0.2em] uppercase mb-1">{label}</div>
-            <div className={`text-2xl font-extrabold ${color}`}>{value}</div>
-          </div>
-        ))}
       </div>
 
-      {/* ── Strategy Confidence ── */}
-      <div>
-        <div className="flex items-center gap-4 mb-4">
-          <h3 className="text-[9px] font-bold tracking-[0.3em] text-on-surface-variant uppercase">
-            Strategy Confidence
-          </h3>
-          <span className="text-[9px] text-outline">
-            20% = disabled · 50% = reduced · 70% = full
-          </span>
+      {/* Strategy Confidence Cards */}
+      <div style={{ marginBottom: 28 }}>
+        <div
+          style={{
+            fontSize: 12,
+            fontWeight: 600,
+            color: "rgba(235,235,245,0.6)",
+            textTransform: "uppercase",
+            letterSpacing: "0.08em",
+            marginBottom: 14,
+          }}
+        >
+          Strategy Confidence
         </div>
 
         {confidences.length === 0 ? (
-          <div className="p-8 bg-surface-container text-center text-[11px] text-on-surface-variant uppercase tracking-widest">
+          <div
+            style={{
+              background: "#1C1C1E",
+              borderRadius: 12,
+              padding: "40px 24px",
+              textAlign: "center",
+              color: "rgba(235,235,245,0.3)",
+              fontSize: 15,
+            }}
+          >
             No strategies tracked yet
           </div>
         ) : (
-          <div className="flex flex-col gap-2">
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))",
+              gap: 12,
+            }}
+          >
             {confidences.map((c) => {
-              const pct   = Math.max(0, Math.min(100, Number(c.confidence) * 100));
-              const color = confColor(Number(c.confidence));
-              const label = confLabel(Number(c.confidence));
+              const pct = Math.max(0, Math.min(100, Number(c.confidence) * 100));
+              const color = confBarColor(Number(c.confidence));
               return (
                 <div
                   key={c.strategy}
-                  className="relative bg-surface-container-low border border-outline-variant/10 p-4 overflow-hidden"
+                  style={{
+                    background: "#1C1C1E",
+                    borderRadius: 12,
+                    padding: "16px 20px",
+                  }}
                 >
-                  {/* Background fill track */}
                   <div
-                    className="absolute inset-0 pointer-events-none"
-                    style={{ background: `linear-gradient(90deg, ${color}08 0%, transparent ${pct}%, transparent 100%)` }}
-                  />
-                  <div className="relative flex items-center gap-4">
-                    {/* Name + meta */}
-                    <div className="w-44 shrink-0">
-                      <div className="text-[11px] font-bold text-on-surface-variant truncate" title={c.strategy}>
-                        {formatStrategy(c.strategy)}
-                      </div>
-                      <div className="text-[9px] text-outline mt-0.5">
-                        {Number(c.total_trades)} trades · score {Number(c.total_score) >= 0 ? "+" : ""}{Number(c.total_score)}
-                      </div>
-                    </div>
+                    style={{
+                      fontSize: 15,
+                      fontWeight: 600,
+                      color: "#FFFFFF",
+                      marginBottom: 4,
+                    }}
+                  >
+                    {formatStrategy(c.strategy)}
+                  </div>
 
-                    {/* Bar */}
-                    <div className="flex-1">
-                      <div className="w-full h-1.5 bg-surface-container-high overflow-hidden">
-                        <div
-                          className="h-full"
-                          style={{ width: `${pct}%`, background: color }}
-                        />
-                      </div>
-                    </div>
+                  {/* Bar */}
+                  <div
+                    style={{
+                      height: 4,
+                      background: "rgba(120,120,128,0.36)",
+                      borderRadius: 2,
+                      marginBottom: 10,
+                      marginTop: 10,
+                      overflow: "hidden",
+                    }}
+                  >
+                    <div
+                      style={{
+                        height: "100%",
+                        width: `${pct}%`,
+                        background: color,
+                        borderRadius: 2,
+                        transition: "width 0.4s ease",
+                      }}
+                    />
+                  </div>
 
-                    {/* Pct */}
-                    <div className="w-12 text-right shrink-0">
-                      <span className="text-base font-extrabold" style={{ color }}>{pct.toFixed(0)}%</span>
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                    }}
+                  >
+                    <div
+                      style={{
+                        fontSize: 12,
+                        color: "rgba(235,235,245,0.3)",
+                      }}
+                    >
+                      {Number(c.total_trades)} trades · score{" "}
+                      {Number(c.total_score) >= 0 ? "+" : ""}
+                      {Number(c.total_score)}
                     </div>
-
-                    {/* Badge */}
-                    <div className="w-20 shrink-0 text-right">
-                      <span
-                        className="text-[9px] font-bold px-2 py-0.5 border"
-                        style={{
-                          color,
-                          background: `${color}18`,
-                          borderColor: `${color}33`,
-                        }}
-                      >
-                        {label}
-                      </span>
+                    <div
+                      style={{
+                        fontSize: 17,
+                        fontWeight: 700,
+                        fontFamily: MONO,
+                        color,
+                      }}
+                    >
+                      {pct.toFixed(0)}%
                     </div>
                   </div>
+
+                  {c.last_updated && (
+                    <div
+                      style={{
+                        fontSize: 11,
+                        color: "rgba(235,235,245,0.2)",
+                        marginTop: 6,
+                      }}
+                    >
+                      Updated {fmtTime(c.last_updated)}
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -219,57 +284,209 @@ export default function LearningPage() {
         )}
       </div>
 
-      {/* ── Recent Scores ── */}
+      {/* Symbol Filter */}
+      {allSymbols.length > 0 && (
+        <div style={{ marginBottom: 16 }}>
+          <SymbolFilter
+            symbols={allSymbols}
+            selected={symbolFilter}
+            onSelect={setSymbolFilter}
+          />
+        </div>
+      )}
+
+      {/* Recent Scores Table */}
       <div>
-        <h3 className="text-[9px] font-bold tracking-[0.3em] text-on-surface-variant uppercase mb-4">
+        <div
+          style={{
+            fontSize: 12,
+            fontWeight: 600,
+            color: "rgba(235,235,245,0.6)",
+            textTransform: "uppercase",
+            letterSpacing: "0.08em",
+            marginBottom: 14,
+          }}
+        >
           Recent Scores
-        </h3>
+        </div>
 
-        <div className="overflow-x-auto bg-surface-container border border-outline-variant/10">
-          <table className="w-full text-[11px]">
-            <thead>
-              <tr className="border-b border-outline-variant/15">
-                {["Trade", "Strategy", "Symbol", "Session", "Condition", "Score", "P&L", "Time"].map((h) => (
-                  <th
-                    key={h}
-                    className={[
-                      "px-3 py-2.5 text-[9px] font-bold tracking-[0.15em] uppercase text-outline",
-                      h === "Score" || h === "P&L" ? "text-right" : "text-left",
-                    ].join(" ")}
-                  >
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((s, i) => (
-                <tr
-                  key={s.id}
-                  className={`border-b border-outline-variant/5 hover:bg-surface-bright duration-0 ${i % 2 === 0 ? "bg-surface-container-low" : ""}`}
-                >
-                  <td className="px-3 py-2 text-outline font-mono">{s.trade_id.slice(0, 8)}</td>
-                  <td className="px-3 py-2 text-on-surface-variant" title={s.strategy}>
-                    {formatStrategy(s.strategy)}
-                  </td>
-                  <td className="px-3 py-2 text-secondary font-bold">{s.symbol}</td>
-                  <td className="px-3 py-2 text-outline">{s.session || "—"}</td>
-                  <td className="px-3 py-2 text-outline">{s.market_condition || "—"}</td>
-                  <td className="px-3 py-2 text-right font-bold" style={{ color: scoreColor(Number(s.score)) }}>
-                    {Number(s.score) >= 0 ? "+" : ""}{s.score}
-                  </td>
-                  <td className="px-3 py-2 text-right font-bold" style={{ color: Number(s.pnl) >= 0 ? "#00fd87" : "#ff716c" }}>
-                    {Number(s.pnl) >= 0 ? "+" : ""}{Number(s.pnl).toFixed(2)}
-                  </td>
-                  <td className="px-3 py-2 text-outline whitespace-nowrap">{fmtTime(s.created_at)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div
+          style={{
+            background: "#1C1C1E",
+            borderRadius: 12,
+            overflow: "hidden",
+          }}
+        >
+          <div style={{ padding: "12px 12px 0" }}>
+            <input
+              value={scoreSearch}
+              onChange={(e) => setScoreSearch(e.target.value)}
+              placeholder="Filter scores..."
+              style={{
+                width: "100%",
+                height: 34,
+                borderRadius: 10,
+                border: "1px solid rgba(84,84,88,0.65)",
+                background: "rgba(118,118,128,0.2)",
+                color: "#FFFFFF",
+                padding: "0 12px",
+                fontSize: 13,
+                fontWeight: 500,
+                fontFamily: FONT,
+                outline: "none",
+              }}
+            />
+          </div>
 
-          {filtered.length === 0 && (
-            <div className="py-10 text-center text-[11px] text-outline uppercase tracking-widest">
-              {symbol ? `No scores for ${symbol}` : "No scores recorded yet"}
+          {filteredScoresBySearch.length === 0 ? (
+            <div
+              style={{
+                padding: "40px 24px",
+                textAlign: "center",
+                color: "rgba(235,235,245,0.3)",
+                fontSize: 15,
+              }}
+            >
+              {symbolFilter ? `No scores for ${symbolFilter}` : "No scores recorded yet"}
+            </div>
+          ) : (
+            <div style={{ overflowX: "auto" }}>
+              <table
+                style={{
+                  width: "100%",
+                  borderCollapse: "collapse",
+                  fontFamily: FONT,
+                }}
+              >
+                <thead>
+                  <tr>
+                    {["Strategy", "Symbol", "Session", "Score", "PnL", "Date"].map((h) => (
+                      <th
+                        key={h}
+                        style={{
+                          padding: "12px 16px",
+                          textAlign:
+                            h === "Score" || h === "PnL" ? "right" : "left",
+                          fontSize: 11,
+                          fontWeight: 600,
+                          letterSpacing: "0.06em",
+                          textTransform: "uppercase",
+                          color: "rgba(235,235,245,0.3)",
+                          borderBottom: "0.5px solid rgba(84,84,88,0.65)",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {pagedScores.map((s, idx) => {
+                    const isLast = idx === pagedScores.length - 1;
+                    const sc = Number(s.score);
+                    const pnl = Number(s.pnl);
+                    return (
+                      <tr key={s.id}>
+                        <td
+                          style={{
+                            padding: "13px 16px",
+                            fontSize: 14,
+                            color: "rgba(235,235,245,0.6)",
+                            borderBottom: isLast
+                              ? "none"
+                              : "0.5px solid rgba(84,84,88,0.3)",
+                          }}
+                        >
+                          {formatStrategy(s.strategy)}
+                        </td>
+                        <td
+                          style={{
+                            padding: "13px 16px",
+                            fontSize: 15,
+                            fontWeight: 700,
+                            color: "#FFFFFF",
+                            borderBottom: isLast
+                              ? "none"
+                              : "0.5px solid rgba(84,84,88,0.3)",
+                          }}
+                        >
+                          {s.symbol}
+                        </td>
+                        <td
+                          style={{
+                            padding: "13px 16px",
+                            fontSize: 13,
+                            color: "rgba(235,235,245,0.3)",
+                            borderBottom: isLast
+                              ? "none"
+                              : "0.5px solid rgba(84,84,88,0.3)",
+                          }}
+                        >
+                          {s.session || "—"}
+                        </td>
+                        <td
+                          style={{
+                            padding: "13px 16px",
+                            fontSize: 14,
+                            fontFamily: MONO,
+                            fontWeight: 700,
+                            color: scoreColor(sc),
+                            textAlign: "right",
+                            borderBottom: isLast
+                              ? "none"
+                              : "0.5px solid rgba(84,84,88,0.3)",
+                          }}
+                        >
+                          {sc >= 0 ? "+" : ""}
+                          {sc}
+                        </td>
+                        <td
+                          style={{
+                            padding: "13px 16px",
+                            fontSize: 14,
+                            fontFamily: MONO,
+                            fontWeight: 700,
+                            color: pnl >= 0 ? "#30D158" : "#FF453A",
+                            textAlign: "right",
+                            borderBottom: isLast
+                              ? "none"
+                              : "0.5px solid rgba(84,84,88,0.3)",
+                          }}
+                        >
+                          {pnl >= 0 ? "+" : ""}${pnl.toFixed(2)}
+                        </td>
+                        <td
+                          style={{
+                            padding: "13px 16px",
+                            fontSize: 13,
+                            color: "rgba(235,235,245,0.3)",
+                            whiteSpace: "nowrap",
+                            borderBottom: isLast
+                              ? "none"
+                              : "0.5px solid rgba(84,84,88,0.3)",
+                          }}
+                        >
+                          {fmtTime(s.created_at)}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {filteredScoresBySearch.length > 0 && (
+            <div style={{ padding: "0 12px 12px" }}>
+              <PaginationControls
+                page={scorePage}
+                totalItems={filteredScoresBySearch.length}
+                pageSize={scorePageSize}
+                onPageChange={setScorePage}
+                onPageSizeChange={setScorePageSize}
+                label="scores"
+              />
             </div>
           )}
         </div>

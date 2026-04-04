@@ -1,57 +1,104 @@
 "use client";
+
 import { useState } from "react";
 
-type ButtonVariant = "primary" | "danger" | "warning" | "ghost";
+// ── Types ─────────────────────────────────────────────────────────────────────
 
-const VARIANT_COLORS: Record<ButtonVariant, { base: string; r: number; g: number; b: number }> = {
-  primary: { base: "#00ff88", r: 0,   g: 255, b: 136 },
-  danger:  { base: "#ff4455", r: 255, g: 68,  b: 85  },
-  warning: { base: "#f5c518", r: 245, g: 197, b: 24  },
-  ghost:   { base: "#607888", r: 96,  g: 120, b: 136 },
+type Variant = "primary" | "secondary" | "danger";
+type Size    = "sm" | "md";
+
+interface Props {
+  children:  React.ReactNode;
+  onClick?:  () => void;
+  variant?:  Variant;
+  size?:     Size;
+  icon?:     string;
+  disabled?: boolean;
+}
+
+// ── Variant styles ────────────────────────────────────────────────────────────
+
+const VARIANTS: Record<Variant, { bg: string; color: string; border: string }> = {
+  primary: {
+    bg:     "#0A84FF",
+    color:  "#FFFFFF",
+    border: "transparent",
+  },
+  secondary: {
+    bg:     "rgba(118,118,128,0.24)",
+    color:  "#0A84FF",
+    border: "transparent",
+  },
+  danger: {
+    bg:     "rgba(255,69,58,0.15)",
+    color:  "#FF453A",
+    border: "transparent",
+  },
 };
+
+// ── Size styles ───────────────────────────────────────────────────────────────
+
+const SIZES: Record<Size, { height: number; fontSize: number; padding: string }> = {
+  sm: { height: 34, fontSize: 15, padding: "0 14px" },
+  md: { height: 44, fontSize: 17, padding: "0 20px" },
+};
+
+// ── Component ─────────────────────────────────────────────────────────────────
 
 export default function TerminalButton({
   children,
   onClick,
-  variant = "primary",
+  variant  = "primary",
+  size     = "md",
+  icon,
   disabled = false,
-  size = "md",
-  fullWidth = false,
-}: {
-  children: React.ReactNode;
-  onClick?: () => void;
-  variant?: ButtonVariant;
-  disabled?: boolean;
-  size?: "sm" | "md" | "lg";
-  fullWidth?: boolean;
-}) {
-  const [hovered, setHovered] = useState(false);
-  const { base, r, g, b } = VARIANT_COLORS[variant];
-  const alpha = disabled ? 0.04 : hovered ? 0.15 : 0.08;
-  const borderAlpha = disabled ? 0.15 : hovered ? 0.5 : 0.3;
-  const textColor = disabled ? `rgba(${r},${g},${b},0.35)` : base;
-  const padding = size === "sm" ? "5px 12px" : size === "lg" ? "12px 28px" : "9px 20px";
-  const fontSize = size === "sm" ? 9 : size === "lg" ? 11 : 11;
+}: Props) {
+  const [active, setActive] = useState(false);
+
+  const { bg, color, border } = VARIANTS[variant];
+  const { height, fontSize, padding } = SIZES[size];
+
+  const baseStyle: React.CSSProperties = {
+    display:        "inline-flex",
+    alignItems:     "center",
+    justifyContent: "center",
+    gap:            6,
+    height,
+    padding,
+    background:     disabled ? "rgba(118,118,128,0.12)" : bg,
+    color:          disabled ? "rgba(235,235,245,0.25)" : color,
+    border:         `0.5px solid ${border}`,
+    borderRadius:   10,
+    fontSize,
+    fontWeight:     600,
+    fontFamily:     '-apple-system, BlinkMacSystemFont, "SF Pro Display", system-ui, sans-serif',
+    cursor:         disabled ? "not-allowed" : "pointer",
+    outline:        "none",
+    transform:      active && !disabled ? "scale(0.97)" : "scale(1)",
+    opacity:        active && !disabled ? 0.75 : 1,
+    transition:     "transform 0.1s, opacity 0.1s",
+    userSelect:     "none" as const,
+    WebkitUserSelect: "none" as const,
+    boxSizing:      "border-box" as const,
+  };
 
   return (
     <button
       onClick={disabled ? undefined : onClick}
-      onMouseEnter={() => !disabled && setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      style={{
-        padding,
-        background: `rgba(${r},${g},${b},${alpha})`,
-        border: `1px solid rgba(${r},${g},${b},${borderAlpha})`,
-        borderRadius: 5,
-        fontFamily: "'JetBrains Mono', monospace",
-        fontSize, fontWeight: 700, letterSpacing: "0.08em",
-        textTransform: "uppercase" as const,
-        color: textColor,
-        cursor: disabled ? "not-allowed" : "pointer",
-        transition: "background 0.15s, border-color 0.15s",
-        width: fullWidth ? "100%" : undefined,
-      }}
+      disabled={disabled}
+      onMouseDown={() => setActive(true)}
+      onMouseUp={() => setActive(false)}
+      onMouseLeave={() => setActive(false)}
+      style={baseStyle}
     >
+      {icon && (
+        <span
+          className="material-symbols-outlined"
+          style={{ fontSize: size === "sm" ? 16 : 20, lineHeight: 1 }}
+        >
+          {icon}
+        </span>
+      )}
       {children}
     </button>
   );

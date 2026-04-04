@@ -109,7 +109,7 @@ MIN_ICT_SCORE_CRYPTO: float = float(os.getenv("MIN_ICT_SCORE_CRYPTO", "42.0"))
 
 # ── Risk ─────────────────────────────────────────────────────────────────
 MAX_RISK_PER_TRADE: float = float(os.getenv("MAX_RISK_PER_TRADE", "0.02"))
-MAX_OPEN_TRADES: int = int(os.getenv("MAX_OPEN_TRADES", "3"))
+MAX_OPEN_TRADES: int = int(os.getenv("MAX_OPEN_TRADES", "5"))
 MAX_DAILY_LOSS: float = float(os.getenv("MAX_DAILY_LOSS", "0.05"))
 MAX_SPREAD_PIPS: float = float(os.getenv("MAX_SPREAD_PIPS", "3.0"))
 DRAWDOWN_COOLDOWN_HOURS: int = int(os.getenv("DRAWDOWN_COOLDOWN_HOURS", "24"))
@@ -292,11 +292,15 @@ TIMEZONE: str = os.getenv("TIMEZONE", "Europe/Paris")
 
 # ── Session / Day quality gates ─────────────────────────────────────────
 # Comma-separated sessions to ALLOW entries in.  Empty string = no gate.
-# Winning session pattern (from trade history): asian, overlap.
-# London and New York have 0% win rate in observed data.
-# Valid values: asian, london, new_york, overlap, off_hours
+# All four active sessions are enabled by default so the ICT killzone engine
+# (London 07-10 UTC, NY 12-16 UTC) can work as designed.  The prior "0% win
+# rate for London/NY" reflected a tiny early sample — those sessions carry
+# the highest volume, tightest spreads, and the strongest ICT setups.
+# Override via .env ENTRY_ALLOWED_SESSIONS=asian,overlap to revert if needed.
+# IMPORTANT: use "newyork" (no underscore) — that is what current_session() returns.
+# Valid values: asian, london, overlap, newyork, off_hours
 ENTRY_ALLOWED_SESSIONS: list = [
-    s.strip() for s in os.getenv("ENTRY_ALLOWED_SESSIONS", "asian,overlap").split(",")
+    s.strip() for s in os.getenv("ENTRY_ALLOWED_SESSIONS", "asian,london,overlap,newyork").split(",")
     if s.strip()
 ]
 # Days to BLOCK entries.  Saturday and Sunday show 0–11% win rates.
