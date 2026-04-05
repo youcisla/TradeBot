@@ -202,8 +202,10 @@ export default function PerformancePage() {
           <svg width="100%" viewBox={`0 0 800 120`} preserveAspectRatio="none" style={{ display: "block", height: 120 }}>
             {/* Zero line */}
             {(() => {
-              const mn = Math.min(...equityCurve);
-              const mx = Math.max(...equityCurve);
+              const nums = equityCurve.map(Number).filter(n => isFinite(n));
+              if (nums.length === 0) return null;
+              const mn = Math.min(...nums);
+              const mx = Math.max(...nums);
               const range = mx - mn || 1;
               const zeroY = 120 - ((-mn) / range) * 120;
               return <line x1={0} x2={800} y1={zeroY} y2={zeroY} stroke="rgba(255,255,255,0.08)" strokeWidth={1} />;

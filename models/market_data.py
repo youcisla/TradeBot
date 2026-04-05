@@ -107,6 +107,14 @@ class MarketContext:
     tick_drop_pct: float = 0.0
     tick_drop_window_seconds: int = 0
 
+    # ── ML enrichment fields (populated by AnalysisAgent when enabled) ──
+    # GARCH(1,1) volatility regime — "low" | "normal" | "high" | "extreme"
+    garch_regime: str = "normal"
+    garch_vol: float = 0.0      # annualised conditional volatility estimate
+    # Kalman-smoothed mid-price and estimated drift per tick
+    kalman_price: float = 0.0
+    kalman_velocity: float = 0.0
+
     def __post_init__(self) -> None:
         # If caller passed ``trend`` but left ``trend_direction`` at its
         # default, copy the value so both attributes are consistent.

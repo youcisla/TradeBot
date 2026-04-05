@@ -9,8 +9,10 @@ import logging
 from typing import TYPE_CHECKING
 
 from config import settings
+from models.garch_regime import GarchRegimeDetector
 from models.market_data import MarketContext, MarketData
 from utils.helpers import current_session, day_of_week
+from utils.kalman_filter import KalmanPriceFilter
 from utils.mesh_bus import mesh_span
 
 if TYPE_CHECKING:
@@ -26,6 +28,9 @@ class AnalysisAgent:
     def __init__(self, crucix_agent: "CrucixAgent | None" = None, db: "Database | None" = None) -> None:
         self._crucix = crucix_agent
         self._db = db
+        # Per-symbol stateful filters (persist across ticks)
+        self._garch: dict[str, GarchRegimeDetector] = {}
+        self._kalman: dict[str, KalmanPriceFilter] = {}
 
     def analyze(self, data: MarketData) -> MarketContext:
         try:
@@ -58,6 +63,18 @@ class AnalysisAgent:
     def _analyze_inner(self, data: MarketData) -> MarketContext:
         closes = [c.close for c in data.candles] if data.candles else []
 
+        # ── Kalman price filter (smooths microstructure noise) ─────────────────
+        kf = self._kalman.setdefault(data.symbol, KalmanPriceFilter(symbol=data.symbol))
+        kalman_price = kf.update(data.mid_price)
+        kalman_velocity = kf.velocity
+
+        # ── GARCH volatility regime ────────────────────────────────────────
+        garch = self._garch.setdefault(data.symbol, GarchRegimeDetector(symbol=data.symbol))
+        if len(closes) >= 2:
+            garch.update_price(closes[-1], closes[-2])
+        garch_regime = garch.regime
+        garch_vol = garch.conditional_vol
+
         # ── H1 indicators (primary analysis timeframe) ───────────────────
         sma_fast = self._sma(closes, settings.SMA_FAST_PERIOD)
         sma_slow = self._sma(closes, settings.SMA_SLOW_PERIOD)
@@ -81,6 +98,10 @@ class AnalysisAgent:
                                         and abs(sma_fast - sma_slow) > atr) else "ranging"
         else:
             regime = "unknown"
+
+        # GARCH overrides ADX volatile detection when enabled and model has warmed up
+        if settings.GARCH_ENABLED and garch.is_high_vol and regime != "volatile":
+            regime = "volatile"
 
         h1_trend = self._tf_trend(closes, settings.SMA_FAST_PERIOD, settings.SMA_SLOW_PERIOD)
 
@@ -143,6 +164,10 @@ class AnalysisAgent:
             shock_detected=data.shock_detected,
             tick_drop_pct=data.tick_drop_pct,
             tick_drop_window_seconds=data.tick_drop_window_seconds,
+            garch_regime=garch_regime,
+            garch_vol=garch_vol,
+            kalman_price=kalman_price,
+            kalman_velocity=kalman_velocity,
         )
 
         if self._crucix:

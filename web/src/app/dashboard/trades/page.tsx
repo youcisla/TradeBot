@@ -30,10 +30,11 @@ function fmtUsd(v: number | undefined): string {
 }
 
 function fmtPrice(v: number): string {
-  if (!v) return "—";
-  if (v >= 100) return v.toFixed(2);
-  if (v >= 1)   return v.toFixed(4);
-  return v.toFixed(5);
+  const n = Number(v);
+  if (!n && n !== 0) return "—";
+  if (n >= 100) return n.toFixed(2);
+  if (n >= 1)   return n.toFixed(4);
+  return n.toFixed(5);
 }
 
 function fmtDate(ts: string | undefined): string {
@@ -263,7 +264,7 @@ export default function TradeBookPage() {
                 {isOpen ? "—" : fmtPrice(t.stop_loss ?? 0)}
               </span>
               <span style={{ fontFamily: MONO, fontSize: 12, color: "rgba(232,234,237,0.55)" }}>
-                {t.lot_size?.toFixed(2) ?? "—"}
+                {t.lot_size != null ? Number(t.lot_size).toFixed(2) : "—"}
               </span>
               <span style={{ fontFamily: MONO, fontSize: 13, fontWeight: 600, color: pnlColor, textAlign: "right" }}>
                 {isOpen ? "—" : fmtUsd(pnl)}
