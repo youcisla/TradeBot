@@ -217,6 +217,10 @@ python scripts/backtest.py --ml4t-benchmark --purge-size 5 --embargo-size 3
 python scripts/backtest.py --research-intake
 ```
 
+The ML4T benchmark now includes a microstructure proxy baseline model
+(`microstructure_tree_proxy_baseline`) built from short-horizon range, volume,
+and volatility-regime features.
+
 ## Runtime Profiles
 
 Set `BOT_PROFILE` in `.env` (or pass `-Profile` to `start.ps1`).
@@ -261,6 +265,10 @@ Research intake governance artifacts:
 - `research/promotion_checklist.{json,yaml}`
 - `research/candidate_backlog.json`
 - Output artifact: `backtesting/runs/research_intake.json`
+
+Research promotion scoring is uncertainty-aware: candidate posterior score is
+penalized when uncertainty or low evidence is high, before promotion gates are
+evaluated.
 
 ### 2. Web Dashboard (Vercel)
 

@@ -1,10 +1,10 @@
 {
   "schema_version": "1.0",
-  "generated_at": "2026-04-05T11:39:47.184829+00:00",
+  "generated_at": "2026-04-05T11:43:48.388764+00:00",
   "experiment": {
     "name": "research_intake_promotion",
     "metadata": {
-      "candidate_count": 2,
+      "candidate_count": 5,
       "rubric_version": "2026-04-05",
       "checklist_version": "2026-04-05",
       "promotion_threshold": 0.7,
@@ -13,17 +13,17 @@
     }
   },
   "aggregate": {
-    "symbols": 2,
-    "models_evaluated": 2,
-    "total_trades": 10
+    "symbols": 5,
+    "models_evaluated": 5,
+    "total_trades": 23
   },
   "symbols": {
     "zipline-event-parity": {
       "models": [
         {
           "name": "research_source_score",
-          "accuracy": 0.789,
-          "avg_strategy_return": 0.789,
+          "accuracy": 0.7476,
+          "avg_strategy_return": 0.747578,
           "trades": 5
         }
       ],
@@ -38,6 +38,9 @@
       },
       "score_breakdown": {
         "weighted_score": 0.789,
+        "posterior_score": 0.747578,
+        "uncertainty": 0.15,
+        "uncertainty_penalty_factor": 0.35,
         "threshold": 0.7,
         "parts": {
           "reproducibility": 0.9,
@@ -100,8 +103,8 @@
       "models": [
         {
           "name": "research_source_score",
-          "accuracy": 0.616,
-          "avg_strategy_return": 0.616,
+          "accuracy": 0.5082,
+          "avg_strategy_return": 0.5082,
           "trades": 5
         }
       ],
@@ -116,6 +119,9 @@
       },
       "score_breakdown": {
         "weighted_score": 0.616,
+        "posterior_score": 0.5082,
+        "uncertainty": 0.5,
+        "uncertainty_penalty_factor": 0.35,
         "threshold": 0.7,
         "parts": {
           "reproducibility": 0.4,
@@ -123,6 +129,249 @@
           "maintenance": 0.7,
           "adoption": 0.6,
           "risk_alignment": 0.8
+        }
+      },
+      "promotion": {
+        "promoted": false,
+        "checklist_passed": 5,
+        "checklist_total": 5,
+        "required_failed": false,
+        "items": [
+          {
+            "id": "open_source_license",
+            "field": "open_source_license",
+            "required": true,
+            "minimum": 1.0,
+            "value": 1.0,
+            "passed": true
+          },
+          {
+            "id": "active_maintenance",
+            "field": "active_maintenance",
+            "required": true,
+            "minimum": 1.0,
+            "value": 1.0,
+            "passed": true
+          },
+          {
+            "id": "implementation_path",
+            "field": "implementation_path",
+            "required": true,
+            "minimum": 1.0,
+            "value": 1.0,
+            "passed": true
+          },
+          {
+            "id": "testability",
+            "field": "testability",
+            "required": true,
+            "minimum": 1.0,
+            "value": 1.0,
+            "passed": true
+          },
+          {
+            "id": "risk_fit",
+            "field": "risk_fit",
+            "required": true,
+            "minimum": 1.0,
+            "value": 1.0,
+            "passed": true
+          }
+        ]
+      }
+    },
+    "stock-model-zoo-pattern-mining": {
+      "models": [
+        {
+          "name": "research_source_score",
+          "accuracy": 0.3632,
+          "avg_strategy_return": 0.363219,
+          "trades": 4
+        }
+      ],
+      "candidate": {
+        "id": "stock-model-zoo-pattern-mining",
+        "name": "Stock-Prediction-Models pattern mining",
+        "url": "https://github.com/huseinzol05/Stock-Prediction-Models",
+        "source_id": "stock-prediction-models",
+        "source_category": "model-zoo",
+        "source_tier": "intake",
+        "notes": "Use for architecture/model idea mining only; avoid direct production parity claims"
+      },
+      "score_breakdown": {
+        "weighted_score": 0.4925,
+        "posterior_score": 0.363219,
+        "uncertainty": 0.75,
+        "uncertainty_penalty_factor": 0.35,
+        "threshold": 0.7,
+        "parts": {
+          "reproducibility": 0.35,
+          "implementation_readiness": 0.55,
+          "maintenance": 0.25,
+          "adoption": 0.75,
+          "risk_alignment": 0.7
+        }
+      },
+      "promotion": {
+        "promoted": false,
+        "checklist_passed": 4,
+        "checklist_total": 5,
+        "required_failed": true,
+        "items": [
+          {
+            "id": "open_source_license",
+            "field": "open_source_license",
+            "required": true,
+            "minimum": 1.0,
+            "value": 1.0,
+            "passed": true
+          },
+          {
+            "id": "active_maintenance",
+            "field": "active_maintenance",
+            "required": true,
+            "minimum": 1.0,
+            "value": 0.0,
+            "passed": false
+          },
+          {
+            "id": "implementation_path",
+            "field": "implementation_path",
+            "required": true,
+            "minimum": 1.0,
+            "value": 1.0,
+            "passed": true
+          },
+          {
+            "id": "testability",
+            "field": "testability",
+            "required": true,
+            "minimum": 1.0,
+            "value": 1.0,
+            "passed": true
+          },
+          {
+            "id": "risk_fit",
+            "field": "risk_fit",
+            "required": true,
+            "minimum": 1.0,
+            "value": 1.0,
+            "passed": true
+          }
+        ]
+      }
+    },
+    "bitcoin-bayesian-uncertainty-gate": {
+      "models": [
+        {
+          "name": "research_source_score",
+          "accuracy": 0.4234,
+          "avg_strategy_return": 0.42336,
+          "trades": 4
+        }
+      ],
+      "candidate": {
+        "id": "bitcoin-bayesian-uncertainty-gate",
+        "name": "Bitcoin Bayesian latent-source uncertainty gate",
+        "url": "https://github.com/stavros0/bitcoin-price-prediction",
+        "source_id": "bitcoin-bayesian-latent-source",
+        "source_category": "probabilistic-modeling",
+        "source_tier": "intake",
+        "notes": "Adapt posterior uncertainty as a confidence dampener before risk approval"
+      },
+      "score_breakdown": {
+        "weighted_score": 0.588,
+        "posterior_score": 0.42336,
+        "uncertainty": 0.8,
+        "uncertainty_penalty_factor": 0.35,
+        "threshold": 0.7,
+        "parts": {
+          "reproducibility": 0.6,
+          "implementation_readiness": 0.65,
+          "maintenance": 0.3,
+          "adoption": 0.55,
+          "risk_alignment": 0.85
+        }
+      },
+      "promotion": {
+        "promoted": false,
+        "checklist_passed": 4,
+        "checklist_total": 5,
+        "required_failed": true,
+        "items": [
+          {
+            "id": "open_source_license",
+            "field": "open_source_license",
+            "required": true,
+            "minimum": 1.0,
+            "value": 1.0,
+            "passed": true
+          },
+          {
+            "id": "active_maintenance",
+            "field": "active_maintenance",
+            "required": true,
+            "minimum": 1.0,
+            "value": 0.0,
+            "passed": false
+          },
+          {
+            "id": "implementation_path",
+            "field": "implementation_path",
+            "required": true,
+            "minimum": 1.0,
+            "value": 1.0,
+            "passed": true
+          },
+          {
+            "id": "testability",
+            "field": "testability",
+            "required": true,
+            "minimum": 1.0,
+            "value": 1.0,
+            "passed": true
+          },
+          {
+            "id": "risk_fit",
+            "field": "risk_fit",
+            "required": true,
+            "minimum": 1.0,
+            "value": 1.0,
+            "passed": true
+          }
+        ]
+      }
+    },
+    "hft-microstructure-tree-ensemble": {
+      "models": [
+        {
+          "name": "research_source_score",
+          "accuracy": 0.674,
+          "avg_strategy_return": 0.673971,
+          "trades": 5
+        }
+      ],
+      "candidate": {
+        "id": "hft-microstructure-tree-ensemble",
+        "name": "HFT microstructure tree ensemble",
+        "url": "https://github.com/hzjken/HFT-price-prediction",
+        "source_id": "hft-price-prediction",
+        "source_category": "microstructure-ml",
+        "source_tier": "core",
+        "notes": "Strong candidate for short-horizon baseline pipeline and feature engineering expansion"
+      },
+      "score_breakdown": {
+        "weighted_score": 0.7247,
+        "posterior_score": 0.673971,
+        "uncertainty": 0.2,
+        "uncertainty_penalty_factor": 0.35,
+        "threshold": 0.7,
+        "parts": {
+          "reproducibility": 0.8,
+          "implementation_readiness": 0.78,
+          "maintenance": 0.45,
+          "adoption": 0.65,
+          "risk_alignment": 0.9
         }
       },
       "promotion": {

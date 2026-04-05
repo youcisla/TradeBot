@@ -26,6 +26,38 @@ def _to_score(candidate: dict, key: str, default_value: float) -> float:
     return _clamp(default_value)
 
 
+def _as_non_negative_float(value: object, default_value: float = 0.0) -> float:
+  try:
+    return max(0.0, float(value))
+  except (TypeError, ValueError):
+    return max(0.0, default_value)
+
+
+def _estimate_uncertainty(candidate: dict) -> float:
+  """Estimate uncertainty in [0, 1] from optional candidate metadata."""
+  base_uncertainty = _as_non_negative_float(candidate.get("uncertainty", 0.0), 0.0)
+  confidence_interval_width = _as_non_negative_float(
+    candidate.get("confidence_interval_width", 0.0),
+    0.0,
+  )
+  evidence_count = _as_non_negative_float(candidate.get("evidence_count", 0.0), 0.0)
+
+  # More uncertainty if confidence interval is wide.
+  ci_component = _clamp(confidence_interval_width)
+
+  # Small sample sizes imply higher uncertainty.
+  sample_penalty = 0.0
+  if evidence_count > 0:
+    if evidence_count < 100:
+      sample_penalty = 0.20
+    elif evidence_count < 250:
+      sample_penalty = 0.10
+    elif evidence_count < 500:
+      sample_penalty = 0.05
+
+  return _clamp(max(base_uncertainty, ci_component) + sample_penalty)
+
+
 def load_json(path: str | Path) -> dict:
   file_path = Path(path)
   with file_path.open("r", encoding="utf-8") as fh:
@@ -99,7 +131,13 @@ def evaluate_research_candidates(
 
     checklist_status = _checklist_status(candidate, checklist)
     threshold = float(rubric.get("promotion_threshold", 0.7))
-    promoted = (weighted_score >= threshold) and (not checklist_status["required_failed"])
+    uncertainty = _estimate_uncertainty(candidate)
+    uncertainty_penalty_factor = _as_non_negative_float(
+      rubric.get("uncertainty_penalty_factor", 0.35),
+      0.35,
+    )
+    posterior_score = weighted_score * (1.0 - _clamp(uncertainty_penalty_factor) * uncertainty)
+    promoted = (posterior_score >= threshold) and (not checklist_status["required_failed"])
 
     source_id = candidate.get("source_id", "")
     source_meta = source_by_id.get(source_id, {})
@@ -109,8 +147,8 @@ def evaluate_research_candidates(
       "models": [
         {
           "name": "research_source_score",
-          "accuracy": round(weighted_score, 4),
-          "avg_strategy_return": round(weighted_score, 6),
+          "accuracy": round(posterior_score, 4),
+          "avg_strategy_return": round(posterior_score, 6),
           "trades": checklist_status["passed"],
         }
       ],
@@ -125,6 +163,9 @@ def evaluate_research_candidates(
       },
       "score_breakdown": {
         "weighted_score": round(weighted_score, 6),
+        "posterior_score": round(posterior_score, 6),
+        "uncertainty": round(uncertainty, 6),
+        "uncertainty_penalty_factor": round(uncertainty_penalty_factor, 6),
         "threshold": threshold,
         "parts": {k: round(v, 6) for k, v in parts.items()},
       },

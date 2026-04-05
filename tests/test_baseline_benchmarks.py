@@ -26,10 +26,15 @@ def _candles(n: int = 600) -> list[Candle]:
 
 def test_evaluate_baselines_returns_ranked_results():
   results = evaluate_baselines(_candles())
-  assert len(results) == 3
+  assert len(results) == 4
 
   names = {r.model for r in results}
-  assert names == {"momentum_baseline", "mean_reversion_baseline", "linear_score_baseline"}
+  assert names == {
+    "momentum_baseline",
+    "mean_reversion_baseline",
+    "linear_score_baseline",
+    "microstructure_tree_proxy_baseline",
+  }
 
   avg_returns = [r.avg_strategy_return for r in results]
   assert avg_returns == sorted(avg_returns, reverse=True)

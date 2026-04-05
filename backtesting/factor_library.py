@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from statistics import mean, pstdev
 
 from models.market_data import Candle
@@ -71,10 +72,42 @@ def extract_factor_rows(candles: list[Candle], lookback: int = 30) -> list[dict[
     range_hl = _safe_div(high_now - low_now, close_now)
     oc_delta = _safe_div(close_now - candles[idx].open, candles[idx].open)
 
+    prev_ranges = [c.high - c.low for c in candles[max(0, idx - 5):idx]]
+    avg_prev_range = mean(prev_ranges) if prev_ranges else (high_now - low_now)
+    range_expansion_5 = _safe_div(high_now - low_now, avg_prev_range, default=1.0)
+
+    close_location = _safe_div(close_now - low_now, high_now - low_now, default=0.5)
+
     vol_window = volumes[idx - lookback:idx]
     vol_mu = mean(vol_window) if vol_window else 0.0
     vol_sigma = pstdev(vol_window) if len(vol_window) > 1 else 0.0
     vol_z = _safe_div(volumes[idx] - vol_mu, vol_sigma, default=0.0)
+
+    short_vol_window = volumes[max(0, idx - 5):idx]
+    short_vol_mu = mean(short_vol_window) if short_vol_window else volumes[idx]
+    volume_impulse = _safe_div(volumes[idx], short_vol_mu, default=1.0)
+
+    ret_1_window_5 = []
+    for j in range(max(1, idx - 4), idx + 1):
+      ret = _safe_div(closes[j] - closes[j - 1], closes[j - 1])
+      ret_1_window_5.append(ret)
+
+    ret_1_window_20 = []
+    for j in range(max(1, idx - 19), idx + 1):
+      ret = _safe_div(closes[j] - closes[j - 1], closes[j - 1])
+      ret_1_window_20.append(ret)
+
+    realized_vol_5 = pstdev(ret_1_window_5) if len(ret_1_window_5) > 1 else 0.0
+    realized_vol_20 = pstdev(ret_1_window_20) if len(ret_1_window_20) > 1 else 0.0
+    volatility_regime = _safe_div(realized_vol_5, realized_vol_20, default=1.0)
+
+    trend_votes = 0
+    for ret in ret_1_window_5:
+      if ret > 0:
+        trend_votes += 1
+      elif ret < 0:
+        trend_votes -= 1
+    trend_persistence_5 = _safe_div(float(trend_votes), float(len(ret_1_window_5) or 1))
 
     rsi_14 = _rsi(closes[:idx + 1], period=14)
     atr_14 = _atr(candles[:idx + 1], period=14)
@@ -87,7 +120,14 @@ def extract_factor_rows(candles: list[Candle], lookback: int = 30) -> list[dict[
       "ret_5": ret_5,
       "range_hl": range_hl,
       "oc_delta": oc_delta,
+      "close_location": close_location,
+      "range_expansion_5": range_expansion_5,
       "vol_z": vol_z,
+      "volume_impulse": volume_impulse,
+      "realized_vol_5": realized_vol_5,
+      "realized_vol_20": realized_vol_20,
+      "volatility_regime": volatility_regime,
+      "trend_persistence_5": trend_persistence_5,
       "rsi_14": rsi_14,
       "atr_norm": atr_norm,
     })

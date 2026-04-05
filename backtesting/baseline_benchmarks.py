@@ -48,6 +48,23 @@ def _predict_linear_score(row: dict[str, float]) -> int:
   return 1 if score >= 0 else -1
 
 
+def _predict_microstructure_tree_proxy(row: dict[str, float]) -> int:
+  """Rule-based proxy for short-horizon tree-model behavior.
+
+  Inspired by HFT-style microstructure pipelines where short-range pressure,
+  volatility regime, and volume impulse are dominant signals.
+  """
+  score = (
+    0.35 * (row["close_location"] - 0.5)
+    + 0.25 * row["trend_persistence_5"]
+    + 0.20 * (row["range_expansion_5"] - 1.0)
+    + 0.15 * (row["volume_impulse"] - 1.0)
+    - 0.10 * (row["volatility_regime"] - 1.0)
+    + 0.05 * row["ret_1"]
+  )
+  return 1 if score >= 0 else -1
+
+
 def _evaluate_model(
   rows: list[dict[str, float]],
   closes: list[float],
@@ -118,4 +135,11 @@ def evaluate_baselines(
   linear = _evaluate_model(rows, closes, slices, _predict_linear_score)
   linear.model = "linear_score_baseline"
 
-  return sorted([momentum, mean_rev, linear], key=lambda r: r.avg_strategy_return, reverse=True)
+  microstructure = _evaluate_model(rows, closes, slices, _predict_microstructure_tree_proxy)
+  microstructure.model = "microstructure_tree_proxy_baseline"
+
+  return sorted(
+    [momentum, mean_rev, linear, microstructure],
+    key=lambda r: r.avg_strategy_return,
+    reverse=True,
+  )

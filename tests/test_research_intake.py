@@ -73,6 +73,63 @@ def test_evaluate_research_candidates_marks_promotion_correctly():
   assert reports["high_quality"]["promotion"]["promoted"] is True
   assert reports["fails_gate"]["promotion"]["promoted"] is False
   assert reports["fails_gate"]["promotion"]["required_failed"] is True
+  assert reports["high_quality"]["score_breakdown"]["posterior_score"] <= reports["high_quality"]["score_breakdown"]["weighted_score"]
+
+
+def test_evaluate_research_candidates_uncertainty_can_block_promotion():
+  candidates = [
+    {
+      "id": "high_but_uncertain",
+      "name": "High but uncertain",
+      "source_id": "s1",
+      "url": "https://example.com/high-uncertain",
+      "reproducibility": 0.95,
+      "implementation_readiness": 0.95,
+      "maintenance": 0.9,
+      "adoption": 0.8,
+      "risk_alignment": 0.95,
+      "uncertainty": 1.0,
+      "confidence_interval_width": 0.9,
+      "evidence_count": 50,
+      "open_source_license": True,
+      "active_maintenance": True,
+      "implementation_path": True,
+      "testability": True,
+      "risk_fit": True,
+    }
+  ]
+  rubric = {
+    "promotion_threshold": 0.8,
+    "uncertainty_penalty_factor": 0.5,
+    "weights": {
+      "reproducibility": 0.3,
+      "implementation_readiness": 0.25,
+      "maintenance": 0.2,
+      "adoption": 0.1,
+      "risk_alignment": 0.15,
+    },
+    "defaults": {},
+  }
+  checklist = {
+    "items": [
+      {"id": "license", "field": "open_source_license", "required": True, "minimum": 1},
+      {"id": "maint", "field": "active_maintenance", "required": True, "minimum": 1},
+    ]
+  }
+  curated_sources = {
+    "sources": [{"id": "s1", "category": "workflow", "tier": "core"}]
+  }
+
+  reports = evaluate_research_candidates(
+    candidates,
+    rubric=rubric,
+    checklist=checklist,
+    curated_sources=curated_sources,
+  )
+
+  detail = reports["high_but_uncertain"]["score_breakdown"]
+  assert detail["posterior_score"] < detail["weighted_score"]
+  assert reports["high_but_uncertain"]["promotion"]["promoted"] is False
 
 
 def test_run_research_intake_pipeline_exports_experiment_artifact(tmp_path):
@@ -140,3 +197,4 @@ def test_run_research_intake_pipeline_exports_experiment_artifact(tmp_path):
   assert artifact["experiment"]["name"] == "research_intake_promotion"
   assert "candidate_a" in artifact["symbols"]
   assert artifact["symbols"]["candidate_a"]["promotion"]["promoted"] is True
+  assert "posterior_score" in artifact["symbols"]["candidate_a"]["score_breakdown"]

@@ -32,6 +32,30 @@
       "category": "curation",
       "tier": "intake",
       "notes": "High-signal discovery funnel for papers, libraries, and frameworks"
+    },
+    {
+      "id": "stock-prediction-models",
+      "name": "Stock-Prediction-Models",
+      "url": "https://github.com/huseinzol05/Stock-Prediction-Models",
+      "category": "model-zoo",
+      "tier": "intake",
+      "notes": "Large model/agent idea library; archived and notebook-heavy, best for concept extraction"
+    },
+    {
+      "id": "bitcoin-bayesian-latent-source",
+      "name": "bitcoin-price-prediction",
+      "url": "https://github.com/stavros0/bitcoin-price-prediction",
+      "category": "probabilistic-modeling",
+      "tier": "intake",
+      "notes": "Bayesian latent source approach for uncertainty-aware directional prediction"
+    },
+    {
+      "id": "hft-price-prediction",
+      "name": "HFT-price-prediction",
+      "url": "https://github.com/hzjken/HFT-price-prediction",
+      "category": "microstructure-ml",
+      "tier": "core",
+      "notes": "Practical tree-based microstructure pipeline with lag/rolling features and feature selection"
     }
   ]
 }
