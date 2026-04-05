@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, Callable
 from broker.connector import BrokerConnector
 from utils.mesh_bus import mesh_span
 from config import settings
+from agents.guards import GuardPipeline
 from config.symbols import commission_per_lot, contract_size
 from models.signal import Signal
 from models.trade import Trade
@@ -44,6 +45,8 @@ class ExecutionAgent:
         self._db = db
         self._autotrading_block_until: datetime | None = None
         self._autotrading_block_last_notice: datetime | None = None
+        # GuardPipeline — pre-execution safety checks
+        self._guards = GuardPipeline(broker=broker, db=db)
 
     def open_trade(self, signal: Signal) -> Trade | None:
         try:
@@ -65,6 +68,24 @@ class ExecutionAgent:
             self._db.log_agent_event("execution", level, msg, data)
 
     def _open_inner(self, signal: Signal) -> Trade | None:
+        # ── GuardPipeline gate ────────────────────────────────────────────
+        if getattr(settings, "GUARD_PIPELINE_ENABLED", True):
+            live = self._broker.get_open_positions()
+            passed, reason = self._guards.check(signal, open_trades=live)
+            if not passed:
+                logger.warning(
+                    "EXEC BLOCKED [GUARD]: %s %s — %s",
+                    signal.symbol,
+                    signal.direction,
+                    reason,
+                )
+                self._emit(
+                    "warn",
+                    f"Trade blocked by guard: {reason}",
+                    {"symbol": signal.symbol, "direction": signal.direction, "reason": reason},
+                )
+                return None
+
         if self._autotrading_block_until is not None:
             now = datetime.now(UTC)
             if now < self._autotrading_block_until:

@@ -4,11 +4,11 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const TABS = [
-  { href: "/dashboard",          label: "Home",     icon: "space_dashboard" },
-  { href: "/dashboard/trades",   label: "Positions",   icon: "swap_horiz"      },
-  { href: "/dashboard/tools",    label: "Toolbox",     icon: "build"           },
-  { href: "/dashboard/chart",    label: "Live Chart",  icon: "query_stats"     },
-  { href: "/dashboard/settings", label: "Preferences", icon: "settings"        },
+  { href: "/dashboard",          label: "Home",    icon: "dashboard"         },
+  { href: "/dashboard/trades",   label: "Trades",  icon: "swap_horiz"        },
+  { href: "/dashboard/markets",  label: "Markets", icon: "candlestick_chart" },
+  { href: "/dashboard/brain",    label: "Brain",   icon: "psychology"        },
+  { href: "/dashboard/settings", label: "Settings",icon: "settings"          },
 ];
 
 export default function DashBottomNav() {

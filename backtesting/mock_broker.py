@@ -40,9 +40,23 @@ _TYPICAL_SPREADS: dict[str, float] = {
 class MockBroker(BrokerConnector):
     """Offline broker simulator for backtesting."""
 
-    def __init__(self, initial_balance: float = 10_000.0) -> None:
+    # Commission rate per lot per side (round-turn = 2×).
+    # Default 0.0001 matches a typical raw-spread ECN account (~$10/standard lot).
+    COMMISSION_PER_LOT_PER_SIDE: float = 0.0001
+
+    def __init__(
+        self,
+        initial_balance: float = 10_000.0,
+        commission_per_lot_per_side: float | None = None,
+    ) -> None:
         self._connected = False
         self._balance = initial_balance
+        self._commission_rate: float = (
+            commission_per_lot_per_side
+            if commission_per_lot_per_side is not None
+            else self.COMMISSION_PER_LOT_PER_SIDE
+        )
+        self.total_commission_paid: float = 0.0  # accumulated for reporting
 
         self.history: list[Candle] = []
         self.current_idx: int = -1
@@ -128,7 +142,10 @@ class MockBroker(BrokerConnector):
                 pnl = self._pnl(p.symbol, p.direction, p.entry_price, close_price, p.lot_size)
                 p.current_price = close_price
                 p.pnl = pnl
-                self._balance += pnl
+                # Deduct exit commission (one side — entry was already charged)
+                exit_commission = self._commission_rate * p.lot_size
+                self._balance += pnl - exit_commission
+                self.total_commission_paid += exit_commission
                 to_close.append((ticket, hit_sl))
 
         for ticket, was_sl in to_close:
@@ -202,8 +219,15 @@ class MockBroker(BrokerConnector):
             comment=comment,
         )
         self.positions[ticket] = pos
-        logger.debug("[MOCK] %s %s %.2f lots @ %.5f SL=%.5f TP=%.5f",
-                     direction, symbol, lot_size, entry_price, sl, tp or 0.0)
+
+        # Deduct entry commission immediately (one side)
+        entry_commission = self._commission_rate * lot_size
+        self._balance -= entry_commission
+        self.total_commission_paid += entry_commission
+
+        logger.debug("[MOCK] %s %s %.2f lots @ %.5f SL=%.5f TP=%.5f commission=%.4f",
+                     direction, symbol, lot_size, entry_price, sl, tp or 0.0,
+                     entry_commission)
         return OrderResult(
             success=True,
             order_id=str(uuid.uuid4()),
@@ -267,6 +291,10 @@ class MockBroker(BrokerConnector):
         c = self.current_candle.close if self.current_candle else pos.entry_price
         pnl = self._pnl(symbol, pos.direction, pos.entry_price, c, pos.lot_size)
         pos.current_price = c
+        # Deduct exit commission (other side of round-turn)
+        exit_commission = self._commission_rate * pos.lot_size
+        self._balance -= exit_commission
+        self.total_commission_paid += exit_commission
         pos.pnl = pnl
         self._balance += pnl
         self.closed_positions.append(pos)

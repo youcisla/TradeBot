@@ -29,6 +29,62 @@ BROKER_SERVER: str = os.getenv("BROKER_SERVER", "")
 ALPHA_VANTAGE_KEY: str = os.getenv("ALPHA_VANTAGE_KEY", "")
 TWELVE_DATA_KEY: str = os.getenv("TWELVE_DATA_KEY", "")
 
+# ── Intelligence Sweep / FRED / yfinance ─────────────────────────────────
+FRED_API_KEY: str = os.getenv("FRED_API_KEY", "")
+YFINANCE_ENABLED: bool = os.getenv("YFINANCE_ENABLED", "true").lower() == "true"
+INTELLIGENCE_SWEEP_INTERVAL_MINUTES: int = int(
+    os.getenv("INTELLIGENCE_SWEEP_INTERVAL_MINUTES", "15")
+)
+
+# ── OpenRouter LLM Gateway ───────────────────────────────────────────────
+OPENROUTER_API_KEY: str = os.getenv("OPENROUTER_API_KEY", "")
+OPENROUTER_BASE_URL: str = os.getenv(
+    "OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"
+)
+OPENROUTER_MODEL: str = os.getenv("OPENROUTER_MODEL", "anthropic/claude-3-haiku")
+OPENROUTER_FALLBACK_ENABLED: bool = (
+    os.getenv("OPENROUTER_FALLBACK_ENABLED", "false").lower() == "true"
+)
+
+# ── Guard Pipeline ───────────────────────────────────────────────────────
+GUARD_PIPELINE_ENABLED: bool = (
+    os.getenv("GUARD_PIPELINE_ENABLED", "true").lower() == "true"
+)
+GUARD_COOLDOWN_SECONDS: int = int(os.getenv("GUARD_COOLDOWN_SECONDS", "300"))
+GUARD_MAX_DAILY_LOSS_PCT: float = float(os.getenv("GUARD_MAX_DAILY_LOSS_PCT", "0.05"))
+GUARD_MAX_VIX: float = float(os.getenv("GUARD_MAX_VIX", "40.0"))
+GUARD_FEED_STALENESS_SECONDS: float = float(
+    os.getenv("GUARD_FEED_STALENESS_SECONDS", "120")
+)
+
+# ── Backtesting ──────────────────────────────────────────────────────────
+BACKTEST_COMMISSION_PER_LOT_PER_SIDE: float = float(
+    os.getenv("BACKTEST_COMMISSION_PER_LOT_PER_SIDE", "0.0001")
+)
+BACKTEST_WALK_FORWARD_ENABLED: bool = (
+    os.getenv("BACKTEST_WALK_FORWARD_ENABLED", "false").lower() == "true"
+)
+BACKTEST_WALK_FORWARD_WINDOW_DAYS: int = int(
+    os.getenv("BACKTEST_WALK_FORWARD_WINDOW_DAYS", "90")
+)
+
+# ── ML Enhancements ──────────────────────────────────────────────────────
+KALMAN_ENABLED: bool = os.getenv("KALMAN_ENABLED", "true").lower() == "true"
+GARCH_ENABLED: bool = os.getenv("GARCH_ENABLED", "true").lower() == "true"
+GARCH_HIGH_VOL_THRESHOLD: float = float(os.getenv("GARCH_HIGH_VOL_THRESHOLD", "2.0"))
+LGBM_ENSEMBLE_ENABLED: bool = (
+    os.getenv("LGBM_ENSEMBLE_ENABLED", "false").lower() == "true"
+)
+HEDGE_STRIP_ENABLED: bool = (
+    os.getenv("HEDGE_STRIP_ENABLED", "true").lower() == "true"
+)
+
+# ── MCP Server ───────────────────────────────────────────────────────────
+MCP_SERVER_PORT: int = int(os.getenv("MCP_SERVER_PORT", "8080"))
+MCP_SERVER_ENABLED: bool = (
+    os.getenv("MCP_SERVER_ENABLED", "false").lower() == "true"
+)
+
 # ── Economic Calendar / News Filter ─────────────────────────────────────
 NEWS_CALENDAR_SOURCE: str = os.getenv("NEWS_CALENDAR_SOURCE", "static")
 FINNHUB_API_KEY: str = os.getenv("FINNHUB_API_KEY", "")

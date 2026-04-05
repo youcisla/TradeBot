@@ -36,7 +36,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <main
           style={{
             flex: 1,
-            marginLeft: 256,
+            marginLeft: 240,
             minHeight: "calc(100vh - 64px)",
             padding: "24px 24px 96px",
             overflowX: "hidden",

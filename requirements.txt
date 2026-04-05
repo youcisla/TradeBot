@@ -34,3 +34,18 @@ matplotlib>=3.8
 # ── Walk-Forward Optimizer (LearningAgent.run_wfo_assessment) ────────────
 numpy>=1.26
 pandas>=2.1
+
+# ── Macro intelligence (filters/intelligence_sweep.py) ───────────────────
+fredapi>=0.5.0
+yfinance>=0.2.36
+aiohttp>=3.9.0
+
+# ── GARCH regime detection (models/garch_regime.py) ──────────────────────
+arch>=6.3.0
+
+# ── LightGBM ensemble (models/lgbm_ensemble.py) ──────────────────────────
+lightgbm>=4.3.0
+shap>=0.44.0
+
+# ── MCP server (tools/mcp_server.py) ─────────────────────────────────────
+fastmcp>=0.1.0

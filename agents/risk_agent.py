@@ -1116,22 +1116,3 @@ class RiskAgent:
                 )
                 return True
         return False
-
-from utils.dynamic_position_sizer import DynamicPositionSizer
-from utils.correlation_gate import CorrelationGate
-
-        # Kelly criterion position sizing (optional, controlled by settings)
-        self._kelly_sizer = DynamicPositionSizer(
-            lookback_days=30,
-            min_kelly_fraction=0.10,
-            max_kelly_fraction=0.25,
-            min_sample_trades=10,
-            fallback_risk_pct=settings.MAX_RISK_PER_TRADE,
-        ) if getattr(settings, 'KELLY_SIZING_ENABLED', False) else None
-
-        # Correlation gating for multi-position overleveraging
-        self._correlation_gate = CorrelationGate(
-            correlation_threshold=0.80,
-            lookback_days=30,
-            size_multiplier=0.5,
-        ) if getattr(settings, 'CORRELATION_GATING_ENABLED', False) else None

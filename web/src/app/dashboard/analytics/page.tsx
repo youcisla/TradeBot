@@ -1,546 +1,322 @@
 "use client";
 
-import { useEffect, useState, useCallback, useMemo } from "react";
-import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
-} from "recharts";
-import EquityCurve from "@/components/EquityCurve";
-import SymbolFilter from "@/components/SymbolFilter";
-import PaginationControls from "@/components/PaginationControls";
+import { useEffect, useMemo, useState } from "react";
 
-interface SymbolStat {
+//  Types 
+
+interface KpiData {
+  equity?: number;
+  balance?: number;
+  daily_pnl?: number;
+  monthly_pnl?: number;
+  open_trades?: number;
+}
+
+interface Trade {
+  id: number;
   symbol: string;
-  total: number;
-  wins: number;
-  losses: number;
-  total_pnl: number;
-  avg_pnl: number;
+  direction: string;
+  entry_price: number;
+  pnl?: number;
+  status: string;
+  strategy?: string;
+  open_time?: string;
+  close_time?: string;
 }
 
-interface DayPnl {
-  day: string;
-  pnl: number;
-  trades: number;
+//  Helpers 
+
+function fmtUsd(v: number): string {
+  const abs = Math.abs(v);
+  const f = abs.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return (v < 0 ? "-$" : "$") + f;
 }
 
-interface Kpis {
-  total_trades: number;
-  wins: number;
-  losses: number;
-  total_pnl: number;
-  avg_pnl: number;
-  best_trade: number;
-  worst_trade: number;
-  avg_duration_min: number;
+function pnlColor(v: number): string {
+  return v > 0 ? "#34C759" : v < 0 ? "#FF3B30" : "rgba(232,234,237,0.40)";
 }
 
-type Period = "1D" | "1W" | "1M" | "3M" | "All";
-
-const FONT =
-  `-apple-system, BlinkMacSystemFont, "SF Pro Display", system-ui, sans-serif`;
-const MONO =
-  `"SF Mono", SFMono-Regular, ui-monospace, Menlo, monospace`;
-
-function sinceDate(p: Period): string | undefined {
-  if (p === "All") return undefined;
-  const d = new Date();
-  if (p === "1D") d.setDate(d.getDate() - 1);
-  else if (p === "1W") d.setDate(d.getDate() - 7);
-  else if (p === "1M") d.setMonth(d.getMonth() - 1);
-  else d.setMonth(d.getMonth() - 3);
-  return d.toISOString();
+// SVG sparkline helpers
+function sparkline(values: number[], w: number, h: number): string {
+  if (values.length < 2) return "";
+  const mn = Math.min(...values);
+  const mx = Math.max(...values);
+  const range = mx - mn || 1;
+  const pts = values.map((v, i) => {
+    const x = (i / (values.length - 1)) * w;
+    const y = h - ((v - mn) / range) * h;
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  });
+  return `M${pts.join("L")}`;
 }
 
-interface KpiCardProps {
-  label: string;
-  value: string;
-  sub?: string;
-  color?: string;
-}
+//  Page 
 
-function KpiCard({ label, value, sub, color = "#FFFFFF" }: KpiCardProps) {
-  return (
-    <div
-      style={{
-        background: "#1C1C1E",
-        borderRadius: 12,
-        padding: 16,
-        minWidth: 130,
-        flexShrink: 0,
-      }}
-    >
-      <div
-        style={{
-          fontSize: 12,
-          color: "rgba(235,235,245,0.6)",
-          marginBottom: 8,
-          fontWeight: 500,
-          fontFamily: FONT,
-        }}
-      >
-        {label}
-      </div>
-      <div
-        style={{
-          fontSize: 20,
-          fontWeight: 700,
-          color,
-          fontFamily: MONO,
-        }}
-      >
-        {value}
-      </div>
-      {sub && (
-        <div
-          style={{
-            fontSize: 12,
-            color: "rgba(235,235,245,0.3)",
-            marginTop: 4,
-            fontFamily: FONT,
-          }}
-        >
-          {sub}
-        </div>
-      )}
-    </div>
-  );
-}
-
-interface BarTooltipProps {
-  active?: boolean;
-  payload?: { value?: number }[];
-  label?: string;
-}
-
-function DailyTooltip({ active, payload, label }: BarTooltipProps) {
-  if (!active || !payload?.length) return null;
-  const val = payload[0]?.value ?? 0;
-  return (
-    <div
-      style={{
-        background: "#2C2C2E",
-        borderRadius: 8,
-        padding: "8px 12px",
-        fontFamily: FONT,
-        fontSize: 12,
-        color: "#FFFFFF",
-        boxShadow: "0 4px 16px rgba(0,0,0,0.4)",
-      }}
-    >
-      <div style={{ color: "rgba(235,235,245,0.6)", marginBottom: 4 }}>{label}</div>
-      <div style={{ fontWeight: 700, color: Number(val) >= 0 ? "#30D158" : "#FF453A" }}>
-        {Number(val) >= 0 ? "+" : ""}${Number(val).toFixed(2)}
-      </div>
-    </div>
-  );
-}
-
-export default function AnalyticsPage() {
-  const [period, setPeriod] = useState<Period>("All");
-  const [symbolFilter, setSymbolFilter] = useState<string | null>(null);
-  const [kpis, setKpis] = useState<Kpis | null>(null);
-  const [dailyPnl, setDailyPnl] = useState<DayPnl[]>([]);
-  const [symbolStats, setSymbolStats] = useState<SymbolStat[]>([]);
-  const [tableSearch, setTableSearch] = useState("");
-  const [tablePage, setTablePage] = useState(1);
-  const [tablePageSize, setTablePageSize] = useState(10);
+export default function PerformancePage() {
+  const [kpis,    setKpis]    = useState<KpiData>({});
+  const [trades,  setTrades]  = useState<Trade[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const load = useCallback(() => {
-    setLoading(true);
-    const since = sinceDate(period);
-    const params = new URLSearchParams();
-    if (since) params.set("since", since);
-    if (symbolFilter) params.set("symbol", symbolFilter);
-    const qs = params.toString() ? `?${params.toString()}` : "";
-    fetch(`/api/analytics${qs}`)
-      .then((r) => r.json())
-      .then((d) => {
-        setKpis(d.kpis ?? null);
-        setDailyPnl(d.dailyPnl ?? []);
-        setSymbolStats(d.symbolStats ?? []);
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, [period, symbolFilter]);
-
-  useEffect(() => { load(); }, [load]);
-
-  const winRate = kpis && kpis.total_trades > 0
-    ? (kpis.wins / kpis.total_trades) * 100
-    : 0;
-  const winRateColor =
-    winRate >= 55 ? "#30D158" : winRate >= 45 ? "#FF9F0A" : "#FF453A";
-
-  const equityCurveData = useMemo(() => dailyPnl.map((d) => ({ day: d.day, pnl: d.pnl })), [dailyPnl]);
-
-  const allSymbols = useMemo(
-    () => symbolStats.map((s) => s.symbol).sort(),
-    [symbolStats]
-  );
-
-  const filteredSymbolStats = useMemo(() => {
-    const query = tableSearch.trim().toLowerCase();
-    if (!query) return symbolStats;
-    return symbolStats.filter((stat) => stat.symbol.toLowerCase().includes(query));
-  }, [symbolStats, tableSearch]);
-
-  const pagedSymbolStats = useMemo(() => {
-    const start = (tablePage - 1) * tablePageSize;
-    return filteredSymbolStats.slice(start, start + tablePageSize);
-  }, [filteredSymbolStats, tablePage, tablePageSize]);
-
   useEffect(() => {
-    setTablePage(1);
-  }, [tableSearch, tablePageSize, symbolFilter]);
+    const load = async () => {
+      setLoading(true);
+      try {
+        const [kRes, tRes] = await Promise.all([
+          fetch("/api/status"),
+          fetch("/api/trades?all=true&limit=500"),
+        ]);
+        const kd = await kRes.json();
+        setKpis(kd ?? {});
+        const td = await tRes.json();
+        setTrades(Array.isArray(td) ? td : (td.trades ?? []));
+      } catch { /* silent */ }
+      finally { setLoading(false); }
+    };
+    load();
+    const t = setInterval(load, 30_000);
+    return () => clearInterval(t);
+  }, []);
 
-  useEffect(() => {
-    const totalPages = Math.max(1, Math.ceil(filteredSymbolStats.length / tablePageSize));
-    setTablePage((prev) => Math.min(prev, totalPages));
-  }, [filteredSymbolStats.length, tablePageSize]);
+  const closed = useMemo(() => trades.filter(t => t.status?.toUpperCase() === "CLOSED"), [trades]);
+  const open_  = useMemo(() => trades.filter(t => t.status?.toUpperCase() !== "CLOSED"), [trades]);
 
-  const PERIODS: Period[] = ["1D", "1W", "1M", "3M", "All"];
+  const wins    = closed.filter(t => (t.pnl ?? 0) > 0).length;
+  const losses  = closed.filter(t => (t.pnl ?? 0) < 0).length;
+  const winRate = closed.length > 0 ? (wins / closed.length) * 100 : 0;
+  const totalPnl = closed.reduce((s, t) => s + (t.pnl ?? 0), 0);
+  const avgWin   = wins > 0 ? closed.filter(t => (t.pnl ?? 0) > 0).reduce((s, t) => s + (t.pnl ?? 0), 0) / wins : 0;
+  const avgLoss  = losses > 0 ? Math.abs(closed.filter(t => (t.pnl ?? 0) < 0).reduce((s, t) => s + (t.pnl ?? 0), 0) / losses) : 0;
+  const rr       = avgLoss > 0 ? avgWin / avgLoss : 0;
+  const profitFactor = avgLoss > 0 ? (avgWin * wins) / (avgLoss * losses) : 0;
+
+  // Equity curve from cumulative PnL
+  const equityCurve = useMemo(() => {
+    const sorted = [...closed]
+      .sort((a, b) => (a.close_time ?? "").localeCompare(b.close_time ?? ""))
+      .map(t => t.pnl ?? 0);
+    let cum = 0;
+    return sorted.map(p => { cum += p; return cum; });
+  }, [closed]);
+
+  // PnL by symbol
+  const bySymbol = useMemo(() => {
+    const map = new Map<string, { pnl: number; count: number }>();
+    for (const t of closed) {
+      const e = map.get(t.symbol) ?? { pnl: 0, count: 0 };
+      e.pnl += t.pnl ?? 0;
+      e.count++;
+      map.set(t.symbol, e);
+    }
+    return Array.from(map.entries())
+      .map(([sym, v]) => ({ sym, ...v }))
+      .sort((a, b) => Math.abs(b.pnl) - Math.abs(a.pnl))
+      .slice(0, 10);
+  }, [closed]);
+
+  // PnL by strategy
+  const byStrategy = useMemo(() => {
+    const map = new Map<string, { pnl: number; wins: number; total: number }>();
+    for (const t of closed) {
+      const key = t.strategy ?? "Unknown";
+      const e   = map.get(key) ?? { pnl: 0, wins: 0, total: 0 };
+      e.pnl  += t.pnl ?? 0;
+      e.total++;
+      if ((t.pnl ?? 0) > 0) e.wins++;
+      map.set(key, e);
+    }
+    return Array.from(map.entries())
+      .map(([strat, v]) => ({ strat, ...v, wr: v.total > 0 ? (v.wins / v.total) * 100 : 0 }))
+      .sort((a, b) => b.total - a.total);
+  }, [closed]);
+
+  // Monthly P&L groups
+  const byMonth = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const t of closed) {
+      if (!t.close_time) continue;
+      const d = new Date(t.close_time);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      map.set(key, (map.get(key) ?? 0) + (t.pnl ?? 0));
+    }
+    return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0])).slice(-6);
+  }, [closed]);
+
+  const MONO = '"SF Mono", SFMono-Regular, ui-monospace, monospace';
+  const card: React.CSSProperties = {
+    background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.09)", borderRadius: 12,
+  };
+  const sectionLabel: React.CSSProperties = {
+    fontSize: 11, fontWeight: 600, color: "rgba(232,234,237,0.40)",
+    letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 14,
+  };
+
+  //  Max bar widths for symbol chart
+  const maxAbsPnl = bySymbol.reduce((m, x) => Math.max(m, Math.abs(x.pnl)), 1);
+  const maxMonthPnl = byMonth.reduce((m, x) => Math.max(m, Math.abs(x[1])), 1);
 
   return (
-    <div
-      style={{
-        fontFamily: FONT,
-        paddingTop: 20,
-        paddingLeft: 20,
-        paddingRight: 20,
-        paddingBottom: 40,
-        maxWidth: 1400,
-        margin: "0 auto",
-      }}
-    >
-      {/* Header */}
-      <div style={{ marginBottom: 24, display: "flex", alignItems: "flex-end", justifyContent: "space-between", flexWrap: "wrap", gap: 16 }}>
-        <h1 style={{ fontSize: 28, fontWeight: 700, color: "#FFFFFF", margin: 0 }}>
-          Performance
-        </h1>
-        {loading && (
-          <span style={{ fontSize: 13, color: "rgba(235,235,245,0.3)" }}>
-            Loading...
-          </span>
-        )}
-      </div>
-
-      {/* Period Selector */}
-      <div
-        style={{
-          display: "inline-flex",
-          background: "rgba(118,118,128,0.24)",
-          borderRadius: 10,
-          padding: 2,
-          marginBottom: 24,
-          gap: 2,
-        }}
-      >
-        {PERIODS.map((p) => (
-          <button
-            key={p}
-            onClick={() => setPeriod(p)}
-            style={{
-              padding: "6px 16px",
-              borderRadius: 8,
-              border: "none",
-              fontSize: 13,
-              fontWeight: 600,
-              cursor: "pointer",
-              fontFamily: FONT,
-              background: period === p ? "#2C2C2E" : "transparent",
-              color: period === p ? "#FFFFFF" : "rgba(235,235,245,0.6)",
-              transition: "background 0.15s, color 0.15s",
-            }}
-          >
-            {p}
-          </button>
+    <>
+      {/*  Top KPI strip  */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 12, marginBottom: 20 }}>
+        {[
+          { label: "Net P&L",        value: fmtUsd(totalPnl),          color: pnlColor(totalPnl) },
+          { label: "Win Rate",       value: winRate.toFixed(1) + "%",   color: winRate >= 50 ? "#34C759" : "#FF9F0A" },
+          { label: "Risk / Reward",  value: rr.toFixed(2) + "×",       color: rr >= 1.5 ? "#34C759" : rr >= 1 ? "#FF9F0A" : "#FF3B30" },
+          { label: "Profit Factor",  value: profitFactor.toFixed(2),   color: profitFactor >= 1.5 ? "#34C759" : profitFactor >= 1 ? "#FF9F0A" : "#FF3B30" },
+        ].map(({ label, value, color }) => (
+          <div key={label} style={{ ...card, padding: "18px 20px" }}>
+            <div style={{ fontSize: 11, fontWeight: 600, color: "rgba(232,234,237,0.40)", letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 6 }}>{label}</div>
+            <div style={{ fontSize: 24, fontWeight: 700, color, fontFamily: MONO, letterSpacing: -0.5 }}>
+              {loading ? "—" : value}
+            </div>
+          </div>
         ))}
       </div>
 
-      {/* KPI Cards Row */}
-      {kpis && (
-        <div
-          style={{
-            display: "flex",
-            gap: 12,
-            marginBottom: 24,
-            overflowX: "auto",
-            paddingBottom: 4,
-            scrollbarWidth: "none",
-          }}
-        >
-          <KpiCard
-            label="Win Rate"
-            value={`${winRate.toFixed(1)}%`}
-            sub={`${kpis.wins}W / ${kpis.losses}L`}
-            color={winRateColor}
-          />
-          <KpiCard
-            label="Total PnL"
-            value={`${Number(kpis.total_pnl) >= 0 ? "+" : ""}$${Number(kpis.total_pnl).toFixed(2)}`}
-            color={Number(kpis.total_pnl) >= 0 ? "#30D158" : "#FF453A"}
-          />
-          <KpiCard
-            label="Best Trade"
-            value={`+$${Number(kpis.best_trade).toFixed(2)}`}
-            color="#30D158"
-          />
-          <KpiCard
-            label="Worst Trade"
-            value={`$${Number(kpis.worst_trade).toFixed(2)}`}
-            color="#FF453A"
-          />
-          <KpiCard
-            label="Avg Duration"
-            value={`${Math.floor(Number(kpis.avg_duration_min))}m`}
-            sub="per trade"
-            color="rgba(235,235,245,0.6)"
-          />
-          <KpiCard
-            label="Total Trades"
-            value={String(kpis.total_trades)}
-            color="rgba(235,235,245,0.6)"
-          />
-        </div>
-      )}
-
-      {/* Symbol Filter */}
-      {allSymbols.length > 0 && (
-        <div style={{ marginBottom: 24 }}>
-          <SymbolFilter
-            symbols={allSymbols}
-            selected={symbolFilter}
-            onSelect={setSymbolFilter}
-          />
-        </div>
-      )}
-
-      {/* Equity Curve */}
-      <div
-        style={{
-          background: "#1C1C1E",
-          borderRadius: 12,
-          padding: "16px 20px",
-          marginBottom: 20,
-        }}
-      >
-        <div
-          style={{
-            fontSize: 12,
-            fontWeight: 600,
-            color: "rgba(235,235,245,0.6)",
-            textTransform: "uppercase",
-            letterSpacing: "0.08em",
-            marginBottom: 12,
-          }}
-        >
-          Equity Curve
-        </div>
-        <EquityCurve data={equityCurveData} />
+      {/*  Second row: totals  */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: 12, marginBottom: 20 }}>
+        {[
+          { label: "Total Trades",  value: String(trades.length) },
+          { label: "Closed",        value: String(closed.length) },
+          { label: "Open",          value: String(open_.length),  color: "#0A84FF" },
+          { label: "Avg Win",       value: fmtUsd(avgWin),        color: "#34C759" },
+          { label: "Avg Loss",      value: fmtUsd(-avgLoss),      color: "#FF3B30" },
+        ].map(({ label, value, color }) => (
+          <div key={label} style={{ ...card, padding: "14px 18px" }}>
+            <div style={{ fontSize: 11, fontWeight: 600, color: "rgba(232,234,237,0.35)", letterSpacing: 0.4, textTransform: "uppercase", marginBottom: 4 }}>{label}</div>
+            <div style={{ fontSize: 18, fontWeight: 700, color: color ?? "#E8EAED", fontFamily: MONO }}>
+              {loading ? "—" : value}
+            </div>
+          </div>
+        ))}
       </div>
 
-      {/* Daily PnL Bar Chart */}
-      <div
-        style={{
-          background: "#1C1C1E",
-          borderRadius: 12,
-          padding: "16px 20px",
-          marginBottom: 20,
-        }}
-      >
-        <div
-          style={{
-            fontSize: 12,
-            fontWeight: 600,
-            color: "rgba(235,235,245,0.6)",
-            textTransform: "uppercase",
-            letterSpacing: "0.08em",
-            marginBottom: 12,
-          }}
-        >
-          Daily PnL
-        </div>
-        {dailyPnl.length === 0 ? (
-          <div
-            style={{
-              height: 160,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              color: "rgba(235,235,245,0.3)",
-              fontSize: 14,
-            }}
-          >
-            No data
+      {/*  Equity curve  */}
+      <div style={{ ...card, padding: "20px", marginBottom: 20 }}>
+        <div style={sectionLabel}>Equity Curve · Closed Trades P&L</div>
+        {equityCurve.length < 2 ? (
+          <div style={{ height: 120, display: "flex", alignItems: "center", justifyContent: "center", color: "rgba(232,234,237,0.20)", fontSize: 13 }}>
+            Not enough closed trades
           </div>
         ) : (
-          <ResponsiveContainer width="100%" height={160}>
-            <BarChart data={dailyPnl.map((d) => ({ ...d, pnl: Number(d.pnl) }))}>
-              <XAxis
-                dataKey="day"
-                tick={{ fill: "rgba(235,235,245,0.3)", fontSize: 11, fontFamily: FONT }}
-                axisLine={false}
-                tickLine={false}
-              />
-              <YAxis
-                tick={{ fill: "rgba(235,235,245,0.3)", fontSize: 11, fontFamily: FONT }}
-                axisLine={false}
-                tickLine={false}
-                width={50}
-                tickFormatter={(v: number) => `$${v}`}
-              />
-              <Tooltip content={<DailyTooltip />} />
-              <Bar dataKey="pnl" radius={[4, 4, 0, 0]}>
-                {dailyPnl.map((d, i) => (
-                  <Cell
-                    key={i}
-                    fill={Number(d.pnl) >= 0 ? "#30D158" : "#FF453A"}
-                    fillOpacity={0.85}
-                  />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
+          <svg width="100%" viewBox={`0 0 800 120`} preserveAspectRatio="none" style={{ display: "block", height: 120 }}>
+            {/* Zero line */}
+            {(() => {
+              const mn = Math.min(...equityCurve);
+              const mx = Math.max(...equityCurve);
+              const range = mx - mn || 1;
+              const zeroY = 120 - ((-mn) / range) * 120;
+              return <line x1={0} x2={800} y1={zeroY} y2={zeroY} stroke="rgba(255,255,255,0.08)" strokeWidth={1} />;
+            })()}
+            {/* Fill under curve */}
+            {(() => {
+              const path = sparkline(equityCurve, 800, 120);
+              const last = equityCurve[equityCurve.length - 1];
+              const isPositive = last >= 0;
+              return (
+                <>
+                  <defs>
+                    <linearGradient id="fillGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor={isPositive ? "#34C759" : "#FF3B30"} stopOpacity={0.15} />
+                      <stop offset="100%" stopColor={isPositive ? "#34C759" : "#FF3B30"} stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <path d={path + `L800,120 L0,120 Z`} fill="url(#fillGrad)" />
+                  <path d={path} fill="none" stroke={isPositive ? "#34C759" : "#FF3B30"} strokeWidth={1.5} />
+                </>
+              );
+            })()}
+          </svg>
+        )}
+        {equityCurve.length >= 2 && (
+          <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6, fontSize: 11, color: "rgba(232,234,237,0.25)", fontFamily: MONO }}>
+            <span>Trade 1</span>
+            <span style={{ color: pnlColor(equityCurve[equityCurve.length - 1]) }}>{fmtUsd(equityCurve[equityCurve.length - 1])} cumulative</span>
+            <span>Trade {equityCurve.length}</span>
+          </div>
         )}
       </div>
 
-      {/* Symbol Performance Table */}
-      {symbolStats.length > 0 && (
-        <div
-          style={{
-            background: "#1C1C1E",
-            borderRadius: 12,
-            overflow: "hidden",
-          }}
-        >
-          <div
-            style={{
-              padding: "16px 20px 12px",
-              fontSize: 12,
-              fontWeight: 600,
-              color: "rgba(235,235,245,0.6)",
-              textTransform: "uppercase",
-              letterSpacing: "0.08em",
-            }}
-          >
-            Symbol Performance
+      {/*  Bottom row  */}
+      <div style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
+
+        {/* By symbol */}
+        <div style={{ flex: 1 }}>
+          <div style={{ ...card, padding: "20px" }}>
+            <div style={sectionLabel}>P&L by Symbol</div>
+            {bySymbol.length === 0 ? (
+              <div style={{ fontSize: 13, color: "rgba(232,234,237,0.20)", textAlign: "center", padding: "20px 0" }}>No data</div>
+            ) : bySymbol.map(({ sym, pnl, count }) => (
+              <div key={sym} style={{ marginBottom: 10 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                  <span style={{ fontSize: 12, color: "#E8EAED", fontWeight: 600 }}>{sym}</span>
+                  <span style={{ fontSize: 12, fontFamily: MONO, color: pnlColor(pnl) }}>{fmtUsd(pnl)}</span>
+                </div>
+                <div style={{ height: 4, background: "rgba(255,255,255,0.06)", borderRadius: 2, overflow: "hidden" }}>
+                  <div style={{
+                    height: "100%", width: `${(Math.abs(pnl) / maxAbsPnl) * 100}%`,
+                    background: pnl > 0 ? "#34C759" : "#FF3B30", borderRadius: 2,
+                  }} />
+                </div>
+                <div style={{ fontSize: 10, color: "rgba(232,234,237,0.25)", marginTop: 3, fontFamily: MONO }}>{count} trade{count !== 1 ? "s" : ""}</div>
+              </div>
+            ))}
           </div>
-          <div style={{ padding: "0 12px 12px" }}>
-            <input
-              value={tableSearch}
-              onChange={(e) => setTableSearch(e.target.value)}
-              placeholder="Filter symbols..."
-              style={{
-                width: "100%",
-                height: 34,
-                borderRadius: 10,
-                border: "1px solid rgba(84,84,88,0.65)",
-                background: "rgba(118,118,128,0.2)",
-                color: "#FFFFFF",
-                padding: "0 12px",
-                fontSize: 13,
-                fontWeight: 500,
-                fontFamily: FONT,
-                outline: "none",
-              }}
-            />
-          </div>
-          <table
-            style={{ width: "100%", borderCollapse: "collapse", fontFamily: FONT }}
-          >
-            <thead>
-              <tr style={{ borderTop: "0.5px solid rgba(84,84,88,0.65)" }}>
-                {["Symbol", "Win Rate", "Trades", "Total PnL"].map((h) => (
-                  <th
-                    key={h}
-                    style={{
-                      padding: "10px 20px",
-                      textAlign: h === "Total PnL" ? "right" : "left",
-                      fontSize: 11,
-                      fontWeight: 600,
-                      letterSpacing: "0.06em",
-                      textTransform: "uppercase",
-                      color: "rgba(235,235,245,0.3)",
-                      borderBottom: "0.5px solid rgba(84,84,88,0.65)",
-                    }}
-                  >
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {pagedSymbolStats.map((s, idx) => {
-                const wr = s.total > 0 ? (Number(s.wins) / Number(s.total)) * 100 : 0;
-                const pnl = Number(s.total_pnl);
-                const isLast = idx === pagedSymbolStats.length - 1;
-                return (
-                  <tr key={s.symbol}>
-                    <td
-                      style={{
-                        padding: "13px 20px",
-                        fontSize: 15,
-                        fontWeight: 700,
-                        color: "#FFFFFF",
-                        borderBottom: isLast ? "none" : "0.5px solid rgba(84,84,88,0.3)",
-                      }}
-                    >
-                      {s.symbol}
-                    </td>
-                    <td
-                      style={{
-                        padding: "13px 20px",
-                        fontSize: 14,
-                        fontWeight: 600,
-                        color: wr >= 50 ? "#30D158" : "#FF453A",
-                        borderBottom: isLast ? "none" : "0.5px solid rgba(84,84,88,0.3)",
-                      }}
-                    >
-                      {wr.toFixed(0)}%
-                    </td>
-                    <td
-                      style={{
-                        padding: "13px 20px",
-                        fontSize: 14,
-                        color: "rgba(235,235,245,0.6)",
-                        borderBottom: isLast ? "none" : "0.5px solid rgba(84,84,88,0.3)",
-                      }}
-                    >
-                      {s.total}
-                    </td>
-                    <td
-                      style={{
-                        padding: "13px 20px",
-                        fontSize: 14,
-                        fontFamily: MONO,
-                        fontWeight: 700,
-                        color: pnl >= 0 ? "#30D158" : "#FF453A",
-                        textAlign: "right",
-                        borderBottom: isLast ? "none" : "0.5px solid rgba(84,84,88,0.3)",
-                      }}
-                    >
-                      {pnl >= 0 ? "+" : ""}${pnl.toFixed(2)}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-          {filteredSymbolStats.length > 0 && (
-            <div style={{ padding: "0 12px 12px" }}>
-              <PaginationControls
-                page={tablePage}
-                totalItems={filteredSymbolStats.length}
-                pageSize={tablePageSize}
-                onPageChange={setTablePage}
-                onPageSizeChange={setTablePageSize}
-                label="symbols"
-              />
-            </div>
-          )}
         </div>
-      )}
-    </div>
+
+        {/* Monthly P&L */}
+        <div style={{ flex: 1 }}>
+          <div style={{ ...card, padding: "20px" }}>
+            <div style={sectionLabel}>Monthly P&L · Last 6 Months</div>
+            {byMonth.length === 0 ? (
+              <div style={{ fontSize: 13, color: "rgba(232,234,237,0.20)", textAlign: "center", padding: "20px 0" }}>No closed trades</div>
+            ) : byMonth.map(([month, pnl]) => (
+              <div key={month} style={{ marginBottom: 12 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                  <span style={{ fontSize: 12, color: "rgba(232,234,237,0.55)" }}>
+                    {new Date(month + "-15").toLocaleDateString("en-US", { month: "short", year: "2-digit" })}
+                  </span>
+                  <span style={{ fontSize: 13, fontFamily: MONO, fontWeight: 700, color: pnlColor(pnl) }}>{fmtUsd(pnl)}</span>
+                </div>
+                <div style={{ height: 6, background: "rgba(255,255,255,0.06)", borderRadius: 3, overflow: "hidden" }}>
+                  <div style={{
+                    height: "100%", width: `${(Math.abs(pnl) / maxMonthPnl) * 100}%`,
+                    background: pnl > 0 ? "#34C759" : "#FF3B30", borderRadius: 3,
+                  }} />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* By strategy */}
+        <div style={{ flex: 1 }}>
+          <div style={{ ...card, padding: "20px" }}>
+            <div style={sectionLabel}>P&L by Strategy</div>
+            {byStrategy.length === 0 ? (
+              <div style={{ fontSize: 13, color: "rgba(232,234,237,0.20)", textAlign: "center", padding: "20px 0" }}>No data</div>
+            ) : byStrategy.map(({ strat, pnl, total, wr }) => (
+              <div key={strat} style={{
+                padding: "10px 12px", marginBottom: 8, borderRadius: 8,
+                background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)",
+              }}>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: "#E8EAED", maxWidth: "60%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {strat}
+                  </span>
+                  <span style={{ fontSize: 13, fontFamily: MONO, fontWeight: 700, color: pnlColor(pnl) }}>
+                    {fmtUsd(pnl)}
+                  </span>
+                </div>
+                <div style={{ display: "flex", gap: 16 }}>
+                  <span style={{ fontSize: 11, color: "rgba(232,234,237,0.35)" }}>{total} trades</span>
+                  <span style={{ fontSize: 11, color: wr >= 50 ? "#34C759" : "#FF9F0A" }}>{wr.toFixed(0)}% WR</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </>
   );
 }

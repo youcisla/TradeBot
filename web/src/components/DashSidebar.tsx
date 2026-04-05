@@ -5,36 +5,30 @@ import { usePathname } from "next/navigation";
 
 const NAV_SECTIONS = [
   {
-    label: "Control",
+    label: "Overview",
     items: [
-      { href: "/dashboard",               label: "Home",          icon: "space_dashboard" },
-      { href: "/dashboard/trades",        label: "Positions",     icon: "swap_horiz"      },
-      { href: "/dashboard/strategy",      label: "Automation",    icon: "neurology"       },
-      { href: "/dashboard/agent_theater", label: "Activity Feed", icon: "smart_toy"       },
+      { href: "/dashboard", label: "Command Center", icon: "dashboard" },
     ],
   },
   {
-    label: "Performance",
+    label: "Operations",
     items: [
-      { href: "/dashboard/analytics", label: "Performance",   icon: "bar_chart"         },
-      { href: "/dashboard/ict",       label: "Setup Scanner", icon: "candlestick_chart" },
-      { href: "/dashboard/learning",  label: "Insights",      icon: "school"            },
+      { href: "/dashboard/trades",  label: "Trade Book",   icon: "swap_horiz"        },
+      { href: "/dashboard/markets", label: "Market Intel", icon: "candlestick_chart" },
     ],
   },
   {
-    label: "Markets",
+    label: "Intelligence",
     items: [
-      { href: "/dashboard/chart", label: "Live Chart",   icon: "query_stats" },
-      { href: "/dashboard/world", label: "Macro Brief",  icon: "public"      },
-      { href: "/dashboard/globe", label: "Market Globe", icon: "language"    },
+      { href: "/dashboard/analytics", label: "Performance",  icon: "bar_chart"  },
+      { href: "/dashboard/brain",     label: "Agent Brain",  icon: "psychology" },
+      { href: "/dashboard/risk",      label: "Risk Console", icon: "shield"     },
     ],
   },
   {
     label: "System",
     items: [
-      { href: "/dashboard/tools",    label: "Toolbox",     icon: "build"        },
-      { href: "/dashboard/settings", label: "Preferences", icon: "settings"     },
-      { href: "/dashboard/skills",   label: "Skill Lab",   icon: "auto_awesome" },
+      { href: "/dashboard/settings", label: "Settings", icon: "settings" },
     ],
   },
 ];
@@ -55,7 +49,7 @@ export default function DashSidebar() {
           position: "fixed",
           top: 64,
           left: 0,
-          width: 256,
+          width: 240,
           height: "calc(100vh - 64px)",
           background:
             "linear-gradient(175deg, rgba(16,19,26,0.95) 0%, rgba(10,12,15,0.96) 40%, rgba(8,9,11,0.98) 100%)",

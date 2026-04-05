@@ -464,6 +464,17 @@ export async function getKpis() {
   return rows[0] ?? {};
 }
 
+/** Month-to-date closed P&L (used by Risk Console) */
+export async function getMonthlyPnl(): Promise<number> {
+  const rows = await query(`
+    SELECT COALESCE(SUM(pnl), 0)::float AS monthly_pnl
+    FROM trades
+    WHERE status = 'CLOSED'
+      AND close_time >= date_trunc('month', now() AT TIME ZONE 'UTC')
+  `);
+  return Number((rows[0] as { monthly_pnl: number }).monthly_pnl ?? 0);
+}
+
 // ── ICT Strategy Queries ────────────────────────────────────────────────
 
 /** Recent ICT setups (last 100) */
