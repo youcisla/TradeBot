@@ -109,12 +109,12 @@ MIN_ICT_SCORE_CRYPTO: float = float(os.getenv("MIN_ICT_SCORE_CRYPTO", "42.0"))
 
 # ── Risk ─────────────────────────────────────────────────────────────────
 MAX_RISK_PER_TRADE: float = float(os.getenv("MAX_RISK_PER_TRADE", "0.02"))
-MAX_OPEN_TRADES: int = int(os.getenv("MAX_OPEN_TRADES", "5"))
+MAX_OPEN_TRADES: int = int(os.getenv("MAX_OPEN_TRADES", "12"))
 MAX_DAILY_LOSS: float = float(os.getenv("MAX_DAILY_LOSS", "0.05"))
-MAX_SPREAD_PIPS: float = float(os.getenv("MAX_SPREAD_PIPS", "3.0"))
+MAX_SPREAD_PIPS: float = float(os.getenv("MAX_SPREAD_PIPS", "8.0"))
 DRAWDOWN_COOLDOWN_HOURS: int = int(os.getenv("DRAWDOWN_COOLDOWN_HOURS", "24"))
 MIN_LOT_SIZE: float = float(os.getenv("MIN_LOT_SIZE", "0.01"))
-MAX_LOT_SIZE: float = float(os.getenv("MAX_LOT_SIZE", "5.0"))
+MAX_LOT_SIZE: float = float(os.getenv("MAX_LOT_SIZE", "50.0"))
 # Per-asset-class spread limits.
 # Forex/exotic/commodity use pip-based limits.
 # Crypto uses a percentage-of-price limit (0.1 = 0.1%) because dollar
@@ -189,7 +189,7 @@ LIMIT_ENTRY_MAX_DISTANCE_ATR_CRYPTO: float = float(os.getenv("LIMIT_ENTRY_MAX_DI
 
 # ── Bot Loop ─────────────────────────────────────────────────────────────
 LOOP_INTERVAL_SECONDS: int = int(os.getenv("LOOP_INTERVAL_SECONDS", "5"))
-RECONCILE_EVERY_N_LOOPS: int = int(os.getenv("RECONCILE_EVERY_N_LOOPS", "10"))
+RECONCILE_EVERY_N_LOOPS: int = int(os.getenv("RECONCILE_EVERY_N_LOOPS", "60"))
 CANDLE_SERVER_PORT: int = int(os.getenv("CANDLE_SERVER_PORT", "5555"))
 # Minimum wall-clock seconds between re-scanning the same symbol.
 SCAN_COOLDOWN_SECONDS: int = int(os.getenv("SCAN_COOLDOWN_SECONDS", "300"))
@@ -204,7 +204,7 @@ SCAN_COOLDOWN_SECONDS_ASIA: int = int(
 # still scanning the full symbol universe.
 BTC_PRIORITY_SYMBOL: str = os.getenv("BTC_PRIORITY_SYMBOL", "BTCUSD")
 BTC_PRIORITY_SCAN_COOLDOWN_SECONDS: int = int(
-    os.getenv("BTC_PRIORITY_SCAN_COOLDOWN_SECONDS", "15")
+    os.getenv("BTC_PRIORITY_SCAN_COOLDOWN_SECONDS", "8")
 )
 EVENT_DRIVEN_RESCAN_ON_NEW_CANDLE: bool = (
     os.getenv("EVENT_DRIVEN_RESCAN_ON_NEW_CANDLE", "true").lower() == "true"
@@ -300,10 +300,66 @@ ORCHESTRATION_SCAN_ERROR_MIN_SAMPLES: int = int(
 
 # ── Data Validation ──────────────────────────────────────────────────────
 STUCK_QUOTE_THRESHOLD: int = int(os.getenv("STUCK_QUOTE_THRESHOLD", "10"))
+STUCK_QUOTE_THRESHOLD_CRYPTO: int = int(
+    os.getenv("STUCK_QUOTE_THRESHOLD_CRYPTO", "14")
+)
 SPIKE_PERCENT_THRESHOLD: float = float(os.getenv("SPIKE_PERCENT_THRESHOLD", "2.0"))
 
+# ── Execution hard-failure backoff ───────────────────────────────────────
+# MT5 10017/10027 indicates terminal-level autotrading disabled.
+# Backing off avoids hammering the terminal with repeated failed sends.
+EXEC_AUTOTRADING_ERROR_COOLDOWN_SECONDS: int = int(
+    os.getenv("EXEC_AUTOTRADING_ERROR_COOLDOWN_SECONDS", "300")
+)
+
+# ── Spread rejection cooldown ────────────────────────────────────────────
+# If a symbol repeatedly fails spread checks, temporarily cool it down
+# to avoid wasting loops on the same reject condition.
+SPREAD_REJECT_COOLDOWN_HITS: int = int(
+    os.getenv("SPREAD_REJECT_COOLDOWN_HITS", "3")
+)
+SPREAD_REJECT_COOLDOWN_SECONDS: int = int(
+    os.getenv("SPREAD_REJECT_COOLDOWN_SECONDS", "300")
+)
+
+# ── Autonomous tool system ──────────────────────────────────────────────
+# Enables a built-in tool registry that can run diagnostics and
+# corrective actions on a schedule from inside the main trading loop.
+TOOL_SYSTEM_ENABLED: bool = os.getenv("TOOL_SYSTEM_ENABLED", "true").lower() == "true"
+TOOL_SYSTEM_AUTORUN_EVERY_N_LOOPS: int = int(
+    os.getenv("TOOL_SYSTEM_AUTORUN_EVERY_N_LOOPS", "5")
+)
+TOOL_SYSTEM_STRICT_CRITICAL: bool = (
+    os.getenv("TOOL_SYSTEM_STRICT_CRITICAL", "true").lower() == "true"
+)
+TOOL_SYSTEM_MAX_ACTIONS_PER_CYCLE: int = int(
+    os.getenv("TOOL_SYSTEM_MAX_ACTIONS_PER_CYCLE", "8")
+)
+TOOL_SYSTEM_WARNING_SPIKE_THRESHOLD: int = int(
+    os.getenv("TOOL_SYSTEM_WARNING_SPIKE_THRESHOLD", "2")
+)
+TOOL_SYSTEM_EMERGENCY_RECOVERY_CYCLES: int = int(
+    os.getenv("TOOL_SYSTEM_EMERGENCY_RECOVERY_CYCLES", "2")
+)
+TOOL_SYSTEM_EMERGENCY_SYMBOLS: str = os.getenv(
+    "TOOL_SYSTEM_EMERGENCY_SYMBOLS",
+    "BTCUSD,ETHUSD,XAUUSD,EURUSD",
+)
+TOOL_SYSTEM_EMERGENCY_MAX_RISK_PER_TRADE: float = float(
+    os.getenv("TOOL_SYSTEM_EMERGENCY_MAX_RISK_PER_TRADE", "0.005")
+)
+TOOL_SYSTEM_EMERGENCY_MAX_OPEN_TRADES: int = int(
+    os.getenv("TOOL_SYSTEM_EMERGENCY_MAX_OPEN_TRADES", "1")
+)
+TOOL_SYSTEM_REWEIGHT_LOOKBACK_HOURS: int = int(
+    os.getenv("TOOL_SYSTEM_REWEIGHT_LOOKBACK_HOURS", "48")
+)
+TOOL_SYSTEM_REWEIGHT_MIN_TRADES: int = int(
+    os.getenv("TOOL_SYSTEM_REWEIGHT_MIN_TRADES", "4")
+)
+
 # ── Symbols (default for V1) ────────────────────────────────────────────
-DEFAULT_SYMBOL: str = os.getenv("DEFAULT_SYMBOL", "EURUSD")
+DEFAULT_SYMBOL: str = os.getenv("DEFAULT_SYMBOL", "BTCUSD")
 DEFAULT_TIMEFRAME: str = os.getenv("DEFAULT_TIMEFRAME", "H1")
 
 # ── DeepSeek LLM Strategy ────────────────────────────────────────────────
@@ -346,7 +402,7 @@ TIMEZONE: str = os.getenv("TIMEZONE", "Europe/Paris")
 # IMPORTANT: use "newyork" (no underscore) — that is what current_session() returns.
 # Valid values: asian, london, overlap, newyork, off_hours
 ENTRY_ALLOWED_SESSIONS: list = [
-    s.strip() for s in os.getenv("ENTRY_ALLOWED_SESSIONS", "asian,london,overlap,newyork").split(",")
+    s.strip() for s in os.getenv("ENTRY_ALLOWED_SESSIONS", "asian,london,overlap").split(",")
     if s.strip()
 ]
 # Days to BLOCK entries.  Saturday and Sunday show 0–11% win rates.
@@ -363,7 +419,10 @@ MTF_MIN_ALIGNMENT: float = float(os.getenv("MTF_MIN_ALIGNMENT", "0.0"))
 # Symbols scanned during the forex weekend (Friday 22:00 – Sunday 22:00 UTC).
 # Crypto markets run 24/7 so the bot stays active but narrows focus.
 # Comma-separated, e.g. "BTCUSD" or "BTCUSD,ETHUSD".
-WEEKEND_SYMBOLS: str = os.getenv("WEEKEND_SYMBOLS", "BTCUSD")
+WEEKEND_SYMBOLS: str = os.getenv(
+    "WEEKEND_SYMBOLS",
+    "BTCUSD,ETHUSD,BNBUSD,SOLUSD,XRPUSD,ADAUSD,DOTUSD,LTCUSD,EOSUSD,XLMUSD,TRXUSD",
+)
 
 # ── Crucix World Intelligence (optional) ─────────────────────────────
 CRUCIX_URL: str = os.getenv("CRUCIX_URL", "http://localhost:3117")

@@ -119,6 +119,10 @@ class RiskAgent:
         # to catch real equity changes between loops.
         self._equity_cache: tuple[float, float] = (0.0, 0.0)  # (monotonic_ts, value)
         self._tick_cache: dict[str, tuple[float, dict]] = {}  # symbol → (monotonic_ts, tick)
+        self._spread_reject_counts: dict[str, int] = {}
+        self._spread_reject_until: dict[str, datetime] = {}
+        self._emergency_max_risk_per_trade: float | None = None
+        self._emergency_max_open_trades: int | None = None
         # Tick spec cache (tick_size, tick_value) — refreshed every 60s.
         # tick_value is in account currency (MT5 converts automatically), so
         # this is the source of truth for EUR/USD and other cross-currency accounts.
@@ -164,7 +168,12 @@ class RiskAgent:
         (mock connector, symbol not in MT5).
         """
         balance = self._broker.get_balance()
-        risk_amount = balance * settings.MAX_RISK_PER_TRADE
+        max_risk_per_trade = (
+            self._emergency_max_risk_per_trade
+            if self._emergency_max_risk_per_trade is not None
+            else settings.MAX_RISK_PER_TRADE
+        )
+        risk_amount = balance * max_risk_per_trade
         sl_distance = abs(signal.entry_price - signal.stop_loss)
         if sl_distance == 0:
             return settings.MIN_LOT_SIZE
@@ -227,6 +236,20 @@ class RiskAgent:
 
         return max(settings.MIN_LOT_SIZE, min(settings.MAX_LOT_SIZE, lot_size))
 
+    def set_emergency_caps(self, *, max_risk_per_trade: float, max_open_trades: int) -> None:
+        self._emergency_max_risk_per_trade = max(0.0001, float(max_risk_per_trade))
+        self._emergency_max_open_trades = max(1, int(max_open_trades))
+
+    def clear_emergency_caps(self) -> None:
+        self._emergency_max_risk_per_trade = None
+        self._emergency_max_open_trades = None
+
+    def get_emergency_caps(self) -> dict[str, float | int | None]:
+        return {
+            "max_risk_per_trade": self._emergency_max_risk_per_trade,
+            "max_open_trades": self._emergency_max_open_trades,
+        }
+
     # ── internal checks (ordered fail-fast) ──────────────────────────────
 
     def _validate_hard(self, signal: Signal) -> bool:
@@ -279,7 +302,8 @@ class RiskAgent:
             return False
 
         # 3. Max concurrent trades
-        if len(open_trades) >= settings.MAX_OPEN_TRADES:
+        max_open_trades = self._emergency_max_open_trades or settings.MAX_OPEN_TRADES
+        if len(open_trades) >= max_open_trades:
             self._emit("warn", "MAX_TRADES — concurrent position cap reached")
             return False
 
@@ -363,17 +387,18 @@ class RiskAgent:
             return False
 
         # 4. Maximum concurrent open trades
-        if len(open_trades) >= settings.MAX_OPEN_TRADES:
+        max_open_trades = self._emergency_max_open_trades or settings.MAX_OPEN_TRADES
+        if len(open_trades) >= max_open_trades:
             logger.warning(
                 "RISK REJECT [MAX_TRADES]: %d open >= limit %d",
-                len(open_trades), settings.MAX_OPEN_TRADES,
+                len(open_trades), max_open_trades,
             )
             self._emit(
                 "warn",
-                f"MAX_TRADES — {len(open_trades)} open trades >= limit {settings.MAX_OPEN_TRADES}",
+                f"MAX_TRADES — {len(open_trades)} open trades >= limit {max_open_trades}",
                 {"check": "max_trades",
                  "count": len(open_trades),
-                 "limit": settings.MAX_OPEN_TRADES},
+                 "limit": max_open_trades},
             )
             return False
 
@@ -499,6 +524,11 @@ class RiskAgent:
 
     def _check_spread(self, signal: Signal) -> bool:
         """Return True if spread is within limits for the signal's asset class."""
+        now_utc = datetime.now(UTC)
+        spread_block_until = self._spread_reject_until.get(signal.symbol)
+        if spread_block_until and now_utc < spread_block_until:
+            return False
+
         live_spread = signal.entry_snapshot.spread
         # Reuse tick fetched by MarketAgent earlier in the same loop iteration
         # if it is still fresh (< 10s old), avoiding a redundant MT5 IPC call.
@@ -521,6 +551,7 @@ class RiskAgent:
             price = signal.entry_price or 1.0
             spread_pct = (live_spread / price) * 100
             if spread_pct > settings.MAX_SPREAD_PCT_CRYPTO:
+                self._register_spread_reject(signal.symbol, now_utc)
                 logger.warning(
                     "RISK REJECT [SPREAD]: %.3f%% > max %.1f%% for %s (crypto)",
                     spread_pct, settings.MAX_SPREAD_PCT_CRYPTO, signal.symbol,
@@ -539,6 +570,7 @@ class RiskAgent:
                     },
                 )
                 return False
+            self._clear_spread_reject(signal.symbol)
             return True
 
         pv = pip_value(signal.symbol)
@@ -553,6 +585,7 @@ class RiskAgent:
             max_spread = settings.MAX_SPREAD_PIPS
 
         if spread_pips > max_spread:
+            self._register_spread_reject(signal.symbol, now_utc)
             logger.warning(
                 "RISK REJECT [SPREAD]: %.1f pips > max %.1f for %s (%s)",
                 spread_pips, max_spread, signal.symbol, ac,
@@ -572,7 +605,21 @@ class RiskAgent:
             )
             return False
 
+        self._clear_spread_reject(signal.symbol)
         return True
+
+    def _register_spread_reject(self, symbol: str, now_utc: datetime) -> None:
+        count = self._spread_reject_counts.get(symbol, 0) + 1
+        self._spread_reject_counts[symbol] = count
+        if count >= settings.SPREAD_REJECT_COOLDOWN_HITS:
+            self._spread_reject_until[symbol] = now_utc + timedelta(
+                seconds=settings.SPREAD_REJECT_COOLDOWN_SECONDS
+            )
+            self._spread_reject_counts[symbol] = 0
+
+    def _clear_spread_reject(self, symbol: str) -> None:
+        self._spread_reject_counts[symbol] = 0
+        self._spread_reject_until.pop(symbol, None)
 
     def _emit(self, level: str, msg: str, data: dict | None = None) -> None:
         if self._db:

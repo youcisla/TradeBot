@@ -207,7 +207,14 @@ def commission_per_lot(symbol: str) -> float:
 
 # ── Active symbols (what the bot actually trades) ───────────────────────
 # Override via env:  ACTIVE_SYMBOLS=EURUSD,GBPUSD,XAUUSD
-_env_active = os.getenv("ACTIVE_SYMBOLS", "")
+_env_active = os.getenv(
+    "ACTIVE_SYMBOLS",
+    (
+        "EURUSD,USDJPY,GBPUSD,AUDUSD,USDCAD,USDCHF,"
+        "BTCUSD,ETHUSD,BNBUSD,SOLUSD,XRPUSD,ADAUSD,DOTUSD,LTCUSD,"
+        "EOSUSD,XLMUSD,TRXUSD,USDSGD,USDCNH,USDHKD"
+    ),
+)
 SYMBOLS: list[str] = (
     [s.strip() for s in _env_active.split(",") if s.strip()]
     if _env_active

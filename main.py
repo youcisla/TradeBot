@@ -9,6 +9,7 @@ Phase 1 uses MockConnector + DEMO_MODE = False — fully runnable end-to-end.
 from __future__ import annotations
 
 import concurrent.futures
+import json
 import logging
 import os
 import signal
@@ -20,6 +21,7 @@ import time
 if sys.platform == "win32":
     os.system("")  # activates VT100 processing for the current console
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import cast
 
 from broker.connector import BrokerConnector
@@ -56,6 +58,7 @@ from utils import terminal_ui as tui
 from utils.helpers import current_session, is_market_open, is_any_market_open, is_weekend, local_now
 from utils.orchestration_profiler import OrchestrationProfiler, OrchestrationTargets
 from utils.symbol_event_tracker import SymbolEventTracker
+from utils.tool_system import AutonomousToolSystem, result_to_text
 
 logger = logging.getLogger(__name__)
 
@@ -197,6 +200,25 @@ def main() -> None:
     weekend_strategy_agent = StrategyAgent(weekend_strategies, learning.get_confidence, db=db)
     execution_agent = ExecutionAgent(broker, state, risk_agent.calculate_position_size, db=db)
 
+    def _get_active_symbols_local() -> list[str]:
+        return _active_symbols[:]
+
+    def _set_active_symbols_local(new_symbols: list[str]) -> None:
+        global _active_symbols
+        _active_symbols = new_symbols[:]
+        logger.warning("Tool system updated active symbols: %s", ", ".join(_active_symbols))
+
+    tool_system = AutonomousToolSystem(
+        repo_root=Path(__file__).resolve().parent,
+        db=db,
+        broker=broker,
+        trade_manager=trade_manager,
+        risk_agent=risk_agent,
+        get_active_symbols=_get_active_symbols_local,
+        set_active_symbols=_set_active_symbols_local,
+        base_symbols=_active_symbols[:],
+    )
+
     # ── Trading Council (algorithmic quality gate) ────────────────────────
     council: CouncilAgent | None = None
     if settings.COUNCIL_ENABLED:
@@ -333,7 +355,7 @@ def main() -> None:
                 _update_heartbeat(db, broker, trade_manager, learning)
             except Exception:
                 logger.warning("Heartbeat update failed — continuing")
-            _process_commands(db, trade_manager)
+            _process_commands(db, trade_manager, tool_system)
             # Sleep in short bursts so kill/commands are picked up quickly
             for _ in range(30):  # 30 × 10s = 5 min total
                 if _shutdown or telegram_bot.is_kill_requested():
@@ -475,8 +497,18 @@ def main() -> None:
                 },
             )
 
+        if (
+            settings.TOOL_SYSTEM_ENABLED
+            and settings.TOOL_SYSTEM_AUTORUN_EVERY_N_LOOPS > 0
+            and loop_count % settings.TOOL_SYSTEM_AUTORUN_EVERY_N_LOOPS == 0
+        ):
+            try:
+                tool_system.run_cycle(loop_count=loop_count, metrics=_metrics)
+            except Exception:
+                logger.exception("Tool system cycle failed — continuing")
+
         # ── Process UI command queue ─────────────────────────────────────
-        _process_commands(db, trade_manager)
+        _process_commands(db, trade_manager, tool_system)
 
         # ── Daily summary (triggered at DAILY_SUMMARY_HOUR in local time) ──
         now = local_now()
@@ -520,6 +552,7 @@ def main() -> None:
 def _process_commands(
     db: Database,
     trade_manager: TradeManagerAgent,
+    tool_system: AutonomousToolSystem | None = None,
 ) -> None:
     """Poll the bot_commands table and Telegram kill flag for pending commands."""
     # ── Check Telegram kill flag (set by polling thread) ─────────────
@@ -579,6 +612,27 @@ def _process_commands(
                 else:
                     db.update_command(cmd["id"], "failed",
                                      f"Unknown skill action: {action}")
+            elif cmd_name == "tool":
+                payload = cmd.get("payload") or {}
+                action = payload.get("action", "")
+                if tool_system is None:
+                    db.update_command(cmd["id"], "failed", "Tool system not initialized")
+                elif action == "list":
+                    db.update_command(
+                        cmd["id"],
+                        "done",
+                        json.dumps({"tools": tool_system.list_tools()}, ensure_ascii=True),
+                    )
+                elif action == "run":
+                    tool_name = str(payload.get("tool", "")).strip()
+                    result = tool_system.execute_tool(tool_name, payload)
+                    db.update_command(cmd["id"], "done", result_to_text(result))
+                else:
+                    db.update_command(
+                        cmd["id"],
+                        "failed",
+                        f"Unknown tool action: {action}",
+                    )
             else:
                 db.update_command(cmd["id"], "failed", f"Unknown command: {cmd_name}")
         except Exception as exc:

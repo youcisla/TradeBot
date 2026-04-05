@@ -58,3 +58,29 @@ class TestMarketAgent:
         assert "EURUSD" in agent._validators
         assert "GBPUSD" in agent._validators
         assert agent._validators["EURUSD"] is not agent._validators["GBPUSD"]
+
+    def test_crypto_stuck_quote_threshold_is_more_lenient(self, broker):
+        agent = MarketAgent(broker)
+
+        # Warm up validator state for BTCUSD with unchanged price sequence.
+        static_bid = 50000.0
+        static_ask = 50000.5
+
+        def static_tick(symbol):
+            return {
+                "bid": static_bid,
+                "ask": static_ask,
+                "spread": static_ask - static_bid,
+                "volume": 100,
+            }
+
+        broker.get_tick = static_tick
+
+        # Crypto threshold defaults to 14, so first 13 validations should pass.
+        for _ in range(13):
+            data = agent.get_data("BTCUSD")
+            assert data.symbol == "BTCUSD"
+
+        # 14th unchanged tick should raise a stuck-quote rejection.
+        with pytest.raises(DataValidationError):
+            agent.get_data("BTCUSD")

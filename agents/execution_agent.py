@@ -9,7 +9,7 @@ symbol + direction + strategy as a final safety net.
 from __future__ import annotations
 
 import logging
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Callable
 
 from broker.connector import BrokerConnector
@@ -40,6 +40,8 @@ class ExecutionAgent:
         self._state = state
         self._calc_size = calculate_position_size
         self._db = db
+        self._autotrading_block_until: datetime | None = None
+        self._autotrading_block_last_notice: datetime | None = None
 
     def open_trade(self, signal: Signal) -> Trade | None:
         try:
@@ -60,6 +62,31 @@ class ExecutionAgent:
             self._db.log_agent_event("execution", level, msg, data)
 
     def _open_inner(self, signal: Signal) -> Trade | None:
+        if self._autotrading_block_until is not None:
+            now = datetime.now(UTC)
+            if now < self._autotrading_block_until:
+                if (
+                    self._autotrading_block_last_notice is None
+                    or (now - self._autotrading_block_last_notice).total_seconds() >= 60
+                ):
+                    self._autotrading_block_last_notice = now
+                    wait_s = int((self._autotrading_block_until - now).total_seconds())
+                    logger.warning(
+                        "EXEC SKIP [AUTOTRADING_DISABLED]: %s %s (retry in %ss)",
+                        signal.symbol,
+                        signal.direction,
+                        max(1, wait_s),
+                    )
+                    self._emit(
+                        "warn",
+                        (
+                            f"Execution temporarily blocked — MT5 autotrading disabled; "
+                            f"retry in {max(1, wait_s)}s"
+                        ),
+                        {"symbol": signal.symbol, "direction": signal.direction, "retry_in_s": max(1, wait_s)},
+                    )
+                return None
+
         # Duplicate guard: fetch live positions directly from MT5.
         # Avoids DB-lag where a freshly-opened trade isn't yet committed.
         live_positions = self._broker.get_open_positions()
@@ -117,17 +144,29 @@ class ExecutionAgent:
                            {"symbol": signal.symbol, "reason": "stale_signal"})
                 return None
             logger.error("Order failed: %s", msg)
-            # Error 10017 = trade disabled in MT5 terminal (autotrading off).
-            # This is terminal-level, not symbol-level — pause the bot immediately.
-            if "10017" in msg:
+            # Error 10017/10027 = trade disabled in MT5 terminal (autotrading off).
+            # This is terminal-level, not symbol-level — back off execution attempts
+            # for a cooldown window and pause via Telegram control plane.
+            if self._is_autotrading_disabled(msg):
+                now = datetime.now(UTC)
+                self._autotrading_block_until = now + timedelta(
+                    seconds=settings.EXEC_AUTOTRADING_ERROR_COOLDOWN_SECONDS
+                )
+                self._autotrading_block_last_notice = now
                 telegram_bot.send_message(
-                    "⛔ MT5 Trade Disabled (error 10017) — autotrading is OFF in the terminal.\n"
-                    "Re-enable 'Algo Trading' in MT5 and use /resume to continue."
+                    "⛔ MT5 Trade Disabled (error 10017/10027) — autotrading is OFF in the terminal.\n"
+                    "Re-enable 'Algo Trading' in MT5 and use /resume to continue.\n"
+                    f"Execution backoff: {settings.EXEC_AUTOTRADING_ERROR_COOLDOWN_SECONDS}s"
                 )
                 telegram_bot.pause()
-                self._emit("error",
-                           "MT5 autotrading is disabled (10017) — bot paused",
-                           {"error": msg})
+                self._emit(
+                    "error",
+                    "MT5 autotrading is disabled (10017/10027) — bot paused",
+                    {
+                        "error": msg,
+                        "cooldown_seconds": settings.EXEC_AUTOTRADING_ERROR_COOLDOWN_SECONDS,
+                    },
+                )
             else:
                 telegram_bot.send_message(
                     f"❌ Order failed: {signal.symbol} {signal.direction} — {msg}"
@@ -191,3 +230,8 @@ class ExecutionAgent:
             f"SL={trade.stop_loss:.5f}  {tp_summary}"
         )
         return trade
+
+    @staticmethod
+    def _is_autotrading_disabled(message: str) -> bool:
+        msg = message.lower()
+        return "10017" in msg or "10027" in msg or "autotrading disabled" in msg

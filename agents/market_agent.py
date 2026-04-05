@@ -84,7 +84,7 @@ class MarketAgent:
 
         # Validate
         validator = self._validator(symbol)
-        validator.validate_tick(bid, ask, spread)
+        validator.validate_tick(bid, ask, spread, symbol=symbol)
 
         session_profile = self._session_profile()
 

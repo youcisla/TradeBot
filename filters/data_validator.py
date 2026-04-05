@@ -11,6 +11,7 @@ from datetime import timedelta
 from typing import TYPE_CHECKING
 
 from config import settings
+from config.symbols import asset_class
 from models.market_data import Candle
 
 if TYPE_CHECKING:
@@ -30,7 +31,13 @@ class DataValidator:
         self._recent_prices: list[float] = []
         self._db = db
 
-    def validate_tick(self, bid: float, ask: float, spread: float) -> None:
+    def validate_tick(
+        self,
+        bid: float,
+        ask: float,
+        spread: float,
+        symbol: str | None = None,
+    ) -> None:
         """Validate a single tick.  Raises DataValidationError on failure."""
 
         # Price must be positive and present
@@ -55,17 +62,21 @@ class DataValidator:
                     )
 
         # Stuck quote detection
-        self._recent_prices.append(bid)
-        if len(self._recent_prices) > settings.STUCK_QUOTE_THRESHOLD:
-            self._recent_prices = self._recent_prices[-settings.STUCK_QUOTE_THRESHOLD:]
+        threshold = settings.STUCK_QUOTE_THRESHOLD
+        if symbol and asset_class(symbol) == "crypto":
+            threshold = settings.STUCK_QUOTE_THRESHOLD_CRYPTO
 
-        if (len(self._recent_prices) >= settings.STUCK_QUOTE_THRESHOLD
+        self._recent_prices.append(bid)
+        if len(self._recent_prices) > threshold:
+            self._recent_prices = self._recent_prices[-threshold:]
+
+        if (len(self._recent_prices) >= threshold
                 and len(set(self._recent_prices)) == 1):
             self._emit("warn",
-                       f"Stuck quote: price unchanged for {settings.STUCK_QUOTE_THRESHOLD} ticks ({bid})",
-                       {"bid": bid, "ticks": settings.STUCK_QUOTE_THRESHOLD})
+                       f"Stuck quote: price unchanged for {threshold} ticks ({bid})",
+                       {"bid": bid, "ticks": threshold, "symbol": symbol})
             raise DataValidationError(
-                f"Stuck quote: price unchanged for {settings.STUCK_QUOTE_THRESHOLD} ticks ({bid})"
+                f"Stuck quote: price unchanged for {threshold} ticks ({bid})"
             )
 
     def validate_candles(self, candles: list[Candle], expected_gap: timedelta | None = None) -> None:

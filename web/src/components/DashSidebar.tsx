@@ -32,6 +32,7 @@ const NAV_SECTIONS = [
   {
     label: "System",
     items: [
+      { href: "/dashboard/tools",    label: "Tools",    icon: "build"        },
       { href: "/dashboard/settings", label: "Settings", icon: "settings"     },
       { href: "/dashboard/skills",   label: "Skills",   icon: "auto_awesome" },
     ],

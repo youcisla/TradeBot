@@ -9,7 +9,9 @@
 #>
 
 param(
-    [switch]$AuditMode
+    [switch]$AuditMode,
+    [switch]$DoctorOnly,
+    [switch]$SkipDoctor
 )
 
 $ErrorActionPreference = "Stop"
@@ -35,6 +37,23 @@ if (-not (Test-Path $venvPython)) {
     Write-Host "        Run: python -m venv .venv" -ForegroundColor Yellow
     Write-Host "        Then: .venv\Scripts\pip install -r requirements.txt" -ForegroundColor Yellow
     exit 1
+}
+
+$doctorScript = Join-Path $Root "scripts\ops_doctor.py"
+if (-not $SkipDoctor -and (Test-Path $doctorScript)) {
+    Write-Host "[*] Running ops doctor preflight..." -ForegroundColor Yellow
+    & $venvPython $doctorScript --root $Root --strict
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "[ERROR] Ops doctor reported critical failures." -ForegroundColor Red
+        Write-Host "        Fix issues above or rerun with -SkipDoctor to bypass." -ForegroundColor Yellow
+        exit 1
+    }
+    Write-Host "[OK] Ops doctor checks passed." -ForegroundColor Green
+}
+
+if ($DoctorOnly) {
+    Write-Host "[*] Doctor-only mode requested. Exiting after diagnostics." -ForegroundColor Cyan
+    exit 0
 }
 
 $webDir = Join-Path $Root "web"

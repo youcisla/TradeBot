@@ -786,6 +786,34 @@ class Database:
         finally:
             self._put_conn(conn)
 
+    def get_recent_strategy_regime_stats(
+        self,
+        lookback_hours: int = 48,
+        min_trades: int = 3,
+    ) -> list[dict]:
+        """Return per-strategy/per-regime win-rate stats for recent closed trades."""
+        conn = self._get_conn()
+        try:
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute(
+                    """SELECT
+                           strategy,
+                           COALESCE(NULLIF(market_condition, ''), 'unknown') AS market_condition,
+                           COUNT(*)::int AS trades,
+                           COUNT(*) FILTER (WHERE pnl >= 0)::int AS wins,
+                           COALESCE(AVG(score), 0)::float AS avg_score,
+                           COALESCE(AVG(pnl), 0)::float AS avg_pnl
+                       FROM trade_scores
+                       WHERE created_at >= NOW() - (%s || ' hours')::interval
+                       GROUP BY strategy, COALESCE(NULLIF(market_condition, ''), 'unknown')
+                       HAVING COUNT(*) >= %s
+                       ORDER BY strategy ASC, trades DESC""",
+                    (str(max(1, lookback_hours)), max(1, min_trades)),
+                )
+                return [dict(row) for row in cur.fetchall()]
+        finally:
+            self._put_conn(conn)
+
     def boost_all_strategy_confidence(self, boost: float) -> None:
         """Add *boost* to every strategy's confidence, capped at 1.0."""
         conn = self._get_conn()

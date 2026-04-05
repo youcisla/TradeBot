@@ -13,6 +13,7 @@ const NAV_ITEMS = [
   { href: "/dashboard/world",          label: "World Intel",   icon: "⊛" },
   { href: "/dashboard/ict",            label: "ICT Engine",    icon: "⊞" },
   { href: "/dashboard/agent_theater",  label: "Theater",       icon: "⊟" },
+  { href: "/dashboard/tools",          label: "Tools",         icon: "⊜" },
   { href: "/dashboard/skills",         label: "Skills",        icon: "⊡" },
   { href: "/dashboard/settings",       label: "Settings",      icon: "⊠" },
 ];

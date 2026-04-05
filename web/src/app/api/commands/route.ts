@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth";
 import { insertCommand } from "@/lib/db";
 import { authOptions } from "@/lib/auth";
 
-const ALLOWED_COMMANDS = new Set(["kill", "pause", "resume", "close_trade", "close_all"]);
+const ALLOWED_COMMANDS = new Set(["kill", "pause", "resume", "close_trade", "close_all", "tool"]);
 
 export async function POST(request: Request) {
   const session = await getServerSession(authOptions);

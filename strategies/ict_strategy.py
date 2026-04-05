@@ -220,7 +220,25 @@ class ICTStrategy(BaseStrategy):
         historical_conf = 0.5
 
         if self._db:
-            historical_conf = self._db.get_confidence(model_slug)
+            try:
+                db_conf = self._db.get_confidence(model_slug)
+                if db_conf is not None:
+                    historical_conf = db_conf
+            except Exception:
+                logger.warning(
+                    "ICTStrategy: confidence lookup failed for %s — using fallback %.2f",
+                    model_slug,
+                    historical_conf,
+                    exc_info=True,
+                )
+                self._emit(
+                    "warn",
+                    (
+                        f"ICT confidence lookup failed for {model_slug}; "
+                        f"using fallback {historical_conf:.2f}"
+                    ),
+                    {"model": model_slug, "fallback_confidence": historical_conf},
+                )
             # If backtesting proved this model is unprofitable, the agent suppresses the signal
             if historical_conf < settings.CONFIDENCE_ALLOW:
                 self._emit("info", f"Rejecting {best.model.name} setup due to poor historical confidence ({historical_conf:.2f})")

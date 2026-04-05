@@ -66,6 +66,16 @@ export interface AgentEvent {
   created_at: string;
 }
 
+export interface ToolCycleEvent extends AgentEvent {
+  data: {
+    loop?: number;
+    failed_tools?: string[];
+    executed_tools?: string[];
+    emergency_mode?: boolean;
+    doctor_warning_count?: number;
+  } | null;
+}
+
 export interface Trade {
   id: string;
   symbol: string;
@@ -138,6 +148,29 @@ export async function getBotStatus(): Promise<BotStatus | null> {
 export async function getAgentEvents(limit = 80): Promise<AgentEvent[]> {
   const rows = await query(
     "SELECT * FROM agent_events ORDER BY created_at DESC LIMIT $1",
+    [limit]
+  );
+  return rows as AgentEvent[];
+}
+
+export async function getToolCycleEvents(limit = 50): Promise<ToolCycleEvent[]> {
+  const rows = await query(
+    `SELECT * FROM agent_events
+     WHERE agent = 'tool_system'
+       AND message = 'Autonomous tool cycle completed'
+     ORDER BY created_at DESC
+     LIMIT $1`,
+    [limit]
+  );
+  return rows as ToolCycleEvent[];
+}
+
+export async function getToolSystemEvents(limit = 200): Promise<AgentEvent[]> {
+  const rows = await query(
+    `SELECT * FROM agent_events
+     WHERE agent = 'tool_system'
+     ORDER BY created_at DESC
+     LIMIT $1`,
     [limit]
   );
   return rows as AgentEvent[];

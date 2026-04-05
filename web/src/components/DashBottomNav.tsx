@@ -6,8 +6,8 @@ import { usePathname } from "next/navigation";
 const TABS = [
   { href: "/dashboard",          label: "Home",     icon: "space_dashboard" },
   { href: "/dashboard/trades",   label: "Trades",   icon: "swap_horiz"      },
+  { href: "/dashboard/tools",    label: "Tools",    icon: "build"           },
   { href: "/dashboard/chart",    label: "Chart",    icon: "query_stats"     },
-  { href: "/dashboard/world",    label: "Intel",    icon: "public"          },
   { href: "/dashboard/settings", label: "Settings", icon: "settings"        },
 ];
 
