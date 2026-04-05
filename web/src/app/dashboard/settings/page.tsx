@@ -440,7 +440,7 @@ export default function SettingsPage() {
         margin: "0 0 32px 0",
         letterSpacing: "-0.02em",
       }}>
-        Settings
+        Preferences
       </h1>
 
       {/* Bot Account section */}

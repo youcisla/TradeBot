@@ -1,8 +1,7 @@
-"""DeepSeek Strategy — LLM-powered primary signal generator.
+"""DeepSeek Strategy — LLM-powered signal generator.
 
-Replaces the LSTM NeuralStrategy.  On each call it sends the last 20 H1
-candles plus all computed indicators to the DeepSeek chat API and parses
-a structured JSON trade decision.
+On each call it sends the last 20 H1 candles plus computed indicators to
+the DeepSeek chat API and parses a structured JSON trade decision.
 
 Fail-safe: any network / parse error returns None (no signal), so the ICT
 and SMA strategies still run as fallbacks.

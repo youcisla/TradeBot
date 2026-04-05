@@ -7,34 +7,34 @@ const NAV_SECTIONS = [
   {
     label: "Control",
     items: [
-      { href: "/dashboard",               label: "Mission",    icon: "space_dashboard" },
-      { href: "/dashboard/trades",        label: "Execution",  icon: "swap_horiz"      },
-      { href: "/dashboard/strategy",      label: "Strategies", icon: "neurology"       },
-      { href: "/dashboard/agent_theater", label: "Agents",     icon: "smart_toy"       },
+      { href: "/dashboard",               label: "Home",          icon: "space_dashboard" },
+      { href: "/dashboard/trades",        label: "Positions",     icon: "swap_horiz"      },
+      { href: "/dashboard/strategy",      label: "Automation",    icon: "neurology"       },
+      { href: "/dashboard/agent_theater", label: "Activity Feed", icon: "smart_toy"       },
     ],
   },
   {
     label: "Performance",
     items: [
-      { href: "/dashboard/analytics", label: "Analytics", icon: "bar_chart"         },
-      { href: "/dashboard/ict",       label: "ICT",        icon: "candlestick_chart" },
-      { href: "/dashboard/learning",  label: "Learning",   icon: "school"            },
+      { href: "/dashboard/analytics", label: "Performance",   icon: "bar_chart"         },
+      { href: "/dashboard/ict",       label: "Setup Scanner", icon: "candlestick_chart" },
+      { href: "/dashboard/learning",  label: "Insights",      icon: "school"            },
     ],
   },
   {
     label: "Markets",
     items: [
-      { href: "/dashboard/chart", label: "Chart", icon: "query_stats" },
-      { href: "/dashboard/world", label: "Macro", icon: "public"      },
-      { href: "/dashboard/globe", label: "Globe", icon: "language"    },
+      { href: "/dashboard/chart", label: "Live Chart",   icon: "query_stats" },
+      { href: "/dashboard/world", label: "Macro Brief",  icon: "public"      },
+      { href: "/dashboard/globe", label: "Market Globe", icon: "language"    },
     ],
   },
   {
     label: "System",
     items: [
-      { href: "/dashboard/tools",    label: "Tools",    icon: "build"        },
-      { href: "/dashboard/settings", label: "Settings", icon: "settings"     },
-      { href: "/dashboard/skills",   label: "Skills",   icon: "auto_awesome" },
+      { href: "/dashboard/tools",    label: "Toolbox",     icon: "build"        },
+      { href: "/dashboard/settings", label: "Preferences", icon: "settings"     },
+      { href: "/dashboard/skills",   label: "Skill Lab",   icon: "auto_awesome" },
     ],
   },
 ];
@@ -95,7 +95,7 @@ export default function DashSidebar() {
               letterSpacing: "-0.01em",
             }}
           >
-            NeuralFX
+            PulseTrade
           </span>
         </div>
 

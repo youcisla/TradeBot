@@ -162,7 +162,7 @@ export default function StrategyPage() {
             margin: 0,
           }}
         >
-          Strategy
+          Automation
         </h1>
         <div
           style={{
@@ -190,7 +190,7 @@ export default function StrategyPage() {
               color: isRunning ? "#30D158" : "#FF453A",
             }}
           >
-            {isRunning ? "Bot Running" : "Bot Stopped"}
+            {isRunning ? "Automation Online" : "Automation Paused"}
           </span>
         </div>
       </div>

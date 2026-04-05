@@ -379,7 +379,7 @@ export default function ICTPage() {
           fontFamily:   FONT,
         }}
       >
-        ICT Setups
+        Setup Scanner
       </h1>
 
       {/* Symbol filter */}

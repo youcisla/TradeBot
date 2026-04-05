@@ -149,10 +149,10 @@ export default function LearningPage() {
             marginBottom: 4,
           }}
         >
-          Learning
+          Insights
         </h1>
         <div style={{ fontSize: 15, color: "rgba(235,235,245,0.6)" }}>
-          Strategy confidence &amp; trade reward scores
+          Confidence trends and trade quality signals
         </div>
       </div>
 

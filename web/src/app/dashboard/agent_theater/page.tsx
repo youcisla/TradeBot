@@ -350,7 +350,7 @@ export default function AgentTheaterPage() {
           fontFamily:   FONT,
         }}
       >
-        Agent Theater
+        Activity Feed
       </h1>
 
       {/* Stats row */}

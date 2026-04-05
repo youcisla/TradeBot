@@ -219,7 +219,7 @@ export default function GlobePage() {
               fontFamily:   FONT,
             }}
           >
-            Global Markets
+            Market Globe
           </h1>
           <p style={{ margin: 0, fontSize: 13, color: "rgba(235,235,245,0.4)", fontFamily: FONT }}>
             Live session activity across global financial centers

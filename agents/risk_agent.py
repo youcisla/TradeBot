@@ -289,8 +289,10 @@ class RiskAgent:
         if not self._check_protections(signal):
             return False
 
+        agile_high_conf = self._is_agile_high_conf(signal)
+
         # 1d. Session gate — only enter in allowed sessions (data-driven)
-        if settings.ENTRY_ALLOWED_SESSIONS:
+        if settings.ENTRY_ALLOWED_SESSIONS and not agile_high_conf:
             sess = current_session()
             if sess not in settings.ENTRY_ALLOWED_SESSIONS:
                 self._emit("warn",
@@ -301,7 +303,7 @@ class RiskAgent:
                 return False
 
         # 1e. Day-of-week gate — block systematic losing days
-        if settings.ENTRY_BLOCKED_DAYS:
+        if settings.ENTRY_BLOCKED_DAYS and not agile_high_conf:
             today = day_of_week()
             weekend_crypto = (
                 asset_class(signal.symbol) == "crypto" and is_weekend()
@@ -323,7 +325,7 @@ class RiskAgent:
         if self._check_duplicate(signal, open_trades):
             self._emit("warn", f"DUPLICATE — {signal.symbol} {signal.direction} already open")
             return False
-        if self._check_correlation(signal, open_trades):
+        if self._check_correlation(signal, open_trades) and not agile_high_conf:
             self._emit("warn", f"CORRELATION — {signal.symbol} {signal.direction} blocked")
             return False
 
@@ -356,10 +358,12 @@ class RiskAgent:
         if not skip_duplicate and not self._check_protections(signal):
             return False
 
+        agile_high_conf = self._is_agile_high_conf(signal)
+
         # 1d. Session gate — only allow new entries in proven sessions.
         # skip_duplicate=True means this is a post-entry check; don't close
         # a trade simply because the session changed after entry.
-        if not skip_duplicate and settings.ENTRY_ALLOWED_SESSIONS:
+        if not skip_duplicate and settings.ENTRY_ALLOWED_SESSIONS and not agile_high_conf:
             sess = signal.entry_snapshot.session or current_session()
             if sess not in settings.ENTRY_ALLOWED_SESSIONS:
                 logger.warning(
@@ -374,7 +378,7 @@ class RiskAgent:
                 return False
 
         # 1e. Day-of-week gate — skip on post-entry checks for same reason.
-        if not skip_duplicate and settings.ENTRY_BLOCKED_DAYS:
+        if not skip_duplicate and settings.ENTRY_BLOCKED_DAYS and not agile_high_conf:
             today = signal.entry_snapshot.day_of_week or day_of_week()
             weekend_crypto = (
                 asset_class(signal.symbol) == "crypto" and is_weekend()
@@ -409,7 +413,7 @@ class RiskAgent:
             return False
 
         # 3. Correlation guard (same symbol or correlated pair, same direction)
-        if not skip_duplicate and self._check_correlation(signal, open_trades):
+        if not skip_duplicate and self._check_correlation(signal, open_trades) and not agile_high_conf:
             logger.warning(
                 "RISK REJECT [CORRELATION]: %s %s blocked by existing exposure",
                 signal.symbol, signal.direction,
@@ -582,26 +586,30 @@ class RiskAgent:
                 pass
 
         ac = asset_class(signal.symbol)
+        spread_mult = 1.0
+        if self._is_agile_high_conf(signal):
+            spread_mult = max(1.0, settings.RISK_AGILE_SPREAD_MULTIPLIER)
         if ac == "crypto":
             price = signal.entry_price or 1.0
             spread_pct = (live_spread / price) * 100
-            if spread_pct > settings.MAX_SPREAD_PCT_CRYPTO:
+            allowed_pct = settings.MAX_SPREAD_PCT_CRYPTO * spread_mult
+            if spread_pct > allowed_pct:
                 self._register_spread_reject(signal.symbol, now_utc)
                 logger.warning(
-                    "RISK REJECT [SPREAD]: %.3f%% > max %.1f%% for %s (crypto)",
-                    spread_pct, settings.MAX_SPREAD_PCT_CRYPTO, signal.symbol,
+                    "RISK REJECT [SPREAD]: %.3f%% > max %.2f%% for %s (crypto)",
+                    spread_pct, allowed_pct, signal.symbol,
                 )
                 self._emit(
                     "warn",
                     (
                         f"SPREAD — {signal.symbol} {spread_pct:.2f}% > "
-                        f"max {settings.MAX_SPREAD_PCT_CRYPTO}%"
+                        f"max {allowed_pct:.2f}%"
                     ),
                     {
                         "symbol": signal.symbol,
                         "check": "spread",
                         "spread_pct": round(spread_pct, 3),
-                        "max": settings.MAX_SPREAD_PCT_CRYPTO,
+                        "max": allowed_pct,
                     },
                 )
                 return False
@@ -619,23 +627,24 @@ class RiskAgent:
         else:
             max_spread = settings.MAX_SPREAD_PIPS
 
-        if spread_pips > max_spread:
+        allowed_spread = max_spread * spread_mult
+        if spread_pips > allowed_spread:
             self._register_spread_reject(signal.symbol, now_utc)
             logger.warning(
                 "RISK REJECT [SPREAD]: %.1f pips > max %.1f for %s (%s)",
-                spread_pips, max_spread, signal.symbol, ac,
+                spread_pips, allowed_spread, signal.symbol, ac,
             )
             self._emit(
                 "warn",
                 (
                     f"SPREAD — {signal.symbol} {spread_pips:.1f} pips > "
-                    f"max {max_spread} ({ac})"
+                    f"max {allowed_spread:.1f} ({ac})"
                 ),
                 {
                     "symbol": signal.symbol,
                     "check": "spread",
                     "spread_pips": round(spread_pips, 1),
-                    "max": max_spread,
+                    "max": allowed_spread,
                 },
             )
             return False
@@ -649,6 +658,8 @@ class RiskAgent:
         Phase is derived from the signal timestamp modulo TIME_PHASE_BUCKET_MINUTES.
         """
         if not settings.TIME_PHASE_CONFIDENCE_ENABLED:
+            return True
+        if self._is_agile_high_conf(signal):
             return True
 
         bucket = max(1, settings.TIME_PHASE_BUCKET_MINUTES)
@@ -705,6 +716,8 @@ class RiskAgent:
         if not settings.PROTECTIONS_ENABLED:
             return True
 
+        agile_high_conf = self._is_agile_high_conf(signal)
+
         now = datetime.now(UTC)
 
         if self._global_lock_until and now < self._global_lock_until:
@@ -743,7 +756,7 @@ class RiskAgent:
 
         symbol_recent = [t for t in recent if t.symbol == signal.symbol]
 
-        cooldown = max(0, settings.PROTECTION_COOLDOWN_MINUTES)
+        cooldown = 0 if agile_high_conf else max(0, settings.PROTECTION_COOLDOWN_MINUTES)
         if cooldown > 0 and symbol_recent:
             last_close = max(
                 self._ensure_utc_trade_time(t.close_time)
@@ -775,7 +788,7 @@ class RiskAgent:
             and (now - self._ensure_utc_trade_time(t.close_time)).total_seconds() <= stoploss_lookback * 60
             and t.close_reason == "SL"
         ]
-        if len(stoploss_recent) >= stoploss_limit:
+        if len(stoploss_recent) >= stoploss_limit and not agile_high_conf:
             lock_minutes = max(1, settings.PROTECTION_STOPLOSS_GUARD_LOCK_MINUTES)
             latest_sl = max(self._ensure_utc_trade_time(t.close_time) for t in stoploss_recent)
             lock_until = latest_sl + timedelta(minutes=lock_minutes)
@@ -823,6 +836,15 @@ class RiskAgent:
             return False
 
         return True
+
+    @staticmethod
+    def _is_agile_profile() -> bool:
+        return settings.RISK_VALIDATION_PROFILE == "agile"
+
+    def _is_agile_high_conf(self, signal: Signal) -> bool:
+        if not self._is_agile_profile():
+            return False
+        return signal.confidence >= settings.RISK_AGILE_HIGH_CONF_THRESHOLD
 
     def _get_closed_trades_recent(self, lookback_minutes: int) -> list[Trade]:
         """Load recent closed trades from DB with a short TTL cache."""

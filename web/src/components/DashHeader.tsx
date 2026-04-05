@@ -60,7 +60,7 @@ export default function DashHeader() {
               letterSpacing: "-0.01em",
             }}
           >
-            NeuralFX
+            PulseTrade
           </span>
           <div
             style={{

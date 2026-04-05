@@ -38,6 +38,7 @@ from models.market_data import MarketContext
 from models.signal import Signal
 from strategies.sma_crossover import SmaCrossoverStrategy
 from strategies.ict_strategy import ICTStrategy
+from strategies.unified_strategy import UnifiedStrategy
 
 from agents.market_agent import MarketAgent
 from agents.analysis_agent import AnalysisAgent
@@ -165,12 +166,13 @@ def main() -> None:
     reflector = Reflector()
     learning.set_reflector(reflector)
 
-    # ── 4. Strategies — DeepSeek (primary LLM) + ICT/SMC + SMA crossover
+    # ── 4. Unified strategy — one connected decision pipeline
     deepseek_strategy = DeepSeekStrategy()
     ict_strategy = ICTStrategy(broker=broker, db=db, min_confidence=55.0)
     sma_strategy = SmaCrossoverStrategy()
-    strategies = [deepseek_strategy, ict_strategy, sma_strategy]
-    logger.info("Multi-strategy mode: DeepSeek LLM + ICT/SMC + SMAcrossover")
+    unified_strategy = UnifiedStrategy([deepseek_strategy, ict_strategy, sma_strategy])
+    strategies = [unified_strategy]
+    logger.info("Unified strategy mode: deepseek + ict + sma in one connected engine")
 
     # ── Weekend crypto strategies — multi-TF ICT for BTCUSD ─────────────
     # During the forex weekend, only crypto trades.  Three ICT instances
@@ -186,7 +188,13 @@ def main() -> None:
         htf_timeframe="W1", htf_candle_count=52,
         entry_timeframe="H4", entry_candle_count=150,
     )
-    weekend_strategies = [deepseek_strategy, ict_btc_h4w1, ict_strategy, ict_btc_h1d1]
+    weekend_unified_strategy = UnifiedStrategy([
+        deepseek_strategy,
+        ict_btc_h4w1,
+        ict_strategy,
+        ict_btc_h1d1,
+    ])
+    weekend_strategies = [weekend_unified_strategy]
 
     # Parse weekend symbol list (e.g. "BTCUSD" or "BTCUSD,ETHUSD")
     _weekend_symbols: list[str] = [
@@ -839,6 +847,7 @@ def _run_iteration(
         )
 
     metrics["loops"] = metrics.get("loops", 0) + 1
+    metrics["council_reviews_this_loop"] = 0
 
     # ── Skip new signals if paused ───────────────────────────────────────
     if telegram_bot.is_paused():
@@ -1204,10 +1213,15 @@ def _run_iteration(
         )
         is_fast_lane = settings.FAST_LANE_ENABLED and i < settings.FAST_LANE_MAX_SIGNALS
 
+        council_mode = settings.COUNCIL_MODE
+        council_max_reviews = max(0, settings.COUNCIL_MAX_REVIEWS_PER_LOOP)
+        council_reviews = metrics.get("council_reviews_this_loop", 0)
+        allow_council_review = council_reviews < council_max_reviews
+
         # ── Trading Council gate ─────────────────────────────────────────
         # In instant-entry mode the top signal skips this gate entirely.
         # Council still runs for i>0 signals as a blocking quality filter.
-        if council is not None and not is_instant:
+        if council is not None and not is_instant and allow_council_review:
             ctx = signal_contexts.get(id(signal_obj))
             if ctx is not None:
                 if _tui:
@@ -1216,30 +1230,43 @@ def _run_iteration(
                         f"debating {signal_obj.symbol} {signal_obj.direction}",
                     )
                 verdict = council.review(signal_obj, ctx)
+                metrics["council_reviews_this_loop"] = council_reviews + 1
                 if not verdict.approved:
                     msg = (
                         f"Council REJECTED {signal_obj.symbol} {signal_obj.direction} "
                         f"({verdict.confidence:.0%} < {settings.COUNCIL_MIN_CONFIDENCE:.0%}) — "
                         f"{verdict.reasoning}"
                     )
-                    logger.info(msg)
-                    log_agent.log_risk_rejection(
-                        signal_obj.symbol, signal_obj.direction,
-                        signal_obj.strategy, f"Council: {verdict.reasoning}",
+                    logger.info("%s [mode=%s]", msg, council_mode)
+                    if council_mode == "blocking":
+                        log_agent.log_risk_rejection(
+                            signal_obj.symbol, signal_obj.direction,
+                            signal_obj.strategy, f"Council: {verdict.reasoning}",
+                        )
+                        if _tui:
+                            _tui.add_event(
+                                "council", "warn",
+                                f"REJECT {signal_obj.symbol} {verdict.confidence:.0%}",
+                            )
+                        from utils import telegram_bot as _tg
+                        _tg.send_message(
+                            f"🏛️ Council REJECTED {signal_obj.direction} {signal_obj.symbol} "
+                            f"— {verdict.confidence:.0%} confidence\n{verdict.reasoning}",
+                            dedupe_key=f"council-reject:{signal_obj.symbol}:{signal_obj.direction}",
+                        )
+                        metrics["council_rejections"] = metrics.get("council_rejections", 0) + 1
+                        continue
+                    # Advisory mode: keep speed and opportunity capture, but
+                    # apply a small confidence haircut to reflect disagreement.
+                    signal_obj.confidence = max(
+                        0.0,
+                        signal_obj.confidence - settings.COUNCIL_ADVISORY_REJECTION_CONF_PENALTY,
                     )
                     if _tui:
                         _tui.add_event(
                             "council", "warn",
-                            f"REJECT {signal_obj.symbol} {verdict.confidence:.0%}",
+                            f"ADVISORY {signal_obj.symbol} {verdict.confidence:.0%}",
                         )
-                    from utils import telegram_bot as _tg
-                    _tg.send_message(
-                        f"🏛️ Council REJECTED {signal_obj.direction} {signal_obj.symbol} "
-                        f"— {verdict.confidence:.0%} confidence\n{verdict.reasoning}",
-                        dedupe_key=f"council-reject:{signal_obj.symbol}:{signal_obj.direction}",
-                    )
-                    metrics["council_rejections"] = metrics.get("council_rejections", 0) + 1
-                    continue
                 else:
                     logger.info(
                         "Council APPROVED %s %s (%.0f%%)",
@@ -1251,6 +1278,13 @@ def _run_iteration(
                             "council", "info",
                             f"APPROVED {signal_obj.symbol} {verdict.confidence:.0%}",
                         )
+        elif council is not None and not is_instant and not allow_council_review:
+            logger.debug(
+                "Council skipped for %s %s (review cap %d reached)",
+                signal_obj.symbol,
+                signal_obj.direction,
+                council_max_reviews,
+            )
 
         # ── Risk check (drawdown, spread, lot-size, etc.) ────────────────
         if _tui:

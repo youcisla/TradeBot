@@ -4,18 +4,18 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const NAV_ITEMS = [
-  { href: "/dashboard",                label: "Dashboard",     icon: "⬛" },
-  { href: "/dashboard/chart",          label: "Chart",         icon: "◈" },
-  { href: "/dashboard/analytics",      label: "Analytics",     icon: "◇" },
-  { href: "/dashboard/trades",         label: "Trades",        icon: "◆" },
-  { href: "/dashboard/learning",       label: "Learning",      icon: "◉" },
-  { href: "/dashboard/strategy",       label: "Strategy",      icon: "⊕" },
-  { href: "/dashboard/world",          label: "World Intel",   icon: "⊛" },
-  { href: "/dashboard/ict",            label: "ICT Engine",    icon: "⊞" },
-  { href: "/dashboard/agent_theater",  label: "Theater",       icon: "⊟" },
-  { href: "/dashboard/tools",          label: "Tools",         icon: "⊜" },
-  { href: "/dashboard/skills",         label: "Skills",        icon: "⊡" },
-  { href: "/dashboard/settings",       label: "Settings",      icon: "⊠" },
+  { href: "/dashboard",                label: "Home",          icon: "⬛" },
+  { href: "/dashboard/chart",          label: "Live Chart",    icon: "◈" },
+  { href: "/dashboard/analytics",      label: "Performance",   icon: "◇" },
+  { href: "/dashboard/trades",         label: "Positions",     icon: "◆" },
+  { href: "/dashboard/learning",       label: "Insights",      icon: "◉" },
+  { href: "/dashboard/strategy",       label: "Automation",    icon: "⊕" },
+  { href: "/dashboard/world",          label: "Macro Brief",   icon: "⊛" },
+  { href: "/dashboard/ict",            label: "Setup Scanner", icon: "⊞" },
+  { href: "/dashboard/agent_theater",  label: "Activity Feed", icon: "⊟" },
+  { href: "/dashboard/tools",          label: "Toolbox",       icon: "⊜" },
+  { href: "/dashboard/skills",         label: "Skill Lab",     icon: "⊡" },
+  { href: "/dashboard/settings",       label: "Preferences",   icon: "⊠" },
 ];
 
 export default function DashNav() {
@@ -62,7 +62,7 @@ export default function DashNav() {
           textTransform: "uppercase",
           textShadow: "0 0 12px rgba(0,255,136,0.5)",
         }}>
-          NeuralFX
+          PulseTrade
         </span>
       </div>
 

@@ -508,15 +508,6 @@ def _build_strategies(filter_name: str | None = None) -> list:
         ICTStrategy(),
     ]
 
-    # NeuralStrategy only if models exist
-    try:
-        from agents.model_manager import ModelManager
-        from agents.neural_strategy import NeuralStrategy
-        mm = ModelManager()
-        strats.append(NeuralStrategy(mm))
-    except Exception as exc:
-        logger.debug("NeuralStrategy skipped: %s", exc)
-
     if filter_name:
         strats = [s for s in strats if filter_name in s.name]
         if not strats:

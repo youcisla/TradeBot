@@ -216,7 +216,7 @@ export default function AnalyticsPage() {
       {/* Header */}
       <div style={{ marginBottom: 24, display: "flex", alignItems: "flex-end", justifyContent: "space-between", flexWrap: "wrap", gap: 16 }}>
         <h1 style={{ fontSize: 28, fontWeight: 700, color: "#FFFFFF", margin: 0 }}>
-          Analytics
+          Performance
         </h1>
         {loading && (
           <span style={{ fontSize: 13, color: "rgba(235,235,245,0.3)" }}>

@@ -231,7 +231,7 @@ export default function TradesPage() {
             marginBottom: 4,
           }}
         >
-          Trades
+          Positions
         </h1>
         <div
           style={{

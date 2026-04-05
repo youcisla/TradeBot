@@ -122,7 +122,7 @@ export default function ToolsPage() {
   return (
     <div style={{ color: "#fff", fontFamily: "-apple-system, system-ui, sans-serif" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-        <h1 style={{ margin: 0, fontSize: 28, letterSpacing: "-0.02em" }}>Tool System</h1>
+        <h1 style={{ margin: 0, fontSize: 28, letterSpacing: "-0.02em" }}>Toolbox</h1>
         <div style={{ fontSize: 12, color: "#9aa0a6" }}>Live: refresh every 5s</div>
       </div>
 

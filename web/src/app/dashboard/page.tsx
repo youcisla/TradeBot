@@ -202,7 +202,7 @@ export default function CommandCenterPage() {
             {/* Top row */}
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
               <span style={{ fontSize: 22, fontWeight: 700, color: "#FFFFFF", letterSpacing: -0.5 }}>
-                NeuralFX
+                PulseTrade
               </span>
               <div style={{
                 display:      "flex",

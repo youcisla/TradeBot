@@ -854,6 +854,43 @@ class Database:
         finally:
             self._put_conn(conn)
 
+    def reset_learning_state(self) -> dict[str, int]:
+        """Delete historical learning state so confidence/scoring restarts fresh.
+
+        This intentionally clears only learning artifacts and leaves trades,
+        bot status, commands, and market/event telemetry untouched.
+        """
+        conn = self._get_conn()
+        removed_scores = 0
+        removed_confidence = 0
+        removed_snapshots = 0
+        try:
+            with conn:
+                with conn.cursor() as cur:
+                    cur.execute("DELETE FROM trade_scores")
+                    removed_scores = cur.rowcount
+
+                    cur.execute("DELETE FROM strategy_confidence")
+                    removed_confidence = cur.rowcount
+
+                    cur.execute("DELETE FROM performance_snapshots")
+                    removed_snapshots = cur.rowcount
+
+            summary = {
+                "trade_scores": removed_scores,
+                "strategy_confidence": removed_confidence,
+                "performance_snapshots": removed_snapshots,
+            }
+            self.log_agent_event(
+                "learning_agent",
+                "warning",
+                "Learning state reset requested; historical scoring cleared",
+                summary,
+            )
+            return summary
+        finally:
+            self._put_conn(conn)
+
     # ── agent events (persona log) ───────────────────────────────────────
 
     def log_agent_event(self, agent: str, level: str, message: str,

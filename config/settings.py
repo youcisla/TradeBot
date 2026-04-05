@@ -70,6 +70,17 @@ ENCRYPTION_KEY: str = os.getenv("ENCRYPTION_KEY", "")
 # On unexpected errors the council fails open — trading is never blocked.
 COUNCIL_ENABLED: bool = os.getenv("COUNCIL_ENABLED", "true").lower() == "true"
 COUNCIL_MIN_CONFIDENCE: float = float(os.getenv("COUNCIL_MIN_CONFIDENCE", "0.60"))
+# Council decision mode:
+# - blocking: veto trade when council rejects (classic behavior)
+# - advisory: council still scores/reasons but does not block execution
+COUNCIL_MODE: str = os.getenv("COUNCIL_MODE", "advisory").lower()
+# Hard cap to avoid council latency exploding in signal-heavy loops.
+# Set to 0 to skip in-loop council reviews entirely.
+COUNCIL_MAX_REVIEWS_PER_LOOP: int = int(os.getenv("COUNCIL_MAX_REVIEWS_PER_LOOP", "3"))
+# In advisory mode, optionally haircut confidence when council disagrees.
+COUNCIL_ADVISORY_REJECTION_CONF_PENALTY: float = float(
+    os.getenv("COUNCIL_ADVISORY_REJECTION_CONF_PENALTY", "0.08")
+)
 # Expert vote weights — must sum to 1.0.
 COUNCIL_ICT_WEIGHT: float    = float(os.getenv("COUNCIL_ICT_WEIGHT",    "0.50"))
 COUNCIL_DANIAL_WEIGHT: float = float(os.getenv("COUNCIL_DANIAL_WEIGHT", "0.17"))
@@ -157,6 +168,20 @@ MAX_SPREAD_PIPS_COMMODITY: float = float(os.getenv("MAX_SPREAD_PIPS_COMMODITY", 
 MAX_SPREAD_PIPS_EXOTIC: float = float(os.getenv("MAX_SPREAD_PIPS_EXOTIC", "15.0"))
 # Indices are quoted in points — allow up to 5 points spread (covers typical CFD spread)
 MAX_SPREAD_POINTS_INDEX: float = float(os.getenv("MAX_SPREAD_POINTS_INDEX", "5.0"))
+
+# Risk behavior profile:
+# - strict: all gates enforced
+# - balanced: default production posture
+# - agile: looser entry gating for high-confidence opportunities
+RISK_VALIDATION_PROFILE: str = os.getenv("RISK_VALIDATION_PROFILE", "agile").lower()
+# Confidence level considered "high-quality" when agile profile is active.
+RISK_AGILE_HIGH_CONF_THRESHOLD: float = float(
+    os.getenv("RISK_AGILE_HIGH_CONF_THRESHOLD", "0.74")
+)
+# Spread multiplier in agile mode for high-confidence setups.
+RISK_AGILE_SPREAD_MULTIPLIER: float = float(
+    os.getenv("RISK_AGILE_SPREAD_MULTIPLIER", "1.35")
+)
 
 # ── Execution lanes (speed vs certainty) ─────────────────────────────────
 # Fast lane runs hard safety checks first to minimize signal-to-order latency.

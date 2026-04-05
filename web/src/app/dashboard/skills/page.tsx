@@ -402,7 +402,7 @@ export default function SkillsPage() {
           margin: 0,
           letterSpacing: "-0.02em",
         }}>
-          Skills
+          Skill Lab
         </h1>
         <button
           onClick={() => setCreating(!creating)}

@@ -152,7 +152,7 @@ export default function WorldPage() {
           fontFamily:   FONT,
         }}
       >
-        Macro Intel
+        Macro Brief
       </h1>
 
       {/* Loading */}

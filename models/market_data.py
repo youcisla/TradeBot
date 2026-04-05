@@ -92,7 +92,7 @@ class MarketContext:
     m15_candles: list[Candle] = field(default_factory=list)
     h4_candles: list[Candle] = field(default_factory=list)
     d1_candles: list[Candle] = field(default_factory=list)
-    # ADX value computed by AnalysisAgent (used by NeuralStrategy regime gate)
+    # ADX value computed by AnalysisAgent and consumed by strategy regime logic.
     adx: float = 0.0
     # Per-timeframe trend directions (bullish / bearish / neutral)
     m30_trend: str = "neutral"
