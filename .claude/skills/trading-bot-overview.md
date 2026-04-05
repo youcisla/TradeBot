@@ -135,6 +135,14 @@ All values from `.env`, never hardcoded. Key settings:
 - `utils/telegram_bot.py` — send_message()
 - `filters/crucix_client.py` — CrucixClient, MacroContext, `get_macro_context()`
 
+## Research Intake Workflow
+- `backtesting/research_intake.py` — candidate scoring, checklist gates, promotion decision export
+- `research/curated_sources.{json,yaml}` — trusted upstream source catalog
+- `research/scoring_rubric.{json,yaml}` — weighted scoring model and promotion threshold
+- `research/promotion_checklist.{json,yaml}` — hard gate criteria for promotion
+- `research/candidate_backlog.json` — candidate queue for evaluation
+- `scripts/backtest.py --research-intake` — runs the workflow and writes `backtesting/runs/research_intake.json`
+
 ---
 
 ## When to use this skill

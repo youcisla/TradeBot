@@ -200,7 +200,67 @@ cp .env.example .env
 python main.py
 # Or use the launcher:
 .\start.ps1
+
+# First-run wizard (recommended)
+python scripts/first_run_wizard.py
+
+# Launch with an explicit runtime profile
+.\start.ps1 -Profile paper
+
+# Deterministic replay + parity validation before live rollout
+python scripts/replay_session.py --symbol EURUSD --data backtesting/data/EURUSD_H1.csv
+
+# ML4T baseline benchmark workflow with purged walk-forward validation
+python scripts/backtest.py --ml4t-benchmark --purge-size 5 --embargo-size 3
+
+# Research intake scoring + promotion gates (exports experiment artifact)
+python scripts/backtest.py --research-intake
 ```
+
+## Runtime Profiles
+
+Set `BOT_PROFILE` in `.env` (or pass `-Profile` to `start.ps1`).
+
+- `custom`: keep raw `.env` values unchanged
+- `dev`: demo + faster iteration + conservative risk
+- `paper`: strict validation for simulation-first operation
+- `live-safe`: blocking council + strict risk + instant-entry disabled
+- `live-full`: faster live posture with advisory council and fast lane
+
+## Strategy Plugin Contract
+
+You can inject additional strategies without modifying orchestration code.
+
+1. Implement a class inheriting `BaseStrategy`.
+2. Ensure it is importable by dotted path.
+3. Add to `STRATEGY_PLUGINS` in `.env`.
+
+Example:
+
+```env
+STRATEGY_PLUGINS=my_package.my_strategy.MyStrategy
+```
+
+Plugins are auto-loaded at startup and merged into the unified strategy pipeline.
+
+## Operations Runbook
+
+Incident and recovery procedures are documented in:
+
+- `docs/incident-recovery-playbook.md`
+
+Replay artifacts and parity checks:
+
+- `scripts/replay_session.py`
+- Standardized artifact output: `backtesting/runs/*_replay_artifact.json`
+
+Research intake governance artifacts:
+
+- `research/curated_sources.{json,yaml}`
+- `research/scoring_rubric.{json,yaml}`
+- `research/promotion_checklist.{json,yaml}`
+- `research/candidate_backlog.json`
+- Output artifact: `backtesting/runs/research_intake.json`
 
 ### 2. Web Dashboard (Vercel)
 

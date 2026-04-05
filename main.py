@@ -39,6 +39,7 @@ from models.signal import Signal
 from strategies.sma_crossover import SmaCrossoverStrategy
 from strategies.ict_strategy import ICTStrategy
 from strategies.unified_strategy import UnifiedStrategy
+from strategies.plugin_loader import load_strategy_plugins
 
 from agents.market_agent import MarketAgent
 from agents.analysis_agent import AnalysisAgent
@@ -170,9 +171,17 @@ def main() -> None:
     deepseek_strategy = DeepSeekStrategy()
     ict_strategy = ICTStrategy(broker=broker, db=db, min_confidence=55.0)
     sma_strategy = SmaCrossoverStrategy()
-    unified_strategy = UnifiedStrategy([deepseek_strategy, ict_strategy, sma_strategy])
+    plugin_strategies = load_strategy_plugins(db=db, broker=broker)
+    base_strategies = [deepseek_strategy, ict_strategy, sma_strategy]
+    unified_strategy = UnifiedStrategy(base_strategies + plugin_strategies)
     strategies = [unified_strategy]
-    logger.info("Unified strategy mode: deepseek + ict + sma in one connected engine")
+    if plugin_strategies:
+        logger.info(
+            "Unified strategy mode: deepseek + ict + sma + %d plugin(s) in one connected engine",
+            len(plugin_strategies),
+        )
+    else:
+        logger.info("Unified strategy mode: deepseek + ict + sma in one connected engine")
 
     # ── Weekend crypto strategies — multi-TF ICT for BTCUSD ─────────────
     # During the forex weekend, only crypto trades.  Three ICT instances
@@ -193,6 +202,7 @@ def main() -> None:
         ict_btc_h4w1,
         ict_strategy,
         ict_btc_h1d1,
+        *plugin_strategies,
     ])
     weekend_strategies = [weekend_unified_strategy]
 
@@ -314,11 +324,18 @@ def main() -> None:
         "full_lane_fills": 0,
         "deferred_added": 0,
         "deferred_promoted": 0,
+        "risk_soft_rejections": 0,
+        "budget_scan_hits": 0,
+        "budget_rank_hits": 0,
+        "budget_exec_hits": 0,
+        "budget_iteration_hits": 0,
+        "budget_council_skips": 0,
         "last_scan_latency_ms": 0.0,
         "last_rank_latency_ms": 0.0,
         "last_execution_latency_ms": 0.0,
         "last_signal_to_order_ms": -1.0,
     }
+    _risk_reject_reason_counts: dict[str, int] = {}
     profiler = OrchestrationProfiler(
         OrchestrationTargets(
             scan_ms=settings.ORCHESTRATION_TARGET_SCAN_MS,
@@ -417,6 +434,7 @@ def main() -> None:
                 opportunity_lifecycle=opportunity_lifecycle,
                 weekend_symbols=_weekend_symbols if _weekend else None,
                 scan_workers=scan_workers,
+                risk_reject_reason_counts=_risk_reject_reason_counts,
             )
         except Exception:
             logger.exception("Unhandled error in main loop iteration %d", loop_count)
@@ -463,7 +481,8 @@ def main() -> None:
             bottleneck = profiler.primary_bottleneck()
             logger.info(
                 "KPI snapshot @loop %d | scanned=%d raw=%d ranked=%d council_rej=%d risk_rej=%d "
-                "fast_attempts=%d fast_fills=%d fast_closed=%d full_fills=%d deferred_added=%d deferred_promoted=%d "
+                "risk_soft_rej=%d fast_attempts=%d fast_fills=%d fast_closed=%d full_fills=%d deferred_added=%d deferred_promoted=%d "
+                "budget_scan=%d budget_rank=%d budget_exec=%d budget_iter=%d budget_council_skips=%d "
                 "session=%s cooldown=%.0fs scan_ms=%.1f rank_ms=%.1f exec_ms=%.1f signal_to_order_ms=%.1f "
                 "avg_scan=%.1f avg_rank=%.1f avg_exec=%.1f avg_total=%.1f workers=%d bottleneck=%s",
                 loop_count,
@@ -472,12 +491,18 @@ def main() -> None:
                 _metrics["ranked_signals"],
                 _metrics["council_rejections"],
                 _metrics["risk_rejections"],
+                _metrics["risk_soft_rejections"],
                 _metrics["fast_lane_attempts"],
                 _metrics["fast_lane_fills"],
                 _metrics["fast_lane_closed"],
                 _metrics["full_lane_fills"],
                 _metrics["deferred_added"],
                 _metrics["deferred_promoted"],
+                _metrics["budget_scan_hits"],
+                _metrics["budget_rank_hits"],
+                _metrics["budget_exec_hits"],
+                _metrics["budget_iteration_hits"],
+                _metrics["budget_council_skips"],
                 _active_session,
                 _active_scan_cooldown,
                 _metrics["last_scan_latency_ms"],
@@ -517,6 +542,7 @@ def main() -> None:
                     "avg_execution_latency_ms": profile["avg_exec_ms"],
                     "avg_total_latency_ms": profile["avg_total_ms"],
                     "bottleneck": bottleneck,
+                    "risk_reject_reason_counts": dict(_risk_reject_reason_counts),
                 },
             )
 
@@ -762,6 +788,7 @@ def _run_iteration(
     opportunity_lifecycle: OpportunityLifecycleManager,
     weekend_symbols: list[str] | None = None,
     scan_workers: int = 6,
+    risk_reject_reason_counts: dict[str, int] | None = None,
 ) -> None:
     """Single iteration of the trading loop.
 
@@ -793,6 +820,11 @@ def _run_iteration(
 
     iter_start_ts = time.monotonic()
     iter_trace_id = f"iter-{loop_count}-{int(time.time())}"
+    hard_budget_enabled = settings.ORCHESTRATION_HARD_BUDGET_ENABLED
+    max_scan_ms = settings.ORCHESTRATION_MAX_SCAN_MS
+    max_rank_ms = settings.ORCHESTRATION_MAX_RANK_MS
+    max_exec_ms = settings.ORCHESTRATION_MAX_EXEC_MS
+    max_iter_ms = settings.ORCHESTRATION_MAX_ITERATION_MS
 
     if settings.ORCHESTRATION_ENABLE_ITERATION_TRACE:
         db.log_agent_event(
@@ -1023,6 +1055,13 @@ def _run_iteration(
     metrics["scanned_symbols"] = metrics.get("scanned_symbols", 0) + len(scanned)
     metrics["raw_signals"] = metrics.get("raw_signals", 0) + len(all_signals)
     metrics["last_scan_latency_ms"] = (time.monotonic() - scan_phase_start) * 1000.0
+    if hard_budget_enabled and metrics["last_scan_latency_ms"] > max_scan_ms:
+        metrics["budget_scan_hits"] = metrics.get("budget_scan_hits", 0) + 1
+        logger.warning(
+            "Scan hard budget exceeded: %.1fms > %.1fms — reducing ranked workload this loop",
+            metrics["last_scan_latency_ms"],
+            max_scan_ms,
+        )
 
     # Graceful degradation: abort ranking/execution when scan quality is poor.
     sampled = len(scanned) + len(scan_error_symbols)
@@ -1190,6 +1229,13 @@ def _run_iteration(
 
     metrics["ranked_signals"] = metrics.get("ranked_signals", 0) + len(ranked)
     metrics["last_rank_latency_ms"] = (time.monotonic() - rank_phase_start) * 1000.0
+    if hard_budget_enabled and metrics["last_rank_latency_ms"] > max_rank_ms:
+        metrics["budget_rank_hits"] = metrics.get("budget_rank_hits", 0) + 1
+        logger.warning(
+            "Rank hard budget exceeded: %.1fms > %.1fms — execution phase will be tightly bounded",
+            metrics["last_rank_latency_ms"],
+            max_rank_ms,
+        )
     signal_ready_ts = time.monotonic()
     first_fill_signal_to_order_ms = -1.0
     execution_phase_start = signal_ready_ts
@@ -1205,6 +1251,24 @@ def _run_iteration(
     #   All signals → council gate (blocking) → risk → execute.
     # ══════════════════════════════════════════════════════════════════════
     for i, signal_obj in enumerate(ranked):
+        exec_elapsed_ms = (time.monotonic() - execution_phase_start) * 1000.0
+        iter_elapsed_ms = (time.monotonic() - iter_start_ts) * 1000.0
+        if hard_budget_enabled and exec_elapsed_ms > max_exec_ms:
+            metrics["budget_exec_hits"] = metrics.get("budget_exec_hits", 0) + 1
+            logger.warning(
+                "Execution hard budget exceeded: %.1fms > %.1fms — stopping further ranked processing",
+                exec_elapsed_ms,
+                max_exec_ms,
+            )
+            break
+        if hard_budget_enabled and iter_elapsed_ms > max_iter_ms:
+            metrics["budget_iteration_hits"] = metrics.get("budget_iteration_hits", 0) + 1
+            logger.warning(
+                "Iteration hard budget exceeded: %.1fms > %.1fms — stopping further ranked processing",
+                iter_elapsed_ms,
+                max_iter_ms,
+            )
+            break
 
         is_instant = (
             settings.INSTANT_ENTRY_ENABLED
@@ -1216,7 +1280,12 @@ def _run_iteration(
         council_mode = settings.COUNCIL_MODE
         council_max_reviews = max(0, settings.COUNCIL_MAX_REVIEWS_PER_LOOP)
         council_reviews = metrics.get("council_reviews_this_loop", 0)
-        allow_council_review = council_reviews < council_max_reviews
+        remaining_exec_budget = max_exec_ms - exec_elapsed_ms
+        budget_allows_council = (
+            (not hard_budget_enabled)
+            or remaining_exec_budget >= settings.ORCHESTRATION_EXEC_BUDGET_COUNCIL_MARGIN_MS
+        )
+        allow_council_review = council_reviews < council_max_reviews and budget_allows_council
 
         # ── Trading Council gate ─────────────────────────────────────────
         # In instant-entry mode the top signal skips this gate entirely.
@@ -1279,11 +1348,11 @@ def _run_iteration(
                             f"APPROVED {signal_obj.symbol} {verdict.confidence:.0%}",
                         )
         elif council is not None and not is_instant and not allow_council_review:
+            metrics["budget_council_skips"] = metrics.get("budget_council_skips", 0) + 1
             logger.debug(
-                "Council skipped for %s %s (review cap %d reached)",
+                "Council skipped for %s %s (review cap reached or tight execution budget)",
                 signal_obj.symbol,
                 signal_obj.direction,
-                council_max_reviews,
             )
 
         # ── Risk check (drawdown, spread, lot-size, etc.) ────────────────
@@ -1298,9 +1367,20 @@ def _run_iteration(
 
         if not risk_agent.validate(signal_obj, mode=validation_mode):
             metrics["risk_rejections"] = metrics.get("risk_rejections", 0) + 1
+            reject_info = risk_agent.get_last_reject_info()
+            reject_reason = str(reject_info.get("reason", "unknown"))
+            reject_hard = bool(reject_info.get("hard", False))
+            if not reject_hard:
+                metrics["risk_soft_rejections"] = metrics.get("risk_soft_rejections", 0) + 1
+            if risk_reject_reason_counts is not None:
+                risk_reject_reason_counts[reject_reason] = (
+                    risk_reject_reason_counts.get(reject_reason, 0) + 1
+                )
             log_agent.log_risk_rejection(
                 signal_obj.symbol, signal_obj.direction,
-                signal_obj.strategy, f"Failed {validation_mode} risk validation")
+                signal_obj.strategy,
+                f"Failed {validation_mode} risk validation ({reject_reason})",
+            )
             if _tui:
                 _tui.add_event("risk", "warn",
                                f"REJECT {signal_obj.symbol} {signal_obj.direction}")
@@ -1308,6 +1388,7 @@ def _run_iteration(
             if (
                 settings.DEFERRED_ENTRY_ENABLED
                 and signal_obj.confidence >= settings.DEFERRED_ENTRY_MIN_CONF
+                and not reject_hard
             ):
                 ttl = max(30, int(settings.DEFERRED_ENTRY_TTL_SECONDS))
                 expires_at = time.time() + ttl

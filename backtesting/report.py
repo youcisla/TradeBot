@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import logging
 import math
+import uuid
+from datetime import UTC, datetime
 
 from broker.connector import PositionInfo
 
@@ -153,3 +155,102 @@ def inject_report_to_db(report: dict, db) -> None:
         db.upsert_confidence(strategy_slug, conf, trades, 0)
         logger.info("Injected backtest confidence: %s → %.2f (PF:%.2f WR:%.1f%%)",
                     strategy_slug, conf, pf if isinstance(pf, float) else 99.0, wr)
+
+
+def generate_run_artifact(
+    closed_positions: list[PositionInfo],
+    initial_balance: float,
+    *,
+    symbol: str,
+    profile: str,
+    mode: str,
+    source_data: str,
+    report: dict | None = None,
+) -> dict:
+    """Build a machine-readable run artifact for replay/backtest parity checks."""
+    normalized_report = report or generate_report(
+        closed_positions,
+        initial_balance=initial_balance,
+    )
+
+    equity = initial_balance
+    equity_curve = [{"step": 0, "balance": round(equity, 2)}]
+    trade_ledger = []
+
+    for idx, pos in enumerate(closed_positions, start=1):
+        equity += pos.pnl
+        outcome = "win" if pos.pnl >= 0 else "loss"
+        trade_ledger.append({
+            "ticket": pos.ticket,
+            "symbol": pos.symbol,
+            "direction": pos.direction,
+            "lot_size": pos.lot_size,
+            "entry_price": round(pos.entry_price, 5),
+            "exit_price": round(pos.current_price, 5),
+            "stop_loss": round(pos.stop_loss, 5),
+            "take_profit": round(pos.take_profit or 0.0, 5),
+            "pnl": round(pos.pnl, 2),
+            "comment": pos.comment,
+            "outcome": outcome,
+        })
+        equity_curve.append({"step": idx, "balance": round(equity, 2)})
+
+    artifact = {
+        "schema_version": "1.0",
+        "generated_at": datetime.now(UTC).isoformat(),
+        "run": {
+            "run_id": str(uuid.uuid4()),
+            "mode": mode,
+            "symbol": symbol,
+            "profile": profile,
+            "source_data": source_data,
+        },
+        "metrics": {
+            "total_trades": normalized_report.get("Total Trades", 0),
+            "winning_trades": normalized_report.get("Winning Trades", 0),
+            "losing_trades": normalized_report.get("Losing Trades", 0),
+            "win_rate_pct": normalized_report.get("Win Rate (%)", 0.0),
+            "gross_profit": normalized_report.get("Gross Profit", 0.0),
+            "gross_loss": normalized_report.get("Gross Loss", 0.0),
+            "net_profit": normalized_report.get("Net Profit", 0.0),
+            "expectancy": normalized_report.get("Expectancy", 0.0),
+            "profit_factor": normalized_report.get("Profit Factor", 0.0),
+            "max_drawdown_pct": normalized_report.get("Max Drawdown (%)", 0.0),
+            "return_pct": normalized_report.get("Return (%)", 0.0),
+            "initial_balance": normalized_report.get("Initial Balance", initial_balance),
+            "final_balance": normalized_report.get("Final Balance", initial_balance),
+        },
+        "models": normalized_report.get("Models", {}),
+        "trade_ledger": trade_ledger,
+        "equity_curve": equity_curve,
+    }
+    return artifact
+
+
+def generate_experiment_artifact(
+    *,
+    experiment_name: str,
+    symbol_reports: dict,
+    metadata: dict | None = None,
+) -> dict:
+    """Build a standardized experiment artifact for benchmark/model comparisons."""
+    aggregate = {
+        "symbols": len(symbol_reports),
+        "models_evaluated": 0,
+        "total_trades": 0,
+    }
+
+    for report in symbol_reports.values():
+        aggregate["models_evaluated"] += len(report.get("models", []))
+        aggregate["total_trades"] += sum(m.get("trades", 0) for m in report.get("models", []))
+
+    return {
+        "schema_version": "1.0",
+        "generated_at": datetime.now(UTC).isoformat(),
+        "experiment": {
+            "name": experiment_name,
+            "metadata": metadata or {},
+        },
+        "aggregate": aggregate,
+        "symbols": symbol_reports,
+    }

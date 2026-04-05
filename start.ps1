@@ -11,7 +11,10 @@
 param(
     [switch]$AuditMode,
     [switch]$DoctorOnly,
-    [switch]$SkipDoctor
+    [switch]$SkipDoctor,
+    [ValidateSet("custom", "dev", "paper", "live-safe", "live-full")]
+    [string]$Profile = "custom",
+    [switch]$Onboard
 )
 
 $ErrorActionPreference = "Stop"
@@ -37,6 +40,22 @@ if (-not (Test-Path $venvPython)) {
     Write-Host "        Run: python -m venv .venv" -ForegroundColor Yellow
     Write-Host "        Then: .venv\Scripts\pip install -r requirements.txt" -ForegroundColor Yellow
     exit 1
+}
+
+if ($Onboard) {
+    $wizard = Join-Path $Root "scripts\first_run_wizard.py"
+    if (-not (Test-Path $wizard)) {
+        Write-Host "[ERROR] Onboarding wizard not found at scripts\first_run_wizard.py" -ForegroundColor Red
+        exit 1
+    }
+    Write-Host "[*] Launching first-run onboarding wizard..." -ForegroundColor Yellow
+    & $venvPython $wizard
+    exit $LASTEXITCODE
+}
+
+if ($Profile -ne "custom") {
+    $env:BOT_PROFILE = $Profile
+    Write-Host "[PROFILE] Runtime profile forced by launcher: BOT_PROFILE=$Profile" -ForegroundColor Yellow
 }
 
 $doctorScript = Join-Path $Root "scripts\ops_doctor.py"

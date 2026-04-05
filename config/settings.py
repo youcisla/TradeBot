@@ -16,6 +16,9 @@ load_dotenv(_env_path)
 
 # ── Mode ─────────────────────────────────────────────────────────────────
 DEMO_MODE: bool = os.getenv("DEMO_MODE", "false").lower() == "true"
+# Runtime profile selector. Keep "custom" to respect raw .env values.
+# Supported: custom, dev, paper, live-safe, live-full
+BOT_PROFILE: str = os.getenv("BOT_PROFILE", "custom").strip().lower()
 
 # ── Broker ───────────────────────────────────────────────────────────────
 BROKER_ACCOUNT: str = os.getenv("BROKER_ACCOUNT", "")
@@ -427,6 +430,28 @@ ORCHESTRATION_SCAN_ERROR_RATE_ABORT: float = float(
 ORCHESTRATION_SCAN_ERROR_MIN_SAMPLES: int = int(
     os.getenv("ORCHESTRATION_SCAN_ERROR_MIN_SAMPLES", "5")
 )
+# Hard stage budgets (ms). When exceeded, orchestration degrades gracefully
+# by skipping optional gates and/or stopping further ranked processing.
+ORCHESTRATION_HARD_BUDGET_ENABLED: bool = (
+    os.getenv("ORCHESTRATION_HARD_BUDGET_ENABLED", "true").lower() == "true"
+)
+ORCHESTRATION_MAX_SCAN_MS: float = float(
+    os.getenv("ORCHESTRATION_MAX_SCAN_MS", "2200")
+)
+ORCHESTRATION_MAX_RANK_MS: float = float(
+    os.getenv("ORCHESTRATION_MAX_RANK_MS", "300")
+)
+ORCHESTRATION_MAX_EXEC_MS: float = float(
+    os.getenv("ORCHESTRATION_MAX_EXEC_MS", "1300")
+)
+ORCHESTRATION_MAX_ITERATION_MS: float = float(
+    os.getenv("ORCHESTRATION_MAX_ITERATION_MS", "5000")
+)
+# Safety margin: when remaining execution budget is below this threshold,
+# skip council reviews to preserve order-placement latency.
+ORCHESTRATION_EXEC_BUDGET_COUNCIL_MARGIN_MS: float = float(
+    os.getenv("ORCHESTRATION_EXEC_BUDGET_COUNCIL_MARGIN_MS", "350")
+)
 
 # ── Data Validation ──────────────────────────────────────────────────────
 STUCK_QUOTE_THRESHOLD: int = int(os.getenv("STUCK_QUOTE_THRESHOLD", "10"))
@@ -505,6 +530,8 @@ DEFAULT_TIMEFRAME: str = os.getenv("DEFAULT_TIMEFRAME", "H1")
 # ── DeepSeek LLM Strategy ────────────────────────────────────────────────
 DEEPSEEK_API_KEY:        str   = os.getenv("DEEPSEEK_API_KEY", "")
 DEEPSEEK_MODEL:          str   = os.getenv("DEEPSEEK_MODEL", "deepseek-chat")
+DEEPSEEK_QUICK_MODEL:    str   = os.getenv("DEEPSEEK_QUICK_MODEL", DEEPSEEK_MODEL)
+DEEPSEEK_DEEP_MODEL:     str   = os.getenv("DEEPSEEK_DEEP_MODEL", "deepseek-reasoner")
 DEEPSEEK_MIN_CONFIDENCE: float = float(os.getenv("DEEPSEEK_MIN_CONFIDENCE", "0.65"))
 DEEPSEEK_SCHEMA_VERSION: str = os.getenv("DEEPSEEK_SCHEMA_VERSION", "v1")
 # How long (minutes) to reuse a cached signal before re-querying the API.
@@ -515,6 +542,18 @@ DEEPSEEK_CACHE_MINUTES:  int   = int(os.getenv("DEEPSEEK_CACHE_MINUTES", "30"))
 # Example: 0.25 means +/-25% tolerance around expected R multiples.
 DEEPSEEK_R_MULT_TOLERANCE: float = float(
     os.getenv("DEEPSEEK_R_MULT_TOLERANCE", "0.25")
+)
+DEEPSEEK_QUICK_TIMEOUT_SECONDS: float = float(
+    os.getenv("DEEPSEEK_QUICK_TIMEOUT_SECONDS", "10")
+)
+DEEPSEEK_DEEP_TIMEOUT_SECONDS: float = float(
+    os.getenv("DEEPSEEK_DEEP_TIMEOUT_SECONDS", "8")
+)
+DEEPSEEK_ENABLE_DEEP_VERIFY: bool = (
+    os.getenv("DEEPSEEK_ENABLE_DEEP_VERIFY", "true").lower() == "true"
+)
+DEEPSEEK_DEEP_VERIFY_MIN_CONFIDENCE: float = float(
+    os.getenv("DEEPSEEK_DEEP_VERIFY_MIN_CONFIDENCE", "0.78")
 )
 # Quality telemetry cadence (in DeepSeek detect calls).
 DEEPSEEK_METRICS_LOG_EVERY: int = int(os.getenv("DEEPSEEK_METRICS_LOG_EVERY", "25"))
@@ -566,3 +605,79 @@ WEEKEND_SYMBOLS: str = os.getenv(
 
 # ── Crucix World Intelligence (optional) ─────────────────────────────
 CRUCIX_URL: str = os.getenv("CRUCIX_URL", "http://localhost:3117")
+
+# ── Strategy plugin loader ───────────────────────────────────────────────
+# Comma-separated dotted paths to strategy classes, e.g.
+# STRATEGY_PLUGINS=my_pkg.alpha.AlphaStrategy,my_pkg.beta.BetaStrategy
+STRATEGY_PLUGINS: tuple[str, ...] = tuple(
+    s.strip()
+    for s in os.getenv("STRATEGY_PLUGINS", "").split(",")
+    if s.strip()
+)
+STRATEGY_PLUGIN_FAIL_FAST: bool = (
+    os.getenv("STRATEGY_PLUGIN_FAIL_FAST", "false").lower() == "true"
+)
+
+
+def _apply_profile_overrides() -> None:
+    """Apply opinionated runtime profiles after env parsing.
+
+    Profiles intentionally only override a small, high-impact subset.
+    """
+
+    profile_overrides: dict[str, dict[str, object]] = {
+        "dev": {
+            "DEMO_MODE": True,
+            "COUNCIL_ENABLED": False,
+            "COUNCIL_MODE": "advisory",
+            "FAST_LANE_ENABLED": True,
+            "INSTANT_ENTRY_ENABLED": True,
+            "MAX_RISK_PER_TRADE": 0.005,
+            "MAX_OPEN_TRADES": 2,
+            "MAX_DAILY_LOSS": 0.02,
+        },
+        "paper": {
+            "DEMO_MODE": True,
+            "COUNCIL_ENABLED": True,
+            "COUNCIL_MODE": "blocking",
+            "FAST_LANE_ENABLED": False,
+            "INSTANT_ENTRY_ENABLED": False,
+            "MAX_RISK_PER_TRADE": 0.003,
+            "MAX_OPEN_TRADES": 2,
+            "MAX_DAILY_LOSS": 0.015,
+        },
+        "live-safe": {
+            "DEMO_MODE": False,
+            "COUNCIL_ENABLED": True,
+            "COUNCIL_MODE": "blocking",
+            "FAST_LANE_ENABLED": False,
+            "INSTANT_ENTRY_ENABLED": False,
+            "MAX_RISK_PER_TRADE": 0.005,
+            "MAX_OPEN_TRADES": 2,
+            "MAX_DAILY_LOSS": 0.02,
+            "RISK_VALIDATION_PROFILE": "strict",
+        },
+        "live-full": {
+            "DEMO_MODE": False,
+            "COUNCIL_ENABLED": True,
+            "COUNCIL_MODE": "advisory",
+            "FAST_LANE_ENABLED": True,
+            "INSTANT_ENTRY_ENABLED": True,
+            "MAX_RISK_PER_TRADE": 0.01,
+            "MAX_OPEN_TRADES": 4,
+            "MAX_DAILY_LOSS": 0.03,
+            "RISK_VALIDATION_PROFILE": "agile",
+        },
+    }
+
+    selected = profile_overrides.get(BOT_PROFILE)
+    if not selected:
+        return
+
+    g = globals()
+    for key, value in selected.items():
+        if key in g:
+            g[key] = value
+
+
+_apply_profile_overrides()

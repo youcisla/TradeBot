@@ -10,12 +10,13 @@ When TP1 is hit the SL on the remaining legs moves to breakeven.
 
 from __future__ import annotations
 
+import json
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 
 from backtesting.mock_broker import MockBroker
-from backtesting.report import generate_report, inject_report_to_db
+from backtesting.report import generate_report, generate_run_artifact, inject_report_to_db
 from database.db import Database
 
 logger = logging.getLogger(__name__)
@@ -73,7 +74,15 @@ class BacktestEngine:
 
     # ── public API ───────────────────────────────────────────────────────
 
-    def run(self, symbol: str) -> dict:
+    def run(
+        self,
+        symbol: str,
+        *,
+        profile: str = "custom",
+        mode: str = "backtest",
+        export_artifact: bool = False,
+        artifact_path: Path | str | None = None,
+    ) -> dict:
         """Run the backtest and return the performance report dict."""
         # Import agents lazily so the module can be imported without all
         # agent dependencies installed (useful for tests).
@@ -253,6 +262,25 @@ class BacktestEngine:
 
         report = generate_report(self.broker.closed_positions,
                                  initial_balance=self._initial_balance)
+
+        if export_artifact:
+            artifact = generate_run_artifact(
+                self.broker.closed_positions,
+                initial_balance=self._initial_balance,
+                symbol=symbol,
+                profile=profile,
+                mode=mode,
+                source_data=str(self.data_path),
+                report=report,
+            )
+            output_path = Path(artifact_path) if artifact_path else (
+                Path("backtesting") / "runs" / f"{symbol.lower()}_{mode}_artifact.json"
+            )
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            with output_path.open("w", encoding="utf-8") as fh:
+                json.dump(artifact, fh, indent=2)
+            report["Artifact Path"] = str(output_path)
+
         if self.db:
             inject_report_to_db(report, self.db)
         return report

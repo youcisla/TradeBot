@@ -1,0 +1,178 @@
+{
+  "schema_version": "1.0",
+  "generated_at": "2026-04-05T11:39:47.184829+00:00",
+  "experiment": {
+    "name": "research_intake_promotion",
+    "metadata": {
+      "candidate_count": 2,
+      "rubric_version": "2026-04-05",
+      "checklist_version": "2026-04-05",
+      "promotion_threshold": 0.7,
+      "source_catalog": "C:\\Users\\Youcef\\Downloads\\TradeBot\\research\\curated_sources.json",
+      "candidate_backlog": "C:\\Users\\Youcef\\Downloads\\TradeBot\\research\\candidate_backlog.json"
+    }
+  },
+  "aggregate": {
+    "symbols": 2,
+    "models_evaluated": 2,
+    "total_trades": 10
+  },
+  "symbols": {
+    "zipline-event-parity": {
+      "models": [
+        {
+          "name": "research_source_score",
+          "accuracy": 0.789,
+          "avg_strategy_return": 0.789,
+          "trades": 5
+        }
+      ],
+      "candidate": {
+        "id": "zipline-event-parity",
+        "name": "Zipline parity and deterministic fills",
+        "url": "https://github.com/quantopian/zipline",
+        "source_id": "zipline",
+        "source_category": "backtesting",
+        "source_tier": "core",
+        "notes": "Use for deterministic replay and parity safety checks"
+      },
+      "score_breakdown": {
+        "weighted_score": 0.789,
+        "threshold": 0.7,
+        "parts": {
+          "reproducibility": 0.9,
+          "implementation_readiness": 0.8,
+          "maintenance": 0.5,
+          "adoption": 0.8,
+          "risk_alignment": 0.9
+        }
+      },
+      "promotion": {
+        "promoted": true,
+        "checklist_passed": 5,
+        "checklist_total": 5,
+        "required_failed": false,
+        "items": [
+          {
+            "id": "open_source_license",
+            "field": "open_source_license",
+            "required": true,
+            "minimum": 1.0,
+            "value": 1.0,
+            "passed": true
+          },
+          {
+            "id": "active_maintenance",
+            "field": "active_maintenance",
+            "required": true,
+            "minimum": 1.0,
+            "value": 1.0,
+            "passed": true
+          },
+          {
+            "id": "implementation_path",
+            "field": "implementation_path",
+            "required": true,
+            "minimum": 1.0,
+            "value": 1.0,
+            "passed": true
+          },
+          {
+            "id": "testability",
+            "field": "testability",
+            "required": true,
+            "minimum": 1.0,
+            "value": 1.0,
+            "passed": true
+          },
+          {
+            "id": "risk_fit",
+            "field": "risk_fit",
+            "required": true,
+            "minimum": 1.0,
+            "value": 1.0,
+            "passed": true
+          }
+        ]
+      }
+    },
+    "awesome-list-source-intake": {
+      "models": [
+        {
+          "name": "research_source_score",
+          "accuracy": 0.616,
+          "avg_strategy_return": 0.616,
+          "trades": 5
+        }
+      ],
+      "candidate": {
+        "id": "awesome-list-source-intake",
+        "name": "Awesome Quant ML curated source intake",
+        "url": "https://github.com/grananqvist/Awesome-Quant-Machine-Learning-Trading",
+        "source_id": "awesome-quant-ml",
+        "source_category": "curation",
+        "source_tier": "intake",
+        "notes": "Use as discovery feed, not direct execution framework"
+      },
+      "score_breakdown": {
+        "weighted_score": 0.616,
+        "threshold": 0.7,
+        "parts": {
+          "reproducibility": 0.4,
+          "implementation_readiness": 0.7,
+          "maintenance": 0.7,
+          "adoption": 0.6,
+          "risk_alignment": 0.8
+        }
+      },
+      "promotion": {
+        "promoted": false,
+        "checklist_passed": 5,
+        "checklist_total": 5,
+        "required_failed": false,
+        "items": [
+          {
+            "id": "open_source_license",
+            "field": "open_source_license",
+            "required": true,
+            "minimum": 1.0,
+            "value": 1.0,
+            "passed": true
+          },
+          {
+            "id": "active_maintenance",
+            "field": "active_maintenance",
+            "required": true,
+            "minimum": 1.0,
+            "value": 1.0,
+            "passed": true
+          },
+          {
+            "id": "implementation_path",
+            "field": "implementation_path",
+            "required": true,
+            "minimum": 1.0,
+            "value": 1.0,
+            "passed": true
+          },
+          {
+            "id": "testability",
+            "field": "testability",
+            "required": true,
+            "minimum": 1.0,
+            "value": 1.0,
+            "passed": true
+          },
+          {
+            "id": "risk_fit",
+            "field": "risk_fit",
+            "required": true,
+            "minimum": 1.0,
+            "value": 1.0,
+            "passed": true
+          }
+        ]
+      }
+    }
+  }
+}

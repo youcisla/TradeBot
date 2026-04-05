@@ -1,0 +1,29 @@
+schema_version: "1.0"
+sources:
+  - id: ml4t
+    name: Machine Learning for Trading
+    url: https://github.com/stefan-jansen/machine-learning-for-trading
+    category: workflow
+    tier: core
+    notes: Primary implementation backbone for research-to-production pipeline
+
+  - id: zipline
+    name: Zipline
+    url: https://github.com/quantopian/zipline
+    category: backtesting
+    tier: core
+    notes: Reference for deterministic event-driven backtesting and parity workflows
+
+  - id: superalgos
+    name: Superalgos
+    url: https://github.com/Superalgos/Superalgos
+    category: orchestration
+    tier: core
+    notes: Reference for plugin architecture and operational maturity
+
+  - id: awesome-quant-ml
+    name: Awesome Quant Machine Learning Trading
+    url: https://github.com/grananqvist/Awesome-Quant-Machine-Learning-Trading
+    category: curation
+    tier: intake
+    notes: High-signal discovery funnel for papers, libraries, and frameworks

@@ -1,0 +1,19 @@
+{
+  "schema_version": "1.0",
+  "version": "2026-04-05",
+  "promotion_threshold": 0.7,
+  "weights": {
+    "reproducibility": 0.28,
+    "implementation_readiness": 0.24,
+    "maintenance": 0.18,
+    "adoption": 0.15,
+    "risk_alignment": 0.15
+  },
+  "defaults": {
+    "reproducibility": 0.0,
+    "implementation_readiness": 0.0,
+    "maintenance": 0.0,
+    "adoption": 0.0,
+    "risk_alignment": 0.0
+  }
+}

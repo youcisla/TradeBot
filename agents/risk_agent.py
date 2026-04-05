@@ -130,6 +130,9 @@ class RiskAgent:
         # tick_value is in account currency (MT5 converts automatically), so
         # this is the source of truth for EUR/USD and other cross-currency accounts.
         self._tick_spec_cache: dict[str, tuple[float, float, float]] = {}  # symbol → (ts, size, value)
+        self._last_reject_reason: str = ""
+        self._last_reject_hard: bool = True
+        self._last_reject_message: str = ""
 
     # ── public API ───────────────────────────────────────────────────────
 
@@ -277,12 +280,13 @@ class RiskAgent:
         """
         # 1. Drawdown circuit breaker
         if self._check_drawdown():
-            self._emit("warn", "Drawdown breaker is ON — no trades allowed!")
+            self._emit("warn", "Drawdown breaker is ON — no trades allowed!", {"check": "drawdown"})
             return False
 
         # 1b. Crucix macro blackout check
         if self._crucix and self._crucix.is_blackout(signal.symbol):
-            self._emit("warn", f"MACRO BLACKOUT: FLASH alert active on {signal.symbol}")
+            self._emit("warn", f"MACRO BLACKOUT: FLASH alert active on {signal.symbol}",
+                       {"symbol": signal.symbol, "check": "crucix_blackout"})
             return False
 
         # 1c. Protection layer (cooldown, stoploss guard, global loss guard).
@@ -331,7 +335,7 @@ class RiskAgent:
 
         # 3. Max concurrent trades
         if not self._check_open_trade_cap(open_trades):
-            self._emit("warn", "MAX_TRADES — concurrent position cap reached")
+            self._emit("warn", "MAX_TRADES — concurrent position cap reached", {"check": "max_trades"})
             return False
 
         # 4. Spread check (fast path)
@@ -344,7 +348,7 @@ class RiskAgent:
         # 1. Drawdown circuit breaker
         if self._check_drawdown():
             logger.warning("RISK REJECT [DRAWDOWN]: circuit breaker active")
-            self._emit("warn", "Drawdown breaker is ON — no trades allowed!")
+            self._emit("warn", "Drawdown breaker is ON — no trades allowed!", {"check": "drawdown"})
             return False
 
         # 1b. Crucix macro blackout check
@@ -888,8 +892,32 @@ class RiskAgent:
         self._spread_reject_until.pop(symbol, None)
 
     def _emit(self, level: str, msg: str, data: dict | None = None) -> None:
+        if level == "warn":
+            check = "unknown"
+            if isinstance(data, dict):
+                check = str(data.get("check", "unknown"))
+            self._last_reject_reason = check
+            self._last_reject_hard = self._is_hard_reject(check)
+            self._last_reject_message = msg
         if self._db:
             self._db.log_agent_event("risk", level, msg, data)
+
+    @staticmethod
+    def _is_hard_reject(reason: str) -> bool:
+        # Hard rejects should never be bypassed/deferred by orchestration.
+        return reason in {
+            "drawdown",
+            "crucix_blackout",
+            "max_trades",
+            "lot_size",
+        }
+
+    def get_last_reject_info(self) -> dict[str, str | bool]:
+        return {
+            "reason": self._last_reject_reason,
+            "hard": self._last_reject_hard,
+            "message": self._last_reject_message,
+        }
 
     # ── drawdown circuit breaker ─────────────────────────────────────────
 

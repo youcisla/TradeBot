@@ -52,6 +52,9 @@ if str(_REPO) not in sys.path:
 
 from config import settings
 from config.symbols import SYMBOLS, asset_class
+from backtesting.baseline_benchmarks import evaluate_baselines
+from backtesting.research_intake import run_research_intake_pipeline
+from backtesting.report import generate_experiment_artifact
 from models.market_data import Candle, MarketContext, MarketData
 from models.signal import EntrySnapshot, Signal
 from utils.helpers import current_session, day_of_week
@@ -465,6 +468,73 @@ def _save_csv(stats: list[StrategyStats], path: str) -> None:
     logger.info("CSV saved → %s", path)
 
 
+def _run_ml4t_benchmark(
+    candle_map: dict[str, list[Candle]],
+    *,
+    purge_size: int,
+    embargo_size: int,
+    output_path: str,
+) -> dict:
+    """Run baseline model benchmarks over all symbols and export one artifact."""
+    symbol_reports: dict[str, dict] = {}
+
+    for symbol, candles in candle_map.items():
+        results = evaluate_baselines(
+            candles,
+            purge_size=purge_size,
+            embargo_size=embargo_size,
+        )
+        models = [
+            {
+                "name": r.model,
+                "accuracy": round(r.accuracy, 4),
+                "avg_strategy_return": round(r.avg_strategy_return, 6),
+                "trades": r.trades,
+            }
+            for r in results
+        ]
+        symbol_reports[symbol] = {"models": models}
+
+    artifact = generate_experiment_artifact(
+        experiment_name="ml4t_baseline_benchmarks",
+        symbol_reports=symbol_reports,
+        metadata={
+            "purge_size": purge_size,
+            "embargo_size": embargo_size,
+            "validation": "purged_walk_forward",
+        },
+    )
+
+    out_file = Path(output_path) if output_path else (_REPO / "backtesting" / "runs" / "ml4t_baselines.json")
+    out_file.parent.mkdir(parents=True, exist_ok=True)
+    with out_file.open("w", encoding="utf-8") as fh:
+        json.dump(artifact, fh, indent=2)
+
+    logger.info("ML4T baseline benchmark artifact saved → %s", out_file)
+    return artifact
+
+
+def _run_research_intake(
+    *,
+    candidates_path: str,
+    curated_sources_path: str,
+    scoring_rubric_path: str,
+    promotion_checklist_path: str,
+    output_path: str,
+) -> dict:
+    """Score research candidates and export promotion decisions as an experiment artifact."""
+    out_file = Path(output_path) if output_path else (_REPO / "backtesting" / "runs" / "research_intake.json")
+    artifact = run_research_intake_pipeline(
+        candidates_path=candidates_path,
+        curated_sources_path=curated_sources_path,
+        scoring_rubric_path=scoring_rubric_path,
+        promotion_checklist_path=promotion_checklist_path,
+        output_path=out_file,
+    )
+    logger.info("Research intake artifact saved → %s", out_file)
+    return artifact
+
+
 # ── DB seeder ────────────────────────────────────────────────────────────────
 
 def _seed_db(stats: list[StrategyStats]) -> None:
@@ -528,7 +598,49 @@ def main() -> None:
     parser.add_argument("--seed-db",  action="store_true", help="Write confidence values to DB")
     parser.add_argument("--out",      default="",   help="Save results to CSV file")
     parser.add_argument("--no-cache", action="store_true", help="Force re-fetch from MT5 (ignore cache)")
+    parser.add_argument("--ml4t-benchmark", action="store_true", help="Run baseline ML4T benchmark workflow")
+    parser.add_argument("--benchmark-out", default="", help="Save ML4T benchmark artifact JSON")
+    parser.add_argument("--purge-size", type=int, default=5, help="Purged split buffer size")
+    parser.add_argument("--embargo-size", type=int, default=3, help="Embargo gap between folds")
+    parser.add_argument("--research-intake", action="store_true", help="Run research candidate scoring + promotion gates")
+    parser.add_argument("--research-candidates", default="", help="Path to research candidate backlog JSON")
+    parser.add_argument("--research-sources", default="", help="Path to curated sources JSON")
+    parser.add_argument("--research-rubric", default="", help="Path to scoring rubric JSON")
+    parser.add_argument("--research-checklist", default="", help="Path to promotion checklist JSON")
+    parser.add_argument("--research-out", default="", help="Save research intake artifact JSON")
     args = parser.parse_args()
+
+    research_defaults = {
+        "candidates": _REPO / "research" / "candidate_backlog.json",
+        "sources": _REPO / "research" / "curated_sources.json",
+        "rubric": _REPO / "research" / "scoring_rubric.json",
+        "checklist": _REPO / "research" / "promotion_checklist.json",
+    }
+
+    # Standalone research intake mode: no MT5 dependency, no backtest run.
+    if args.research_intake and not args.ml4t_benchmark:
+        artifact = _run_research_intake(
+            candidates_path=args.research_candidates or str(research_defaults["candidates"]),
+            curated_sources_path=args.research_sources or str(research_defaults["sources"]),
+            scoring_rubric_path=args.research_rubric or str(research_defaults["rubric"]),
+            promotion_checklist_path=args.research_checklist or str(research_defaults["checklist"]),
+            output_path=args.research_out,
+        )
+        promoted = [
+            key
+            for key, report in artifact.get("symbols", {}).items()
+            if report.get("promotion", {}).get("promoted")
+        ]
+        print("\nRESEARCH INTAKE PROMOTION")
+        print("─" * 60)
+        print(f"  Candidates scored: {len(artifact.get('symbols', {}))}")
+        print(f"  Promoted:          {len(promoted)}")
+        if promoted:
+            print("  Promotion list:")
+            for item in promoted:
+                print(f"    - {item}")
+        print("─" * 60)
+        return
 
     target_symbols = (
         [s.strip() for s in args.symbols.split(",") if s.strip()]
@@ -590,6 +702,50 @@ def main() -> None:
                 logger.warning("%s failed: %s", sym, exc)
 
     logger.info("Backtest complete in %.1fs — %d total simulated trades", time.time() - t1, len(all_results))
+
+    if args.ml4t_benchmark:
+        artifact = _run_ml4t_benchmark(
+            candle_map,
+            purge_size=args.purge_size,
+            embargo_size=args.embargo_size,
+            output_path=args.benchmark_out,
+        )
+        print("\nML4T BASELINE BENCHMARK")
+        print("─" * 60)
+        for symbol, report in artifact.get("symbols", {}).items():
+            models = report.get("models", [])
+            if not models:
+                continue
+            best = models[0]
+            print(
+                f"  {symbol:<10} {best['name']:<24} "
+                f"acc={best['accuracy']:.2%} avg_ret={best['avg_strategy_return']:+.4f}"
+            )
+        print("─" * 60)
+
+    if args.research_intake:
+        artifact = _run_research_intake(
+            candidates_path=args.research_candidates or str(research_defaults["candidates"]),
+            curated_sources_path=args.research_sources or str(research_defaults["sources"]),
+            scoring_rubric_path=args.research_rubric or str(research_defaults["rubric"]),
+            promotion_checklist_path=args.research_checklist or str(research_defaults["checklist"]),
+            output_path=args.research_out,
+        )
+        promoted = [
+            key
+            for key, report in artifact.get("symbols", {}).items()
+            if report.get("promotion", {}).get("promoted")
+        ]
+
+        print("\nRESEARCH INTAKE PROMOTION")
+        print("─" * 60)
+        print(f"  Candidates scored: {len(artifact.get('symbols', {}))}")
+        print(f"  Promoted:          {len(promoted)}")
+        if promoted:
+            print("  Promotion list:")
+            for item in promoted:
+                print(f"    - {item}")
+        print("─" * 60)
 
     # ── Aggregate and report ─────────────────────────────────────────────
     stats = _aggregate(all_results)

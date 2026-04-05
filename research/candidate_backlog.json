@@ -1,0 +1,39 @@
+{
+  "schema_version": "1.0",
+  "candidates": [
+    {
+      "id": "zipline-event-parity",
+      "name": "Zipline parity and deterministic fills",
+      "url": "https://github.com/quantopian/zipline",
+      "source_id": "zipline",
+      "reproducibility": 0.9,
+      "implementation_readiness": 0.8,
+      "maintenance": 0.5,
+      "adoption": 0.8,
+      "risk_alignment": 0.9,
+      "open_source_license": true,
+      "active_maintenance": true,
+      "implementation_path": true,
+      "testability": true,
+      "risk_fit": true,
+      "notes": "Use for deterministic replay and parity safety checks"
+    },
+    {
+      "id": "awesome-list-source-intake",
+      "name": "Awesome Quant ML curated source intake",
+      "url": "https://github.com/grananqvist/Awesome-Quant-Machine-Learning-Trading",
+      "source_id": "awesome-quant-ml",
+      "reproducibility": 0.4,
+      "implementation_readiness": 0.7,
+      "maintenance": 0.7,
+      "adoption": 0.6,
+      "risk_alignment": 0.8,
+      "open_source_license": true,
+      "active_maintenance": true,
+      "implementation_path": true,
+      "testability": true,
+      "risk_fit": true,
+      "notes": "Use as discovery feed, not direct execution framework"
+    }
+  ]
+}
