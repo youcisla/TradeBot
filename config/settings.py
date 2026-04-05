@@ -34,6 +34,19 @@ NEWS_BLACKOUT_MINUTES: int = int(os.getenv("NEWS_BLACKOUT_MINUTES", "15"))
 # ── Telegram ─────────────────────────────────────────────────────────────
 TELEGRAM_BOT_TOKEN: str = os.getenv("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT_ID: str = os.getenv("TELEGRAM_CHAT_ID", "")
+TELEGRAM_NOISE_FILTER_ENABLED: bool = (
+    os.getenv("TELEGRAM_NOISE_FILTER_ENABLED", "true").lower() == "true"
+)
+TELEGRAM_DEDUPE_WINDOW_SECONDS: int = int(
+    os.getenv("TELEGRAM_DEDUPE_WINDOW_SECONDS", "180")
+)
+TELEGRAM_RATE_LIMIT_PER_MINUTE: int = int(
+    os.getenv("TELEGRAM_RATE_LIMIT_PER_MINUTE", "20")
+)
+TELEGRAM_SUPPRESSION_REPORT_EVERY: int = int(
+    os.getenv("TELEGRAM_SUPPRESSION_REPORT_EVERY", "10")
+)
+TELEGRAM_CHART_DAYS: int = int(os.getenv("TELEGRAM_CHART_DAYS", "30"))
 
 # ── Security ─────────────────────────────────────────────────────────────
 ENCRYPTION_KEY: str = os.getenv("ENCRYPTION_KEY", "")

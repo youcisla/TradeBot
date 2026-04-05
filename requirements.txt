@@ -27,3 +27,6 @@ rank_bm25>=0.2.2
 
 # ── Testing ──────────────────────────────────────────────────────────────
 pytest>=7.0
+
+# ── Reporting / Charts (Telegram graph snapshots) ───────────────────────
+matplotlib>=3.8

@@ -58,6 +58,7 @@ from utils import terminal_ui as tui
 from utils.helpers import current_session, is_market_open, is_any_market_open, is_weekend, local_now
 from utils.orchestration_profiler import OrchestrationProfiler, OrchestrationTargets
 from utils.symbol_event_tracker import SymbolEventTracker
+from utils.telegram_reports import build_pnl_curve_png
 from utils.tool_system import AutonomousToolSystem, result_to_text
 
 logger = logging.getLogger(__name__)
@@ -258,9 +259,12 @@ def main() -> None:
             f"🎛 Demo: {settings.DEMO_MODE}"
         )
 
-    telegram_bot.register_callbacks(None, _status_callback)
+    def _graph_callback() -> tuple[str, bytes] | None:
+        return build_pnl_curve_png(db, days=settings.TELEGRAM_CHART_DAYS)
+
+    telegram_bot.register_callbacks(None, _status_callback, _graph_callback)
     telegram_bot.start_polling()
-    telegram_bot.send_message("🤖 Trading bot started (DEMO)")
+    telegram_bot.send_message("🤖 Trading bot started (DEMO)", priority="high", force=True)
 
     # ── 8. Signal handlers for graceful shutdown ────────────────────────
     def _sig_handler(signum: int, frame: object) -> None:
@@ -1194,7 +1198,8 @@ def _run_iteration(
                     from utils import telegram_bot as _tg
                     _tg.send_message(
                         f"🏛️ Council REJECTED {signal_obj.direction} {signal_obj.symbol} "
-                        f"— {verdict.confidence:.0%} confidence\n{verdict.reasoning}"
+                        f"— {verdict.confidence:.0%} confidence\n{verdict.reasoning}",
+                        dedupe_key=f"council-reject:{signal_obj.symbol}:{signal_obj.direction}",
                     )
                     metrics["council_rejections"] = metrics.get("council_rejections", 0) + 1
                     continue
@@ -1306,7 +1311,8 @@ def _run_iteration(
                                 _tg.send_message(
                                     f"⚠️ Council advisory (post-entry): {_sig.direction} "
                                     f"{_sig.symbol} — {conf_str} confidence\n"
-                                    f"{verdict.reasoning}"
+                                    f"{verdict.reasoning}",
+                                    dedupe_key=f"council-advisory:{_sig.symbol}:{_sig.direction}",
                                 )
                         except Exception:
                             logger.exception("Advisory council thread failed")

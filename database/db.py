@@ -984,6 +984,22 @@ class Database:
         finally:
             self._put_conn(conn)
 
+    def get_closed_trades_since(self, since: "datetime", limit: int = 500) -> list[Trade]:
+        """Return closed trades with close_time >= since ordered by close_time asc."""
+        conn = self._get_conn()
+        try:
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute(
+                    """SELECT * FROM trades
+                       WHERE status='CLOSED' AND close_time >= %s
+                       ORDER BY close_time ASC
+                       LIMIT %s""",
+                    (since, max(1, int(limit))),
+                )
+                return [self._row_to_trade(r) for r in cur.fetchall()]
+        finally:
+            self._put_conn(conn)
+
     # ── ICT setup logging ────────────────────────────────────────────────
 
     def save_ict_setup(self, setup: dict) -> None:
