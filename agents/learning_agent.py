@@ -23,10 +23,12 @@ way out of a losing streak.
 from __future__ import annotations
 
 import logging
+import time
 from datetime import UTC, date, datetime, timedelta
 from typing import TYPE_CHECKING
 
 from config import settings
+from utils.mesh_bus import record_call
 from config.symbols import contract_size
 from database.db import Database
 from models.trade import Trade
@@ -45,6 +47,8 @@ _DAY_IMPROVEMENT_BOOST    = 0.04   # extra confidence per active strategy
 _WEEK_IMPROVEMENT_BOOST   = 0.06
 _MONTH_IMPROVEMENT_BOOST  = 0.10
 _MAX_MULTIPLIER           = 2.50   # cap so a single trade can't spike confidence
+_SIMILAR_CONTEXT_POSITIVE_BONUS = 0.15
+_SIMILAR_CONTEXT_NEGATIVE_CAP = 1.25
 
 
 class LearningAgent:
@@ -80,6 +84,7 @@ class LearningAgent:
 
         Returns the raw score.
         """
+        _t0 = time.monotonic()
         score = self._compute_score(trade)
 
         # Persist the score record
@@ -100,9 +105,11 @@ class LearningAgent:
             filters_aligned=trade.snap_rsi_aligned and trade.snap_trend_aligned,
         )
 
+        context_memory = self._build_context_memory(trade)
+
         # Update win streak and compute reward multiplier
         streak = self._update_streak(trade.strategy, score)
-        multiplier = self._reward_multiplier(trade.strategy, score, streak)
+        multiplier = self._reward_multiplier(trade.strategy, score, streak, context_memory)
 
         # Apply confidence delta (multiplier only amplifies positive deltas)
         current = self.get_confidence(trade.strategy)
@@ -123,7 +130,8 @@ class LearningAgent:
             f"conf {trade.strategy} {current:.2f}->{new_conf:.2f}",
             {"trade_id": trade.id, "score": score,
              "multiplier": multiplier, "streak": streak,
-             "old_conf": current, "new_conf": new_conf},
+               "old_conf": current, "new_conf": new_conf,
+               "context_memory": context_memory},
         )
         logger.info(
             "Trade %s scored %+.1f (x%.2f, streak=%d) | %s conf %.2f→%.2f",
@@ -135,6 +143,7 @@ class LearningAgent:
         if self._reflector is not None:
             self._reflector.reflect_async(trade, context)
 
+        record_call("learning", (time.monotonic() - _t0) * 1000.0, True)
         return score
 
     # ── period snapshots (call from main loop) ───────────────────────────
@@ -274,7 +283,8 @@ class LearningAgent:
     # ── per-trade reward multiplier ───────────────────────────────────────
 
     def _reward_multiplier(self, strategy: str, score: float,
-                           streak: int) -> float:
+                           streak: int,
+                           context_memory: dict | None = None) -> float:
         """Compute how much to amplify a positive confidence delta.
 
         Only affects wins; losses always use base multiplier = 1.0.
@@ -299,7 +309,32 @@ class LearningAgent:
         elif streak >= 3:
             multiplier += _STREAK_3_BONUS
 
+        # Situation memory retrieval: use outcomes from similar setups.
+        if context_memory and int(context_memory.get("trades", 0)) >= 3:
+            avg_score = float(context_memory.get("avg_score", 0.0))
+            win_rate = float(context_memory.get("win_rate", 0.0))
+            if avg_score > 0.75 and win_rate >= 0.55:
+                multiplier += _SIMILAR_CONTEXT_POSITIVE_BONUS
+            elif avg_score < 0 or win_rate < 0.40:
+                multiplier = min(multiplier, _SIMILAR_CONTEXT_NEGATIVE_CAP)
+
         return min(multiplier, _MAX_MULTIPLIER)
+
+    def _build_context_memory(self, trade: Trade) -> dict | None:
+        """Retrieve recent outcomes for a setup with similar context."""
+        try:
+            memory = self._db.get_recent_context_outcomes(
+                strategy=trade.strategy,
+                symbol=trade.symbol,
+                session=trade.snap_session or "",
+                market_condition=trade.snap_market_condition or "",
+                lookback_days=30,
+                limit=50,
+            )
+            return memory
+        except Exception:
+            logger.exception("Learning memory retrieval failed for %s", trade.id)
+            return None
 
     # ── streak tracking ───────────────────────────────────────────────────
 
@@ -360,6 +395,118 @@ class LearningAgent:
             "total_pnl":    round(total_pnl, 2),
             "avg_pnl":      round(total_pnl / len(closed), 2) if closed else 0,
         }
+
+    # ── walk-forward optimization check ──────────────────────────────────
+
+    def run_wfo_assessment(
+        self,
+        strategy: str = "all",
+        lookback_days: int = 90,
+    ) -> dict:
+        """Run a walk-forward optimization check on recent closed-trade PnL.
+
+        Detects model overfitting and parameter fragility emerging from live
+        trading.  Returns the raw WFO result dict so the **caller** (main loop
+        or weekly scheduler) can decide how to act on it, e.g.::
+
+            result = learning_agent.run_wfo_assessment()
+            if result.get("avg_overfitting", 0) > 1.5:
+                risk_agent.set_emergency_caps(max_risk_per_trade=0.01,
+                                              max_open_trades=3)
+
+        **Thresholds** (from :class:`~utils.walk_forward_optimizer.WalkForwardOptimizer`):
+
+        * ``avg_overfitting > 1.5``  — strategy is fitting to noise, not edge.
+        * ``parameter_stability < 0.6`` — optimal parameters shift each window,
+          indicating fragility.
+
+        At least 30 closed trades must exist in *lookback_days* (default 90);
+        fewer returns ``{"skipped": True, …}``.
+        """
+        try:
+            import pandas as pd  # optional — only needed for WFO
+            from utils.walk_forward_optimizer import WalkForwardOptimizer, WFOConfig
+        except ImportError as exc:
+            logger.warning("WFO skipped: missing dependency (%s)", exc)
+            return {"skipped": True, "reason": "import_error", "error": str(exc)}
+
+        since = datetime.now(UTC) - timedelta(days=lookback_days)
+        trades = self._db.get_closed_trades_since(since, limit=2000)
+
+        if len(trades) < 30:
+            logger.info(
+                "WFO skipped: only %d closed trades in the %d-day window (need ≥30).",
+                len(trades), lookback_days,
+            )
+            return {
+                "skipped": True,
+                "reason": "insufficient_trades",
+                "count": len(trades),
+            }
+
+        # Build a minimal, sorted PnL time-series for the WFO engine.
+        records = [
+            {"close_time": t.close_time, "pnl": t.pnl or 0.0}
+            for t in trades
+            if t.close_time is not None
+        ]
+        bars = (
+            pd.DataFrame(records)
+            .sort_values("close_time")
+            .reset_index(drop=True)
+        )
+
+        # No parameter grid — just walk PnL forward to check for regime drift.
+        def fitness_fn(window_bars: "pd.DataFrame", _params: dict) -> float:  # noqa: ANN001
+            return float(window_bars["pnl"].sum())
+
+        n = len(bars)
+        config = WFOConfig(
+            train_window=max(10, min(50, n // 3)),
+            test_window=max(5, n // 10),
+            reoptimize_freq=max(5, n // 10),
+            param_ranges={},           # no optimisation — pure regime check
+        )
+        wfo    = WalkForwardOptimizer(config)
+        result = wfo.run_walk_forward(bars, fitness_fn)
+        result["strategy"] = strategy
+
+        overfitting = result.get("avg_overfitting", 0.0)
+        stability   = result.get("parameter_stability", 1.0)
+        num_windows = result.get("num_windows", 0)
+
+        logger.info(
+            "WFO [%s]: windows=%d  overfitting=%.2f  stability=%.2f",
+            strategy, num_windows, overfitting, stability,
+        )
+
+        # Fire alert when either threshold is breached.
+        if overfitting > 1.5 or stability < 0.6:
+            problems: list[str] = []
+            if overfitting > 1.5:
+                problems.append(f"overfitting={overfitting:.2f} (>1.5)")
+            if stability < 0.6:
+                problems.append(f"stability={stability:.2f} (<0.6)")
+
+            alert = (
+                f"⚠️ WFO ALERT [{strategy}]: {', '.join(problems)}\n"
+                f"Caller should call risk_agent.set_emergency_caps() to tighten risk."
+            )
+            logger.warning(alert.replace("\n", " | "))
+            self._emit(
+                "warn",
+                f"WFO alert: {'; '.join(problems)}",
+                {
+                    "strategy":    strategy,
+                    "overfitting": overfitting,
+                    "stability":   stability,
+                    "num_windows": num_windows,
+                },
+            )
+            from utils import telegram_bot
+            telegram_bot.send_message(alert)
+
+        return result
 
     # ── scoring engine ────────────────────────────────────────────────────
 

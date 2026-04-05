@@ -111,3 +111,23 @@ class TestLearningAgent:
         agent = LearningAgent(db)
         report = agent.get_report()
         assert report["trades_today"] == 0
+
+    def test_context_memory_can_boost_multiplier(self, db):
+        agent = LearningAgent(db)
+        mult = agent._reward_multiplier(
+            "sma_crossover",
+            2.0,
+            0,
+            {"trades": 6, "avg_score": 1.4, "avg_pnl": 12.0, "win_rate": 0.68},
+        )
+        assert mult > 1.0
+
+    def test_context_memory_caps_multiplier_when_context_is_weak(self, db):
+        agent = LearningAgent(db)
+        mult = agent._reward_multiplier(
+            "sma_crossover",
+            2.0,
+            5,
+            {"trades": 7, "avg_score": -1.1, "avg_pnl": -8.0, "win_rate": 0.25},
+        )
+        assert mult <= 1.25

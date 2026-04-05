@@ -123,13 +123,15 @@ export default function AgentFeed({
 
   return (
     <div style={{
-      background:    "#1C1C1E",
-      borderRadius:  12,
+      background: "linear-gradient(180deg, rgba(19,24,32,0.92) 0%, rgba(12,15,20,0.96) 100%)",
+      borderRadius: 14,
+      border: "1px solid rgba(95,122,158,0.32)",
       overflow:      "hidden",
       display:       "flex",
       flexDirection: "column",
       height:        "100%",
       minHeight:     500,
+      boxShadow: "0 20px 34px rgba(0,0,0,0.35)",
       fontFamily:    '-apple-system, BlinkMacSystemFont, "SF Pro Display", system-ui, sans-serif',
     }}>
       <style>{KEYFRAMES}</style>
@@ -141,10 +143,10 @@ export default function AgentFeed({
           alignItems:     "center",
           justifyContent: "space-between",
           padding:        "14px 16px 12px",
-          borderBottom:   "0.5px solid rgba(84,84,88,0.65)",
+          borderBottom:   "1px solid rgba(95,122,158,0.28)",
           flexShrink:     0,
         }}>
-          <span style={{ fontSize: 15, fontWeight: 700, color: "#FFFFFF" }}>
+          <span style={{ fontSize: 15, fontWeight: 700, color: "#eff5ff" }}>
             Agent Feed
           </span>
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -152,12 +154,12 @@ export default function AgentFeed({
               width:        8,
               height:       8,
               borderRadius: "50%",
-              background:   "#30D158",
+              background:   "#66f6a5",
               display:      "inline-block",
               animation:    "feedPulse 2s ease-in-out infinite",
               flexShrink:   0,
             }} />
-            <span style={{ fontSize: 12, color: "#30D158", fontWeight: 600 }}>Live</span>
+            <span style={{ fontSize: 12, color: "#66f6a5", fontWeight: 600 }}>Live</span>
           </div>
         </div>
       )}
@@ -235,7 +237,7 @@ export default function AgentFeed({
                     ? "#FF453A"
                     : ev.level === "warn" || ev.level === "warning"
                     ? "#FF9F0A"
-                    : "rgba(235,235,245,0.8)",
+                    : "rgba(229,239,253,0.86)",
                   flex:         1,
                   overflow:     "hidden",
                   textOverflow: "ellipsis",

@@ -13,6 +13,7 @@ from config.symbols import asset_class
 from models.market_data import MarketContext
 from models.signal import Signal
 from strategies.base_strategy import BaseStrategy
+from utils.mesh_bus import mesh_span
 
 if TYPE_CHECKING:
     from database.db import Database
@@ -85,7 +86,8 @@ class StrategyAgent:
                 )
                 continue
 
-            signal = strategy.detect(context)
+            with mesh_span(strategy.name):
+                signal = strategy.detect(context)
             if signal is not None:
                 # If strategy provides its own dynamic confidence (e.g. from ICT setups with historical backtest), keep it
                 # Otherwise, fallback to the generic strategy confidence

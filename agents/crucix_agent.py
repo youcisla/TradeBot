@@ -13,9 +13,11 @@ normally — Crucix is enrichment, never a hard dependency.
 from __future__ import annotations
 
 import logging
+import time
 from typing import TYPE_CHECKING
 
 from filters.crucix_client import CrucixClient, MacroContext, get_client
+from utils.mesh_bus import record_call
 
 if TYPE_CHECKING:
     from database.db import Database
@@ -40,6 +42,7 @@ class CrucixAgent:
 
     def run(self) -> MacroContext:
         """Fetch latest macro context and log it to DB.  Never raises."""
+        _t0 = time.monotonic()
         try:
             ctx = self._client.get_context()
             if ctx.crucix_available:
@@ -72,9 +75,11 @@ class CrucixAgent:
                     )
             else:
                 logger.debug("CrucixAgent: Crucix not available — macro context skipped")
+            record_call("crucix", (time.monotonic() - _t0) * 1000.0, True)
             return ctx
         except Exception:
             logger.exception("CrucixAgent.run failed")
+            record_call("crucix", (time.monotonic() - _t0) * 1000.0, False)
             return MacroContext()
 
     def is_blackout(self, symbol: str) -> bool:

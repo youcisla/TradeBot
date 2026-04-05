@@ -4,7 +4,7 @@ from unittest.mock import patch
 
 import pytest
 
-from agents.council_agent import CouncilAgent, CouncilVerdict
+from agents.council_agent import CouncilAgent, CouncilVerdict, ExpertVerdict
 from tests.conftest import make_candles, make_signal
 
 
@@ -79,3 +79,19 @@ def test_review_has_reasons(council: CouncilAgent) -> None:
     # At least one expert should produce a reason
     total_reasons = len(verdict.reasons_for) + len(verdict.reasons_against)
     assert total_reasons > 0
+
+
+def test_review_risk_debate_is_deterministic(council: CouncilAgent) -> None:
+    signal = make_signal()
+    ctx = _make_context()
+
+    with patch.object(council._ict, "analyse", return_value=ExpertVerdict(score=0.9)):
+        with patch.object(council._danial, "analyse", return_value=ExpertVerdict(score=0.8)):
+            with patch.object(council._traditional, "analyse", return_value=ExpertVerdict(score=0.7)):
+                with patch.object(council._world, "analyse", return_value=ExpertVerdict(score=0.6)):
+                    verdict1 = council.review(signal, ctx)
+                    verdict2 = council.review(signal, ctx)
+
+    assert verdict1.risk_recommendation == verdict2.risk_recommendation
+    assert verdict1.risk_views == verdict2.risk_views
+    assert verdict1.trace_id != ""

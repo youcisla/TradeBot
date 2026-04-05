@@ -6,6 +6,10 @@ sources:
     category: workflow
     tier: core
     notes: Primary implementation backbone for research-to-production pipeline
+    implemented_adaptations:
+      - Research intake promotion workflow in backtesting/research_intake.py
+      - Candidate-to-artifact governance path via scripts/backtest.py --research-intake
+      - Structured score rubric and promotion gates in research/scoring_rubric.json and research/promotion_checklist.json
 
   - id: zipline
     name: Zipline
@@ -13,6 +17,10 @@ sources:
     category: backtesting
     tier: core
     notes: Reference for deterministic event-driven backtesting and parity workflows
+    implemented_adaptations:
+      - Deterministic replay and parity checks in scripts/replay_session.py
+      - Event-driven backtesting engine hardening in backtesting/engine.py
+      - Regression tests for repeatable outcomes in tests/test_walk_forward.py
 
   - id: superalgos
     name: Superalgos
@@ -20,6 +28,10 @@ sources:
     category: orchestration
     tier: core
     notes: Reference for plugin architecture and operational maturity
+    implemented_adaptations:
+      - Runtime strategy plugin loading in strategies/plugin_loader.py
+      - Autonomous operational tool cycle in utils/tool_system.py
+      - Emergency mode and self-healing guards via tool-system commands and settings
 
   - id: awesome-quant-ml
     name: Awesome Quant Machine Learning Trading
@@ -27,6 +39,10 @@ sources:
     category: curation
     tier: intake
     notes: High-signal discovery funnel for papers, libraries, and frameworks
+    implemented_adaptations:
+      - Source catalog curation workflow in research/curated_sources.{json,yaml}
+      - Candidate backlog process in research/candidate_backlog.json
+      - Intake scoring and promotion automation in backtesting/research_intake.py
 
   - id: stock-prediction-models
     name: Stock-Prediction-Models
@@ -34,6 +50,10 @@ sources:
     category: model-zoo
     tier: intake
     notes: Large model/agent idea library; archived and notebook-heavy, best for concept extraction
+    implemented_adaptations:
+      - Model-zoo candidate intake metadata in research/candidate_backlog.json
+      - Benchmark-ready conversion path through research_intake promotion workflow
+      - Comparative validation hooks in backtesting/report.py artifact outputs
 
   - id: bitcoin-bayesian-latent-source
     name: bitcoin-price-prediction
@@ -41,6 +61,10 @@ sources:
     category: probabilistic-modeling
     tier: intake
     notes: Bayesian latent source approach for uncertainty-aware directional prediction
+    implemented_adaptations:
+      - Uncertainty-aware posterior scoring in backtesting/research_intake.py
+      - Confidence interval and evidence-count penalties in candidate promotion logic
+      - Promotion thresholding that blends raw score with uncertainty penalty
 
   - id: hft-price-prediction
     name: HFT-price-prediction
@@ -48,3 +72,80 @@ sources:
     category: microstructure-ml
     tier: core
     notes: Practical tree-based microstructure pipeline with lag/rolling features and feature selection
+    implemented_adaptations:
+      - Microstructure-aware spread/risk constraints in config/settings.py and agents/risk_agent.py
+      - High-frequency execution guardrails in agents/execution_agent.py and agents/trade_manager.py
+      - Short-horizon orchestration profiling and worker adaptation in main.py and utils/orchestration_profiler.py
+
+  - id: claw-code
+    name: Claw Code
+    url: https://github.com/ultraworkers/claw-code
+    category: agent-runtime
+    tier: core
+    notes: Reference for command governance, permission workflows, and runtime telemetry
+    implemented_adaptations:
+      - Command risk policies and confirmation enforcement in web/src/app/api/commands/route.ts
+      - Optional two-step approval flow (pending_confirmation with approve/deny actions)
+      - Command lifecycle telemetry with running status, trace ids, and duration in main.py and database/db.py
+      - Command queue correctness fixes and regression coverage in tests/test_command_queue.py
+
+  - id: anthropics-claude-code
+    name: Claude Code
+    url: https://github.com/anthropics/claude-code
+    category: agent-runtime
+    tier: core
+    notes: Official reference for terminal-native agent workflow, plugin ecosystem, and operational patterns
+    implemented_adaptations:
+      - Auth-guarded command API contract with consistent JSON error shape in web/src/app/api/commands/route.ts
+      - Explicit command review workflow (approve/deny actions) for high-risk operations
+
+  - id: everything-claude-code
+    name: Everything Claude Code
+    url: https://github.com/affaan-m/everything-claude-code
+    category: orchestration
+    tier: core
+    notes: Large cross-harness playbook for skills-first workflows, hook governance, and continuous learning loops
+    implemented_adaptations:
+      - Dashboard review queue for pending high-risk commands in web/src/components/CommandPanel.tsx
+      - End-to-end review lifecycle surfaced through GET/POST command API and DB helpers
+
+  - id: claude-code-best
+    name: Claude Code Best
+    url: https://github.com/claude-code-best/claude-code
+    category: agent-runtime
+    tier: intake
+    notes: Reverse-engineered Claude-compatible runtime with feature-flagged modules, enterprise telemetry, and compatibility layers
+    implemented_adaptations:
+      - Feature-flag-driven two-step approval gating retained via COMMAND_TWO_STEP_APPROVAL_ENABLED
+      - Runtime traceability surfaced in command metadata and review queue context
+
+  - id: learn-claude-code
+    name: Learn Claude Code
+    url: https://github.com/shareAI-lab/learn-claude-code
+    category: education
+    tier: core
+    notes: Progressive harness-engineering curriculum covering tool loops, context management, subagents, teams, and task isolation
+    implemented_adaptations:
+      - Harness reliability upgrade: atomic command claiming with FOR UPDATE SKIP LOCKED in database/db.py
+      - Command loop compatibility fallback in main.py for test doubles and legacy adapters
+
+  - id: public-apis
+    name: Public APIs
+    url: https://github.com/public-apis/public-apis
+    category: market-data-sources
+    tier: intake
+    notes: Community-curated API index used to discover finance, currency, news, and weather providers for research intake
+    implemented_adaptations:
+      - Automated parser and candidate normalizer in backtesting/public_api_intake.py
+      - Import utility script in scripts/import_public_apis.py for backlog updates
+      - Seeded intake candidates in research/candidate_backlog.json for immediate scoring workflow
+
+  - id: godmod3
+    name: GODMOD3
+    url: https://github.com/MSL135/GODMOD3
+    category: agent-runtime
+    tier: intake
+    notes: Reference for multi-model parallel evaluation, parameter auto-tuning, and browser-local privacy patterns
+    implemented_adaptations:
+      - Seeded evaluation candidates in research/candidate_backlog.json for council and tuning experiments
+      - Scoped adoption to governance-safe orchestration patterns (no jailbreak or refusal-bypass modules)

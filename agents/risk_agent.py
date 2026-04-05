@@ -27,6 +27,7 @@ from models.signal import Signal
 from models.trade import Trade
 from utils import telegram_bot
 from utils.helpers import current_session, day_of_week, is_weekend
+from utils.mesh_bus import mesh_span
 
 if TYPE_CHECKING:
     from agents.crucix_agent import CrucixAgent
@@ -133,6 +134,9 @@ class RiskAgent:
         self._last_reject_reason: str = ""
         self._last_reject_hard: bool = True
         self._last_reject_message: str = ""
+        # Monthly loss gate cache (60 s TTL — same batch = same answer)
+        self._monthly_cache_ts: float = 0.0
+        self._monthly_loss_blocked: bool = False
 
     # ── public API ───────────────────────────────────────────────────────
 
@@ -152,8 +156,10 @@ class RiskAgent:
             if not self._check_signal_geometry(signal):
                 return False
             if mode == "hard":
-                return self._validate_hard(signal)
-            return self._validate_inner(signal, skip_duplicate=post_entry)
+                with mesh_span("risk"):
+                    return self._validate_hard(signal)
+            with mesh_span("risk"):
+                return self._validate_inner(signal, skip_duplicate=post_entry)
         except Exception:
             logger.exception("RiskAgent.validate crashed — rejecting signal")
             return False
@@ -191,6 +197,10 @@ class RiskAgent:
             risk_amount = max(0.0, settings.POSITION_SIZE_FIXED_RISK_AMOUNT)
         elif mode == "balance_pct":
             risk_amount = balance * max_risk_per_trade
+        elif mode == "kelly":
+            # Kelly Criterion: size based on historical edge (win-rate / payoff ratio).
+            # Falls back to equity_pct when trade history is insufficient.
+            risk_amount = equity * self._compute_kelly_fraction()
         else:
             # Default and fallback: equity-based risk percentage.
             risk_amount = equity * max_risk_per_trade
@@ -256,6 +266,60 @@ class RiskAgent:
                 pass  # Crucix unavailable — use unscaled lot
 
         return max(settings.MIN_LOT_SIZE, min(settings.MAX_LOT_SIZE, lot_size))
+
+    def _compute_kelly_fraction(self) -> float:
+        """Return the Kelly-optimal risk fraction for the current strategy edge.
+
+        Uses closed trades from the last KELLY_LOOKBACK_DAYS days (default 90).
+        Applies half-Kelly by default (KELLY_HALF=true) to reduce variance.
+        Falls back to ``settings.MAX_RISK_PER_TRADE`` when fewer than
+        ``settings.KELLY_MIN_TRADES`` trades are available.
+
+        Formula (full-Kelly):
+            f* = (W × R - (1 - W)) / R
+        where:
+            W = win-rate (fraction of profitable closes)
+            R = avg_win_pnl / avg_loss_pnl  (reward-to-risk ratio)
+
+        Reference: BackTrader KellyCriterion Sizer, Thorp (1962)
+        """
+        from datetime import UTC, timedelta
+        since = datetime.now(UTC) - timedelta(days=settings.KELLY_LOOKBACK_DAYS)
+        trades = self._db.get_closed_trades_since(since, limit=500)
+
+        if len(trades) < settings.KELLY_MIN_TRADES:
+            logger.debug(
+                "Kelly fallback: only %d trades (need %d) — using equity_pct",
+                len(trades), settings.KELLY_MIN_TRADES,
+            )
+            return settings.MAX_RISK_PER_TRADE
+
+        wins  = [t.pnl for t in trades if t.pnl and t.pnl > 0]
+        losses = [t.pnl for t in trades if t.pnl and t.pnl <= 0]
+
+        if not wins or not losses:
+            # Edge-case: all wins or all losses — defer to equity_pct
+            return settings.MAX_RISK_PER_TRADE
+
+        W = len(wins) / len(trades)
+        avg_win  = sum(wins)  / len(wins)
+        avg_loss = abs(sum(losses) / len(losses))
+        R = avg_win / avg_loss if avg_loss > 0 else 1.0
+
+        f_star = (W * R - (1.0 - W)) / R
+
+        if settings.KELLY_HALF:
+            f_star *= 0.5  # Half-Kelly reduces variance without sacrificing much growth
+
+        # Cap at MAX_RISK_PER_TRADE so Kelly can never exceed the configured risk limit.
+        kelly = max(0.0, min(f_star, settings.MAX_RISK_PER_TRADE))
+        logger.info(
+            "Kelly fraction: W=%.1f%% R=%.2f f*=%.4f %s=%.4f",
+            W * 100, R, f_star,
+            "half-kelly" if settings.KELLY_HALF else "full-kelly",
+            kelly,
+        )
+        return kelly
 
     def set_emergency_caps(self, *, max_risk_per_trade: float, max_open_trades: int) -> None:
         self._emergency_max_risk_per_trade = max(0.0001, float(max_risk_per_trade))
@@ -349,6 +413,15 @@ class RiskAgent:
         if self._check_drawdown():
             logger.warning("RISK REJECT [DRAWDOWN]: circuit breaker active")
             self._emit("warn", "Drawdown breaker is ON — no trades allowed!", {"check": "drawdown"})
+            return False
+
+        # 1a. Monthly loss gate (MT5_Trade_Connector RiskManagement_v1 pattern)
+        if self._check_monthly_loss():
+            self._emit(
+                "warn",
+                f"MONTHLY LOSS GATE: MTD loss exceeds {settings.MAX_MONTHLY_LOSS:.0%} — trading halted",
+                {"check": "monthly_loss"},
+            )
             return False
 
         # 1b. Crucix macro blackout check
@@ -968,6 +1041,44 @@ class RiskAgent:
 
         return False
 
+    # ── monthly loss gate ────────────────────────────────────────────────
+    # Pattern: MT5_Trade_Connector RiskManagement_v1 (daily 5% / monthly 10%)
+
+    def _check_monthly_loss(self) -> bool:
+        """Return True (block trading) if month-to-date PnL loss exceeds MAX_MONTHLY_LOSS.
+
+        Computes MTD loss from closed trades in the DB.  Cached for 60 s to
+        avoid hammering the database on every signal in a ranked batch.
+        """
+        now_mono = time.monotonic()
+        if now_mono - self._monthly_cache_ts < 60.0:
+            return self._monthly_loss_blocked
+
+        # Refresh MTD closed-trade PnL
+        now_utc = datetime.now(UTC)
+        month_start = now_utc.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        trades = self._db.get_closed_trades_since(month_start, limit=2000)
+        mtd_pnl = sum(t.pnl for t in trades if t.pnl is not None)
+
+        # We need equity at month-start to express loss as a fraction.
+        # Use current equity as a conservative proxy (equity decreases → ratio safe).
+        equity = self._broker.get_equity()
+        if equity <= 0:
+            self._monthly_cache_ts = now_mono
+            self._monthly_loss_blocked = False
+            return False
+
+        mtd_loss_pct = -mtd_pnl / equity  # positive when losing
+        self._monthly_cache_ts = now_mono
+        self._monthly_loss_blocked = mtd_loss_pct >= settings.MAX_MONTHLY_LOSS
+
+        if self._monthly_loss_blocked:
+            logger.critical(
+                "MONTHLY LOSS GATE: MTD PnL=%.2f (%.1f%%) exceeds limit %.1f%%",
+                mtd_pnl, mtd_loss_pct * 100, settings.MAX_MONTHLY_LOSS * 100,
+            )
+        return self._monthly_loss_blocked
+
     # ── duplicate guard ──────────────────────────────────────────────────
 
     @staticmethod
@@ -1005,3 +1116,22 @@ class RiskAgent:
                 )
                 return True
         return False
+
+from utils.dynamic_position_sizer import DynamicPositionSizer
+from utils.correlation_gate import CorrelationGate
+
+        # Kelly criterion position sizing (optional, controlled by settings)
+        self._kelly_sizer = DynamicPositionSizer(
+            lookback_days=30,
+            min_kelly_fraction=0.10,
+            max_kelly_fraction=0.25,
+            min_sample_trades=10,
+            fallback_risk_pct=settings.MAX_RISK_PER_TRADE,
+        ) if getattr(settings, 'KELLY_SIZING_ENABLED', False) else None
+
+        # Correlation gating for multi-position overleveraging
+        self._correlation_gate = CorrelationGate(
+            correlation_threshold=0.80,
+            lookback_days=30,
+            size_multiplier=0.5,
+        ) if getattr(settings, 'CORRELATION_GATING_ENABLED', False) else None

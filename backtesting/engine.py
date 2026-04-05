@@ -12,12 +12,14 @@ from __future__ import annotations
 
 import json
 import logging
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
 from backtesting.mock_broker import MockBroker
 from backtesting.report import generate_report, generate_run_artifact, inject_report_to_db
 from database.db import Database
+from utils.mesh_bus import record_call
 
 logger = logging.getLogger(__name__)
 
@@ -84,6 +86,7 @@ class BacktestEngine:
         artifact_path: Path | str | None = None,
     ) -> dict:
         """Run the backtest and return the performance report dict."""
+        _t0 = time.monotonic()
         # Import agents lazily so the module can be imported without all
         # agent dependencies installed (useful for tests).
         from agents.market_agent   import MarketAgent
@@ -283,4 +286,5 @@ class BacktestEngine:
 
         if self.db:
             inject_report_to_db(report, self.db)
+        record_call("backtesting", (time.monotonic() - _t0) * 1000.0, True)
         return report

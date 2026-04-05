@@ -18,6 +18,7 @@ from datetime import UTC, datetime
 from typing import Callable
 
 from broker.connector import BrokerConnector
+from utils.mesh_bus import mesh_span
 from config import settings
 from config.symbols import pip_value, contract_size, commission_per_lot
 from database.db import Database
@@ -141,7 +142,8 @@ class TradeManagerAgent:
     def monitor(self) -> None:
         """Called once per main loop iteration."""
         try:
-            self._monitor_inner()
+            with mesh_span("trade_manager"):
+                self._monitor_inner()
         except Exception:
             logger.exception("TradeManager.monitor failed")
 

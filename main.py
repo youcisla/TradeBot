@@ -68,6 +68,7 @@ logger = logging.getLogger(__name__)
 
 # ── Global shutdown flag ────────────────────────────────────────────────
 _shutdown = False
+_session_id: int = 0
 
 
 def _request_shutdown() -> None:
@@ -262,6 +263,9 @@ def main() -> None:
     trade_manager.reconcile()
     log_agent.record("STARTUP", f"Reconciliation done — {len(trade_manager.get_open_trades())} open trades")
     db.set_bot_uptime_start()
+    global _session_id
+    _session_id = db.start_session(version=getattr(settings, "VERSION", ""))
+    log_agent.record("STARTUP", f"Session started — id={_session_id}")
 
     # ── 7b. Terminal UI (Rich live dashboard) ───────────────────────────
     _ui = tui.init(refresh_per_second=4)
@@ -571,6 +575,22 @@ def main() -> None:
                 learning.snapshot_daily()
                 if now.weekday() == 6:          # Sunday → weekly snapshot
                     learning.snapshot_weekly()
+                    # Walk-forward check: detect regime overfitting / param fragility.
+                    wfo_result = learning.run_wfo_assessment()
+                    if (
+                        wfo_result.get("avg_overfitting", 0.0) > 1.5
+                        or wfo_result.get("parameter_stability", 1.0) < 0.6
+                    ):
+                        risk_agent.set_emergency_caps(
+                            max_risk_per_trade=0.01,
+                            max_open_trades=3,
+                        )
+                        logger.warning(
+                            "WFO risk-gating: overfitting=%.2f stability=%.2f"
+                            " → emergency caps set (max_risk=1%% max_pos=3)",
+                            wfo_result.get("avg_overfitting", 0.0),
+                            wfo_result.get("parameter_stability", 1.0),
+                        )
                 if now.day == 1:                # 1st of month → monthly snapshot
                     learning.snapshot_monthly()
             except Exception:
@@ -589,6 +609,7 @@ def main() -> None:
     candle_server.stop()
     telegram_bot.stop_polling()
     telegram_bot.send_message("🛑 Bot shutting down.")
+    db.end_session(_session_id, exit_reason="graceful")
     db.set_bot_stopped()
     broker.disconnect()
     db.close()
@@ -604,6 +625,19 @@ def _process_commands(
     tool_system: AutonomousToolSystem | None = None,
 ) -> None:
     """Poll the bot_commands table and Telegram kill flag for pending commands."""
+
+    def _extract_trace_id(payload: object) -> str:
+        if isinstance(payload, dict):
+            meta = payload.get("_meta")
+            if isinstance(meta, dict):
+                trace_id = meta.get("traceId")
+                if isinstance(trace_id, str) and trace_id.strip():
+                    return trace_id
+        return f"cmd-{int(time.time() * 1000)}"
+
+    def _final_result_message(base: str, *, trace_id: str, duration_ms: float) -> str:
+        return f"{base} | trace={trace_id} | duration_ms={duration_ms:.1f}"
+
     # ── Check Telegram kill flag (set by polling thread) ─────────────
     if telegram_bot.is_kill_requested():
         telegram_bot.pause()  # block new trades immediately
@@ -613,32 +647,98 @@ def _process_commands(
         return
 
     # ── Process DB command queue (web dashboard) ─────────────────────
-    for cmd in db.get_pending_commands():
+    # Prefer atomic claiming to avoid duplicate execution in multi-worker setups.
+    claim_fn = getattr(db, "claim_pending_commands", None)
+    if callable(claim_fn):
+        pending_commands = claim_fn(limit=25)
+        already_marked_running = True
+    else:
+        pending_commands = db.get_pending_commands()
+        already_marked_running = False
+
+    for cmd in pending_commands:
         cmd_name = cmd["command"]
+        payload = cmd.get("payload") if isinstance(cmd.get("payload"), dict) else {}
+        trace_id = _extract_trace_id(payload)
+        started_at = time.perf_counter()
+
+        if not already_marked_running:
+            db.update_command(
+                cmd["id"],
+                "running",
+                f"Started {cmd_name}",
+                set_executed=False,
+            )
+        db.log_agent_event(
+            "logging",
+            "info",
+            f"Command started: {cmd_name}",
+            {"command_id": cmd["id"], "command": cmd_name, "trace_id": trace_id},
+        )
+
         try:
             if cmd_name == "kill":
                 telegram_bot.pause()  # block new trades during shutdown
                 trade_manager.close_all("UI_KILL")
-                db.update_command(cmd["id"], "done", "All trades closed, shutting down")
+                duration_ms = (time.perf_counter() - started_at) * 1000.0
+                db.update_command(
+                    cmd["id"],
+                    "done",
+                    _final_result_message(
+                        "All trades closed, shutting down",
+                        trace_id=trace_id,
+                        duration_ms=duration_ms,
+                    ),
+                )
                 telegram_bot.send_message("🛑 KILL from dashboard — all positions closed, shutting down.")
                 _request_shutdown()
             elif cmd_name == "pause":
                 telegram_bot.pause()
-                db.update_command(cmd["id"], "done", "Bot paused")
+                duration_ms = (time.perf_counter() - started_at) * 1000.0
+                db.update_command(
+                    cmd["id"],
+                    "done",
+                    _final_result_message("Bot paused", trace_id=trace_id, duration_ms=duration_ms),
+                )
                 telegram_bot.send_message("⏸️ Bot PAUSED (from dashboard)")
             elif cmd_name == "resume":
                 telegram_bot.resume()
-                db.update_command(cmd["id"], "done", "Bot resumed")
+                duration_ms = (time.perf_counter() - started_at) * 1000.0
+                db.update_command(
+                    cmd["id"],
+                    "done",
+                    _final_result_message("Bot resumed", trace_id=trace_id, duration_ms=duration_ms),
+                )
                 telegram_bot.send_message("▶️ Bot RESUMED (from dashboard)")
+            elif cmd_name == "close_all":
+                trade_manager.close_all("UI_CLOSE_ALL")
+                duration_ms = (time.perf_counter() - started_at) * 1000.0
+                db.update_command(
+                    cmd["id"],
+                    "done",
+                    _final_result_message(
+                        "All open trades closed",
+                        trace_id=trace_id,
+                        duration_ms=duration_ms,
+                    ),
+                )
+                telegram_bot.send_message("📤 All open trades closed (from dashboard)")
             elif cmd_name == "close_trade":
-                payload = cmd.get("payload") or {}
-                trade_id = payload.get("trade_id", "")
+                trade_id = payload.get("trade_id") or payload.get("tradeId") or ""
                 trade_manager.close_trade(trade_id, "UI_CLOSE")
-                db.update_command(cmd["id"], "done", f"Trade {trade_id} closed")
+                duration_ms = (time.perf_counter() - started_at) * 1000.0
+                db.update_command(
+                    cmd["id"],
+                    "done",
+                    _final_result_message(
+                        f"Trade {trade_id} closed",
+                        trace_id=trace_id,
+                        duration_ms=duration_ms,
+                    ),
+                )
                 telegram_bot.send_message(f"📤 Trade {trade_id} closed (from dashboard)")
             elif cmd_name == "skill":
                 from utils.skill_manager import SkillManager
-                payload = cmd.get("payload") or {}
                 action = payload.get("action", "")
                 skill_name = payload.get("skill", "")
                 sm = SkillManager(db=db)
@@ -647,35 +747,59 @@ def _process_commands(
                     db.log_agent_event("skill_manager", "info",
                                        f"Skills listed: {len(result)} found",
                                        {"skills": result})
-                    db.update_command(cmd["id"], "done", str(result))
+                    duration_ms = (time.perf_counter() - started_at) * 1000.0
+                    db.update_command(
+                        cmd["id"],
+                        "done",
+                        _final_result_message(str(result), trace_id=trace_id, duration_ms=duration_ms),
+                    )
                 elif action == "read" and skill_name:
                     content = sm.read_skill(skill_name)
                     db.log_agent_event("skill_manager", "info",
                                        f"Skill read: {skill_name}",
                                        {"content": content[:500]})
-                    db.update_command(cmd["id"], "done", content[:2000])
+                    duration_ms = (time.perf_counter() - started_at) * 1000.0
+                    db.update_command(
+                        cmd["id"],
+                        "done",
+                        _final_result_message(content[:2000], trace_id=trace_id, duration_ms=duration_ms),
+                    )
                 elif action == "apply" and skill_name:
                     argument = payload.get("argument", "")
                     rendered = sm.apply_skill(skill_name, argument)
-                    db.update_command(cmd["id"], "done", rendered[:2000])
+                    duration_ms = (time.perf_counter() - started_at) * 1000.0
+                    db.update_command(
+                        cmd["id"],
+                        "done",
+                        _final_result_message(rendered[:2000], trace_id=trace_id, duration_ms=duration_ms),
+                    )
                 else:
                     db.update_command(cmd["id"], "failed",
                                      f"Unknown skill action: {action}")
             elif cmd_name == "tool":
-                payload = cmd.get("payload") or {}
                 action = payload.get("action", "")
                 if tool_system is None:
                     db.update_command(cmd["id"], "failed", "Tool system not initialized")
                 elif action == "list":
+                    duration_ms = (time.perf_counter() - started_at) * 1000.0
                     db.update_command(
                         cmd["id"],
                         "done",
-                        json.dumps({"tools": tool_system.list_tools()}, ensure_ascii=True),
+                        _final_result_message(
+                            json.dumps({"tools": tool_system.list_tools()}, ensure_ascii=True),
+                            trace_id=trace_id,
+                            duration_ms=duration_ms,
+                        ),
                     )
                 elif action == "run":
                     tool_name = str(payload.get("tool", "")).strip()
                     result = tool_system.execute_tool(tool_name, payload)
-                    db.update_command(cmd["id"], "done", result_to_text(result))
+                    duration_ms = (time.perf_counter() - started_at) * 1000.0
+                    db.update_command(
+                        cmd["id"],
+                        "done",
+                        _final_result_message(result_to_text(result), trace_id=trace_id, duration_ms=duration_ms),
+                    )
                 else:
                     db.update_command(
                         cmd["id"],
@@ -684,8 +808,38 @@ def _process_commands(
                     )
             else:
                 db.update_command(cmd["id"], "failed", f"Unknown command: {cmd_name}")
+
+            duration_ms = (time.perf_counter() - started_at) * 1000.0
+            db.log_agent_event(
+                "logging",
+                "info",
+                f"Command completed: {cmd_name}",
+                {
+                    "command_id": cmd["id"],
+                    "command": cmd_name,
+                    "trace_id": trace_id,
+                    "duration_ms": round(duration_ms, 2),
+                },
+            )
         except Exception as exc:
-            db.update_command(cmd["id"], "failed", str(exc))
+            duration_ms = (time.perf_counter() - started_at) * 1000.0
+            db.update_command(
+                cmd["id"],
+                "failed",
+                _final_result_message(str(exc), trace_id=trace_id, duration_ms=duration_ms),
+            )
+            db.log_agent_event(
+                "logging",
+                "error",
+                f"Command failed: {cmd_name}",
+                {
+                    "command_id": cmd["id"],
+                    "command": cmd_name,
+                    "trace_id": trace_id,
+                    "duration_ms": round(duration_ms, 2),
+                    "error": str(exc),
+                },
+            )
 
 
 # ── Heartbeat updater ────────────────────────────────────────────────────

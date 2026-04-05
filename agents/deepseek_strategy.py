@@ -16,15 +16,22 @@ import json
 import logging
 import math
 import time
+import concurrent.futures
 from datetime import UTC, datetime
 from typing import Optional
 
 from config import settings
 from models.market_data import MarketContext
 from models.signal import EntrySnapshot, Signal
+from models.agent_mesh import AgentEdge, AgentMeshState, AgentNode
 from strategies.base_strategy import BaseStrategy
+from utils.mesh_bus import record_call
 
 logger = logging.getLogger(__name__)
+
+
+def _clamp(value: float, lower: float, upper: float) -> float:
+    return max(lower, min(upper, value))
 
 
 def _is_mock_value(value: object) -> bool:
@@ -80,6 +87,111 @@ Rules:
 - Use negative confidence adjustment when approved but quality is marginal.
 - Keep output compact and deterministic.
 """
+
+_DEFAULT_SWARM_PROFILES: tuple[tuple[str, str], ...] = (
+    (
+        "trend",
+        "Focus on trend-following continuation setups and momentum alignment. "
+        "Prefer HOLD when momentum is weak or mixed.",
+    ),
+    (
+        "structure",
+        "Focus on market structure, liquidity sweeps, and support/resistance confluence. "
+        "Reject setups with weak structural invalidation.",
+    ),
+    (
+        "risk",
+        "Focus on risk quality: stop placement logic, R-multiple integrity, and regime fit. "
+        "Reject setups with fragile downside protection.",
+    ),
+)
+
+
+class _AgentNeuralMesh:
+    """Adaptive trust/latency mesh for profile-level routing and weighting."""
+
+    def __init__(self) -> None:
+        self.state = AgentMeshState()
+
+    def ensure_profile(self, profile: str) -> None:
+        if profile not in self.state.nodes:
+            self.state.nodes[profile] = AgentNode()
+
+    def select_profiles(
+        self,
+        profiles: list[tuple[str, str]],
+        *,
+        max_agents: int,
+        min_active: int,
+        latency_penalty: float,
+    ) -> list[tuple[str, str]]:
+        for name, _ in profiles:
+            self.ensure_profile(name)
+
+        ranked = sorted(
+            profiles,
+            key=lambda item: self.utility(item[0], latency_penalty=latency_penalty),
+            reverse=True,
+        )
+        target = max(min_active, max_agents)
+        return ranked[: max(1, min(target, len(ranked)))]
+
+    def utility(self, profile: str, *, latency_penalty: float) -> float:
+        self.ensure_profile(profile)
+        node = self.state.nodes.get(profile, AgentNode())
+        trust = node.trust
+        latency = node.latency_ms
+        return trust - (latency / 1000.0) * latency_penalty
+
+    def update_latency(self, profile: str, elapsed_ms: float, alpha: float = 0.25) -> None:
+        self.ensure_profile(profile)
+        node = self.state.nodes[profile]
+        current = node.latency_ms
+        node.latency_ms = current * (1.0 - alpha) + elapsed_ms * alpha
+
+    def update_outcome(
+        self,
+        profile: str,
+        *,
+        agreed_with_consensus: bool,
+        confidence: float,
+        alpha: float,
+        min_trust: float,
+        max_trust: float,
+    ) -> None:
+        self.ensure_profile(profile)
+        target = 0.55 + 0.35 * _clamp(confidence, 0.0, 1.0) if agreed_with_consensus else 0.45 - 0.25 * _clamp(confidence, 0.0, 1.0)
+        node = self.state.nodes[profile]
+        updated = node.trust * (1.0 - alpha) + target * alpha
+        node.trust = _clamp(updated, min_trust, max_trust)
+
+    def pair(self, left: str, right: str) -> float:
+        if left == right:
+            return 1.0
+        key = (left, right)
+        if key in self.state.edges:
+            return self.state.edges[key].coherence
+        rev = (right, left)
+        if rev in self.state.edges:
+            return self.state.edges[rev].coherence
+        return 1.0
+
+    def update_pair_coherence(self, votes: dict[str, str], alpha: float = 0.10) -> None:
+        names = list(votes.keys())
+        for i in range(len(names)):
+            for j in range(i + 1, len(names)):
+                a = names[i]
+                b = names[j]
+                va = votes[a]
+                vb = votes[b]
+                if va not in {"BUY", "SELL"} or vb not in {"BUY", "SELL"}:
+                    continue
+                same = va == vb
+                current = self.pair(a, b)
+                target = 1.20 if same else 0.80
+                self.state.edges[(a, b)] = AgentEdge(
+                    coherence=_clamp(current * (1.0 - alpha) + target * alpha, 0.5, 1.5)
+                )
 
 # Characters that could be used to inject instructions into the prompt.
 _PROMPT_INJECT_CHARS = str.maketrans("", "", "\n\r\x00\x1b")
@@ -164,6 +276,7 @@ class DeepSeekStrategy(BaseStrategy):
     def __init__(self) -> None:
         self._client = None          # lazy-initialised on first call
         self._cache: dict[str, tuple[float, Optional[Signal], tuple[str, str, str, str]]] = {}
+        self._mesh = _AgentNeuralMesh()
         # symbol → (monotonic_time_of_last_call, signal_or_None, context_signature)
         self._metrics: dict[str, int] = {
             "detect_calls": 0,
@@ -304,23 +417,17 @@ class DeepSeekStrategy(BaseStrategy):
 
     def _call_api(self, client, context: MarketContext) -> Optional[Signal]:
         try:
-            self._metrics["api_calls"] += 1
             prompt = _build_prompt(context)
-            quick_model = getattr(settings, "DEEPSEEK_QUICK_MODEL", settings.DEEPSEEK_MODEL)
-            quick_timeout = _as_float(getattr(settings, "DEEPSEEK_QUICK_TIMEOUT_SECONDS", 10), 10.0)
-            response = client.chat.completions.create(
-                model=quick_model,
-                messages=[
-                    {"role": "system", "content": _SYSTEM_PROMPT},
-                    {"role": "user",   "content": prompt},
-                ],
-                response_format={"type": "json_object"},
-                temperature=0.2,      # low temp for consistent, structured output
-                max_tokens=300,
-                timeout=quick_timeout,
-            )
-            raw = response.choices[0].message.content
-            signal = self._parse(raw, context)
+            signal: Optional[Signal]
+            if bool(getattr(settings, "DEEPSEEK_AGENT_SWARM_ENABLED", False)):
+                signal = self._run_agent_swarm(client, context, prompt)
+            else:
+                raw = self._query_agent(
+                    client,
+                    prompt,
+                    system_prompt=_SYSTEM_PROMPT,
+                )
+                signal = self._parse(raw, context)
             if signal is None:
                 return None
 
@@ -351,6 +458,220 @@ class DeepSeekStrategy(BaseStrategy):
             logger.warning("DeepSeekStrategy: API call failed for %s: %s",
                            context.symbol, exc)
             return None
+
+    def _query_agent(
+        self,
+        client,
+        prompt: str,
+        *,
+        system_prompt: str,
+    ) -> str:
+        self._metrics["api_calls"] += 1
+        quick_model = getattr(settings, "DEEPSEEK_QUICK_MODEL", settings.DEEPSEEK_MODEL)
+        quick_timeout = _as_float(getattr(settings, "DEEPSEEK_QUICK_TIMEOUT_SECONDS", 10), 10.0)
+        response = client.chat.completions.create(
+            model=quick_model,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": prompt},
+            ],
+            response_format={"type": "json_object"},
+            temperature=0.2,
+            max_tokens=300,
+            timeout=quick_timeout,
+        )
+        return response.choices[0].message.content
+
+    def _run_agent_swarm(self, client, context: MarketContext, base_prompt: str) -> Optional[Signal]:
+        profiles = self._swarm_profiles()
+        if not profiles:
+            return None
+
+        max_agents = _as_int(getattr(settings, "DEEPSEEK_AGENT_SWARM_MAX_AGENTS", 3), 3)
+        latency_penalty = _as_float(getattr(settings, "DEEPSEEK_MESH_LATENCY_PENALTY", 0.25), 0.25)
+        min_active = _as_int(getattr(settings, "DEEPSEEK_MESH_MIN_ACTIVE_AGENTS", 2), 2)
+        if bool(getattr(settings, "DEEPSEEK_MESH_ENABLED", True)):
+            selected = self._mesh.select_profiles(
+                profiles,
+                max_agents=max_agents,
+                min_active=min_active,
+                latency_penalty=latency_penalty,
+            )
+        else:
+            selected = profiles[: max(1, max_agents)]
+
+        collected: list[tuple[str, Signal]] = []
+        votes: dict[str, str] = {}
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=len(selected)) as pool:
+            future_by_profile = {
+                pool.submit(self._run_single_profile, client, context, base_prompt, profile): profile
+                for profile in selected
+            }
+            for future, profile in future_by_profile.items():
+                profile_name = profile[0]
+                started = time.monotonic()
+                try:
+                    result = future.result()
+                except Exception as exc:
+                    logger.warning(
+                        "DeepSeekStrategy: swarm profile %s failed for %s: %s",
+                        profile_name,
+                        context.symbol,
+                        exc,
+                    )
+                    result = None
+                elapsed_ms = max(0.0, (time.monotonic() - started) * 1000.0)
+                self._mesh.update_latency(profile_name, elapsed_ms)
+                record_call(profile_name, elapsed_ms, success=(result is not None))
+
+                if result is not None:
+                    result_name, signal = result
+                    collected.append((result_name, signal))
+                    votes[result_name] = signal.direction
+
+        if not collected:
+            self._metrics["holds"] += 1
+            return None
+
+        aggregated = self._aggregate_swarm_signals(context, collected)
+        if aggregated is None:
+            return None
+
+        self._mesh.update_pair_coherence(votes)
+        trust_alpha = _as_float(getattr(settings, "DEEPSEEK_MESH_TRUST_ALPHA", 0.18), 0.18)
+        min_trust = _as_float(getattr(settings, "DEEPSEEK_MESH_MIN_TRUST", 0.15), 0.15)
+        max_trust = _as_float(getattr(settings, "DEEPSEEK_MESH_MAX_TRUST", 0.95), 0.95)
+        for profile_name, signal in collected:
+            self._mesh.update_outcome(
+                profile_name,
+                agreed_with_consensus=(signal.direction == aggregated.direction),
+                confidence=signal.confidence,
+                alpha=trust_alpha,
+                min_trust=min_trust,
+                max_trust=max_trust,
+            )
+
+        return aggregated
+
+    def _run_single_profile(
+        self,
+        client,
+        context: MarketContext,
+        base_prompt: str,
+        profile: tuple[str, str],
+    ) -> Optional[tuple[str, Signal]]:
+        profile_name, profile_instruction = profile
+        system_prompt = f"{_SYSTEM_PROMPT}\n\nSpecialist role: {profile_instruction}"
+        raw = self._query_agent(client, base_prompt, system_prompt=system_prompt)
+        signal = self._parse(raw, context)
+        if signal is None:
+            return None
+        signal.reason = f"[{profile_name}] {signal.reason}"[:240]
+        return profile_name, signal
+
+    def _aggregate_swarm_signals(
+        self,
+        context: MarketContext,
+        signals: list[Signal] | list[tuple[str, Signal]],
+    ) -> Optional[Signal]:
+        normalized: list[tuple[str, Signal]] = []
+        for idx, item in enumerate(signals):
+            if isinstance(item, tuple):
+                name, signal = item
+            else:
+                name, signal = (f"agent_{idx}", item)
+            self._mesh.ensure_profile(name)
+            normalized.append((name, signal))
+
+        buy_signals = [(name, signal) for name, signal in normalized if signal.direction == "BUY"]
+        sell_signals = [(name, signal) for name, signal in normalized if signal.direction == "SELL"]
+
+        def _side_score(rows: list[tuple[str, Signal]], direction: str) -> float:
+            total = 0.0
+            names = [name for name, _ in rows]
+            for name, signal in rows:
+                coherence = 1.0
+                peers = [peer for peer in names if peer != name]
+                if peers:
+                    coherence = sum(self._mesh.pair(name, peer) for peer in peers) / len(peers)
+                node = self._mesh.state.nodes.get(name)
+                trust = node.trust if node is not None else 0.5
+                total += signal.confidence * trust * coherence
+            return total
+
+        buy_weight = _side_score(buy_signals, "BUY")
+        sell_weight = _side_score(sell_signals, "SELL")
+
+        selected: list[tuple[str, Signal]]
+        direction: str
+        if buy_weight == sell_weight:
+            selected = normalized
+            direction = max(selected, key=lambda row: row[1].confidence)[1].direction
+            selected = [row for row in selected if row[1].direction == direction]
+        elif buy_weight > sell_weight:
+            selected = buy_signals
+            direction = "BUY"
+        else:
+            selected = sell_signals
+            direction = "SELL"
+
+        if not selected:
+            self._metrics["holds"] += 1
+            return None
+
+        def _row_weight(name: str) -> float:
+            node = self._mesh.state.nodes.get(name)
+            trust = node.trust if node is not None else 0.5
+            return _clamp(trust, 0.1, 1.5)
+
+        weighted = [(name, signal, _row_weight(name)) for name, signal in selected]
+        total_w = sum(weight for _, _, weight in weighted) or 1.0
+
+        best = max(weighted, key=lambda row: row[1].confidence)[1]
+        count = len(weighted)
+        avg_conf = sum(signal.confidence * w for _, signal, w in weighted) / total_w
+        avg_sl = sum(signal.stop_loss * w for _, signal, w in weighted) / total_w
+        avg_tp1 = sum(signal.take_profit_1 * w for _, signal, w in weighted) / total_w
+        avg_tp2 = sum(signal.take_profit_2 * w for _, signal, w in weighted) / total_w
+        avg_tp3 = sum(signal.take_profit_3 * w for _, signal, w in weighted) / total_w
+        reason = f"swarm consensus {direction} ({count}/{len(normalized)} agents)"
+
+        return Signal(
+            strategy=f"{self.name}_swarm",
+            symbol=context.symbol,
+            direction=direction,
+            entry_price=best.entry_price,
+            stop_loss=round(avg_sl, 5),
+            take_profit_1=round(avg_tp1, 5),
+            take_profit_2=round(avg_tp2, 5),
+            take_profit_3=round(avg_tp3, 5),
+            confidence=max(0.0, min(1.0, avg_conf)),
+            timestamp=datetime.now(UTC),
+            reason=reason,
+            entry_snapshot=best.entry_snapshot,
+        )
+
+    @staticmethod
+    def _swarm_profiles() -> list[tuple[str, str]]:
+        raw = str(getattr(settings, "DEEPSEEK_AGENT_SWARM_PROFILES", "")).strip()
+        if not raw:
+            return list(_DEFAULT_SWARM_PROFILES)
+
+        profiles: list[tuple[str, str]] = []
+        for item in raw.split(";"):
+            if not item.strip():
+                continue
+            if ":" in item:
+                name, instruction = item.split(":", 1)
+            else:
+                name, instruction = item, "General trading specialist role"
+            name = _sanitize(name, 20).lower()
+            instruction = _sanitize(instruction, 200)
+            if name and instruction:
+                profiles.append((name, instruction))
+
+        return profiles or list(_DEFAULT_SWARM_PROFILES)
 
     def _deep_verify(self, client, ctx: MarketContext, signal: Signal) -> Optional[Signal]:
         try:

@@ -56,6 +56,62 @@
       "category": "microstructure-ml",
       "tier": "core",
       "notes": "Practical tree-based microstructure pipeline with lag/rolling features and feature selection"
+    },
+    {
+      "id": "claw-code",
+      "name": "Claw Code",
+      "url": "https://github.com/ultraworkers/claw-code",
+      "category": "agent-runtime",
+      "tier": "core",
+      "notes": "Reference for command governance, permission workflows, and runtime telemetry"
+    },
+    {
+      "id": "anthropics-claude-code",
+      "name": "Claude Code",
+      "url": "https://github.com/anthropics/claude-code",
+      "category": "agent-runtime",
+      "tier": "core",
+      "notes": "Official reference for terminal-native agent workflow, plugin ecosystem, and operational patterns"
+    },
+    {
+      "id": "everything-claude-code",
+      "name": "Everything Claude Code",
+      "url": "https://github.com/affaan-m/everything-claude-code",
+      "category": "orchestration",
+      "tier": "core",
+      "notes": "Large cross-harness playbook for skills-first workflows, hook governance, and continuous learning loops"
+    },
+    {
+      "id": "claude-code-best",
+      "name": "Claude Code Best",
+      "url": "https://github.com/claude-code-best/claude-code",
+      "category": "agent-runtime",
+      "tier": "intake",
+      "notes": "Reverse-engineered Claude-compatible runtime with feature-flagged modules, enterprise telemetry, and compatibility layers"
+    },
+    {
+      "id": "learn-claude-code",
+      "name": "Learn Claude Code",
+      "url": "https://github.com/shareAI-lab/learn-claude-code",
+      "category": "education",
+      "tier": "core",
+      "notes": "Progressive harness-engineering curriculum covering tool loops, context management, subagents, teams, and task isolation"
+    },
+    {
+      "id": "public-apis",
+      "name": "Public APIs",
+      "url": "https://github.com/public-apis/public-apis",
+      "category": "market-data-sources",
+      "tier": "intake",
+      "notes": "Community-curated API index used to discover finance, currency, news, and weather providers for research intake"
+    },
+    {
+      "id": "godmod3",
+      "name": "GODMOD3",
+      "url": "https://github.com/MSL135/GODMOD3",
+      "category": "agent-runtime",
+      "tier": "intake",
+      "notes": "Reference for multi-model parallel evaluation, parameter auto-tuning, and browser-local privacy patterns"
     }
   ]
 }

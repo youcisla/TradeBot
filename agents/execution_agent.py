@@ -14,6 +14,7 @@ from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Callable
 
 from broker.connector import BrokerConnector
+from utils.mesh_bus import mesh_span
 from config import settings
 from config.symbols import commission_per_lot, contract_size
 from models.signal import Signal
@@ -49,7 +50,8 @@ class ExecutionAgent:
             self._emit("info",
                        f"Executing {signal.direction} {signal.symbol} — placing order now...",
                        {"symbol": signal.symbol, "direction": signal.direction})
-            return self._open_inner(signal)
+            with mesh_span("execution"):
+                return self._open_inner(signal)
         except Exception:
             logger.exception("ExecutionAgent.open_trade failed")
             self._emit("error", f"Execution failed for {signal.symbol} {signal.direction}!")

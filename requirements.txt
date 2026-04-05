@@ -30,3 +30,7 @@ pytest>=7.0
 
 # ── Reporting / Charts (Telegram graph snapshots) ───────────────────────
 matplotlib>=3.8
+
+# ── Walk-Forward Optimizer (LearningAgent.run_wfo_assessment) ────────────
+numpy>=1.26
+pandas>=2.1

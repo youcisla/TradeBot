@@ -18,6 +18,7 @@ import logging
 import time
 import urllib.error
 import urllib.request
+from utils.mesh_bus import record_call
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -142,7 +143,9 @@ class CrucixClient:
         is unavailable.
         """
         # Return cached value if still fresh
+        _t0 = time.monotonic()
         if self._cached_context and (time.monotonic() - self._cache_time) < self._cache_ttl:
+            record_call("crucix_client", (time.monotonic() - _t0) * 1000.0, True)
             return self._cached_context
 
         try:
@@ -151,6 +154,7 @@ class CrucixClient:
             self._cached_context = ctx
             self._cache_time = time.monotonic()
             self._consecutive_failures = 0
+            record_call("crucix_client", (time.monotonic() - _t0) * 1000.0, True)
             return ctx
         except Exception as exc:
             self._consecutive_failures += 1
@@ -162,6 +166,7 @@ class CrucixClient:
                     exc, self._consecutive_failures,
                 )
             # Return stale cache if available, else safe defaults
+            record_call("crucix_client", (time.monotonic() - _t0) * 1000.0, False)
             return self._cached_context or MacroContext()
 
     def is_available(self) -> bool:

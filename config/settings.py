@@ -148,6 +148,7 @@ MIN_ICT_SCORE_CRYPTO: float = float(os.getenv("MIN_ICT_SCORE_CRYPTO", "42.0"))
 MAX_RISK_PER_TRADE: float = float(os.getenv("MAX_RISK_PER_TRADE", "0.02"))
 MAX_OPEN_TRADES: int = int(os.getenv("MAX_OPEN_TRADES", "12"))
 MAX_DAILY_LOSS: float = float(os.getenv("MAX_DAILY_LOSS", "0.05"))
+MAX_MONTHLY_LOSS: float = float(os.getenv("MAX_MONTHLY_LOSS", "0.10"))  # MT5_Trade_Connector RiskManagement_v1 pattern
 MAX_SPREAD_PIPS: float = float(os.getenv("MAX_SPREAD_PIPS", "8.0"))
 DRAWDOWN_COOLDOWN_HOURS: int = int(os.getenv("DRAWDOWN_COOLDOWN_HOURS", "24"))
 MIN_LOT_SIZE: float = float(os.getenv("MIN_LOT_SIZE", "0.01"))
@@ -162,6 +163,12 @@ POSITION_SIZE_FIXED_LOT: float = float(os.getenv("POSITION_SIZE_FIXED_LOT", "0.1
 POSITION_SIZE_FIXED_RISK_AMOUNT: float = float(
     os.getenv("POSITION_SIZE_FIXED_RISK_AMOUNT", "100.0")
 )
+# Kelly Criterion position sizing (POSITION_SIZE_MODE=kelly).
+# Half-Kelly is applied by default (KELLY_HALF=true) to prevent over-betting.
+# Falls back to equity_pct when fewer than KELLY_MIN_TRADES are available.
+KELLY_MIN_TRADES: int = int(os.getenv("KELLY_MIN_TRADES", "20"))
+KELLY_LOOKBACK_DAYS: int = int(os.getenv("KELLY_LOOKBACK_DAYS", "90"))
+KELLY_HALF: bool = os.getenv("KELLY_HALF", "true").lower() == "true"
 # Per-asset-class spread limits.
 # Forex/exotic/commodity use pip-based limits.
 # Crypto uses a percentage-of-price limit (0.1 = 0.1%) because dollar
@@ -554,6 +561,37 @@ DEEPSEEK_ENABLE_DEEP_VERIFY: bool = (
 )
 DEEPSEEK_DEEP_VERIFY_MIN_CONFIDENCE: float = float(
     os.getenv("DEEPSEEK_DEEP_VERIFY_MIN_CONFIDENCE", "0.78")
+)
+# Optional multi-agent mode: run multiple specialized LLM roles in parallel
+# and aggregate to a single consensus signal.
+DEEPSEEK_AGENT_SWARM_ENABLED: bool = (
+    os.getenv("DEEPSEEK_AGENT_SWARM_ENABLED", "false").lower() == "true"
+)
+DEEPSEEK_AGENT_SWARM_MAX_AGENTS: int = int(
+    os.getenv("DEEPSEEK_AGENT_SWARM_MAX_AGENTS", "3")
+)
+# Format: "name:instruction;name:instruction"
+DEEPSEEK_AGENT_SWARM_PROFILES: str = os.getenv(
+    "DEEPSEEK_AGENT_SWARM_PROFILES",
+    "",
+)
+DEEPSEEK_MESH_ENABLED: bool = (
+    os.getenv("DEEPSEEK_MESH_ENABLED", "true").lower() == "true"
+)
+DEEPSEEK_MESH_MIN_ACTIVE_AGENTS: int = int(
+    os.getenv("DEEPSEEK_MESH_MIN_ACTIVE_AGENTS", "2")
+)
+DEEPSEEK_MESH_LATENCY_PENALTY: float = float(
+    os.getenv("DEEPSEEK_MESH_LATENCY_PENALTY", "0.25")
+)
+DEEPSEEK_MESH_TRUST_ALPHA: float = float(
+    os.getenv("DEEPSEEK_MESH_TRUST_ALPHA", "0.18")
+)
+DEEPSEEK_MESH_MIN_TRUST: float = float(
+    os.getenv("DEEPSEEK_MESH_MIN_TRUST", "0.15")
+)
+DEEPSEEK_MESH_MAX_TRUST: float = float(
+    os.getenv("DEEPSEEK_MESH_MAX_TRUST", "0.95")
 )
 # Quality telemetry cadence (in DeepSeek detect calls).
 DEEPSEEK_METRICS_LOG_EVERY: int = int(os.getenv("DEEPSEEK_METRICS_LOG_EVERY", "25"))

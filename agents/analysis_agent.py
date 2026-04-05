@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING
 from config import settings
 from models.market_data import MarketContext, MarketData
 from utils.helpers import current_session, day_of_week
+from utils.mesh_bus import mesh_span
 
 if TYPE_CHECKING:
     from agents.crucix_agent import CrucixAgent
@@ -28,7 +29,8 @@ class AnalysisAgent:
 
     def analyze(self, data: MarketData) -> MarketContext:
         try:
-            ctx = self._analyze_inner(data)
+            with mesh_span("analysis"):
+                ctx = self._analyze_inner(data)
             self._emit("info",
                        f"Crunching {data.symbol} — regime={ctx.regime} trend={ctx.trend_direction} "
                        f"RSI={ctx.rsi:.1f} ATR={ctx.atr:.5f} "

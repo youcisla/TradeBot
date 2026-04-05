@@ -13,6 +13,35 @@ interface Feedback {
   ok:  boolean;
 }
 
+interface PendingReviewCommand {
+  id: number;
+  command: string;
+  payload: {
+    _meta?: {
+      traceId?: string;
+      requestedBy?: string;
+      requestedAt?: string;
+      riskLevel?: string;
+    };
+  } | null;
+  created_at: string;
+}
+
+interface CommandHistoryItem {
+  id: number;
+  command: string;
+  status: string;
+  result: string | null;
+  created_at: string;
+  executed_at: string | null;
+  review: {
+    reviewedBy: string;
+    reviewedAt: string;
+    decision: string;
+    reason: string;
+  } | null;
+}
+
 // ── Icons (inline SVG) ────────────────────────────────────────────────────────
 
 function IconPause() {
@@ -119,6 +148,10 @@ export default function CommandPanel({ onCommand }: Props) {
   const [loading,   setLoading]   = useState<string | null>(null);
   const [feedback,  setFeedback]  = useState<Feedback | null>(null);
   const [botState,  setBotState]  = useState<"running" | "paused" | "unknown">("unknown");
+  const [pendingReviews, setPendingReviews] = useState<PendingReviewCommand[]>([]);
+  const [reviewingId, setReviewingId] = useState<number | null>(null);
+  const [history, setHistory] = useState<CommandHistoryItem[]>([]);
+  const [showHistory, setShowHistory] = useState(false);
   const feedTO                    = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Poll bot state
@@ -140,6 +173,30 @@ export default function CommandPanel({ onCommand }: Props) {
     return () => { active = false; clearInterval(id); };
   }, []);
 
+  // Poll pending high-risk commands awaiting approval
+  useEffect(() => {
+    let active = true;
+    const poll = async () => {
+      try {
+        const r = await fetch("/api/commands?limit=20");
+        const d = await r.json();
+        if (!active) return;
+        const items = Array.isArray(d?.items)
+          ? (d.items as PendingReviewCommand[])
+          : [];
+        setPendingReviews(items);
+      } catch {
+        if (active) setPendingReviews([]);
+      }
+    };
+    poll();
+    const id = setInterval(poll, 8_000);
+    return () => {
+      active = false;
+      clearInterval(id);
+    };
+  }, []);
+
   function showFeedback(msg: string, ok: boolean) {
     setFeedback({ msg, ok });
     if (feedTO.current) clearTimeout(feedTO.current);
@@ -150,24 +207,81 @@ export default function CommandPanel({ onCommand }: Props) {
     if (danger && !window.confirm(`Are you sure you want to ${cmd.replace("_", " ")}?`)) return;
     setLoading(cmd);
     try {
+      const payload: Record<string, unknown> = {
+        source: "dashboard-ui",
+      };
+      if (danger) {
+        payload.confirmed = true;
+        payload.reason = `Manual confirmation from dashboard for ${cmd}`;
+      }
+
       const r = await fetch("/api/commands", {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ command: cmd }),
+        body:    JSON.stringify({ command: cmd, payload }),
       });
       const d = await r.json();
       if (d?.ok !== false) {
-        showFeedback(`${cmd} acknowledged`, true);
+        const ack = d?.requiresApproval
+          ? `${cmd} queued for approval`
+          : `${cmd} acknowledged`;
+        showFeedback(ack, true);
         if (cmd === "pause")  setBotState("paused");
         if (cmd === "resume") setBotState("running");
         onCommand?.(cmd);
       } else {
-        showFeedback(d.error ?? "Command failed", false);
+        const msg = d?.error?.message ?? d?.error ?? "Command failed";
+        showFeedback(msg, false);
       }
     } catch {
       showFeedback("Network error", false);
     } finally {
       setLoading(null);
+    }
+  }
+
+  async function reviewCommand(id: number, decision: "approve" | "deny") {
+    const defaultReason =
+      decision === "approve"
+        ? "Approved from dashboard review queue"
+        : "Denied from dashboard review queue";
+    const reason = window.prompt(
+      `Reason for ${decision} (min 5 chars):`,
+      defaultReason
+    );
+    if (!reason) return;
+
+    setReviewingId(id);
+    try {
+      const r = await fetch("/api/commands", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: decision, id, reason }),
+      });
+      const d = await r.json();
+      if (d?.ok) {
+        setPendingReviews((prev) => prev.filter((item) => item.id !== id));
+        showFeedback(`Command #${id} ${decision}d`, true);
+        // Refresh history after a review action
+        fetchHistory();
+      } else {
+        const msg = d?.error?.message ?? d?.error ?? "Review failed";
+        showFeedback(msg, false);
+      }
+    } catch {
+      showFeedback("Network error while reviewing command", false);
+    } finally {
+      setReviewingId(null);
+    }
+  }
+
+  async function fetchHistory() {
+    try {
+      const r = await fetch("/api/commands?history=1&limit=5");
+      const d = await r.json();
+      setHistory(Array.isArray(d?.items) ? (d.items as CommandHistoryItem[]) : []);
+    } catch {
+      setHistory([]);
     }
   }
 
@@ -183,9 +297,11 @@ export default function CommandPanel({ onCommand }: Props) {
 
   return (
     <div style={{
-      background:    "#1C1C1E",
-      borderRadius:  12,
+      background: "linear-gradient(180deg, rgba(19,24,32,0.92) 0%, rgba(12,15,20,0.96) 100%)",
+      borderRadius: 14,
+      border: "1px solid rgba(95,122,158,0.32)",
       padding:       16,
+      boxShadow: "0 20px 34px rgba(0,0,0,0.35)",
       fontFamily:    '-apple-system, BlinkMacSystemFont, "SF Pro Display", system-ui, sans-serif',
     }}>
       <style>{KEYFRAMES}</style>
@@ -197,7 +313,7 @@ export default function CommandPanel({ onCommand }: Props) {
         justifyContent: "space-between",
         marginBottom:   16,
       }}>
-        <span style={{ fontSize: 15, fontWeight: 700, color: "#FFFFFF" }}>
+        <span style={{ fontSize: 15, fontWeight: 700, color: "#eff5ff" }}>
           Bot Controls
         </span>
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -240,7 +356,7 @@ export default function CommandPanel({ onCommand }: Props) {
                 height:         56,
                 background:     disabled && !isLoading ? "rgba(44,44,46,0.5)" : action.bg,
                 border:         `0.5px solid ${disabled && !isLoading ? "rgba(84,84,88,0.3)" : action.border}`,
-                borderRadius:   10,
+                borderRadius:   12,
                 color:          disabled && !isLoading ? "rgba(235,235,245,0.25)" : action.color,
                 cursor:         disabled ? "not-allowed" : "pointer",
                 fontSize:       13,
@@ -285,6 +401,167 @@ export default function CommandPanel({ onCommand }: Props) {
           {feedback.ok ? "✓ " : "✗ "}{feedback.msg}
         </div>
       )}
+
+      {pendingReviews.length > 0 && (
+        <div style={{ marginTop: 12 }}>
+          <div
+            style={{
+              fontSize: 12,
+              fontWeight: 700,
+              color: "#ffd08a",
+              marginBottom: 8,
+            }}
+          >
+            Pending High-Risk Reviews ({pendingReviews.length})
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {pendingReviews.slice(0, 3).map((item) => {
+              const trace = item.payload?._meta?.traceId ?? "-";
+              const risk = item.payload?._meta?.riskLevel ?? "high";
+              const createdAt = new Date(item.created_at).toLocaleTimeString([], {
+                hour: "2-digit",
+                minute: "2-digit",
+              });
+              const busy = reviewingId === item.id;
+
+              return (
+                <div
+                  key={item.id}
+                  style={{
+                    borderRadius: 10,
+                    border: "1px solid rgba(255, 159, 10, 0.3)",
+                    background: "rgba(255, 159, 10, 0.08)",
+                    padding: 8,
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: 8,
+                    }}
+                  >
+                    <span style={{ fontSize: 12, color: "#f5f7fb", fontWeight: 600 }}>
+                      #{item.id} {item.command}
+                    </span>
+                    <span style={{ fontSize: 11, color: "#ffd08a" }}>{risk}</span>
+                  </div>
+                  <div style={{ fontSize: 11, color: "rgba(235,235,245,0.75)", marginTop: 4 }}>
+                    {createdAt} · {trace}
+                  </div>
+                  <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+                    <button
+                      disabled={busy}
+                      onClick={() => reviewCommand(item.id, "approve")}
+                      style={{
+                        flex: 1,
+                        height: 30,
+                        borderRadius: 8,
+                        border: "1px solid rgba(48,209,88,0.35)",
+                        background: "rgba(48,209,88,0.16)",
+                        color: "#30D158",
+                        fontSize: 12,
+                        fontWeight: 600,
+                        cursor: busy ? "not-allowed" : "pointer",
+                        opacity: busy ? 0.6 : 1,
+                      }}
+                    >
+                      Approve
+                    </button>
+                    <button
+                      disabled={busy}
+                      onClick={() => reviewCommand(item.id, "deny")}
+                      style={{
+                        flex: 1,
+                        height: 30,
+                        borderRadius: 8,
+                        border: "1px solid rgba(255,69,58,0.35)",
+                        background: "rgba(255,69,58,0.16)",
+                        color: "#FF453A",
+                        fontSize: 12,
+                        fontWeight: 600,
+                        cursor: busy ? "not-allowed" : "pointer",
+                        opacity: busy ? 0.6 : 1,
+                      }}
+                    >
+                      Deny
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Command history toggle */}
+      <div style={{ marginTop: 12 }}>
+        <button
+          onClick={() => {
+            const next = !showHistory;
+            setShowHistory(next);
+            if (next) fetchHistory();
+          }}
+          style={{
+            background: "none",
+            border: "none",
+            color: "rgba(235,235,245,0.45)",
+            fontSize: 12,
+            cursor: "pointer",
+            padding: 0,
+            textDecoration: "underline",
+            fontFamily: "inherit",
+          }}
+        >
+          {showHistory ? "Hide history" : "Show recent history"}
+        </button>
+
+        {showHistory && (
+          <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 6 }}>
+            {history.length === 0 ? (
+              <div style={{ fontSize: 12, color: "rgba(235,235,245,0.35)" }}>
+                No resolved commands in the last 24 hours.
+              </div>
+            ) : (
+              history.map((item) => {
+                const isDone = item.status === "done";
+                const badge = isDone ? "✅" : "❌";
+                const resolvedAt = item.executed_at
+                  ? new Date(item.executed_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+                  : "—";
+                return (
+                  <div
+                    key={item.id}
+                    style={{
+                      borderRadius: 8,
+                      border: `1px solid ${isDone ? "rgba(48,209,88,0.2)" : "rgba(255,69,58,0.2)"}`,
+                      background: isDone ? "rgba(48,209,88,0.06)" : "rgba(255,69,58,0.06)",
+                      padding: "6px 8px",
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <span style={{ fontSize: 12 }}>{badge}</span>
+                      <span style={{ fontSize: 12, color: "#eff5ff", fontWeight: 600 }}>
+                        #{item.id} {item.command}
+                      </span>
+                      <span style={{ fontSize: 11, color: "rgba(235,235,245,0.4)", marginLeft: "auto" }}>
+                        {resolvedAt}
+                      </span>
+                    </div>
+                    {item.review && (
+                      <div style={{ fontSize: 11, color: "rgba(235,235,245,0.55)", marginTop: 3 }}>
+                        {item.review.decision} by {item.review.reviewedBy}
+                        {item.review.reason ? ` · ${item.review.reason.slice(0, 60)}` : ""}
+                      </div>
+                    )}
+                  </div>
+                );
+              })
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

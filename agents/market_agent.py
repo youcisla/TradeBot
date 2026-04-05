@@ -16,6 +16,7 @@ from config import settings
 from filters.data_validator import DataValidationError, DataValidator
 from models.market_data import Candle, MarketData
 from utils.helpers import current_session
+from utils.mesh_bus import record_call
 
 if TYPE_CHECKING:
     from database.db import Database
@@ -70,6 +71,7 @@ class MarketAgent:
         Raises ``DataValidationError`` if the data fails sanity checks —
         the main loop should catch this and skip the iteration.
         """
+        _t0 = time.monotonic()
         logger.debug("Scanning %s — pulling live tick data...", symbol)
         try:
             tick = self._broker.get_tick(symbol)
@@ -77,6 +79,7 @@ class MarketAgent:
             # Log to file only — main loop emits a single consolidated DB event
             # when it detects a full IPC loss, avoiding agent-feed spam.
             logger.warning("No tick data for %s: %s", symbol, exc)
+            record_call("market", (time.monotonic() - _t0) * 1000.0, False)
             raise DataValidationError(f"No tick data for {symbol}: {exc}") from exc
 
         bid = tick["bid"]
@@ -106,6 +109,7 @@ class MarketAgent:
                     "m30": len(m30_candles), "m15": len(m15_candles),
                     "last_close": candles[-1].close if candles else None})
 
+        record_call("market", (time.monotonic() - _t0) * 1000.0, True)
         return MarketData(
             symbol=symbol,
             bid=bid,

@@ -52,6 +52,13 @@ SUPPORT:   learning · model_manager · logging
 | DeepSeek LLM | `strategies/deepseek_strategy.py` (via StrategyAgent) | **Active** — LLM-based |
 | SMA Crossover | `strategies/sma_crossover.py` | Legacy / reference |
 
+### DeepSeek Multi-Agent Mode
+- `DEEPSEEK_AGENT_SWARM_ENABLED=true` enables parallel specialist LLM roles (trend/structure/risk)
+- Responses are aggregated into one consensus signal (`deepseek_swarm`) with averaged SL/TP and confidence
+- Feature is off by default and guarded behind env flags in `config/settings.py`
+- Adaptive neural mesh (`DEEPSEEK_MESH_*`) learns per-agent trust/coherence and penalizes slow agents to improve speed and consensus stability over time
+- Mesh graph state is now modeled explicitly via `models/agent_mesh.py` (`AgentNode`, `AgentEdge`, `AgentMeshState`)
+
 ### ICT Engine (10 modules in `strategies/ict/`)
 `engine.py` → `liquidity.py`, `market_structure.py`, `fair_value_gaps.py`, `order_blocks.py`, `displacement.py`, `fibonacci.py`, `sessions.py`, `scoring.py`, `models.py`
 
@@ -142,6 +149,7 @@ All values from `.env`, never hardcoded. Key settings:
 - `research/promotion_checklist.{json,yaml}` — hard gate criteria for promotion
 - `research/candidate_backlog.json` — candidate queue for evaluation
 - `scripts/backtest.py --research-intake` — runs the workflow and writes `backtesting/runs/research_intake.json`
+- `GODMOD3 (MSL135/GODMOD3)` — intake reference for multi-model arbitration and context autotune experiments, scoped to governance-safe patterns only
 
 ---
 

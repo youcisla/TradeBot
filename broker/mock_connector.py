@@ -9,11 +9,13 @@ from __future__ import annotations
 
 import logging
 import random
+import time
 from datetime import UTC, datetime, timedelta
 
 from broker.connector import BrokerConnector, OrderResult, PositionInfo
 from config.symbols import contract_size as _contract_size
 from models.market_data import Candle
+from utils.mesh_bus import record_call
 
 logger = logging.getLogger(__name__)
 
@@ -95,6 +97,7 @@ class MockConnector(BrokerConnector):
     def place_order(self, symbol: str, direction: str, lot_size: float,
                     sl: float, tp: float | None = None,
                     comment: str = "") -> OrderResult:
+        _t0 = time.monotonic()
         ticket = _ticket()
         tick = self.get_tick(symbol)
         fill_price = tick["ask"] if direction == "BUY" else tick["bid"]
@@ -113,6 +116,7 @@ class MockConnector(BrokerConnector):
             "[MockBroker] ORDER %s %s %.2f lots %s @ %.5f  SL=%.5f TP=%s %s",
             direction, symbol, lot_size, order_id, fill_price, sl, tp, comment,
         )
+        record_call("broker_mock", (time.monotonic() - _t0) * 1000.0, True)
         return OrderResult(
             success=True, order_id=order_id, broker_ticket=ticket,
             filled_lots=lot_size, fill_price=fill_price,

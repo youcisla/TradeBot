@@ -138,6 +138,14 @@ export interface DashboardUser {
   created_at: string;
 }
 
+export interface PendingReviewCommand {
+  id: number;
+  command: string;
+  payload: Record<string, unknown> | null;
+  status: string;
+  created_at: string;
+}
+
 // ── Queries ────────────────────────────────────────────────────────────
 
 export async function getBotStatus(): Promise<BotStatus | null> {
@@ -213,12 +221,173 @@ export async function getTradeScores(limit = 100): Promise<TradeScore[]> {
 
 export async function insertCommand(
   command: string,
-  payload?: Record<string, unknown>
+  payload?: Record<string, unknown>,
+  status = "pending"
 ): Promise<void> {
   await query(
-    "INSERT INTO bot_commands (command, payload) VALUES ($1, $2)",
-    [command, payload ? JSON.stringify(payload) : null]
+    "INSERT INTO bot_commands (command, payload, status) VALUES ($1, $2, $3)",
+    [command, payload ? JSON.stringify(payload) : null, status]
   );
+}
+
+export async function reviewCommand(
+  id: number,
+  decision: "approve" | "deny",
+  reviewedBy: string,
+  reason: string
+): Promise<number> {
+  const nextStatus = decision === "approve" ? "pending" : "failed";
+  const result =
+    decision === "approve" ? "Approved for execution" : `Denied: ${reason}`;
+
+  const rows = await query(
+    `
+      UPDATE bot_commands
+      SET status = $1,
+          result = $2,
+          payload = COALESCE(payload, '{}'::jsonb) || jsonb_build_object(
+            '_review',
+            jsonb_build_object(
+              'reviewedBy', $3,
+              'reviewedAt', NOW(),
+              'decision', $4,
+              'reason', $5
+            )
+          ),
+          executed_at = CASE WHEN $1 = 'failed' THEN NOW() ELSE NULL END
+      WHERE id = $6 AND status = 'pending_confirmation'
+      RETURNING id
+    `,
+    [nextStatus, result, reviewedBy, decision, reason, id]
+  );
+
+  return rows.length;
+}
+
+export interface CommandHistoryItem {
+  id: number;
+  command: string;
+  status: string;
+  result: string | null;
+  created_at: string;
+  executed_at: string | null;
+  review: {
+    reviewedBy: string;
+    reviewedAt: string;
+    decision: string;
+    reason: string;
+  } | null;
+}
+
+export async function getCommandHistory(limit = 20): Promise<CommandHistoryItem[]> {
+  const rows = await query(
+    `SELECT id, command, status, result, created_at, executed_at,
+            payload -> '_review' AS review
+     FROM bot_commands
+     WHERE status IN ('done', 'failed')
+       AND created_at > NOW() - INTERVAL '24 hours'
+     ORDER BY COALESCE(executed_at, created_at) DESC
+     LIMIT $1`,
+    [limit]
+  );
+  return rows as CommandHistoryItem[];
+}
+
+export async function getPendingReviewCommands(
+  limit = 25
+): Promise<PendingReviewCommand[]> {
+  const rows = await query(
+    `
+      SELECT id, command, payload, status, created_at
+      FROM bot_commands
+      WHERE status = 'pending_confirmation'
+      ORDER BY created_at ASC
+      LIMIT $1
+    `,
+    [limit]
+  );
+
+  return rows as PendingReviewCommand[];
+}
+
+export interface CommandAuditSummary {
+  windowHours: number;
+  total: number;
+  pending: number;
+  running: number;
+  pendingConfirmation: number;
+  done: number;
+  failed: number;
+  highRiskPendingReview: number;
+  mediumRiskPendingReview: number;
+  lowRiskPendingReview: number;
+  avgRuntimeMs: number;
+}
+
+export async function getCommandAuditSummary(hours = 24): Promise<CommandAuditSummary> {
+  const windowHours = Math.min(Math.max(hours, 1), 168);
+  const rows = await query(
+    `WITH recent AS (
+       SELECT
+         status,
+         COALESCE(payload -> '_meta' ->> 'riskLevel', 'unknown') AS risk_level,
+         CASE
+           WHEN started_at IS NOT NULL AND executed_at IS NOT NULL THEN
+             EXTRACT(EPOCH FROM (executed_at - started_at)) * 1000
+           ELSE NULL
+         END AS runtime_ms
+       FROM bot_commands
+       WHERE created_at > NOW() - ($1 || ' hours')::interval
+     )
+     SELECT
+       COUNT(*)::int AS total,
+       COUNT(*) FILTER (WHERE status = 'pending')::int AS pending,
+       COUNT(*) FILTER (WHERE status = 'running')::int AS running,
+       COUNT(*) FILTER (WHERE status = 'pending_confirmation')::int AS pending_confirmation,
+       COUNT(*) FILTER (WHERE status = 'done')::int AS done,
+       COUNT(*) FILTER (WHERE status = 'failed')::int AS failed,
+       COUNT(*) FILTER (
+         WHERE status = 'pending_confirmation' AND risk_level = 'high'
+       )::int AS high_risk_pending_review,
+       COUNT(*) FILTER (
+         WHERE status = 'pending_confirmation' AND risk_level = 'medium'
+       )::int AS medium_risk_pending_review,
+       COUNT(*) FILTER (
+         WHERE status = 'pending_confirmation' AND risk_level = 'low'
+       )::int AS low_risk_pending_review,
+       COALESCE(AVG(runtime_ms), 0)::float AS avg_runtime_ms
+     FROM recent`,
+    [windowHours]
+  );
+
+  const row = rows[0] as
+    | {
+        total: number;
+        pending: number;
+        running: number;
+        pending_confirmation: number;
+        done: number;
+        failed: number;
+        high_risk_pending_review: number;
+        medium_risk_pending_review: number;
+        low_risk_pending_review: number;
+        avg_runtime_ms: number;
+      }
+    | undefined;
+
+  return {
+    windowHours,
+    total: Number(row?.total ?? 0),
+    pending: Number(row?.pending ?? 0),
+    running: Number(row?.running ?? 0),
+    pendingConfirmation: Number(row?.pending_confirmation ?? 0),
+    done: Number(row?.done ?? 0),
+    failed: Number(row?.failed ?? 0),
+    highRiskPendingReview: Number(row?.high_risk_pending_review ?? 0),
+    mediumRiskPendingReview: Number(row?.medium_risk_pending_review ?? 0),
+    lowRiskPendingReview: Number(row?.low_risk_pending_review ?? 0),
+    avgRuntimeMs: Number(row?.avg_runtime_ms ?? 0),
+  };
 }
 
 // ── Analytics queries ──────────────────────────────────────────────────

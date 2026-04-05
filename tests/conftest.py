@@ -130,6 +130,17 @@ class _MockDatabase:
     def get_rolling_avg_score(self, strategy: str, n: int = 10) -> float | None:
         return None
 
+    def get_recent_context_outcomes(
+        self,
+        strategy: str,
+        symbol: str,
+        session: str,
+        market_condition: str,
+        lookback_days: int = 30,
+        limit: int = 50,
+    ) -> dict[str, Any]:
+        return {"trades": 0, "avg_score": 0.0, "avg_pnl": 0.0, "win_rate": 0.0}
+
     # ── period performance snapshots ──────────────────────────────────────
 
     def get_period_stats(self, since: Any, until: Any) -> dict[str, Any]:

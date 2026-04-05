@@ -7,12 +7,14 @@ opaque store — read on startup, write on every change.
 from __future__ import annotations
 
 import logging
+import time
 from typing import Callable
 
 from broker.connector import BrokerConnector, PositionInfo
 from config.symbols import pip_value
 from database.db import Database
 from models.trade import Trade
+from utils.mesh_bus import record_call
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +30,9 @@ class StatePersistence:
 
     def save_trade(self, trade: Trade) -> None:
         """Persist a trade (insert or update)."""
+        _t0 = time.monotonic()
         self._db.upsert_trade(trade)
+        record_call("state", (time.monotonic() - _t0) * 1000.0, True)
         logger.debug("State persisted: trade=%s status=%s", trade.id, trade.status)
 
     def get_open_trades(self) -> list[Trade]:
@@ -49,6 +53,7 @@ class StatePersistence:
 
         Returns the final list of open trades after reconciliation.
         """
+        _t0 = time.monotonic()
         db_trades = self._db.get_open_trades()
         broker_positions = self._broker.reconcile()
 
@@ -131,4 +136,5 @@ class StatePersistence:
         else:
             logger.info("Reconciliation complete — no mismatches.")
 
+        record_call("state_reconcile", (time.monotonic() - _t0) * 1000.0, True)
         return self._db.get_open_trades()

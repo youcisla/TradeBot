@@ -19,12 +19,14 @@ from __future__ import annotations
 
 import concurrent.futures
 import logging
+import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from config import settings
 from models.signal import Signal
+from utils.mesh_bus import mesh_span, record_coherence
 
 if TYPE_CHECKING:
     from models.market_data import Candle, MarketContext
@@ -45,11 +47,14 @@ class ExpertVerdict:
 class CouncilVerdict:
     approved: bool
     confidence: float                     # 0.0 – 1.0
+    trace_id: str = ""
     direction: str = ""
     ict_score: float = 0.0
     danial_score: float = 0.0
     traditional_score: float = 0.0
     world_score: float = 0.0
+    risk_views: dict[str, str] = field(default_factory=dict)
+    risk_recommendation: str = "neutral"
     reasons_for: list[str] = field(default_factory=list)
     reasons_against: list[str] = field(default_factory=list)
     reasoning: str = ""
@@ -560,18 +565,22 @@ class CouncilAgent:
         Fails open on unexpected errors so trading is never blocked by a bug.
         """
         try:
-            return self._run_council(signal, context)
+            with mesh_span("council"):
+                return self._run_council(signal, context)
         except Exception:
             logger.exception("Council unexpected error — failing open")
+            trace_id = f"council-{uuid.uuid4().hex[:12]}"
             return CouncilVerdict(
                 approved=True,
                 confidence=0.0,
+                trace_id=trace_id,
                 direction=signal.direction,
                 reasoning="Council error — signal passed through unreviewed.",
             )
 
     def _run_council(self, signal: Signal,
                      context: "MarketContext") -> CouncilVerdict:
+        trace_id = f"council-{uuid.uuid4().hex[:12]}"
         # Guard: insufficient candle data to run expert analysis
         if not context.candles or len(context.candles) < settings.COUNCIL_MIN_CANDLES:
             logger.warning(
@@ -582,6 +591,7 @@ class CouncilAgent:
             return CouncilVerdict(
                 approved=False,
                 confidence=0.0,
+                trace_id=trace_id,
                 direction=signal.direction,
                 reasoning="Insufficient candle data for Council review",
             )
@@ -596,6 +606,17 @@ class CouncilAgent:
             danial      = _fut_dan.result()
             traditional = _fut_trad.result()
             world       = _fut_wld.result()
+
+        # Update global coherence between expert pairs based on their agreement
+        _expert_scores = [
+            ("ict_expert", ict.score),
+            ("danial_expert", danial.score),
+            ("traditional_expert", traditional.score),
+            ("world_expert", world.score),
+        ]
+        for _ei, (_na, _sa) in enumerate(_expert_scores):
+            for _nb, _sb in _expert_scores[_ei + 1:]:
+                record_coherence(_na, _nb, (_sa > 0.5) == (_sb > 0.5))
 
         # Strategy-aware weighting: adapt expert weights to signal origin.
         #
@@ -636,6 +657,12 @@ class CouncilAgent:
         )
 
         approved = confidence >= settings.COUNCIL_MIN_CONFIDENCE
+        risk_views, risk_recommendation = self._build_risk_debate(
+            confidence,
+            world.score,
+            len(reasons_for),
+            len(reasons_against),
+        )
 
         if approved:
             top_reasons = "; ".join(reasons_for[:3]) or "multiple confluences"
@@ -643,7 +670,8 @@ class CouncilAgent:
                 f"ICT={ict.score:.0%} DanialFX={danial.score:.0%} "
                 f"Traditional={traditional.score:.0%} World={world.score:.0%} "
                 f"→ {confidence:.0%} — "
-                f"APPROVED. Key confluences: {top_reasons}."
+                f"APPROVED. Key confluences: {top_reasons}. "
+                f"Risk debate={risk_recommendation}."
             )
         else:
             top_issues = "; ".join(reasons_against[:3]) or "insufficient confluences"
@@ -651,28 +679,76 @@ class CouncilAgent:
                 f"ICT={ict.score:.0%} DanialFX={danial.score:.0%} "
                 f"Traditional={traditional.score:.0%} World={world.score:.0%} "
                 f"→ {confidence:.0%} — "
-                f"REJECTED. Main issues: {top_issues}."
+                f"REJECTED. Main issues: {top_issues}. "
+                f"Risk debate={risk_recommendation}."
             )
 
         logger.info(
-            "Council verdict for %s %s: ICT=%.0f%% DanialFX=%.0f%% "
-            "Traditional=%.0f%% World=%.0f%% → %.0f%% → %s",
+            "Council[%s] verdict for %s %s: ICT=%.0f%% DanialFX=%.0f%% "
+            "Traditional=%.0f%% World=%.0f%% → %.0f%% → %s (%s)",
+            trace_id,
             signal.symbol, signal.direction,
             ict.score * 100, danial.score * 100,
             traditional.score * 100, world.score * 100,
             confidence * 100,
             "APPROVED" if approved else "REJECTED",
+            risk_recommendation,
         )
 
         return CouncilVerdict(
             approved=approved,
             confidence=confidence,
+            trace_id=trace_id,
             direction=signal.direction,
             ict_score=ict.score,
             danial_score=danial.score,
             traditional_score=traditional.score,
             world_score=world.score,
+            risk_views=risk_views,
+            risk_recommendation=risk_recommendation,
             reasons_for=reasons_for,
             reasons_against=reasons_against,
             reasoning=reasoning,
         )
+
+    def _build_risk_debate(
+        self,
+        confidence: float,
+        world_score: float,
+        reasons_for_count: int,
+        reasons_against_count: int,
+    ) -> tuple[dict[str, str], str]:
+        """Build aggressive/neutral/conservative views before a final recommendation."""
+        threshold = settings.COUNCIL_MIN_CONFIDENCE
+        world_penalty = max(0.0, (0.5 - world_score) * 0.6)
+        disagreement_penalty = 0.05 if reasons_against_count > reasons_for_count else 0.0
+
+        view_scores = {
+            "aggressive": confidence + 0.10 - world_penalty,
+            "neutral": confidence - world_penalty,
+            "conservative": confidence - 0.12 - world_penalty - disagreement_penalty,
+        }
+
+        risk_views: dict[str, str] = {}
+        approve_votes = 0
+        reject_votes = 0
+        for name, score in view_scores.items():
+            if score >= threshold:
+                risk_views[name] = "approve"
+                approve_votes += 1
+            elif score >= threshold - 0.08:
+                risk_views[name] = "reduce_size"
+            else:
+                risk_views[name] = "reject"
+                reject_votes += 1
+
+        if risk_views["conservative"] == "reject" and world_score < 0.4:
+            recommendation = "reject"
+        elif approve_votes >= 2:
+            recommendation = "approve"
+        elif reject_votes >= 2:
+            recommendation = "reject"
+        else:
+            recommendation = "reduce_size"
+
+        return risk_views, recommendation

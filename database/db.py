@@ -125,6 +125,16 @@ CREATE TABLE IF NOT EXISTS bot_commands (
 );
 """
 
+_ALTER_BOT_COMMANDS_RUNNING = """
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                   WHERE table_name='bot_commands' AND column_name='started_at') THEN
+        ALTER TABLE bot_commands ADD COLUMN started_at TIMESTAMP;
+    END IF;
+END $$;
+"""
+
 _CREATE_BOT_STATUS = """
 CREATE TABLE IF NOT EXISTS bot_status (
     id           INTEGER PRIMARY KEY DEFAULT 1,
@@ -292,6 +302,16 @@ CREATE TABLE IF NOT EXISTS symbol_fault (
 );
 """
 
+_CREATE_BOT_SESSIONS = """
+CREATE TABLE IF NOT EXISTS bot_sessions (
+    id          SERIAL PRIMARY KEY,
+    started_at  TIMESTAMP DEFAULT NOW(),
+    ended_at    TIMESTAMP,
+    version     TEXT DEFAULT '',
+    exit_reason TEXT DEFAULT 'normal'
+);
+"""
+
 _CREATE_INDEXES = """
 CREATE INDEX IF NOT EXISTS idx_agent_events_created_at        ON agent_events (created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_agent_events_agent             ON agent_events (agent);
@@ -308,6 +328,8 @@ CREATE INDEX IF NOT EXISTS idx_ict_setups_symbol              ON ict_setups (sym
 CREATE INDEX IF NOT EXISTS idx_ict_setups_symbol_created      ON ict_setups (symbol, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_bot_commands_status            ON bot_commands (status);
 CREATE INDEX IF NOT EXISTS idx_bot_commands_pending           ON bot_commands (created_at DESC) WHERE status = 'pending';
+CREATE INDEX IF NOT EXISTS idx_bot_commands_pending_review    ON bot_commands (created_at DESC) WHERE status = 'pending_confirmation';
+CREATE INDEX IF NOT EXISTS idx_bot_sessions_started           ON bot_sessions (started_at DESC);
 CREATE INDEX IF NOT EXISTS idx_trade_scores_created_at        ON trade_scores (created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_trade_scores_strategy_time     ON trade_scores (strategy, created_at DESC);
 """
@@ -324,6 +346,7 @@ _ALL_TABLES = [
     _CREATE_DASHBOARD_USERS,
     _CREATE_PERFORMANCE_SNAPSHOTS,
     _CREATE_SYMBOL_FAULT,
+    _CREATE_BOT_SESSIONS,
 ]
 
 
@@ -419,6 +442,7 @@ class Database:
                     cur.execute(_ALTER_TRADES_EXPECTANCY)
                     cur.execute(_ALTER_TRADES_LIVE)
                     cur.execute(_ALTER_STRATEGY_CONFIDENCE_STREAK)
+                    cur.execute(_ALTER_BOT_COMMANDS_RUNNING)
                     cur.execute(_CREATE_INDEXES)
             logger.info("Database tables verified")
         finally:
@@ -426,12 +450,13 @@ class Database:
         self.purge_old_data()
 
     def purge_old_data(self) -> None:
-        """Delete stale rows to prevent unbounded table growth.
+        """Delete stale rows and expire pending approvals.
 
-        Retention policy (configurable via env vars):
+        Retention policy:
           - agent_events: 14 days  (~55k rows @ 4k/day)
           - bot_commands (done): 7 days
           - ict_setups: 30 days
+          - pending_confirmation commands: expire (→ failed) after 1 hour
         """
         conn = self._get_conn()
         try:
@@ -449,10 +474,24 @@ class Database:
                         "DELETE FROM ict_setups WHERE created_at < NOW() - INTERVAL '30 days'"
                     )
                     n_ict = cur.rowcount
-            if n_events or n_cmds or n_ict:
+                    # Expire stale approval requests — prevents orphaned commands
+                    # that were never reviewed from blocking the queue indefinitely.
+                    cur.execute(
+                        """
+                        UPDATE bot_commands
+                        SET status = 'failed',
+                            result = 'Expired: approval not received within 1 hour',
+                            executed_at = NOW()
+                        WHERE status = 'pending_confirmation'
+                          AND created_at < NOW() - INTERVAL '1 hour'
+                        """
+                    )
+                    n_expired = cur.rowcount
+            if n_events or n_cmds or n_ict or n_expired:
                 logger.info(
-                    "DB purge: removed %d agent_events, %d bot_commands, %d ict_setups",
-                    n_events, n_cmds, n_ict,
+                    "DB purge: removed %d agent_events, %d bot_commands, %d ict_setups; "
+                    "expired %d stale approval requests",
+                    n_events, n_cmds, n_ict, n_expired,
                 )
         except Exception:
             logger.exception("DB purge failed (non-fatal)")
@@ -839,6 +878,58 @@ class Database:
         finally:
             self._put_conn(conn)
 
+    def get_recent_context_outcomes(
+        self,
+        strategy: str,
+        symbol: str,
+        session: str,
+        market_condition: str,
+        lookback_days: int = 30,
+        limit: int = 50,
+    ) -> dict[str, float | int]:
+        """Return recent outcomes for trades matching a similar execution context."""
+        conn = self._get_conn()
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """SELECT
+                           COUNT(*)::int AS trades,
+                           COALESCE(AVG(score), 0)::float AS avg_score,
+                           COALESCE(AVG(pnl), 0)::float AS avg_pnl,
+                           COALESCE(AVG(CASE WHEN pnl >= 0 THEN 1.0 ELSE 0.0 END), 0)::float AS win_rate
+                       FROM (
+                           SELECT score, pnl
+                           FROM trade_scores
+                           WHERE strategy = %s
+                             AND symbol = %s
+                             AND COALESCE(session, '') = COALESCE(%s, '')
+                             AND COALESCE(market_condition, '') = COALESCE(%s, '')
+                             AND created_at >= NOW() - (%s || ' days')::interval
+                           ORDER BY created_at DESC
+                           LIMIT %s
+                       ) recent""",
+                    (
+                        strategy,
+                        symbol,
+                        session or "",
+                        market_condition or "",
+                        str(max(1, lookback_days)),
+                        max(1, limit),
+                    ),
+                )
+                row = cur.fetchone()
+                if not row:
+                    return {"trades": 0, "avg_score": 0.0, "avg_pnl": 0.0, "win_rate": 0.0}
+                trades, avg_score, avg_pnl, win_rate = row
+                return {
+                    "trades": int(trades or 0),
+                    "avg_score": float(avg_score or 0.0),
+                    "avg_pnl": float(avg_pnl or 0.0),
+                    "win_rate": float(win_rate or 0.0),
+                }
+        finally:
+            self._put_conn(conn)
+
     def boost_all_strategy_confidence(self, boost: float) -> None:
         """Add *boost* to every strategy's confidence, capped at 1.0."""
         conn = self._get_conn()
@@ -934,18 +1025,162 @@ class Database:
         finally:
             self._put_conn(conn)
 
-    def update_command(self, cmd_id: int, status: str,
-                       result: str | None = None) -> None:
+    def start_session(self, version: str = "") -> int:
+        """Insert a new bot_sessions row and return its primary-key ID."""
         conn = self._get_conn()
         try:
             with conn:
                 with conn.cursor() as cur:
                     cur.execute(
-                        """UPDATE bot_commands
-                           SET status = %s, result = %s, executed_at = NOW()
-                           WHERE id = %s""",
-                        (status, result, cmd_id),
+                        "INSERT INTO bot_sessions (version) VALUES (%s) RETURNING id",
+                        (version,),
                     )
+                    row = cur.fetchone()
+                    return int(row[0]) if row else 0
+        except Exception:
+            logger.exception("start_session failed (non-fatal)")
+            return 0
+        finally:
+            self._put_conn(conn)
+
+    def end_session(self, session_id: int, exit_reason: str = "normal") -> None:
+        """Mark an open bot_sessions row as ended."""
+        if not session_id:
+            return
+        conn = self._get_conn()
+        try:
+            with conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        UPDATE bot_sessions
+                        SET ended_at = NOW(), exit_reason = %s
+                        WHERE id = %s
+                        """,
+                        (exit_reason, session_id),
+                    )
+        except Exception:
+            logger.exception("end_session failed (non-fatal)")
+        finally:
+            self._put_conn(conn)
+
+    def claim_pending_commands(self, limit: int = 25) -> list[dict]:
+        """Atomically claim pending commands for execution.
+
+        Uses ``FOR UPDATE SKIP LOCKED`` so multiple bot workers can safely poll
+        the same queue without executing the same command twice.
+        """
+        conn = self._get_conn()
+        try:
+            with conn:
+                with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                    cur.execute(
+                        """
+                        WITH claimed AS (
+                            SELECT id
+                            FROM bot_commands
+                            WHERE status = 'pending'
+                            ORDER BY created_at ASC
+                            FOR UPDATE SKIP LOCKED
+                            LIMIT %s
+                        )
+                        UPDATE bot_commands bc
+                        SET status = 'running',
+                            result = CONCAT('Started ', bc.command),
+                            started_at = NOW(),
+                            executed_at = NULL
+                        FROM claimed
+                        WHERE bc.id = claimed.id
+                        RETURNING bc.*
+                        """,
+                        (max(1, limit),),
+                    )
+                    return [dict(r) for r in cur.fetchall()]
+        finally:
+            self._put_conn(conn)
+
+    def update_command(
+        self,
+        cmd_id: int,
+        status: str,
+        result: str | None = None,
+        *,
+        set_executed: bool = True,
+    ) -> None:
+        conn = self._get_conn()
+        try:
+            with conn:
+                with conn.cursor() as cur:
+                    if set_executed:
+                        cur.execute(
+                            """UPDATE bot_commands
+                               SET status = %s, result = %s, executed_at = NOW()
+                               WHERE id = %s""",
+                            (status, result, cmd_id),
+                        )
+                    else:
+                        cur.execute(
+                            """UPDATE bot_commands
+                               SET status = %s, result = %s, started_at = NOW(), executed_at = NULL
+                               WHERE id = %s""",
+                            (status, result, cmd_id),
+                        )
+        finally:
+            self._put_conn(conn)
+
+    def review_command(
+        self,
+        cmd_id: int,
+        *,
+        approved: bool,
+        reviewer: str,
+        reason: str,
+    ) -> bool:
+        """Approve or deny a command waiting for human confirmation."""
+        conn = self._get_conn()
+        try:
+            with conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """SELECT payload FROM bot_commands
+                           WHERE id = %s AND status = 'pending_confirmation'""",
+                        (cmd_id,),
+                    )
+                    row = cur.fetchone()
+                    if row is None:
+                        return False
+
+                    payload = row[0] or {}
+                    if not isinstance(payload, dict):
+                        payload = {}
+
+                    review_meta = payload.get("_review")
+                    if not isinstance(review_meta, dict):
+                        review_meta = {}
+
+                    review_meta.update(
+                        {
+                            "reviewedBy": reviewer,
+                            "reviewedAt": datetime.now(UTC).isoformat(),
+                            "reason": reason,
+                            "decision": "approved" if approved else "denied",
+                        }
+                    )
+                    payload["_review"] = review_meta
+
+                    next_status = "pending" if approved else "failed"
+                    result = "Approved for execution" if approved else f"Denied: {reason}"
+
+                    cur.execute(
+                        """UPDATE bot_commands
+                           SET status = %s,
+                               result = %s,
+                               payload = %s,
+                               executed_at = CASE WHEN %s THEN NULL ELSE NOW() END
+                           WHERE id = %s""",
+                        (next_status, result, json.dumps(payload), approved, cmd_id),
+                    )
+                    return True
         finally:
             self._put_conn(conn)
 

@@ -274,3 +274,121 @@ def test_call_api_returns_none_on_exception() -> None:
     mock_client.chat.completions.create.side_effect = Exception("Network error")
     result = strategy._call_api(mock_client, ctx)
     assert result is None
+
+
+def test_swarm_profiles_parse_from_settings() -> None:
+    with patch("agents.deepseek_strategy.settings") as mock_settings:
+        mock_settings.DEEPSEEK_AGENT_SWARM_PROFILES = (
+            "trend:Follow momentum;risk:Focus on stop placement"
+        )
+        profiles = DeepSeekStrategy._swarm_profiles()
+    assert profiles[0][0] == "trend"
+    assert "Follow momentum" in profiles[0][1]
+    assert profiles[1][0] == "risk"
+
+
+def test_aggregate_swarm_signals_prefers_weighted_majority() -> None:
+    strategy = DeepSeekStrategy()
+    ctx = _make_context()
+    buy_a = strategy._parse(_valid_llm_response("BUY"), ctx)
+    assert buy_a is not None
+
+    buy_payload = json.dumps({
+        "direction": "BUY",
+        "confidence": 0.85,
+        "stop_loss": 1.1000,
+        "take_profit_1": 1.1100,
+        "take_profit_2": 1.1150,
+        "take_profit_3": 1.1200,
+        "reasoning": "Strong continuation",
+    })
+    buy_b = strategy._parse(buy_payload, ctx)
+    assert buy_b is not None
+
+    sell_payload = json.dumps({
+        "direction": "SELL",
+        "confidence": 0.66,
+        "stop_loss": 1.1100,
+        "take_profit_1": 1.1000,
+        "take_profit_2": 1.0950,
+        "take_profit_3": 1.0900,
+        "reasoning": "Minor rejection",
+    })
+    sell_a = strategy._parse(sell_payload, ctx)
+    assert sell_a is not None
+
+    aggregated = strategy._aggregate_swarm_signals(ctx, [buy_a, buy_b, sell_a])
+    assert aggregated is not None
+    assert aggregated.direction == "BUY"
+    assert aggregated.strategy == "deepseek_swarm"
+
+
+def test_mesh_weight_can_override_raw_confidence() -> None:
+    strategy = DeepSeekStrategy()
+    ctx = _make_context()
+
+    buy_payload = json.dumps({
+        "direction": "BUY",
+        "confidence": 0.70,
+        "stop_loss": 1.1000,
+        "take_profit_1": 1.1100,
+        "take_profit_2": 1.1150,
+        "take_profit_3": 1.1200,
+        "reasoning": "Trend",
+    })
+    sell_payload = json.dumps({
+        "direction": "SELL",
+        "confidence": 0.78,
+        "stop_loss": 1.1100,
+        "take_profit_1": 1.1000,
+        "take_profit_2": 1.0950,
+        "take_profit_3": 1.0900,
+        "reasoning": "Countertrend",
+    })
+
+    buy_signal = strategy._parse(buy_payload, ctx)
+    sell_signal = strategy._parse(sell_payload, ctx)
+    assert buy_signal is not None
+    assert sell_signal is not None
+
+    strategy._mesh.ensure_profile("trend")
+    strategy._mesh.ensure_profile("counter")
+    strategy._mesh.state.nodes["trend"].trust = 0.95
+    strategy._mesh.state.nodes["counter"].trust = 0.15
+
+    aggregated = strategy._aggregate_swarm_signals(
+        ctx,
+        [("trend", buy_signal), ("counter", sell_signal)],
+    )
+    assert aggregated is not None
+    assert aggregated.direction == "BUY"
+
+
+def test_mesh_select_profiles_prefers_fast_and_trusted_agents() -> None:
+    strategy = DeepSeekStrategy()
+    profiles = [
+        ("fast", "fast profile"),
+        ("slow", "slow profile"),
+        ("mid", "mid profile"),
+    ]
+
+    for name, _ in profiles:
+        strategy._mesh.ensure_profile(name)
+
+    strategy._mesh.state.nodes["fast"].trust = 0.85
+    strategy._mesh.state.nodes["fast"].latency_ms = 120.0
+    strategy._mesh.state.nodes["slow"].trust = 0.52
+    strategy._mesh.state.nodes["slow"].latency_ms = 820.0
+    strategy._mesh.state.nodes["mid"].trust = 0.60
+    strategy._mesh.state.nodes["mid"].latency_ms = 240.0
+
+    selected = strategy._mesh.select_profiles(
+        profiles,
+        max_agents=2,
+        min_active=2,
+        latency_penalty=0.30,
+    )
+
+    selected_names = [name for name, _ in selected]
+    assert "fast" in selected_names
+    assert "slow" not in selected_names
