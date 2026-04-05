@@ -123,6 +123,9 @@ class RiskAgent:
         self._spread_reject_until: dict[str, datetime] = {}
         self._emergency_max_risk_per_trade: float | None = None
         self._emergency_max_open_trades: int | None = None
+        self._symbol_lock_until: dict[str, datetime] = {}
+        self._global_lock_until: datetime | None = None
+        self._closed_trades_cache: tuple[float, list[Trade]] = (0.0, [])
         # Tick spec cache (tick_size, tick_value) — refreshed every 60s.
         # tick_value is in account currency (MT5 converts automatically), so
         # this is the source of truth for EUR/USD and other cross-currency accounts.
@@ -168,12 +171,27 @@ class RiskAgent:
         (mock connector, symbol not in MT5).
         """
         balance = self._broker.get_balance()
+        equity = self._broker.get_equity()
         max_risk_per_trade = (
             self._emergency_max_risk_per_trade
             if self._emergency_max_risk_per_trade is not None
             else settings.MAX_RISK_PER_TRADE
         )
-        risk_amount = balance * max_risk_per_trade
+        mode = settings.POSITION_SIZE_MODE
+        if mode == "fixed_lot":
+            return max(
+                settings.MIN_LOT_SIZE,
+                min(settings.MAX_LOT_SIZE, round(settings.POSITION_SIZE_FIXED_LOT, 2)),
+            )
+
+        if mode == "fixed_risk_amount":
+            risk_amount = max(0.0, settings.POSITION_SIZE_FIXED_RISK_AMOUNT)
+        elif mode == "balance_pct":
+            risk_amount = balance * max_risk_per_trade
+        else:
+            # Default and fallback: equity-based risk percentage.
+            risk_amount = equity * max_risk_per_trade
+
         sl_distance = abs(signal.entry_price - signal.stop_loss)
         if sl_distance == 0:
             return settings.MIN_LOT_SIZE
@@ -267,7 +285,11 @@ class RiskAgent:
             self._emit("warn", f"MACRO BLACKOUT: FLASH alert active on {signal.symbol}")
             return False
 
-        # 1c. Session gate — only enter in allowed sessions (data-driven)
+        # 1c. Protection layer (cooldown, stoploss guard, global loss guard).
+        if not self._check_protections(signal):
+            return False
+
+        # 1d. Session gate — only enter in allowed sessions (data-driven)
         if settings.ENTRY_ALLOWED_SESSIONS:
             sess = current_session()
             if sess not in settings.ENTRY_ALLOWED_SESSIONS:
@@ -278,7 +300,7 @@ class RiskAgent:
                             "allowed": settings.ENTRY_ALLOWED_SESSIONS})
                 return False
 
-        # 1d. Day-of-week gate — block systematic losing days
+        # 1e. Day-of-week gate — block systematic losing days
         if settings.ENTRY_BLOCKED_DAYS:
             today = day_of_week()
             weekend_crypto = (
@@ -291,6 +313,10 @@ class RiskAgent:
                             "blocked": settings.ENTRY_BLOCKED_DAYS})
                 return False
 
+        # 1f. Time-phase confidence gate (optional).
+        if not self._check_time_phase_confidence(signal):
+            return False
+
         open_trades = self._get_open_trades()
 
         # 2. Duplicate and correlation exposure guards
@@ -302,8 +328,7 @@ class RiskAgent:
             return False
 
         # 3. Max concurrent trades
-        max_open_trades = self._emergency_max_open_trades or settings.MAX_OPEN_TRADES
-        if len(open_trades) >= max_open_trades:
+        if not self._check_open_trade_cap(open_trades):
             self._emit("warn", "MAX_TRADES — concurrent position cap reached")
             return False
 
@@ -327,7 +352,11 @@ class RiskAgent:
                        {"symbol": signal.symbol, "check": "crucix_blackout"})
             return False
 
-        # 1c. Session gate — only allow new entries in proven sessions.
+        # 1c. Protection layer — skip on post-entry checks.
+        if not skip_duplicate and not self._check_protections(signal):
+            return False
+
+        # 1d. Session gate — only allow new entries in proven sessions.
         # skip_duplicate=True means this is a post-entry check; don't close
         # a trade simply because the session changed after entry.
         if not skip_duplicate and settings.ENTRY_ALLOWED_SESSIONS:
@@ -344,7 +373,7 @@ class RiskAgent:
                             "check": "session_gate"})
                 return False
 
-        # 1d. Day-of-week gate — skip on post-entry checks for same reason.
+        # 1e. Day-of-week gate — skip on post-entry checks for same reason.
         if not skip_duplicate and settings.ENTRY_BLOCKED_DAYS:
             today = signal.entry_snapshot.day_of_week or day_of_week()
             weekend_crypto = (
@@ -360,6 +389,10 @@ class RiskAgent:
                            {"symbol": signal.symbol, "day": today,
                             "check": "day_gate"})
                 return False
+
+        # 1f. Time-phase confidence gate — skip on post-entry checks.
+        if not skip_duplicate and not self._check_time_phase_confidence(signal):
+            return False
 
         open_trades = self._get_open_trades()
 
@@ -387,18 +420,20 @@ class RiskAgent:
             return False
 
         # 4. Maximum concurrent open trades
-        max_open_trades = self._emergency_max_open_trades or settings.MAX_OPEN_TRADES
-        if len(open_trades) >= max_open_trades:
+        if not self._check_open_trade_cap(open_trades):
             logger.warning(
                 "RISK REJECT [MAX_TRADES]: %d open >= limit %d",
-                len(open_trades), max_open_trades,
+                len(open_trades), self._emergency_max_open_trades or settings.MAX_OPEN_TRADES,
             )
             self._emit(
                 "warn",
-                f"MAX_TRADES — {len(open_trades)} open trades >= limit {max_open_trades}",
+                (
+                    f"MAX_TRADES — {len(open_trades)} open trades >= limit "
+                    f"{self._emergency_max_open_trades or settings.MAX_OPEN_TRADES}"
+                ),
                 {"check": "max_trades",
                  "count": len(open_trades),
-                 "limit": max_open_trades},
+                 "limit": self._emergency_max_open_trades or settings.MAX_OPEN_TRADES},
             )
             return False
 
@@ -608,6 +643,215 @@ class RiskAgent:
         self._clear_spread_reject(signal.symbol)
         return True
 
+    def _check_time_phase_confidence(self, signal: Signal) -> bool:
+        """Gate entries by candle-time phase when enabled.
+
+        Phase is derived from the signal timestamp modulo TIME_PHASE_BUCKET_MINUTES.
+        """
+        if not settings.TIME_PHASE_CONFIDENCE_ENABLED:
+            return True
+
+        bucket = max(1, settings.TIME_PHASE_BUCKET_MINUTES)
+        minute_in_bucket = signal.timestamp.minute % bucket
+        early_max = settings.TIME_PHASE_EARLY_MAX_MINUTE
+        mid_max = settings.TIME_PHASE_MID_MAX_MINUTE
+
+        if minute_in_bucket < early_max:
+            phase = "early"
+            required = settings.TIME_PHASE_MIN_CONF_EARLY
+        elif minute_in_bucket < mid_max:
+            phase = "mid"
+            required = settings.TIME_PHASE_MIN_CONF_MID
+        else:
+            phase = "late"
+            required = settings.TIME_PHASE_MIN_CONF_LATE
+
+        if signal.confidence < required:
+            logger.warning(
+                "RISK REJECT [TIME_PHASE]: %s confidence %.2f < %.2f (%s phase, m=%d/%d)",
+                signal.symbol,
+                signal.confidence,
+                required,
+                phase,
+                minute_in_bucket,
+                bucket,
+            )
+            self._emit(
+                "warn",
+                (
+                    f"TIME_PHASE — {signal.symbol} confidence {signal.confidence:.2f} < "
+                    f"required {required:.2f} ({phase})"
+                ),
+                {
+                    "symbol": signal.symbol,
+                    "check": "time_phase_confidence",
+                    "phase": phase,
+                    "confidence": signal.confidence,
+                    "required": required,
+                    "minute_in_bucket": minute_in_bucket,
+                    "bucket_minutes": bucket,
+                },
+            )
+            return False
+
+        return True
+
+    def _check_protections(self, signal: Signal) -> bool:
+        """Freqtrade-style entry protections.
+
+        Applies global lock, per-symbol lock, per-symbol cooldown, and
+        stoploss/loss cluster guards based on recent closed trades.
+        """
+        if not settings.PROTECTIONS_ENABLED:
+            return True
+
+        now = datetime.now(UTC)
+
+        if self._global_lock_until and now < self._global_lock_until:
+            self._emit(
+                "warn",
+                f"PROTECTION — global lock active until {self._global_lock_until.isoformat()}",
+                {
+                    "symbol": signal.symbol,
+                    "check": "protection_global_lock",
+                    "lock_until": self._global_lock_until.isoformat(),
+                },
+            )
+            return False
+
+        symbol_lock = self._symbol_lock_until.get(signal.symbol)
+        if symbol_lock and now < symbol_lock:
+            self._emit(
+                "warn",
+                f"PROTECTION — {signal.symbol} locked until {symbol_lock.isoformat()}",
+                {
+                    "symbol": signal.symbol,
+                    "check": "protection_symbol_lock",
+                    "lock_until": symbol_lock.isoformat(),
+                },
+            )
+            return False
+
+        lookback_minutes = max(
+            settings.PROTECTION_STOPLOSS_GUARD_LOOKBACK_MINUTES,
+            settings.PROTECTION_GLOBAL_LOSS_GUARD_LOOKBACK_MINUTES,
+            settings.PROTECTION_COOLDOWN_MINUTES,
+        )
+        recent = self._get_closed_trades_recent(lookback_minutes)
+        if not recent:
+            return True
+
+        symbol_recent = [t for t in recent if t.symbol == signal.symbol]
+
+        cooldown = max(0, settings.PROTECTION_COOLDOWN_MINUTES)
+        if cooldown > 0 and symbol_recent:
+            last_close = max(
+                self._ensure_utc_trade_time(t.close_time)
+                for t in symbol_recent
+                if t.close_time is not None
+            )
+            if (now - last_close).total_seconds() < cooldown * 60:
+                lock_until = last_close + timedelta(minutes=cooldown)
+                self._symbol_lock_until[signal.symbol] = lock_until
+                self._emit(
+                    "warn",
+                    (
+                        f"PROTECTION — cooldown: {signal.symbol} last close at "
+                        f"{last_close.isoformat()} (lock until {lock_until.isoformat()})"
+                    ),
+                    {
+                        "symbol": signal.symbol,
+                        "check": "protection_cooldown",
+                        "lock_until": lock_until.isoformat(),
+                    },
+                )
+                return False
+
+        stoploss_lookback = max(1, settings.PROTECTION_STOPLOSS_GUARD_LOOKBACK_MINUTES)
+        stoploss_limit = max(1, settings.PROTECTION_STOPLOSS_GUARD_TRADE_LIMIT)
+        stoploss_recent = [
+            t for t in symbol_recent
+            if t.close_time is not None
+            and (now - self._ensure_utc_trade_time(t.close_time)).total_seconds() <= stoploss_lookback * 60
+            and t.close_reason == "SL"
+        ]
+        if len(stoploss_recent) >= stoploss_limit:
+            lock_minutes = max(1, settings.PROTECTION_STOPLOSS_GUARD_LOCK_MINUTES)
+            latest_sl = max(self._ensure_utc_trade_time(t.close_time) for t in stoploss_recent)
+            lock_until = latest_sl + timedelta(minutes=lock_minutes)
+            self._symbol_lock_until[signal.symbol] = lock_until
+            self._emit(
+                "warn",
+                (
+                    f"PROTECTION — stoploss guard: {signal.symbol} has "
+                    f"{len(stoploss_recent)} SL closes in {stoploss_lookback}m"
+                ),
+                {
+                    "symbol": signal.symbol,
+                    "check": "protection_stoploss_guard",
+                    "sl_count": len(stoploss_recent),
+                    "lock_until": lock_until.isoformat(),
+                },
+            )
+            return False
+
+        global_lookback = max(1, settings.PROTECTION_GLOBAL_LOSS_GUARD_LOOKBACK_MINUTES)
+        global_loss_limit = max(1, settings.PROTECTION_GLOBAL_LOSS_GUARD_MAX_LOSSES)
+        losing_recent = [
+            t for t in recent
+            if t.close_time is not None
+            and (now - self._ensure_utc_trade_time(t.close_time)).total_seconds() <= global_lookback * 60
+            and t.pnl < 0
+        ]
+        if len(losing_recent) >= global_loss_limit:
+            lock_minutes = max(1, settings.PROTECTION_GLOBAL_LOSS_GUARD_LOCK_MINUTES)
+            latest_loss = max(self._ensure_utc_trade_time(t.close_time) for t in losing_recent)
+            self._global_lock_until = latest_loss + timedelta(minutes=lock_minutes)
+            self._emit(
+                "warn",
+                (
+                    f"PROTECTION — global loss guard: {len(losing_recent)} losing closes "
+                    f"in {global_lookback}m"
+                ),
+                {
+                    "symbol": signal.symbol,
+                    "check": "protection_global_loss_guard",
+                    "loss_count": len(losing_recent),
+                    "lock_until": self._global_lock_until.isoformat(),
+                },
+            )
+            return False
+
+        return True
+
+    def _get_closed_trades_recent(self, lookback_minutes: int) -> list[Trade]:
+        """Load recent closed trades from DB with a short TTL cache."""
+        if self._db is None or not hasattr(self._db, "get_closed_trades_since"):
+            return []
+
+        now_mono = time.monotonic()
+        cache_ts, cached_trades = self._closed_trades_cache
+        if now_mono - cache_ts < 5.0:
+            return cached_trades
+
+        since = datetime.now(UTC) - timedelta(minutes=max(1, int(lookback_minutes)))
+        try:
+            trades = self._db.get_closed_trades_since(since, limit=1000)
+        except Exception:
+            logger.exception("Failed to load closed trades for protection checks")
+            trades = []
+
+        self._closed_trades_cache = (now_mono, trades)
+        return trades
+
+    @staticmethod
+    def _ensure_utc_trade_time(dt: datetime | None) -> datetime:
+        if dt is None:
+            return datetime.min.replace(tzinfo=UTC)
+        if dt.tzinfo is None:
+            return dt.replace(tzinfo=UTC)
+        return dt.astimezone(UTC)
+
     def _register_spread_reject(self, symbol: str, now_utc: datetime) -> None:
         count = self._spread_reject_counts.get(symbol, 0) + 1
         self._spread_reject_counts[symbol] = count
@@ -685,6 +929,10 @@ class RiskAgent:
                     and t.is_open()):
                 return True
         return False
+
+    def _check_open_trade_cap(self, open_trades: list[Trade]) -> bool:
+        max_open_trades = self._emergency_max_open_trades or settings.MAX_OPEN_TRADES
+        return len(open_trades) < max_open_trades
 
     # ── correlation guard ────────────────────────────────────────────────
 

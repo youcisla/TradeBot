@@ -61,6 +61,12 @@ class _MockDatabase:
     def get_trade(self, trade_id: str) -> Trade | None:
         return self._trades.get(trade_id)
 
+    def update_live_state(self, trade_id: str, pnl: float, current_price: float) -> None:
+        trade = self._trades.get(trade_id)
+        if trade is not None:
+            trade.pnl = pnl
+            trade.current_price = current_price
+
     def get_trades_closed_today(self) -> list[Trade]:
         return []
 

@@ -373,7 +373,7 @@ class MT5Connector(BrokerConnector):
         request = {
             "action": mt5.TRADE_ACTION_DEAL,
             "symbol": broker_sym,
-            "volume": float(round(lot_size, 2)),
+            "volume": 0.0,
             "type": order_type,
             "price": fill_price,
             "sl": float(sl) if sl > 0 else 0.0,
@@ -385,6 +385,25 @@ class MT5Connector(BrokerConnector):
         }
         if tp is not None and tp > 0:
             request["tp"] = float(tp)
+
+        requested_volume = float(lot_size)
+        normalized_volume = self._normalize_volume(broker_sym, requested_volume)
+        if normalized_volume <= 0:
+            return OrderResult(
+                success=False,
+                message=(
+                    f"Invalid lot size for {symbol}: requested={requested_volume:.4f} "
+                    "cannot be normalized to broker volume rules"
+                ),
+            )
+        if abs(normalized_volume - requested_volume) > 1e-9:
+            logger.info(
+                "Volume normalized for %s: requested %.4f -> %.4f",
+                symbol,
+                requested_volume,
+                normalized_volume,
+            )
+        request["volume"] = normalized_volume
 
         result = mt5.order_send(request)
         if result is None:
@@ -440,7 +459,7 @@ class MT5Connector(BrokerConnector):
         request = {
             "action": mt5.TRADE_ACTION_DEAL,
             "symbol": broker_sym,
-            "volume": float(round(lot_size, 2)),
+            "volume": 0.0,
             "type": close_type,
             "position": ticket,
             "price": price,
@@ -450,6 +469,26 @@ class MT5Connector(BrokerConnector):
             "type_time": mt5.ORDER_TIME_GTC,
             "type_filling": mt5.ORDER_FILLING_IOC,
         }
+
+        requested_volume = float(lot_size)
+        normalized_volume = self._normalize_volume(broker_sym, requested_volume)
+        if normalized_volume <= 0:
+            logger.error(
+                "close_partial rejected for %d (%s): requested %.4f invalid for broker volume rules",
+                ticket,
+                symbol,
+                requested_volume,
+            )
+            return False
+        if abs(normalized_volume - requested_volume) > 1e-9:
+            logger.info(
+                "Partial close volume normalized for %s: requested %.4f -> %.4f",
+                symbol,
+                requested_volume,
+                normalized_volume,
+            )
+        request["volume"] = normalized_volume
+
         result = mt5.order_send(request)
         if result is None or result.retcode != mt5.TRADE_RETCODE_DONE:
             logger.error("close_partial failed for %d: %s", ticket,
@@ -529,3 +568,43 @@ class MT5Connector(BrokerConnector):
         if not compact:
             compact = "bot"
         return compact[:29]
+
+    @staticmethod
+    def _normalize_volume(symbol: str, requested: float) -> float:
+        """Normalize volume to broker min/max/step rules.
+
+        Returns 0.0 when the requested lot cannot produce a valid volume.
+        """
+        if requested <= 0:
+            return 0.0
+
+        info = mt5.symbol_info(symbol)
+        if info is None:
+            return round(requested, 2)
+
+        volume_min = float(getattr(info, "volume_min", 0.0) or 0.0)
+        volume_max = float(getattr(info, "volume_max", 0.0) or 0.0)
+        volume_step = float(getattr(info, "volume_step", 0.0) or 0.0)
+
+        volume = requested
+        if volume_step > 0:
+            # Floor to avoid exceeding requested risk.
+            steps = int(volume / volume_step)
+            volume = steps * volume_step
+
+        if volume_min > 0 and volume < volume_min:
+            return 0.0
+        if volume_max > 0 and volume > volume_max:
+            if volume_step > 0:
+                steps = int(volume_max / volume_step)
+                volume = steps * volume_step
+            else:
+                volume = volume_max
+
+        if volume <= 0:
+            return 0.0
+
+        if volume_step > 0:
+            decimals = max(0, len(f"{volume_step:.8f}".rstrip("0").split(".")[-1]))
+            return round(volume, decimals)
+        return round(volume, 2)

@@ -40,6 +40,9 @@ class Signal:
     # here after TP1 instead of the default entry+spread formula.
     structural_be: float = 0.0
     confidence: float = 0.5
+    # Expected edge metadata (filled by strategy/execution pipeline).
+    expected_edge_pct: float = 0.0
+    expected_pnl: float = 0.0
     timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
     reason: str = ""
     entry_snapshot: EntrySnapshot = field(default_factory=EntrySnapshot)

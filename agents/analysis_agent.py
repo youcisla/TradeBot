@@ -138,6 +138,9 @@ class AnalysisAgent:
             d1_trend=d1_trend,
             mtf_alignment=mtf_alignment,
             mtf_bias=mtf_bias,
+            shock_detected=data.shock_detected,
+            tick_drop_pct=data.tick_drop_pct,
+            tick_drop_window_seconds=data.tick_drop_window_seconds,
         )
 
         if self._crucix:

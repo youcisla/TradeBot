@@ -38,6 +38,10 @@ class MarketData:
     m15_candles: list[Candle] = field(default_factory=list)
     h4_candles: list[Candle] = field(default_factory=list)
     d1_candles: list[Candle] = field(default_factory=list)
+    # Ultra-short horizon microstructure features from MarketAgent tick memory.
+    shock_detected: bool = False
+    tick_drop_pct: float = 0.0
+    tick_drop_window_seconds: int = 0
 
     @property
     def mid_price(self) -> float:
@@ -98,6 +102,10 @@ class MarketContext:
     # and a label: "aligned_bull" | "aligned_bear" | "mixed" | "unknown"
     mtf_alignment: float = 0.0
     mtf_bias: str = "unknown"
+    # Short-horizon shock state propagated from MarketAgent.
+    shock_detected: bool = False
+    tick_drop_pct: float = 0.0
+    tick_drop_window_seconds: int = 0
 
     def __post_init__(self) -> None:
         # If caller passed ``trend`` but left ``trend_direction`` at its

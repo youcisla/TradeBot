@@ -8,6 +8,7 @@ from __future__ import annotations
 import logging
 import time
 from datetime import UTC, datetime
+from collections import deque
 from typing import TYPE_CHECKING
 
 from broker.connector import BrokerConnector
@@ -37,6 +38,7 @@ class MarketAgent:
         self._candle_count = candle_count
         # Cache slow-changing higher-timeframe candles to reduce MT5 round-trips.
         self._htf_cache: dict[tuple[str, str, int], tuple[float, list[Candle]]] = {}
+        self._tick_history: dict[str, deque[tuple[float, float]]] = {}
         self._htf_cache_base_ttl_seconds: dict[str, float] = {
             "M15": settings.HTF_CACHE_TTL_M15_SECONDS,
             "M30": settings.HTF_CACHE_TTL_M30_SECONDS,
@@ -81,6 +83,7 @@ class MarketAgent:
         ask = tick["ask"]
         spread = tick["spread"]
         volume = tick.get("volume", 0.0)
+        shock_detected, tick_drop_pct = self._detect_tick_shock(symbol, ask)
 
         # Validate
         validator = self._validator(symbol)
@@ -114,6 +117,9 @@ class MarketAgent:
             m15_candles=m15_candles,
             h4_candles=h4_candles,
             d1_candles=d1_candles,
+            shock_detected=shock_detected,
+            tick_drop_pct=tick_drop_pct,
+            tick_drop_window_seconds=settings.OPPORTUNITY_SHOCK_LOOKBACK_SECONDS,
         )
 
     def _emit(self, level: str, msg: str, data: dict | None = None) -> None:
@@ -133,6 +139,28 @@ class MarketAgent:
         except Exception:
             logger.warning("Failed to fetch candles for %s", symbol, exc_info=True)
             return []
+
+    def _detect_tick_shock(self, symbol: str, ask: float) -> tuple[bool, float]:
+        """Detect rapid ask-price drops over a short lookback window."""
+        if ask <= 0:
+            return (False, 0.0)
+        now = time.monotonic()
+        history = self._tick_history.setdefault(symbol, deque(maxlen=64))
+        history.append((now, ask))
+
+        lookback = max(1, settings.OPPORTUNITY_SHOCK_LOOKBACK_SECONDS)
+        min_ts = now - lookback
+        baseline = ask
+        for ts, px in history:
+            if ts >= min_ts:
+                baseline = px
+                break
+
+        if baseline <= 0:
+            return (False, 0.0)
+
+        drop_pct = (baseline - ask) / baseline
+        return (drop_pct >= settings.OPPORTUNITY_SHOCK_DROP_THRESHOLD, max(0.0, drop_pct))
 
     def _get_htf_candles(
         self,

@@ -47,6 +47,16 @@ TELEGRAM_SUPPRESSION_REPORT_EVERY: int = int(
     os.getenv("TELEGRAM_SUPPRESSION_REPORT_EVERY", "10")
 )
 TELEGRAM_CHART_DAYS: int = int(os.getenv("TELEGRAM_CHART_DAYS", "30"))
+TELEGRAM_ALLOWED_USERNAMES: tuple[str, ...] = tuple(
+    u.strip().lstrip("@").lower()
+    for u in os.getenv("TELEGRAM_ALLOWED_USERNAMES", "").replace(";", ",").split(",")
+    if u.strip()
+)
+TELEGRAM_ALLOWED_USER_IDS: tuple[int, ...] = tuple(
+    int(v.strip())
+    for v in os.getenv("TELEGRAM_ALLOWED_USER_IDS", "").replace(";", ",").split(",")
+    if v.strip().isdigit()
+)
 
 # ── Security ─────────────────────────────────────────────────────────────
 ENCRYPTION_KEY: str = os.getenv("ENCRYPTION_KEY", "")
@@ -128,6 +138,16 @@ MAX_SPREAD_PIPS: float = float(os.getenv("MAX_SPREAD_PIPS", "8.0"))
 DRAWDOWN_COOLDOWN_HOURS: int = int(os.getenv("DRAWDOWN_COOLDOWN_HOURS", "24"))
 MIN_LOT_SIZE: float = float(os.getenv("MIN_LOT_SIZE", "0.01"))
 MAX_LOT_SIZE: float = float(os.getenv("MAX_LOT_SIZE", "50.0"))
+# Position sizing mode (MT5-style modes):
+# - equity_pct        : risk percent of equity (default)
+# - balance_pct       : risk percent of balance
+# - fixed_lot         : always use POSITION_SIZE_FIXED_LOT
+# - fixed_risk_amount : fixed account-currency amount risked per trade
+POSITION_SIZE_MODE: str = os.getenv("POSITION_SIZE_MODE", "equity_pct").lower()
+POSITION_SIZE_FIXED_LOT: float = float(os.getenv("POSITION_SIZE_FIXED_LOT", "0.10"))
+POSITION_SIZE_FIXED_RISK_AMOUNT: float = float(
+    os.getenv("POSITION_SIZE_FIXED_RISK_AMOUNT", "100.0")
+)
 # Per-asset-class spread limits.
 # Forex/exotic/commodity use pip-based limits.
 # Crypto uses a percentage-of-price limit (0.1 = 0.1%) because dollar
@@ -176,6 +196,44 @@ MIN_CONF_VOLATILE: float = float(os.getenv("MIN_CONF_VOLATILE", "0.62"))
 MIN_CONF_UNKNOWN: float = float(os.getenv("MIN_CONF_UNKNOWN", "0.55"))
 MIN_CONF_CRYPTO_BONUS: float = float(os.getenv("MIN_CONF_CRYPTO_BONUS", "0.03"))
 MIN_CONF_EXOTIC_BONUS: float = float(os.getenv("MIN_CONF_EXOTIC_BONUS", "0.04"))
+
+# Time-phase confidence gate (optional).
+# Useful for strategies built around fixed-time candles (e.g. 15m):
+# early phase can require stricter confidence than late phase.
+TIME_PHASE_CONFIDENCE_ENABLED: bool = (
+    os.getenv("TIME_PHASE_CONFIDENCE_ENABLED", "false").lower() == "true"
+)
+TIME_PHASE_BUCKET_MINUTES: int = int(os.getenv("TIME_PHASE_BUCKET_MINUTES", "15"))
+TIME_PHASE_EARLY_MAX_MINUTE: int = int(os.getenv("TIME_PHASE_EARLY_MAX_MINUTE", "3"))
+TIME_PHASE_MID_MAX_MINUTE: int = int(os.getenv("TIME_PHASE_MID_MAX_MINUTE", "11"))
+TIME_PHASE_MIN_CONF_EARLY: float = float(os.getenv("TIME_PHASE_MIN_CONF_EARLY", "0.55"))
+TIME_PHASE_MIN_CONF_MID: float = float(os.getenv("TIME_PHASE_MIN_CONF_MID", "0.50"))
+TIME_PHASE_MIN_CONF_LATE: float = float(os.getenv("TIME_PHASE_MIN_CONF_LATE", "0.48"))
+
+# Protection layer (Freqtrade-style guards for overtrading / loss streaks).
+PROTECTIONS_ENABLED: bool = os.getenv("PROTECTIONS_ENABLED", "true").lower() == "true"
+# Per-symbol cooldown after a close before allowing re-entry.
+PROTECTION_COOLDOWN_MINUTES: int = int(os.getenv("PROTECTION_COOLDOWN_MINUTES", "10"))
+# Per-symbol stoploss guard: lock symbol when too many SL closes in lookback.
+PROTECTION_STOPLOSS_GUARD_LOOKBACK_MINUTES: int = int(
+    os.getenv("PROTECTION_STOPLOSS_GUARD_LOOKBACK_MINUTES", "180")
+)
+PROTECTION_STOPLOSS_GUARD_TRADE_LIMIT: int = int(
+    os.getenv("PROTECTION_STOPLOSS_GUARD_TRADE_LIMIT", "3")
+)
+PROTECTION_STOPLOSS_GUARD_LOCK_MINUTES: int = int(
+    os.getenv("PROTECTION_STOPLOSS_GUARD_LOCK_MINUTES", "60")
+)
+# Global recent-loss guard: lock all entries on clustered losses.
+PROTECTION_GLOBAL_LOSS_GUARD_LOOKBACK_MINUTES: int = int(
+    os.getenv("PROTECTION_GLOBAL_LOSS_GUARD_LOOKBACK_MINUTES", "120")
+)
+PROTECTION_GLOBAL_LOSS_GUARD_MAX_LOSSES: int = int(
+    os.getenv("PROTECTION_GLOBAL_LOSS_GUARD_MAX_LOSSES", "4")
+)
+PROTECTION_GLOBAL_LOSS_GUARD_LOCK_MINUTES: int = int(
+    os.getenv("PROTECTION_GLOBAL_LOSS_GUARD_LOCK_MINUTES", "45")
+)
 # ── Trade Execution ──────────────────────────────────────────────────────
 TP1_CLOSE_PERCENT: float = float(os.getenv("TP1_CLOSE_PERCENT", "0.40"))
 TP2_CLOSE_PERCENT: float = float(os.getenv("TP2_CLOSE_PERCENT", "0.30"))
@@ -221,6 +279,40 @@ BTC_PRIORITY_SCAN_COOLDOWN_SECONDS: int = int(
 )
 EVENT_DRIVEN_RESCAN_ON_NEW_CANDLE: bool = (
     os.getenv("EVENT_DRIVEN_RESCAN_ON_NEW_CANDLE", "true").lower() == "true"
+)
+
+# Opportunity lifecycle orchestration (inspired by short-horizon two-leg flows).
+OPPORTUNITY_PHASE_ENABLED: bool = (
+    os.getenv("OPPORTUNITY_PHASE_ENABLED", "true").lower() == "true"
+)
+OPPORTUNITY_ROLLOVER_SECONDS: int = int(
+    os.getenv("OPPORTUNITY_ROLLOVER_SECONDS", "900")
+)
+OPPORTUNITY_WATCH_WINDOW_SECONDS: int = int(
+    os.getenv("OPPORTUNITY_WATCH_WINDOW_SECONDS", "180")
+)
+OPPORTUNITY_HEDGE_TIMEOUT_SECONDS: int = int(
+    os.getenv("OPPORTUNITY_HEDGE_TIMEOUT_SECONDS", "300")
+)
+OPPORTUNITY_MIN_RECOVERY_CONFIDENCE: float = float(
+    os.getenv("OPPORTUNITY_MIN_RECOVERY_CONFIDENCE", "0.62")
+)
+OPPORTUNITY_FALLBACK_MAX_SPREAD_PCT: float = float(
+    os.getenv("OPPORTUNITY_FALLBACK_MAX_SPREAD_PCT", "0.003")
+)
+OPPORTUNITY_SHOCK_LOOKBACK_SECONDS: int = int(
+    os.getenv("OPPORTUNITY_SHOCK_LOOKBACK_SECONDS", "5")
+)
+OPPORTUNITY_SHOCK_DROP_THRESHOLD: float = float(
+    os.getenv("OPPORTUNITY_SHOCK_DROP_THRESHOLD", "0.0015")
+)
+OPPORTUNITY_REQUIRE_SHOCK_FOR_FAST_LANE: bool = (
+    os.getenv("OPPORTUNITY_REQUIRE_SHOCK_FOR_FAST_LANE", "true").lower() == "true"
+)
+# Simulation-first guard for newly introduced lifecycle logic.
+# In live mode, the opportunity lifecycle is disabled unless explicitly enabled.
+OPPORTUNITY_LIVE_ENABLED: bool = (
+    os.getenv("OPPORTUNITY_LIVE_ENABLED", "false").lower() == "true"
 )
 
 # MarketAgent higher-timeframe cache tuning by session profile.
@@ -323,6 +415,16 @@ SPIKE_PERCENT_THRESHOLD: float = float(os.getenv("SPIKE_PERCENT_THRESHOLD", "2.0
 # Backing off avoids hammering the terminal with repeated failed sends.
 EXEC_AUTOTRADING_ERROR_COOLDOWN_SECONDS: int = int(
     os.getenv("EXEC_AUTOTRADING_ERROR_COOLDOWN_SECONDS", "300")
+)
+# Pending-order confirmation watchdog:
+# after order_send succeeds, wait up to this timeout for the ticket to appear
+# in broker open positions; if it never appears, execution escalates and
+# attempts an emergency close to avoid phantom/open-state divergence.
+EXEC_PENDING_CONFIRM_TIMEOUT_SECONDS: float = float(
+    os.getenv("EXEC_PENDING_CONFIRM_TIMEOUT_SECONDS", "4.0")
+)
+EXEC_PENDING_CONFIRM_POLL_INTERVAL_SECONDS: float = float(
+    os.getenv("EXEC_PENDING_CONFIRM_POLL_INTERVAL_SECONDS", "0.25")
 )
 
 # ── Spread rejection cooldown ────────────────────────────────────────────

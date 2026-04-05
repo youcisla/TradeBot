@@ -58,6 +58,7 @@ from utils import terminal_ui as tui
 from utils.helpers import current_session, is_market_open, is_any_market_open, is_weekend, local_now
 from utils.orchestration_profiler import OrchestrationProfiler, OrchestrationTargets
 from utils.symbol_event_tracker import SymbolEventTracker
+from utils.opportunity_lifecycle import OpportunityLifecycleManager
 from utils.telegram_reports import build_pnl_curve_png
 from utils.tool_system import AutonomousToolSystem, result_to_text
 
@@ -219,6 +220,7 @@ def main() -> None:
         set_active_symbols=_set_active_symbols_local,
         base_symbols=_active_symbols[:],
     )
+    opportunity_lifecycle = OpportunityLifecycleManager()
 
     # ── Trading Council (algorithmic quality gate) ────────────────────────
     council: CouncilAgent | None = None
@@ -253,10 +255,11 @@ def main() -> None:
         balance = broker.get_balance()
         open_count = len(trade_manager.get_open_trades())
         return (
-            f"💰 Balance: {balance:.2f} | Equity: {equity:.2f}\n"
-            f"📊 Open trades: {open_count}\n"
-            f"⏱ Loop interval: {settings.LOOP_INTERVAL_SECONDS}s\n"
-            f"🎛 Demo: {settings.DEMO_MODE}"
+            "📡 Live Bot Status\n"
+            f"Balance: {balance:.2f} | Equity: {equity:.2f}\n"
+            f"Open trades: {open_count}\n"
+            f"Loop interval: {settings.LOOP_INTERVAL_SECONDS}s\n"
+            f"Demo mode: {settings.DEMO_MODE}"
         )
 
     def _graph_callback() -> tuple[str, bytes] | None:
@@ -264,7 +267,14 @@ def main() -> None:
 
     telegram_bot.register_callbacks(None, _status_callback, _graph_callback)
     telegram_bot.start_polling()
-    telegram_bot.send_message("🤖 Trading bot started (DEMO)", priority="high", force=True)
+    telegram_bot.send_message(
+        "🚀 Bot startup complete\n"
+        "Mode: DEMO\n"
+        f"Active symbols: {len(_active_symbols)}\n"
+        "Type /status or /graph any time.",
+        priority="high",
+        force=True,
+    )
 
     # ── 8. Signal handlers for graceful shutdown ────────────────────────
     def _sig_handler(signum: int, frame: object) -> None:
@@ -396,6 +406,7 @@ def main() -> None:
                 symbol_max_fails=_SYMBOL_MAX_FAILS,
                 symbol_disable_secs=_SYMBOL_DISABLE_SECS,
                 session_profile=_active_session,
+                opportunity_lifecycle=opportunity_lifecycle,
                 weekend_symbols=_weekend_symbols if _weekend else None,
                 scan_workers=scan_workers,
             )
@@ -740,6 +751,7 @@ def _run_iteration(
     symbol_max_fails: int,
     symbol_disable_secs: float,
     session_profile: str,
+    opportunity_lifecycle: OpportunityLifecycleManager,
     weekend_symbols: list[str] | None = None,
     scan_workers: int = 6,
 ) -> None:
@@ -814,6 +826,17 @@ def _run_iteration(
             log_agent.log_trade_to_csv(closed_trade)
             log_agent.log_trade(closed_trade.id, "CLOSED",
                                 f"{closed_trade.close_reason} PnL={closed_trade.pnl:.2f}")
+            opportunity_lifecycle.register_trade_close(closed_trade)
+
+    rolled_symbols = opportunity_lifecycle.on_iteration_start(
+        symbols=_active_symbols,
+        open_trades=trade_manager.get_open_trades(),
+    )
+    if rolled_symbols:
+        logger.info(
+            "Opportunity lifecycle rollover: %s",
+            ", ".join(rolled_symbols[:10]),
+        )
 
     metrics["loops"] = metrics.get("loops", 0) + 1
 
@@ -1142,6 +1165,20 @@ def _run_iteration(
         )
         ranked = ranked[:max_ranked]
 
+    ranked, lifecycle_rejects = opportunity_lifecycle.filter_ranked_signals(
+        ranked,
+        signal_contexts,
+    )
+    if lifecycle_rejects:
+        logger.info(
+            "Lifecycle gate rejected %d signal(s): %s",
+            len(lifecycle_rejects),
+            ", ".join(
+                f"{sig.symbol} {sig.direction} ({reason})"
+                for sig, reason in lifecycle_rejects[:6]
+            ),
+        )
+
     metrics["ranked_signals"] = metrics.get("ranked_signals", 0) + len(ranked)
     metrics["last_rank_latency_ms"] = (time.monotonic() - rank_phase_start) * 1000.0
     signal_ready_ts = time.monotonic()
@@ -1264,6 +1301,7 @@ def _run_iteration(
         trade = execution_agent.open_trade(signal_obj)
         if trade is not None:
             trade_manager.add_trade(trade)
+            opportunity_lifecycle.register_trade_open(signal_obj)
             log_agent.log_trade(trade.id, "OPENED",
                                 f"{trade.direction} {trade.symbol} {trade.lot_size} lots")
             log_agent.log_trade_to_csv(trade)

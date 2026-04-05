@@ -1,5 +1,7 @@
 """Tests for TradeManagerAgent."""
 
+from datetime import UTC, datetime, timedelta
+
 import pytest
 from unittest.mock import patch
 
@@ -104,6 +106,7 @@ class TestTradeManagerAgent:
         mgr = self._make_manager(broker, state, db)
 
         trade = make_trade(broker_ticket=999_999)
+        trade.open_time = datetime.now(UTC) - timedelta(seconds=120)
         state.save_trade(trade)
         mgr._open_trades = [trade]
 
@@ -131,6 +134,43 @@ class TestTradeManagerAgent:
         mgr.monitor()
         assert trade.tp1_hit is True
         assert trade.status == "PARTIAL"
+
+    @patch("utils.telegram_bot.send_message")
+    def test_tp1_handles_partial_fill_mismatch(self, mock_tg, broker, state, db):
+        mgr = self._make_manager(broker, state, db)
+
+        trade = make_trade(entry=1.1050, sl=1.1000, lots=0.10, broker_ticket=100_101)
+        state.save_trade(trade)
+
+        pos = PositionInfo(
+            ticket=trade.broker_ticket,
+            symbol="EURUSD",
+            direction="BUY",
+            lot_size=0.10,
+            entry_price=1.1050,
+            stop_loss=1.1000,
+            current_price=trade.take_profit_1 + 0.0001,
+            pnl=5.0,
+        )
+        broker._positions[trade.broker_ticket] = pos
+
+        def _partial_fill_close(ticket, symbol, lot_size, direction):
+            position = broker._positions.get(ticket)
+            if position is None:
+                return False
+            # Simulate a partial fill that closes only half of requested lots.
+            position.lot_size = round(max(0.0, position.lot_size - (lot_size / 2.0)), 2)
+            return True
+
+        broker.close_partial = _partial_fill_close
+        broker.get_open_positions = lambda: list(broker._positions.values())
+        mgr._open_trades = [trade]
+
+        mgr.monitor()
+
+        assert trade.tp1_hit is True
+        assert trade.status == "PARTIAL"
+        assert broker._positions[trade.broker_ticket].lot_size == 0.08
 
     @patch("utils.telegram_bot.send_message")
     def test_sl_hit_closes_trade(self, mock_tg, broker, state, db):

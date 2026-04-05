@@ -4,6 +4,7 @@ from datetime import UTC, datetime, timedelta
 from unittest.mock import patch
 
 from agents.execution_agent import ExecutionAgent
+from broker.connector import OrderResult
 from tests.conftest import make_signal, make_trade
 
 
@@ -122,3 +123,58 @@ class TestExecutionAgent:
         trade = agent.open_trade(signal)
         assert trade is None
         assert called["place_order"] == 0
+
+    @patch("utils.telegram_bot.send_message")
+    def test_pending_confirmation_timeout_returns_none_and_escalates(
+        self,
+        mock_tg,
+        broker,
+        state,
+    ):
+        agent = self._make_agent(broker, state)
+        signal = make_signal()
+
+        # Force watchdog timeout branch regardless of broker visibility timing.
+        agent._confirm_position_open = lambda ticket: False
+
+        closed = {"called": False}
+        original_close = broker.close_order
+
+        def _close(ticket, symbol, direction):
+            closed["called"] = True
+            return original_close(ticket, symbol, direction)
+
+        broker.close_order = _close
+
+        trade = agent.open_trade(signal)
+
+        assert trade is None
+        assert closed["called"] is True
+        assert mock_tg.called
+
+    @patch("utils.telegram_bot.send_message")
+    def test_pending_confirmation_timeout_when_no_position_exists(
+        self,
+        mock_tg,
+        broker,
+        state,
+    ):
+        agent = self._make_agent(broker, state)
+        signal = make_signal()
+
+        # Duplicate guard should pass, then watchdog times out.
+        broker.get_open_positions = lambda: []
+        broker.place_order = lambda **kwargs: OrderResult(
+            success=True,
+            order_id="MOCK-404",
+            broker_ticket=404,
+            filled_lots=0.10,
+            fill_price=signal.entry_price,
+            message="OK",
+        )
+        agent._confirm_position_open = lambda ticket: False
+
+        trade = agent.open_trade(signal)
+
+        assert trade is None
+        assert mock_tg.called

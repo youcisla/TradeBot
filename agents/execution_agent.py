@@ -9,12 +9,13 @@ symbol + direction + strategy as a final safety net.
 from __future__ import annotations
 
 import logging
+import time
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Callable
 
 from broker.connector import BrokerConnector
 from config import settings
-from config.symbols import commission_per_lot
+from config.symbols import commission_per_lot, contract_size
 from models.signal import Signal
 from models.trade import Trade
 from state.persistence import StatePersistence
@@ -173,9 +174,64 @@ class ExecutionAgent:
                 )
             return None
 
+        # Watchdog: order_send returned success, but we only proceed once the
+        # broker position is actually visible. If it never appears, escalate.
+        if not self._confirm_position_open(result.broker_ticket):
+            close_ok = self._broker.close_order(
+                result.broker_ticket,
+                signal.symbol,
+                signal.direction,
+            )
+            timeout_s = settings.EXEC_PENDING_CONFIRM_TIMEOUT_SECONDS
+            outcome = "OK" if close_ok else "FAILED"
+            logger.error(
+                "EXEC TIMEOUT [POSITION_NOT_VISIBLE]: ticket=%s %s %s (%.2fs) close=%s",
+                result.broker_ticket,
+                signal.symbol,
+                signal.direction,
+                timeout_s,
+                outcome,
+            )
+            self._emit(
+                "error",
+                (
+                    "Order confirmation timeout: broker ticket not visible in open "
+                    f"positions within {timeout_s:.2f}s"
+                ),
+                {
+                    "ticket": result.broker_ticket,
+                    "symbol": signal.symbol,
+                    "direction": signal.direction,
+                    "timeout_seconds": timeout_s,
+                    "emergency_close": outcome,
+                },
+            )
+            telegram_bot.send_message(
+                "⚠️ Order confirmation timeout: "
+                f"{signal.symbol} {signal.direction} ticket={result.broker_ticket} "
+                f"not visible after {timeout_s:.2f}s. "
+                f"Emergency close attempt: {outcome}."
+            )
+            return None
+
         # Estimate round-trip commission for display/PnL tracking.
         # Rate varies by asset class (crypto/commodity/exotic may differ from forex).
         commission = round(lot_size * commission_per_lot(signal.symbol), 2)
+
+        target_price = (
+            signal.take_profit_4
+            or signal.take_profit_3
+            or signal.take_profit_2
+            or signal.take_profit_1
+        )
+        stop_distance = abs(signal.entry_price - signal.stop_loss)
+        target_distance = abs(target_price - signal.entry_price) if target_price > 0 else 0.0
+        expected_edge_pct = (target_distance / stop_distance) if stop_distance > 0 else 0.0
+        expected_pnl = 0.0
+        if target_distance > 0:
+            expected_pnl = (
+                target_distance * contract_size(signal.symbol) * lot_size
+            ) - commission
 
         snap = signal.entry_snapshot
         trade = Trade(
@@ -185,6 +241,8 @@ class ExecutionAgent:
             entry_price=result.fill_price,
             lot_size=lot_size,
             commission=commission,
+            expected_edge_pct=max(signal.expected_edge_pct, expected_edge_pct),
+            expected_pnl=(signal.expected_pnl if signal.expected_pnl != 0.0 else expected_pnl),
             stop_loss=signal.stop_loss,
             take_profit_1=signal.take_profit_1 or 0.0,
             take_profit_2=signal.take_profit_2 or 0.0,
@@ -235,3 +293,22 @@ class ExecutionAgent:
     def _is_autotrading_disabled(message: str) -> bool:
         msg = message.lower()
         return "10017" in msg or "10027" in msg or "autotrading disabled" in msg
+
+    def _confirm_position_open(self, ticket: int) -> bool:
+        """Wait briefly for broker position visibility after order placement."""
+        timeout_s = max(0.0, settings.EXEC_PENDING_CONFIRM_TIMEOUT_SECONDS)
+        poll_s = max(0.05, settings.EXEC_PENDING_CONFIRM_POLL_INTERVAL_SECONDS)
+        deadline = time.monotonic() + timeout_s
+
+        while True:
+            try:
+                positions = self._broker.get_open_positions()
+                if any(p.ticket == ticket for p in positions):
+                    return True
+            except Exception:
+                logger.exception("Failed while confirming broker position visibility")
+
+            if time.monotonic() >= deadline:
+                return False
+
+            time.sleep(poll_s)

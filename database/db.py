@@ -56,6 +56,8 @@ CREATE TABLE IF NOT EXISTS trades (
     close_time          TIMESTAMP,
     pnl                 NUMERIC DEFAULT 0.0,
     commission          NUMERIC DEFAULT 0.0,
+    expected_edge_pct   NUMERIC DEFAULT 0.0,
+    expected_pnl        NUMERIC DEFAULT 0.0,
     close_reason        TEXT DEFAULT '',
     broker_ticket       BIGINT DEFAULT 0,
     spread_at_entry     NUMERIC DEFAULT 0.0,
@@ -250,6 +252,20 @@ BEGIN
 END $$;
 """
 
+_ALTER_TRADES_EXPECTANCY = """
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                   WHERE table_name='trades' AND column_name='expected_edge_pct') THEN
+        ALTER TABLE trades ADD COLUMN expected_edge_pct NUMERIC DEFAULT 0.0;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                   WHERE table_name='trades' AND column_name='expected_pnl') THEN
+        ALTER TABLE trades ADD COLUMN expected_pnl NUMERIC DEFAULT 0.0;
+    END IF;
+END $$;
+"""
+
 _ALTER_BOT_STATUS_BROKER = """
 DO $$
 BEGIN
@@ -400,6 +416,7 @@ class Database:
                     cur.execute(_ALTER_BOT_STATUS_BROKER)
                     cur.execute(_ALTER_TRADES_COMMISSION)
                     cur.execute(_ALTER_TRADES_TP4)
+                    cur.execute(_ALTER_TRADES_EXPECTANCY)
                     cur.execute(_ALTER_TRADES_LIVE)
                     cur.execute(_ALTER_STRATEGY_CONFIDENCE_STREAK)
                     cur.execute(_CREATE_INDEXES)
@@ -457,13 +474,15 @@ class Database:
                             take_profit_4, tp1_lots, tp2_lots, tp3_lots, tp4_lots,
                             tp1_hit, tp2_hit, tp3_hit, tp4_hit, structural_be, status,
                             open_time, close_time, pnl, current_price, commission,
+                            expected_edge_pct, expected_pnl,
                             close_reason, broker_ticket, spread_at_entry,
                             snap_rsi_aligned, snap_trend_aligned,
                             snap_volume_sufficient, snap_near_news_event,
                             snap_market_condition, snap_session, snap_day_of_week
                         ) VALUES (
                             %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,
-                            %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s
+                            %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,
+                            %s,%s,%s
                         )
                         ON CONFLICT (id) DO UPDATE SET
                             stop_loss=EXCLUDED.stop_loss,
@@ -473,6 +492,8 @@ class Database:
                             close_time=EXCLUDED.close_time, pnl=EXCLUDED.pnl,
                             current_price=EXCLUDED.current_price,
                             commission=EXCLUDED.commission,
+                            expected_edge_pct=EXCLUDED.expected_edge_pct,
+                            expected_pnl=EXCLUDED.expected_pnl,
                             close_reason=EXCLUDED.close_reason,
                             lot_size=EXCLUDED.lot_size,
                             spread_at_entry=EXCLUDED.spread_at_entry
@@ -484,7 +505,9 @@ class Database:
                             t.tp1_lots, t.tp2_lots, t.tp3_lots, t.tp4_lots,
                             t.tp1_hit, t.tp2_hit, t.tp3_hit, t.tp4_hit, t.structural_be,
                             t.status, t.open_time, t.close_time,
-                            t.pnl, t.current_price, t.commission, t.close_reason,
+                            t.pnl, t.current_price, t.commission,
+                            t.expected_edge_pct, t.expected_pnl,
+                            t.close_reason,
                             t.broker_ticket, t.spread_at_entry,
                             t.snap_rsi_aligned, t.snap_trend_aligned,
                             t.snap_volume_sufficient, t.snap_near_news_event,
@@ -579,6 +602,8 @@ class Database:
             close_time=close_time,
             pnl=float(row["pnl"] or 0),
             commission=float(row["commission"] or 0),
+            expected_edge_pct=float(row.get("expected_edge_pct") or 0),
+            expected_pnl=float(row.get("expected_pnl") or 0),
             close_reason=row["close_reason"] or "",
             broker_ticket=int(row["broker_ticket"] or 0),
             spread_at_entry=float(row["spread_at_entry"] or 0),

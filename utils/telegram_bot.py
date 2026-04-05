@@ -38,6 +38,24 @@ _last_sent_ts_by_key: dict[str, float] = {}
 _recent_sent_ts: deque[float] = deque()
 _suppressed_count: int = 0
 
+_PRIORITY_MARKER = {
+    "critical": "🔴",
+    "high": "🟠",
+    "normal": "🔵",
+    "low": "⚪",
+}
+
+_HELP_TEXT = (
+    "🤖 Command Center\n"
+    "┈┈┈┈┈┈┈┈┈┈┈┈\n"
+    "• /status — account + bot status\n"
+    "• /graph — performance chart\n"
+    "• /pause — block new entries\n"
+    "• /resume — resume entries\n"
+    "• /kill — close all + shutdown\n"
+    "• /help — show this command list"
+)
+
 
 def is_paused() -> bool:
     return _pause_flag.is_set()
@@ -100,6 +118,64 @@ def _should_suppress_message(message_key: str, *, priority: str, force: bool) ->
         return False
 
 
+def _semantic_bullet(line: str) -> str:
+    text = line.lower()
+    if any(token in text for token in ("error", "failed", "reject", "sl hit", "halted")):
+        return "❌"
+    if any(token in text for token in ("tp4", "runner")):
+        return "🚀"
+    if any(token in text for token in ("tp3", "target 3")):
+        return "🎯"
+    if any(token in text for token in ("tp2", "tp1", "breakeven", "trailing")):
+        return "✅"
+    if any(token in text for token in ("paused", "resume", "kill", "shutdown")):
+        return "🛡️"
+    if any(token in text for token in ("balance", "equity", "pnl", "win rate", "trades")):
+        return "📊"
+    if any(token in text for token in ("spread", "risk", "drawdown", "confidence")):
+        return "⚠️"
+    return "•"
+
+
+def _split_line_chunks(line: str) -> list[str]:
+    if " | " not in line:
+        return [line]
+    return [chunk.strip() for chunk in line.split(" | ") if chunk.strip()]
+
+
+def _normalize_text(text: str) -> list[str]:
+    clean = text.replace("\r\n", "\n").replace("**", "").strip()
+    normalized: list[str] = []
+    for raw_line in clean.split("\n"):
+        line = raw_line.strip()
+        if not line:
+            continue
+        normalized.extend(_split_line_chunks(line))
+    return normalized
+
+
+def _style_telegram_text(text: str, priority: str) -> str:
+    lines = _normalize_text(text)
+    if not lines:
+        return text
+
+    # Convert one-liners with a title/value shape into a compact 2-line card.
+    if len(lines) == 1 and ": " in lines[0]:
+        head, tail = lines[0].split(": ", maxsplit=1)
+        if head and tail:
+            lines = [head, tail]
+
+    marker = _PRIORITY_MARKER.get(priority, _PRIORITY_MARKER["normal"])
+    if len(lines) == 1:
+        return f"{marker} {lines[0]}"
+
+    card_lines = [f"{marker} {lines[0]}", "┈┈┈┈┈┈┈┈┈┈┈┈"]
+    for line in lines[1:]:
+        bullet = _semantic_bullet(line)
+        card_lines.append(f"{bullet} {line}")
+    return "\n".join(card_lines)
+
+
 def send_message(
     text: str,
     *,
@@ -121,8 +197,10 @@ def send_message(
     if _should_suppress_message(key, priority=priority, force=force):
         return False
 
+    styled_text = _style_telegram_text(text, priority)
+
     url = f"https://api.telegram.org/bot{token}/sendMessage"
-    payload = json.dumps({"chat_id": chat_id, "text": text[:4096]}).encode()
+    payload = json.dumps({"chat_id": chat_id, "text": styled_text[:4096]}).encode()
     req = Request(url, data=payload, headers={"Content-Type": "application/json"}, method="POST")
     try:
         with urlopen(req, timeout=10):
@@ -154,16 +232,18 @@ def send_photo(
     if _should_suppress_message(key, priority=priority, force=force):
         return False
 
+    styled_caption = _style_telegram_text(caption, priority) if caption else ""
+
     boundary = f"----WebKitFormBoundary{uuid.uuid4().hex}"
     body = b""
     body += f"--{boundary}\r\n".encode()
     body += b'Content-Disposition: form-data; name="chat_id"\r\n\r\n'
     body += f"{chat_id}\r\n".encode()
 
-    if caption:
+    if styled_caption:
         body += f"--{boundary}\r\n".encode()
         body += b'Content-Disposition: form-data; name="caption"\r\n\r\n'
-        body += caption[:1024].encode("utf-8", errors="ignore") + b"\r\n"
+        body += styled_caption[:1024].encode("utf-8", errors="ignore") + b"\r\n"
 
     body += f"--{boundary}\r\n".encode()
     body += (
@@ -207,7 +287,10 @@ def _maybe_emit_suppression_notice() -> None:
             {
                 "chat_id": chat_id,
                 "text": (
-                    f"🔕 Noise filter active: suppressed {suppressed_now} repetitive/low-priority alerts."
+                    "🔕 Noise filter summary\n"
+                    "┈┈┈┈┈┈┈┈┈┈┈┈\n"
+                    f"📦 Suppressed alerts: {suppressed_now}\n"
+                    "✅ Repetitive low-priority spam was auto-muted."
                 ),
             }
         ).encode()
@@ -245,7 +328,13 @@ def _poll_updates() -> None:
                 from_chat = str(msg.get("chat", {}).get("id", ""))
                 if from_chat != chat_id:
                     continue
-                _handle_command(text)
+                from_user_id = int(msg.get("from", {}).get("id", 0) or 0)
+                from_username = str(msg.get("from", {}).get("username", "") or "")
+                _handle_command(
+                    text,
+                    from_user_id=from_user_id,
+                    from_username=from_username,
+                )
         except URLError:
             time.sleep(5)
         except Exception:
@@ -253,8 +342,44 @@ def _poll_updates() -> None:
             time.sleep(5)
 
 
-def _handle_command(text: str) -> None:
+def _is_authorized_user(from_user_id: int, from_username: str) -> bool:
+    allowed_user_ids = settings.TELEGRAM_ALLOWED_USER_IDS
+    allowed_usernames = settings.TELEGRAM_ALLOWED_USERNAMES
+
+    # If no allowlists are configured, keep current behavior (chat-id only).
+    if not allowed_user_ids and not allowed_usernames:
+        return True
+
+    if allowed_user_ids and from_user_id in allowed_user_ids:
+        return True
+
+    if allowed_usernames and from_username:
+        username = from_username.strip().lstrip("@").lower()
+        if username in allowed_usernames:
+            return True
+
+    return False
+
+
+def _handle_command(
+    text: str,
+    *,
+    from_user_id: int = 0,
+    from_username: str = "",
+) -> None:
     cmd = text.lower().split()[0] if text else ""
+    if not cmd:
+        return
+
+    if not _is_authorized_user(from_user_id, from_username):
+        logger.warning(
+            "Blocked unauthorized Telegram command '%s' from user_id=%s username='%s'",
+            cmd,
+            from_user_id,
+            from_username,
+        )
+        return
+
     if cmd == "/kill":
         send_message(
             "🛑 KILL received — will close all positions and stop bot…",
@@ -296,6 +421,8 @@ def _handle_command(text: str) -> None:
         _pause_flag.clear()
         send_message("▶️ Bot RESUMED — normal operation.", priority="high", force=True)
         logger.info("Bot resumed via Telegram")
+    elif cmd in ("/help", "/start"):
+        send_message(_HELP_TEXT, priority="high", force=True)
 
 
 def start_polling() -> threading.Thread:

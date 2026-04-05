@@ -63,8 +63,9 @@ def build_pnl_curve_png(db: Database, days: int | None = None) -> tuple[str, byt
     trades_count = wins + losses
     win_rate = (wins / trades_count) if trades_count else 0.0
     caption = (
-        f"📈 Performance ({lookback_days}d)\n"
+        f"📈 Performance Snapshot ({lookback_days}d)\n"
         f"Trades: {trades_count} | Wins: {wins} | Losses: {losses}\n"
-        f"Win rate: {win_rate:.0%} | Net PnL: {cumulative:.2f}"
+        f"Win rate: {win_rate:.0%}\n"
+        f"Net PnL: {cumulative:.2f}"
     )
     return caption, buf.getvalue()

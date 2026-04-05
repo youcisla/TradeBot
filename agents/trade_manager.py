@@ -158,6 +158,14 @@ class TradeManagerAgent:
 
             pos = pos_map.get(trade.broker_ticket)
             if pos is None:
+                # Fresh orders may take a short time to appear in the broker's
+                # open-position feed. Keep a small grace window before treating
+                # the absence as an external close.
+                open_time_utc = self._ensure_utc(trade.open_time)
+                age_seconds = (datetime.now(UTC) - open_time_utc).total_seconds()
+                if age_seconds < settings.EXEC_PENDING_CONFIRM_TIMEOUT_SECONDS:
+                    continue
+
                 # Position no longer open — determine why.
                 # If the bot already processed the TP/SL handler this iteration
                 # (tp*_hit flags updated), the trade will be marked CLOSED by
@@ -245,17 +253,69 @@ class TradeManagerAgent:
         except Exception:
             return True  # assume still open on error — safer
 
+    def _reconcile_partial_close(
+        self,
+        ticket: int,
+        before_lots: float,
+        expected_closed_lots: float,
+    ) -> tuple[bool, float]:
+        """Verify how many lots were actually closed after a partial-close attempt."""
+        try:
+            positions = self._broker.get_open_positions()
+            pos = next((p for p in positions if p.ticket == ticket), None)
+        except Exception:
+            logger.exception("Failed to reconcile partial close for ticket %s", ticket)
+            return False, 0.0
+
+        if pos is None:
+            # Position fully closed at broker side.
+            return True, round(max(0.0, before_lots), 2)
+
+        actual_closed = round(max(0.0, before_lots - pos.lot_size), 2)
+        if actual_closed <= 0:
+            return False, 0.0
+
+        if actual_closed + 1e-9 < expected_closed_lots:
+            logger.warning(
+                "Partial-fill reconciliation: ticket %s closed %.2f < requested %.2f",
+                ticket,
+                actual_closed,
+                expected_closed_lots,
+            )
+
+        return True, actual_closed
+
     def _handle_tp1(self, trade: Trade, pos_map: dict) -> None:
+        before_lots = pos_map.get(trade.broker_ticket).lot_size if trade.broker_ticket in pos_map else trade.remaining_lots()
         ok = self._broker.close_partial(
             trade.broker_ticket, trade.symbol, trade.tp1_lots, trade.direction,
         )
-        if not ok:
+        reconciled, actual_closed = self._reconcile_partial_close(
+            trade.broker_ticket,
+            before_lots,
+            trade.tp1_lots,
+        )
+        if not ok and not reconciled:
             # Broker may have already closed the position at the TP level itself.
             # If it's gone, treat that as a successful TP hit rather than EXTERNAL.
             if self._position_still_open(trade.broker_ticket, pos_map):
                 logger.error("Failed to close TP1 partial for trade %s", trade.id)
                 return
             logger.info("TP1 closed by broker for trade %s — treating as TP hit", trade.id)
+        if reconciled and actual_closed + 1e-9 < trade.tp1_lots:
+            self._emit(
+                "warn",
+                (
+                    f"TP1 partial fill mismatch on {trade.symbol}: requested {trade.tp1_lots:.2f}, "
+                    f"closed {actual_closed:.2f}"
+                ),
+                {
+                    "trade_id": trade.id,
+                    "ticket": trade.broker_ticket,
+                    "requested": trade.tp1_lots,
+                    "closed": actual_closed,
+                },
+            )
         trade.tp1_hit = True
         trade.status = "PARTIAL"
 
@@ -284,14 +344,34 @@ class TradeManagerAgent:
         )
 
     def _handle_tp2(self, trade: Trade, pos_map: dict) -> None:
+        before_lots = pos_map.get(trade.broker_ticket).lot_size if trade.broker_ticket in pos_map else trade.remaining_lots()
         ok = self._broker.close_partial(
             trade.broker_ticket, trade.symbol, trade.tp2_lots, trade.direction,
         )
-        if not ok:
+        reconciled, actual_closed = self._reconcile_partial_close(
+            trade.broker_ticket,
+            before_lots,
+            trade.tp2_lots,
+        )
+        if not ok and not reconciled:
             if self._position_still_open(trade.broker_ticket, pos_map):
                 logger.error("Failed to close TP2 partial for trade %s", trade.id)
                 return
             logger.info("TP2 closed by broker for trade %s — treating as TP hit", trade.id)
+        if reconciled and actual_closed + 1e-9 < trade.tp2_lots:
+            self._emit(
+                "warn",
+                (
+                    f"TP2 partial fill mismatch on {trade.symbol}: requested {trade.tp2_lots:.2f}, "
+                    f"closed {actual_closed:.2f}"
+                ),
+                {
+                    "trade_id": trade.id,
+                    "ticket": trade.broker_ticket,
+                    "requested": trade.tp2_lots,
+                    "closed": actual_closed,
+                },
+            )
         trade.tp2_hit = True
         self._state.save_trade(trade)
         self._emit("info",
@@ -307,27 +387,52 @@ class TradeManagerAgent:
         # When TP4 (runner) is active, TP3 is a partial close, not the final exit.
         has_runner = trade.take_profit_4 > 0 and trade.tp4_lots > 0
         if has_runner:
+            before_lots = pos_map.get(trade.broker_ticket).lot_size if trade.broker_ticket in pos_map else trade.remaining_lots()
             ok = self._broker.close_partial(
                 trade.broker_ticket, trade.symbol, trade.tp3_lots, trade.direction,
             )
+            reconciled, actual_closed = self._reconcile_partial_close(
+                trade.broker_ticket,
+                before_lots,
+                trade.tp3_lots,
+            )
         else:
             ok = self._broker.close_order(trade.broker_ticket, trade.symbol, trade.direction)
-        if not ok and self._position_still_open(trade.broker_ticket, pos_map):
+            reconciled = True
+            actual_closed = trade.tp3_lots
+        if not ok and not reconciled and self._position_still_open(trade.broker_ticket, pos_map):
             logger.error("Failed to close TP3 for trade %s — position still open", trade.id)
             return
+        if has_runner and reconciled and actual_closed + 1e-9 < trade.tp3_lots:
+            self._emit(
+                "warn",
+                (
+                    f"TP3 partial fill mismatch on {trade.symbol}: requested {trade.tp3_lots:.2f}, "
+                    f"closed {actual_closed:.2f}"
+                ),
+                {
+                    "trade_id": trade.id,
+                    "ticket": trade.broker_ticket,
+                    "requested": trade.tp3_lots,
+                    "closed": actual_closed,
+                },
+            )
         trade.tp3_hit = True
         if not has_runner:
             trade.status = "CLOSED"
             trade.close_time = datetime.now(UTC)
             trade.close_reason = "TP3"
         true_pnl = round(trade.pnl - trade.commission, 2)
+        expected_gap = round(true_pnl - float(trade.expected_pnl or 0.0), 2)
         self._state.save_trade(trade)
         self._emit("info",
                    f"TP3 hit on {trade.symbol}! "
                    + (f"Closed {trade.tp3_lots:.2f} lots — runner active to TP4={trade.take_profit_4:.5f}"
                       if has_runner else
-                      f"Trade fully closed (gross {trade.pnl:.2f} − commission {trade.commission:.2f} = {true_pnl:.2f}) — perfect exit."),
+                      f"Trade fully closed (gross {trade.pnl:.2f} − commission {trade.commission:.2f} = {true_pnl:.2f}; "
+                      f"expected {trade.expected_pnl:.2f}, Δ {expected_gap:+.2f}) — perfect exit."),
                    {"trade_id": trade.id, "tp": 3, "pnl": trade.pnl, "true_pnl": true_pnl,
+                    "expected_pnl": trade.expected_pnl, "expected_gap": expected_gap,
                     "runner": has_runner})
         logger.info("TP3 hit: trade %s — %s (true PnL so far %.2f)",
                     trade.id, "runner continues" if has_runner else "fully closed", true_pnl)
@@ -335,7 +440,8 @@ class TradeManagerAgent:
             f"🎯 TP3 hit: {trade.symbol} — "
             + (f"closed {trade.tp3_lots} lots, runner to TP4={trade.take_profit_4:.5f}"
                if has_runner else
-               f"fully closed gross {trade.pnl:.2f} − commission {trade.commission:.2f} = **{true_pnl:.2f}**")
+               f"fully closed gross {trade.pnl:.2f} − commission {trade.commission:.2f} = {true_pnl:.2f} | "
+               f"expected {trade.expected_pnl:.2f} | Δ {expected_gap:+.2f}")
         )
 
     def _handle_tp4(self, trade: Trade, pos_map: dict) -> None:
@@ -349,15 +455,19 @@ class TradeManagerAgent:
         trade.close_time = datetime.now(UTC)
         trade.close_reason = "TP4"
         true_pnl = round(trade.pnl - trade.commission, 2)
+        expected_gap = round(true_pnl - float(trade.expected_pnl or 0.0), 2)
         self._state.save_trade(trade)
         self._emit("info",
                    f"TP4 (runner) hit on {trade.symbol}! Trade fully closed at HTF liquidity "
-                   f"(gross {trade.pnl:.2f} − commission {trade.commission:.2f} = {true_pnl:.2f})",
-                   {"trade_id": trade.id, "tp": 4, "pnl": trade.pnl, "true_pnl": true_pnl})
+                   f"(gross {trade.pnl:.2f} − commission {trade.commission:.2f} = {true_pnl:.2f}; "
+                   f"expected {trade.expected_pnl:.2f}, Δ {expected_gap:+.2f})",
+                   {"trade_id": trade.id, "tp": 4, "pnl": trade.pnl, "true_pnl": true_pnl,
+                    "expected_pnl": trade.expected_pnl, "expected_gap": expected_gap})
         logger.info("TP4 runner hit: trade %s — fully closed (true PnL %.2f)", trade.id, true_pnl)
         telegram_bot.send_message(
             f"🚀 TP4 runner hit: {trade.symbol} — fully closed at HTF liquidity "
-            f"gross {trade.pnl:.2f} − commission {trade.commission:.2f} = **{true_pnl:.2f}**"
+            f"gross {trade.pnl:.2f} − commission {trade.commission:.2f} = {true_pnl:.2f} | "
+            f"expected {trade.expected_pnl:.2f} | Δ {expected_gap:+.2f}"
         )
 
     def _handle_sl(self, trade: Trade, pos_map: dict) -> None:
@@ -369,17 +479,21 @@ class TradeManagerAgent:
         trade.close_time = datetime.now(UTC)
         trade.close_reason = "SL"
         true_pnl = round(trade.pnl - trade.commission, 2)
+        expected_gap = round(true_pnl - float(trade.expected_pnl or 0.0), 2)
         self._state.save_trade(trade)
         self._emit("warn",
                    f"SL hit on {trade.symbol} — closed at loss "
-                   f"(gross {trade.pnl:.2f} − commission {trade.commission:.2f} = {true_pnl:.2f}).",
+                   f"(gross {trade.pnl:.2f} − commission {trade.commission:.2f} = {true_pnl:.2f}; "
+                   f"expected {trade.expected_pnl:.2f}, Δ {expected_gap:+.2f}).",
                    {"trade_id": trade.id, "pnl": trade.pnl, "commission": trade.commission,
-                    "true_pnl": true_pnl})
+                    "true_pnl": true_pnl, "expected_pnl": trade.expected_pnl,
+                    "expected_gap": expected_gap})
         logger.info("SL hit: trade %s — closed (gross PnL %.2f, commission %.2f, true %.2f)",
                     trade.id, trade.pnl, trade.commission, true_pnl)
         telegram_bot.send_message(
             f"🛑 SL hit: {trade.symbol} — "
-            f"gross {trade.pnl:.2f} − commission {trade.commission:.2f} = **{true_pnl:.2f}**"
+            f"gross {trade.pnl:.2f} − commission {trade.commission:.2f} = {true_pnl:.2f} | "
+            f"expected {trade.expected_pnl:.2f} | Δ {expected_gap:+.2f}"
         )
 
     def _handle_time_limit(self, trade: Trade, pos_map: dict, hours_open: float) -> None:
@@ -392,18 +506,22 @@ class TradeManagerAgent:
         trade.close_time = datetime.now(UTC)
         trade.close_reason = "TIME_LIMIT"
         true_pnl = round(trade.pnl - trade.commission, 2)
+        expected_gap = round(true_pnl - float(trade.expected_pnl or 0.0), 2)
         self._state.save_trade(trade)
         self._emit("warn",
                    f"Time limit: {trade.symbol} closed after {hours_open:.1f}h "
                    f"(max={settings.MAX_HOURS_IN_TRADE}h) "
-                   f"(gross {trade.pnl:.2f} − commission {trade.commission:.2f} = {true_pnl:.2f})",
+                   f"(gross {trade.pnl:.2f} − commission {trade.commission:.2f} = {true_pnl:.2f}; "
+                   f"expected {trade.expected_pnl:.2f}, Δ {expected_gap:+.2f})",
                    {"trade_id": trade.id, "hours_open": round(hours_open, 1),
-                    "pnl": trade.pnl, "true_pnl": true_pnl})
+                    "pnl": trade.pnl, "true_pnl": true_pnl,
+                    "expected_pnl": trade.expected_pnl, "expected_gap": expected_gap})
         logger.warning("TIME_LIMIT: trade %s force-closed after %.1fh (true PnL %.2f)",
                        trade.id, hours_open, true_pnl)
         telegram_bot.send_message(
             f"⏰ Time limit: {trade.symbol} closed after {hours_open:.1f}h — "
-            f"gross {trade.pnl:.2f} − commission {trade.commission:.2f} = **{true_pnl:.2f}**"
+            f"gross {trade.pnl:.2f} − commission {trade.commission:.2f} = {true_pnl:.2f} | "
+            f"expected {trade.expected_pnl:.2f} | Δ {expected_gap:+.2f}"
         )
 
     # ── emergency close ──────────────────────────────────────────────────
