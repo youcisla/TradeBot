@@ -1,13 +1,13 @@
 ---
 name: coding-standards
-description: "NeuralFX frontend code style rules — inline styles only, no Tailwind on new files, no className on new JSX."
+description: "PulseTrade frontend code style rules — inline styles only, no Tailwind on new files, no className on new JSX."
 category: project
 risk: none
 source: project
 date_added: "2026-03-28"
 ---
 
-# NeuralFX Coding Standards
+# PulseTrade Coding Standards
 
 ## CRITICAL FRONTEND RULES (non-negotiable)
 

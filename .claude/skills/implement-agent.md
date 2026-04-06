@@ -1,6 +1,6 @@
 ---
 name: implement-agent
-description: "How to build or modify any agent in the NeuralFX pipeline — patterns, DB integration, logging, event emission."
+description: "How to build or modify any agent in the PulseTrade pipeline — patterns, DB integration, logging, event emission."
 category: project
 risk: none
 source: project

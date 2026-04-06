@@ -1,16 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useAppShell } from "@/components/AppShell";
 
-//  Types 
-
-interface KpiData {
-  equity?: number;
-  balance?: number;
-  daily_pnl?: number;
-  monthly_pnl?: number;
-  open_trades?: number;
-}
+//  Types
 
 interface Trade {
   id: number;
@@ -53,7 +46,7 @@ function sparkline(values: number[], w: number, h: number): string {
 //  Page 
 
 export default function PerformancePage() {
-  const [kpis,    setKpis]    = useState<KpiData>({});
+  const { status: shellStatus } = useAppShell();
   const [trades,  setTrades]  = useState<Trade[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -61,14 +54,9 @@ export default function PerformancePage() {
     const load = async () => {
       setLoading(true);
       try {
-        const [kRes, tRes] = await Promise.all([
-          fetch("/api/status"),
-          fetch("/api/trades?all=true&limit=500"),
-        ]);
-        const kd = await kRes.json();
-        setKpis(kd ?? {});
-        const td = await tRes.json();
-        setTrades(Array.isArray(td) ? td : (td.trades ?? []));
+        const r = await fetch("/api/trades?all=true&limit=500");
+        const d = await r.json();
+        setTrades(Array.isArray(d) ? d : (d.trades ?? []));
       } catch { /* silent */ }
       finally { setLoading(false); }
     };
@@ -141,12 +129,12 @@ export default function PerformancePage() {
     return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0])).slice(-6);
   }, [closed]);
 
-  const MONO = '"SF Mono", SFMono-Regular, ui-monospace, monospace';
+  const MONO = "var(--font-mono-stack)";
   const card: React.CSSProperties = {
-    background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.09)", borderRadius: 12,
+    background: "var(--card-bg)", border: "1px solid var(--card-border)", borderRadius: "var(--card-radius)",
   };
   const sectionLabel: React.CSSProperties = {
-    fontSize: 11, fontWeight: 600, color: "rgba(232,234,237,0.40)",
+    fontSize: 11, fontWeight: 600, color: "var(--section-label)",
     letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 14,
   };
 
@@ -157,44 +145,58 @@ export default function PerformancePage() {
   return (
     <>
       {/*  Top KPI strip  */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 12, marginBottom: 20 }}>
-        {[
-          { label: "Net P&L",        value: fmtUsd(totalPnl),          color: pnlColor(totalPnl) },
-          { label: "Win Rate",       value: winRate.toFixed(1) + "%",   color: winRate >= 50 ? "#34C759" : "#FF9F0A" },
-          { label: "Risk / Reward",  value: rr.toFixed(2) + "×",       color: rr >= 1.5 ? "#34C759" : rr >= 1 ? "#FF9F0A" : "#FF3B30" },
-          { label: "Profit Factor",  value: profitFactor.toFixed(2),   color: profitFactor >= 1.5 ? "#34C759" : profitFactor >= 1 ? "#FF9F0A" : "#FF3B30" },
-        ].map(({ label, value, color }) => (
-          <div key={label} style={{ ...card, padding: "18px 20px" }}>
-            <div style={{ fontSize: 11, fontWeight: 600, color: "rgba(232,234,237,0.40)", letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 6 }}>{label}</div>
-            <div style={{ fontSize: 24, fontWeight: 700, color, fontFamily: MONO, letterSpacing: -0.5 }}>
-              {loading ? "—" : value}
-            </div>
-          </div>
-        ))}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 12, marginBottom: 20 }}>
+        {loading
+          ? [0,1,2,3].map(i => (
+              <div key={i} className="skel-row" style={{ ...card, padding: "18px 20px" }}>
+                <div className="ios-skeleton" style={{ height: 11, width: "55%", borderRadius: 4, marginBottom: 10 }} />
+                <div className="ios-skeleton" style={{ height: 28, width: "75%", borderRadius: 6 }} />
+              </div>
+            ))
+          : [
+              { label: "Net P&L",        value: fmtUsd(totalPnl),          color: pnlColor(totalPnl) },
+              { label: "Win Rate",       value: winRate.toFixed(1) + "%",   color: winRate >= 50 ? "#34C759" : "#FF9F0A" },
+              { label: "Risk / Reward",  value: rr.toFixed(2) + "×",       color: rr >= 1.5 ? "#34C759" : rr >= 1 ? "#FF9F0A" : "#FF3B30" },
+              { label: "Profit Factor",  value: profitFactor.toFixed(2),   color: profitFactor >= 1.5 ? "#34C759" : profitFactor >= 1 ? "#FF9F0A" : "#FF3B30" },
+            ].map(({ label, value, color }) => (
+              <div key={label} style={{ ...card, padding: "18px 20px" }}>
+                <div style={{ fontSize: 11, fontWeight: 600, color: "rgba(232,234,237,0.60)", letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 6 }}>{label}</div>
+                <div style={{ fontSize: 24, fontWeight: 700, color, fontFamily: MONO, letterSpacing: -0.5 }}>{value}</div>
+              </div>
+            ))
+        }
       </div>
 
       {/*  Second row: totals  */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: 12, marginBottom: 20 }}>
-        {[
-          { label: "Total Trades",  value: String(trades.length) },
-          { label: "Closed",        value: String(closed.length) },
-          { label: "Open",          value: String(open_.length),  color: "#0A84FF" },
-          { label: "Avg Win",       value: fmtUsd(avgWin),        color: "#34C759" },
-          { label: "Avg Loss",      value: fmtUsd(-avgLoss),      color: "#FF3B30" },
-        ].map(({ label, value, color }) => (
-          <div key={label} style={{ ...card, padding: "14px 18px" }}>
-            <div style={{ fontSize: 11, fontWeight: 600, color: "rgba(232,234,237,0.35)", letterSpacing: 0.4, textTransform: "uppercase", marginBottom: 4 }}>{label}</div>
-            <div style={{ fontSize: 18, fontWeight: 700, color: color ?? "#E8EAED", fontFamily: MONO }}>
-              {loading ? "—" : value}
-            </div>
-          </div>
-        ))}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 12, marginBottom: 20 }}>
+        {loading
+          ? [0,1,2,3,4].map(i => (
+              <div key={i} className="skel-row" style={{ ...card, padding: "14px 18px" }}>
+                <div className="ios-skeleton" style={{ height: 11, width: "60%", borderRadius: 4, marginBottom: 8 }} />
+                <div className="ios-skeleton" style={{ height: 22, width: "50%", borderRadius: 5 }} />
+              </div>
+            ))
+          : [
+              { label: "Total Trades",  value: String(trades.length) },
+              { label: "Closed",        value: String(closed.length) },
+              { label: "Open",          value: String(open_.length),  color: "#0A84FF" },
+              { label: "Avg Win",       value: fmtUsd(avgWin),        color: "#34C759" },
+              { label: "Avg Loss",      value: fmtUsd(-avgLoss),      color: "#FF3B30" },
+            ].map(({ label, value, color }) => (
+              <div key={label} style={{ ...card, padding: "14px 18px" }}>
+                <div style={{ fontSize: 11, fontWeight: 600, color: "rgba(232,234,237,0.60)", letterSpacing: 0.4, textTransform: "uppercase", marginBottom: 4 }}>{label}</div>
+                <div style={{ fontSize: 18, fontWeight: 700, color: color ?? "#E8EAED", fontFamily: MONO }}>{value}</div>
+              </div>
+            ))
+        }
       </div>
 
       {/*  Equity curve  */}
       <div style={{ ...card, padding: "20px", marginBottom: 20 }}>
         <div style={sectionLabel}>Equity Curve · Closed Trades P&L</div>
-        {equityCurve.length < 2 ? (
+        {loading ? (
+          <div className="ios-skeleton" style={{ height: 120, borderRadius: 6 }} />
+        ) : equityCurve.length < 2 ? (
           <div style={{ height: 120, display: "flex", alignItems: "center", justifyContent: "center", color: "rgba(232,234,237,0.20)", fontSize: 13 }}>
             Not enough closed trades
           </div>
@@ -240,13 +242,23 @@ export default function PerformancePage() {
       </div>
 
       {/*  Bottom row  */}
-      <div style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
+      <div style={{ display: "flex", gap: 16, alignItems: "flex-start", flexWrap: "wrap" }}>
 
         {/* By symbol */}
-        <div style={{ flex: 1 }}>
+        <div style={{ flex: "1 1 220px", minWidth: 0 }}>
           <div style={{ ...card, padding: "20px" }}>
             <div style={sectionLabel}>P&L by Symbol</div>
-            {bySymbol.length === 0 ? (
+            {loading ? (
+              [0,1,2,3,4].map(i => (
+                <div key={i} className="skel-row" style={{ marginBottom: 14 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5 }}>
+                    <div className="ios-skeleton" style={{ height: 12, width: "30%", borderRadius: 4 }} />
+                    <div className="ios-skeleton" style={{ height: 12, width: "25%", borderRadius: 4 }} />
+                  </div>
+                  <div className="ios-skeleton" style={{ height: 4, borderRadius: 2 }} />
+                </div>
+              ))
+            ) : bySymbol.length === 0 ? (
               <div style={{ fontSize: 13, color: "rgba(232,234,237,0.20)", textAlign: "center", padding: "20px 0" }}>No data</div>
             ) : bySymbol.map(({ sym, pnl, count }) => (
               <div key={sym} style={{ marginBottom: 10 }}>
@@ -267,10 +279,20 @@ export default function PerformancePage() {
         </div>
 
         {/* Monthly P&L */}
-        <div style={{ flex: 1 }}>
+        <div style={{ flex: "1 1 220px", minWidth: 0 }}>
           <div style={{ ...card, padding: "20px" }}>
             <div style={sectionLabel}>Monthly P&L · Last 6 Months</div>
-            {byMonth.length === 0 ? (
+            {loading ? (
+              [0,1,2,3,4,5].map(i => (
+                <div key={i} className="skel-row" style={{ marginBottom: 14 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5 }}>
+                    <div className="ios-skeleton" style={{ height: 12, width: "22%", borderRadius: 4 }} />
+                    <div className="ios-skeleton" style={{ height: 13, width: "28%", borderRadius: 4 }} />
+                  </div>
+                  <div className="ios-skeleton" style={{ height: 6, borderRadius: 3 }} />
+                </div>
+              ))
+            ) : byMonth.length === 0 ? (
               <div style={{ fontSize: 13, color: "rgba(232,234,237,0.20)", textAlign: "center", padding: "20px 0" }}>No closed trades</div>
             ) : byMonth.map(([month, pnl]) => (
               <div key={month} style={{ marginBottom: 12 }}>
@@ -292,10 +314,23 @@ export default function PerformancePage() {
         </div>
 
         {/* By strategy */}
-        <div style={{ flex: 1 }}>
+        <div style={{ flex: "1 1 220px", minWidth: 0 }}>
           <div style={{ ...card, padding: "20px" }}>
             <div style={sectionLabel}>P&L by Strategy</div>
-            {byStrategy.length === 0 ? (
+            {loading ? (
+              [0,1,2,3].map(i => (
+                <div key={i} className="skel-row" style={{ padding: "10px 12px", marginBottom: 8, borderRadius: 8, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+                    <div className="ios-skeleton" style={{ height: 12, width: "45%", borderRadius: 4 }} />
+                    <div className="ios-skeleton" style={{ height: 13, width: "25%", borderRadius: 4 }} />
+                  </div>
+                  <div style={{ display: "flex", gap: 16 }}>
+                    <div className="ios-skeleton" style={{ height: 11, width: "30%", borderRadius: 3 }} />
+                    <div className="ios-skeleton" style={{ height: 11, width: "22%", borderRadius: 3 }} />
+                  </div>
+                </div>
+              ))
+            ) : byStrategy.length === 0 ? (
               <div style={{ fontSize: 13, color: "rgba(232,234,237,0.20)", textAlign: "center", padding: "20px 0" }}>No data</div>
             ) : byStrategy.map(({ strat, pnl, total, wr }) => (
               <div key={strat} style={{

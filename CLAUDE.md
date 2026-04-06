@@ -13,7 +13,7 @@ Never skip step 1-3. Never write code based on memory alone. Always read → the
 
 ## Project Identity
 
-**Name:** NeuralFX TradingBot
+**Name:** PulseTrade TradingBot
 **Stack:** Python (bot) + Next.js 14 App Router (dashboard)
 **Broker:** PU Prime via MetaTrader 5
 **DB:** PostgreSQL (Supabase) — 7 tables

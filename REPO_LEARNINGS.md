@@ -1,6 +1,6 @@
-# NeuralFX TradingBot — Repository Research Synthesis
+# PulseTrade TradingBot — Repository Research Synthesis
 
-> Compiled from ~26 GitHub repositories analyzed to extract actionable upgrades for NeuralFX.
+> Compiled from ~26 GitHub repositories analyzed to extract actionable upgrades for PulseTrade.
 > Each finding is labeled: **P0** (immediate/high-impact), **P1** (next sprint), **P2** (future/optional).
 > Sources are noted inline. Total research base: ~490k stars across repositories.
 
@@ -24,7 +24,7 @@
 
 **Source:** `calesthio/Crucix` (8.5k stars, AGPL-3.0, ACTIVE)
 
-Crucix is a 27-source macro intelligence platform in Node.js ESM. Its architecture reveals what a native Python equivalent would look like for NeuralFX.
+Crucix is a 27-source macro intelligence platform in Node.js ESM. Its architecture reveals what a native Python equivalent would look like for PulseTrade.
 
 ### Core Architecture Pattern
 
@@ -36,7 +36,7 @@ Crucix server.mjs → Promise.allSettled(27 sources in parallel, ~30s timeout pe
                   → SSE push to dashboard browsers
 ```
 
-**NeuralFX Python equivalent:**
+**PulseTrade Python equivalent:**
 
 ```python
 # filters/intelligence_sweep.py
@@ -114,7 +114,7 @@ COMMANDS = {
 
 ### Briefing Template Pattern
 
-Crucix uses `BRIEFING_TEMPLATE.md` — a structured output format that Claude populates. Add to NeuralFX:
+Crucix uses `BRIEFING_TEMPLATE.md` — a structured output format that Claude populates. Add to PulseTrade:
 
 ```markdown
 # Intelligence Briefing — {timestamp}
@@ -360,7 +360,7 @@ Two validated ensembles from Stock-Prediction-Models:
 - **Ensemble A:** AutoEncoder + DRNN + ARIMA + XGBoost
 - **Ensemble B:** AdaBoost + Bagging + ExtraTrees + GBM + RF + XGBoost
 
-For NeuralFX: run LightGBM alongside LSTM. If both agree → high-confidence signal. If they disagree → HOLD.
+For PulseTrade: run LightGBM alongside LSTM. If both agree → high-confidence signal. If they disagree → HOLD.
 
 ```python
 # Ensemble vote in strategy_agent.py
@@ -386,10 +386,10 @@ else:
 
 ### LangGraph Multi-Specialist Pipeline (from TradingAgents v0.2.3)
 
-The current NeuralFX pipeline is linear. TradingAgents proves that a specialist debate model produces better decisions:
+The current PulseTrade pipeline is linear. TradingAgents proves that a specialist debate model produces better decisions:
 
 ```
-Current NeuralFX:
+Current PulseTrade:
 market → analysis → strategy → neural → council → risk → execution
 
 Improved (TradingAgents pattern):
@@ -504,14 +504,14 @@ def strip_hedges(text: str) -> str:
 
 **Source:** `TraderAlice/OpenAlice` (3.1k stars, AGPL-3.0, EXTREMELY ACTIVE — updated 10h ago, built WITH Claude)
 
-OpenAlice is the most architecturally relevant repository in this research. It represents "what NeuralFX wants to become" — a 24/7 autonomous trading agent with proper auditability and human oversight.
+OpenAlice is the most architecturally relevant repository in this research. It represents "what PulseTrade wants to become" — a 24/7 autonomous trading agent with proper auditability and human oversight.
 
 ### Trading-as-Git: Order Lifecycle
 
 Every order goes through a git-like commit flow:
 
 ```python
-# Current NeuralFX order flow:
+# Current PulseTrade order flow:
 execution_agent.place_order(symbol, lots, direction)  # opaque, no audit trail
 
 # OpenAlice pattern:
@@ -701,7 +701,7 @@ From OpenAlice — control AI access level at runtime:
 
 **Source:** `tradermonty/claude-trading-skills` (655 stars, VERY ACTIVE — updated 16h ago)
 
-This repo proves that a SKILL.md-based quality gate system dramatically improves signal precision. The following gates should wrap the NeuralFX execution pipeline.
+This repo proves that a SKILL.md-based quality gate system dramatically improves signal precision. The following gates should wrap the PulseTrade execution pipeline.
 
 ### ExposureCoach — Master Gate (highest priority)
 
@@ -801,7 +801,7 @@ CREATE TABLE trade_theses (
 import backtrader as bt
 
 cerebro = bt.Cerebro()
-cerebro.addstrategy(NeuralFXStrategy)
+cerebro.addstrategy(PulseTradeStrategy)
 cerebro.addanalyzer(bt.analyzers.SharpeRatio, _name='sharpe',
                     riskfreerate=0.05, annualize=True)
 cerebro.addanalyzer(bt.analyzers.SQN, _name='sqn')           # PRIMARY METRIC
@@ -1007,7 +1007,7 @@ selected_features = X_train.columns[selector.support_]
 
 ### Piotroski F-Score Filter (from staskh/trading_skills)
 
-9-point fundamental quality filter. For NeuralFX: apply to any equity signals as pre-entry filter. Not directly applicable to pure forex, but use for SPY/QQQ macro positioning:
+9-point fundamental quality filter. For PulseTrade: apply to any equity signals as pre-entry filter. Not directly applicable to pure forex, but use for SPY/QQQ macro positioning:
 
 ```python
 def piotroski_score(financials: dict) -> int:
@@ -1136,7 +1136,7 @@ def compute_exposure(positions: list[Position]) -> dict:
 
 ### Expose Bot Capabilities as SKILL.md
 
-Every NeuralFX capability should be registered as a Claude-readable SKILL.md:
+Every PulseTrade capability should be registered as a Claude-readable SKILL.md:
 
 ```
 .claude/skills/
@@ -1185,7 +1185,7 @@ Expose the same bot functions simultaneously as Claude skills AND as a FastMCP s
 # tools/mcp_server.py
 from fastmcp import FastMCP
 
-mcp = FastMCP("NeuralFX Trading Tools")
+mcp = FastMCP("PulseTrade Trading Tools")
 
 @mcp.tool()
 async def get_portfolio_snapshot() -> dict:
@@ -1217,7 +1217,7 @@ if __name__ == "__main__":
 // .claude/settings.json
 {
     "mcpServers": {
-        "neuralFX": {
+        "PulseTrade": {
             "command": "python",
             "args": ["tools/mcp_server.py"],
             "env": { "PYTHONPATH": "." }

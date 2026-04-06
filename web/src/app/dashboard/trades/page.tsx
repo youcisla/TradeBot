@@ -101,13 +101,13 @@ export default function TradeBookPage() {
 
   //  Styles
   const card: React.CSSProperties = {
-    background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.09)", borderRadius: 12,
+    background: "var(--card-bg)", border: "1px solid var(--card-border)", borderRadius: "var(--card-radius)",
   };
   const kpiLabel: React.CSSProperties = {
-    fontSize: 11, fontWeight: 600, color: "rgba(232,234,237,0.55)",
+    fontSize: 11, fontWeight: 600, color: "var(--section-label)",
     letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 6,
   };
-  const MONO = '"SF Mono", SFMono-Regular, ui-monospace, monospace';
+  const MONO = "var(--font-mono-stack)";
 
   function FilterBtn({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
     return (
@@ -186,30 +186,41 @@ export default function TradeBookPage() {
       </div>
 
       {/*  Summary KPIs  */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 12, marginBottom: 20 }}>
-        {[
-          { label: "Total Trades",  value: String(trades.length),            color: "#E8EAED",                              sub: `${open_.length} open` },
-          { label: "Win Rate",      value: winRate.toFixed(1) + "%",          color: winRate >= 50 ? "#34C759" : "#FF9F0A", sub: `${wins} / ${closed.length} closed` },
-          { label: "Net P&L",       value: fmtUsd(totalPnl),                  color: totalPnl > 0 ? "#34C759" : totalPnl < 0 ? "#FF3B30" : "#E8EAED", sub: "Closed trades" },
-          { label: "Avg P&L / Trade", value: fmtUsd(avgPnl),                  color: avgPnl > 0 ? "#34C759" : avgPnl < 0 ? "#FF3B30" : "#E8EAED",    sub: "Per closed trade" },
-        ].map(({ label, value, color, sub }) => (
-          <div key={label} style={{ ...card, padding: "18px 20px" }}>
-            <div style={kpiLabel}>{label}</div>
-            <div style={{ fontSize: 22, fontWeight: 700, color, fontFamily: MONO, letterSpacing: -0.5 }}>{value}</div>
-            <div style={{ fontSize: 12, color: "rgba(232,234,237,0.30)", marginTop: 4 }}>{sub}</div>
-          </div>
-        ))}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 12, marginBottom: 20 }}>
+        {loading
+          ? [0,1,2,3].map(i => (
+              <div key={i} className="skel-row" style={{ ...card, padding: "18px 20px" }}>
+                <div className="ios-skeleton" style={{ height: 11, width: "55%", borderRadius: 4, marginBottom: 10 }} />
+                <div className="ios-skeleton" style={{ height: 26, width: "70%", borderRadius: 6, marginBottom: 7 }} />
+                <div className="ios-skeleton" style={{ height: 12, width: "60%", borderRadius: 4 }} />
+              </div>
+            ))
+          : [
+              { label: "Total Trades",    value: String(trades.length),  color: "#E8EAED",                              sub: `${open_.length} open` },
+              { label: "Win Rate",        value: winRate.toFixed(1)+"%", color: winRate >= 50 ? "#34C759" : "#FF9F0A", sub: `${wins} / ${closed.length} closed` },
+              { label: "Net P&L",         value: fmtUsd(totalPnl),       color: totalPnl > 0 ? "#34C759" : totalPnl < 0 ? "#FF3B30" : "#E8EAED", sub: "Closed trades" },
+              { label: "Avg P&L / Trade", value: fmtUsd(avgPnl),         color: avgPnl   > 0 ? "#34C759" : avgPnl   < 0 ? "#FF3B30" : "#E8EAED", sub: "Per closed trade" },
+            ].map(({ label, value, color, sub }) => (
+              <div key={label} style={{ ...card, padding: "18px 20px" }}>
+                <div style={kpiLabel}>{label}</div>
+                <div style={{ fontSize: 22, fontWeight: 700, color, fontFamily: MONO, letterSpacing: -0.5 }}>{value}</div>
+                <div style={{ fontSize: 12, color: "rgba(232,234,237,0.30)", marginTop: 4 }}>{sub}</div>
+              </div>
+            ))
+        }
       </div>
 
       {/*  Trade Table  */}
       <div style={{ ...card, overflow: "hidden" }}>
+        {/* Horizontal scroll wrapper — table scrolls internally, page layout is unaffected */}
+        <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
         {/* Table header */}
         <div style={{
           display: "grid",
-          gridTemplateColumns: "120px 60px 110px 110px 70px 90px 80px 1fr 120px",
-          gap: 8, padding: "12px 20px",
+          gridTemplateColumns: "100px 52px 95px 95px 58px 82px 72px minmax(100px,1fr) 108px",
+          gap: 8, padding: "12px 20px", minWidth: 700,
           borderBottom: "1px solid rgba(255,255,255,0.06)",
-          fontSize: 11, fontWeight: 600, color: "rgba(232,234,237,0.40)",
+          fontSize: 11, fontWeight: 600, color: "rgba(232,234,237,0.60)",
           letterSpacing: 0.4, textTransform: "uppercase",
         }}>
           <span>Symbol</span>
@@ -225,9 +236,25 @@ export default function TradeBookPage() {
 
         {/* Rows */}
         {loading ? (
-          <div style={{ padding: "40px", textAlign: "center", color: "rgba(232,234,237,0.30)", fontSize: 14 }}>
-            Loading…
-          </div>
+          [0,1,2,3,4,5,6,7].map(i => (
+            <div key={i} className="skel-row" style={{
+              display: "grid",
+              gridTemplateColumns: "100px 52px 95px 95px 58px 82px 72px minmax(100px,1fr) 108px",
+              gap: 8, padding: "10px 20px", minWidth: 700,
+              borderBottom: "1px solid rgba(255,255,255,0.04)",
+              alignItems: "center",
+            }}>
+              <div className="ios-skeleton" style={{ height: 13, borderRadius: 4 }} />
+              <div className="ios-skeleton" style={{ height: 11, width: "70%", borderRadius: 4 }} />
+              <div className="ios-skeleton" style={{ height: 12, borderRadius: 4 }} />
+              <div className="ios-skeleton" style={{ height: 12, borderRadius: 4 }} />
+              <div className="ios-skeleton" style={{ height: 12, width: "60%", borderRadius: 4 }} />
+              <div className="ios-skeleton" style={{ height: 13, borderRadius: 4 }} />
+              <div className="ios-skeleton" style={{ height: 20, width: 56, borderRadius: 4 }} />
+              <div className="ios-skeleton" style={{ height: 12, width: "65%", borderRadius: 4 }} />
+              <div className="ios-skeleton" style={{ height: 11, borderRadius: 4 }} />
+            </div>
+          ))
         ) : pageSlice.length === 0 ? (
           <div style={{ padding: "40px", textAlign: "center", color: "rgba(232,234,237,0.30)", fontSize: 14 }}>
             No trades match the current filters
@@ -242,9 +269,9 @@ export default function TradeBookPage() {
               key={t.id}
               style={{
                 display: "grid",
-                gridTemplateColumns: "120px 60px 110px 110px 70px 90px 80px 1fr 120px",
+                gridTemplateColumns: "100px 52px 95px 95px 58px 82px 72px minmax(100px,1fr) 108px",
                 gap: 8,
-                padding: "10px 20px",
+                padding: "10px 20px", minWidth: 700,
                 borderBottom: i < pageSlice.length - 1 ? "1px solid rgba(255,255,255,0.04)" : "none",
                 alignItems: "center",
                 opacity: isOpen ? 1 : 0.75,
@@ -289,6 +316,7 @@ export default function TradeBookPage() {
             </div>
           );
         })}
+        </div>{/* end horizontal scroll wrapper */}
       </div>
 
       {/*  Pagination  */}

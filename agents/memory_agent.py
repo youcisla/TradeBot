@@ -49,7 +49,7 @@ _INCIDENT_LOG_MAX_ENTRIES = 50   # cap so the column doesn't grow unbounded
 
 
 class MemoryAgent:
-    """Persistent cross-session memory for the NeuralFX TradingBot.
+    """Persistent cross-session memory for the PulseTrade TradingBot.
 
     All writes are fail-open: any DB exception is logged at DEBUG level and
     the caller is never interrupted by a memory failure.

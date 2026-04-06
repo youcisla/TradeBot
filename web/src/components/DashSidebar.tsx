@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useAppShell } from "@/components/AppShell";
 
 const NAV_SECTIONS = [
   {
@@ -35,6 +36,11 @@ const NAV_SECTIONS = [
 
 export default function DashSidebar() {
   const pathname = usePathname();
+  const { status: botStatus, isRunning } = useAppShell();
+
+  const stateLabel = botStatus == null ? "Connecting…"
+    : isRunning ? "Bot Online"
+    : (botStatus.state ?? "offline").charAt(0).toUpperCase() + (botStatus.state ?? "offline").slice(1);
 
   function isActive(href: string) {
     if (href === "/dashboard") return pathname === "/dashboard";
@@ -52,21 +58,21 @@ export default function DashSidebar() {
           width: 240,
           height: "calc(100vh - 64px)",
           background:
-            "linear-gradient(175deg, rgba(16,19,26,0.95) 0%, rgba(10,12,15,0.96) 40%, rgba(8,9,11,0.98) 100%)",
-          borderRight: "1px solid rgba(100,120,150,0.22)",
+            "linear-gradient(175deg, var(--sidebar-bg) 0%, var(--sidebar-bg-2) 40%, var(--sidebar-bg-3) 100%)",
+          borderRight: "1px solid var(--sidebar-border)",
           display: "flex",
           flexDirection: "column",
           zIndex: 40,
           overflowY: "auto",
           boxShadow: "18px 0 40px rgba(0,0,0,0.42)",
-          fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", system-ui, sans-serif',
+          fontFamily: "var(--font-system)",
         }}
       >
         {/* Brand area */}
         <div
           style={{
             padding: "16px 16px 14px",
-            borderBottom: "1px solid rgba(100,120,150,0.25)",
+            borderBottom: "1px solid var(--sidebar-separator)",
             display: "flex",
             alignItems: "center",
             gap: 12,
@@ -88,14 +94,14 @@ export default function DashSidebar() {
               style={{
                 fontSize: 16,
                 fontWeight: 700,
-                color: "#e7f0ff",
+                color: "var(--sidebar-brand)",
                 letterSpacing: "0.015em",
                 textTransform: "uppercase",
               }}
             >
-              NeuralFX
+              PulseTrade
             </span>
-            <span style={{ fontSize: 11, color: "rgba(180,200,228,0.58)", letterSpacing: "0.08em" }}>
+            <span style={{ fontSize: 11, color: "var(--sidebar-text-muted)", letterSpacing: "0.08em" }}>
               Command Matrix
             </span>
           </div>
@@ -111,7 +117,7 @@ export default function DashSidebar() {
                   fontWeight: 600,
                   textTransform: "uppercase",
                   letterSpacing: "0.1em",
-                  color: "rgba(171,190,219,0.48)",
+                  color: "var(--sidebar-text-muted)",
                   padding: "0 8px",
                   marginBottom: 6,
                 }}
@@ -134,26 +140,26 @@ export default function DashSidebar() {
                       borderRadius: 12,
                       textDecoration: "none",
                       background: active
-                        ? "linear-gradient(135deg, rgba(38,120,176,0.34) 0%, rgba(24,38,59,0.7) 100%)"
+                        ? "linear-gradient(135deg, var(--sidebar-accent-bg) 0%, var(--sidebar-accent-bg-2) 100%)"
                         : "transparent",
-                      color: active ? "#f2f7ff" : "rgba(226,235,247,0.68)",
+                      color: active ? "var(--sidebar-brand)" : "var(--sidebar-text)",
                       fontSize: 15,
                       fontWeight: active ? 600 : 400,
-                      border: active ? "1px solid rgba(108,184,255,0.45)" : "1px solid transparent",
+                      border: active ? "1px solid var(--sidebar-accent)" : "1px solid transparent",
                       transition: "background 150ms ease, color 150ms ease, border-color 150ms ease",
                       cursor: "pointer",
                     }}
                     onMouseEnter={(e) => {
                       if (!active) {
                         (e.currentTarget as HTMLAnchorElement).style.background =
-                          "rgba(88,122,160,0.18)";
+                          "var(--sidebar-hover-bg)";
                         (e.currentTarget as HTMLAnchorElement).style.color = "#FFFFFF";
                       }
                     }}
                     onMouseLeave={(e) => {
                       if (!active) {
                         (e.currentTarget as HTMLAnchorElement).style.background = "transparent";
-                        (e.currentTarget as HTMLAnchorElement).style.color = "rgba(226,235,247,0.68)";
+                        (e.currentTarget as HTMLAnchorElement).style.color = "var(--sidebar-text)";
                       }
                     }}
                   >
@@ -163,7 +169,7 @@ export default function DashSidebar() {
                         fontSize: 20,
                         flexShrink: 0,
                         fontVariationSettings: active ? "'FILL' 1" : "'FILL' 0",
-                        color: active ? "#63d4ff" : "inherit",
+                        color: active ? "var(--sidebar-icon)" : "inherit",
                         transition: "color 150ms ease",
                       }}
                     >
@@ -183,7 +189,7 @@ export default function DashSidebar() {
         <div
           style={{
             padding: "12px 16px",
-            borderTop: "1px solid rgba(100,120,150,0.25)",
+            borderTop: "1px solid var(--sidebar-separator)",
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
@@ -195,26 +201,26 @@ export default function DashSidebar() {
                 width: 6,
                 height: 6,
                 borderRadius: "50%",
-                background: "#66f6a5",
+                background: isRunning ? "#66f6a5" : botStatus == null ? "#FF9F0A" : "#FF3B30",
                 display: "inline-block",
-                animation: "sidebarDotPulse 2s ease-in-out infinite",
+                animation: isRunning ? "sidebarDotPulse 2s ease-in-out infinite" : undefined,
               }}
             />
             <span
               style={{
                 fontSize: 12,
-                color: "rgba(177,198,227,0.5)",
+                color: isRunning ? "rgba(102,246,165,0.7)" : "var(--sidebar-text-dim)",
                 textTransform: "uppercase",
                 letterSpacing: "0.06em",
               }}
             >
-              Bot Online
+              {stateLabel}
             </span>
           </div>
           <span
             style={{
               fontSize: 12,
-              color: "rgba(177,198,227,0.35)",
+              color: "var(--sidebar-text-dim)",
               textTransform: "uppercase",
               letterSpacing: "0.06em",
             }}

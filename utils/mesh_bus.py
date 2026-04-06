@@ -1,7 +1,7 @@
 """
 utils/mesh_bus.py
 -----------------
-Global nervous system for NeuralFX TradingBot.
+Global nervous system for PulseTrade TradingBot.
 
 Every component (agents, strategies, filters, broker, backtesting, state)
 feeds real call telemetry into a shared AgentMeshState so trust, latency, and

@@ -107,7 +107,7 @@ export default function SettingsPage() {
           }} />
           <div>
             <div style={{ fontSize: 15, fontWeight: 700, color: "#E8EAED" }}>
-              NeuralFX TradingBot · {isRunning ? "Running" : "Stopped"}
+              PulseTrade TradingBot · {isRunning ? "Running" : "Stopped"}
             </div>
             <div style={{ fontSize: 12, color: "rgba(232,234,237,0.40)", marginTop: 2 }}>
               {(status as any)?.version ? `v${(status as any).version}` : ""} · Started {relTime((status as any)?.started_at)}

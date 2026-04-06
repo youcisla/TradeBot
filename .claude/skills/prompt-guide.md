@@ -1,13 +1,13 @@
 ---
 name: prompt-guide
-description: "How to write expert prompts for DeepSeek and Claude within the NeuralFX bot — system prompt patterns, signal formatting, chain-of-thought."
+description: "How to write expert prompts for DeepSeek and Claude within the PulseTrade bot — system prompt patterns, signal formatting, chain-of-thought."
 category: project
 risk: none
 source: project
 date_added: "2026-03-28"
 ---
 
-# Prompt Writing Guide (NeuralFX)
+# Prompt Writing Guide (PulseTrade)
 
 ## Where Prompts Are Used
 

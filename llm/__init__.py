@@ -1,1 +1,1 @@
-"""llm package — LLM client helpers for NeuralFX Trading Bot."""
+"""llm package — LLM client helpers for PulseTrade Trading Bot."""

@@ -53,7 +53,7 @@ def _fmt(val: float) -> str:
 
 def main() -> None:
     print("=" * 90)
-    print("  NeuralFX — MT5 Symbol Spec Fetcher (PU Prime)")
+    print("  PulseTrade — MT5 Symbol Spec Fetcher (PU Prime)")
     print("=" * 90)
 
     # ── Connect ──────────────────────────────────────────────────────────

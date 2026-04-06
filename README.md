@@ -1,4 +1,4 @@
-# NeuralFX TradingBot
+# PulseTrade TradingBot
 
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![Next.js 14](https://img.shields.io/badge/next.js-14-black.svg)](https://nextjs.org/)

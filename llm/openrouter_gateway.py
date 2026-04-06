@@ -99,8 +99,8 @@ class OpenRouterGateway:
         headers = {
             "Authorization": f"Bearer {self._api_key}",
             "Content-Type": "application/json",
-            "HTTP-Referer": "https://github.com/neuralFX-tradingbot",
-            "X-Title": "NeuralFX TradingBot",
+            "HTTP-Referer": "https://github.com/PulseTrade-tradingbot",
+            "X-Title": "PulseTrade TradingBot",
         }
         payload = {
             "model": model,

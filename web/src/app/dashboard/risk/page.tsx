@@ -81,12 +81,12 @@ export default function RiskPage() {
     return () => clearInterval(t);
   }, []);
 
-  const MONO = '"SF Mono", SFMono-Regular, ui-monospace, monospace';
+  const MONO = "var(--font-mono-stack)";
   const card: React.CSSProperties = {
-    background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.09)", borderRadius: 12,
+    background: "var(--card-bg)", border: "1px solid var(--card-border)", borderRadius: "var(--card-radius)",
   };
   const sectionLabel: React.CSSProperties = {
-    fontSize: 11, fontWeight: 600, color: "rgba(232,234,237,0.40)",
+    fontSize: 11, fontWeight: 600, color: "var(--section-label)",
     letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 16,
   };
 
@@ -114,7 +114,7 @@ export default function RiskPage() {
       )}
 
       {/*  Equity / Balance strip  */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 12, marginBottom: 20 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 12, marginBottom: 20 }}>
         {[
           { label: "Equity",          value: fmtUsd(data.equity),       color: "#E8EAED" },
           { label: "Balance",         value: fmtUsd(data.balance),      color: "#E8EAED" },
@@ -122,7 +122,7 @@ export default function RiskPage() {
           { label: "Monthly P&L",     value: data.monthly_pnl != null ? `${fmtUsd(data.monthly_pnl)} (${(data.monthly_pnl_pct ?? 0).toFixed(2)}%)` : "—", color: pnlColor(data.monthly_pnl) },
         ].map(({ label, value, color }) => (
           <div key={label} style={{ ...card, padding: "18px 20px" }}>
-            <div style={{ fontSize: 11, fontWeight: 600, color: "rgba(232,234,237,0.40)", letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 6 }}>{label}</div>
+            <div style={{ fontSize: 11, fontWeight: 600, color: "rgba(232,234,237,0.60)", letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 6 }}>{label}</div>
             <div style={{ fontSize: 20, fontWeight: 700, color, fontFamily: MONO, letterSpacing: -0.5 }}>
               {loading ? "—" : value}
             </div>

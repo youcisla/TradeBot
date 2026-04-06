@@ -1,6 +1,6 @@
 ---
 name: add-strategy
-description: "Creating or modifying a trading strategy in NeuralFX — BaseStrategy interface, ICT engine integration, signal construction."
+description: "Creating or modifying a trading strategy in PulseTrade — BaseStrategy interface, ICT engine integration, signal construction."
 category: project
 risk: none
 source: project

@@ -2,7 +2,7 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ── iOS Design System — NeuralFX TradingBot ─────────────────────────────── */
+/* ── iOS Design System — PulseTrade TradingBot ─────────────────────────────── */
 
 /* System fonts — SF Pro (iOS/macOS native rendering) */
 :root {
@@ -72,12 +72,59 @@
   --z-overlay: 30;
   --z-modal:   50;
   --z-top:     100;
+
+  /* ── Spacing Scale ─────────────────────────────────────────────────────── */
+  --space-1:  4px;
+  --space-2:  8px;
+  --space-3:  12px;
+  --space-4:  16px;
+  --space-5:  20px;
+  --space-6:  24px;
+  --space-8:  32px;
+
+  /* ── Dashboard Background ───────────────────────────────────────────────── */
+  --bg-radial-start: #1a2a3f;
+  --bg-radial-mid:   #06070a;
+  --bg-radial-end:   #030303;
+
+  /* ── Sidebar ────────────────────────────────────────────────────────────── */
+  --sidebar-bg:         rgba(16, 19, 26, 0.96);
+  --sidebar-bg-2:       rgba(10, 12, 15, 0.97);
+  --sidebar-bg-3:       rgba(8, 9, 11, 0.98);
+  --sidebar-border:     rgba(100, 120, 150, 0.22);
+  --sidebar-separator:  rgba(100, 120, 150, 0.25);
+  --sidebar-accent:     rgba(108, 184, 255, 0.45);
+  --sidebar-accent-bg:  rgba(38, 120, 176, 0.34);
+  --sidebar-accent-bg-2:rgba(24, 38, 59, 0.70);
+  --sidebar-text:       rgba(226, 235, 247, 0.68);
+  --sidebar-text-dim:   rgba(226, 235, 247, 0.40);
+  --sidebar-text-muted: rgba(180, 200, 228, 0.58);
+  --sidebar-brand:      #e7f0ff;
+  --sidebar-hover-bg:   rgba(88, 122, 160, 0.18);
+  --sidebar-icon:       #63d4ff;
+
+  /* ── Card tokens (shared across all pages) ─────────────────────────────── */
+  --card-bg:            var(--ios-bg-2);
+  --card-border:        rgba(255, 255, 255, 0.09);
+  --card-radius:        12px;
+  --card-padding:       20px;
+  --card-padding-sm:    16px;
+
+  /* ── Section label token ───────────────────────────────────────────────── */
+  --section-label:     rgba(232, 234, 237, 0.60);
+
+  /* ── Mono font ──────────────────────────────────────────────────────────── */
+  --font-mono-stack:    "SF Mono", SFMono-Regular, ui-monospace, Menlo, Monaco, "Courier New", monospace;
 }
 
 /* ── Base Reset ──────────────────────────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-html { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden; /* must be on html, not just body, to suppress document-level h-scroll */
+}
 
 body {
   font-family: var(--font-system);
@@ -87,6 +134,7 @@ body {
   line-height: 1.5;
   font-size: 17px;
   overflow-x: hidden;
+  max-width: 100%;
 }
 
 /* ── Material Symbols ────────────────────────────────────────────────────── */
@@ -333,6 +381,17 @@ body {
   margin-left: 56px;
 }
 
+/* ── Skeleton stagger (boneyard-style staggered shimmer delay) ───────────── */
+.skel-row:nth-child(1)  { animation-delay:   0ms }
+.skel-row:nth-child(2)  { animation-delay:  40ms }
+.skel-row:nth-child(3)  { animation-delay:  80ms }
+.skel-row:nth-child(4)  { animation-delay: 120ms }
+.skel-row:nth-child(5)  { animation-delay: 160ms }
+.skel-row:nth-child(6)  { animation-delay: 200ms }
+.skel-row:nth-child(7)  { animation-delay: 240ms }
+.skel-row:nth-child(8)  { animation-delay: 280ms }
+.skel-row:nth-child(9)  { animation-delay: 320ms }
+
 /* ── Skeleton / Loading ──────────────────────────────────────────────────── */
 @keyframes ios-shimmer {
   0%   { background-position: -400px 0; }
@@ -500,3 +559,11 @@ button, [role="button"], [role="tab"], select, label[for], a, .interactive {
 .text-purple { color: var(--ios-purple); }
 .text-muted  { color: var(--ios-label-2); }
 .text-dim    { color: var(--ios-label-3); }
+
+/* ── Material Symbols — locally served (avoids render-blocking Google Fonts) ── */
+/* MUST be at the end so @tailwind processes first */
+@font-face {
+  font-family: "Material Symbols Outlined";
+  src: url("/fonts/material-symbols.woff2") format("woff2");
+  font-display: block;
+}

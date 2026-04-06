@@ -119,12 +119,12 @@ class GarchRegimeDetector:
             import numpy as np  # noqa: PLC0415
             from arch import arch_model  # type: ignore[import] # noqa: PLC0415
 
-            returns_arr = np.array(list(self._returns)) * 100  # percentage returns
-            am = arch_model(returns_arr, vol="Garch", p=1, q=1, dist="normal")
+            returns_arr = np.array(list(self._returns)) * 10_000  # pip-scale returns (avoids DataScaleWarning)
+            am = arch_model(returns_arr, vol="Garch", p=1, q=1, dist="normal", rescale=False)
             with _suppress_arch_output():
                 res = am.fit(disp="off", show_warning=False)
             # Last conditional variance (percentage²) → annualised vol
-            last_var = float(res.conditional_volatility[-1]) / 100
+            last_var = float(res.conditional_volatility[-1]) / 10_000
             # Annualise: assuming 252 trading days, 24 candles per day (H1)
             ann_vol = last_var * math.sqrt(252 * 24)
             return ann_vol

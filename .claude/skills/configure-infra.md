@@ -1,6 +1,6 @@
 ---
 name: configure-infra
-description: "Infra, API keys, deployment, broker config, .env variables, and DB setup for NeuralFX."
+description: "Infra, API keys, deployment, broker config, .env variables, and DB setup for PulseTrade."
 category: project
 risk: none
 source: project

@@ -141,19 +141,19 @@ export default function MarketIntelPage() {
   }, [events, filter]);
 
   //  Styles
-  const MONO = '"SF Mono", SFMono-Regular, ui-monospace, monospace';
+  const MONO = "var(--font-mono-stack)";
   const card: React.CSSProperties = {
-    background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.09)", borderRadius: 12,
+    background: "var(--card-bg)", border: "1px solid var(--card-border)", borderRadius: "var(--card-radius)",
   };
   const sectionLabel: React.CSSProperties = {
-    fontSize: 11, fontWeight: 600, color: "rgba(232,234,237,0.40)",
+    fontSize: 11, fontWeight: 600, color: "var(--section-label)",
     letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 12,
   };
 
   return (
     <>
       {/*  Session bar  */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 12, marginBottom: 20 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 12, marginBottom: 20 }}>
         {Object.entries(SESSIONS).map(([key, s]) => {
           const isActive = active.includes(key);
           return (

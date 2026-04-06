@@ -1,4 +1,4 @@
-# NeuralFX — Research Landscape & Feature Roadmap
+# PulseTrade — Research Landscape & Feature Roadmap
 
 > Compiled from analysis of 40 open-source repositories across trading AI, backtesting,
 > ML finance, and Claude/MCP ecosystems. Every idea maps to at least one real implementation.
@@ -20,7 +20,7 @@
 
 ### 1.1 Claude / MCP / Skill Ecosystem
 
-| # | Repo | Stars | Key Takeaway for NeuralFX |
+| # | Repo | Stars | Key Takeaway for PulseTrade |
 |---|---|---|---|
 | 1 | `tradermonty/claude-trading-skills` | 662 | Exposure Coach (0–100% exposure ceiling), Trader Memory Core (thesis lifecycle IDEA→ENTRY_READY→ACTIVE→CLOSED), Edge Pipeline (Candidate→Designer→Reviewer→Orchestrator→Aggregator), skill self-improvement loop (auto-scores, auto-fixes, auto-PR) |
 | 2 | `tradesdontlie/tradingview-mcp` | 1.1k | 78 MCP tools: `chart_get_state`, `data_get_ohlcv`, `pine_smart_compile`, `replay_start`, `batch_run`, `tv stream`; CDP-based automation of TradingView Desktop on port 9222 |
@@ -35,7 +35,7 @@
 
 ### 1.2 Multi-Agent & Orchestration Frameworks
 
-| # | Repo | Stars | Key Takeaway for NeuralFX |
+| # | Repo | Stars | Key Takeaway for PulseTrade |
 |---|---|---|---|
 | 9 | `TauricResearch/TradingAgents` | **47.4k** | Multi-agent debate framework on LangGraph: Fundamentals+Sentiment+News+Technical analysts produce reports → Bull Researcher and Bear Researcher debate → Trader Agent synthesizes → Risk Management gating. Supports GPT/Gemini/Claude/Grok/Ollama. |
 | 10 | `HKUDS/AI-Trader` | 12.2k | Agent swarm marketplace; copy trading; strategy publishing; multi-market. "Best trader" routing per symbol. |
@@ -45,7 +45,7 @@
 
 ### 1.3 Backtesting Infrastructure
 
-| # | Repo | Stars | Key Takeaway for NeuralFX |
+| # | Repo | Stars | Key Takeaway for PulseTrade |
 |---|---|---|---|
 | 12 | `mementum/backtrader` | **21k** | 122 built-in indicators; Sharpe/SQN analyzers; commission/slippage models; supports live trading (IB/Oanda); cerebro architecture; analyzers produce structured metrics |
 | 13 | `quantopian/zipline` | 19.6k | *(archived)* — event-driven; `zipline ingest` + `zipline run`; PyData integration; methodology reference only. Active fork: `zipline-reloaded` |
@@ -57,7 +57,7 @@
 
 ### 1.4 ML Finance — Books & Research Code
 
-| # | Repo | Stars | Key Takeaway for NeuralFX |
+| # | Repo | Stars | Key Takeaway for PulseTrade |
 |---|---|---|---|
 | 17 | `stefan-jansen/machine-learning-for-trading` | **17k** | Ch.12: LightGBM/XGBoost intraday with SHAP feature importance → directly applicable to our LGBM models; Ch.09: ARCH+cointegration pairs trading; Ch.19: LSTM/GRU multivariate; Ch.21: Autoencoders for factor discovery; Ch.22: TimeGAN synthetic training data; Ch.23: Deep RL trading agent (OpenAI Gym) |
 | 18 | `huseinzol05/Stock-Prediction-Models` | 9.3k | *(archived 2023)* — 18 DL models: **Dilated-CNN-Seq2seq 95.86%** (best), LSTM 95.69%; 23 RL agents (Double Duel Q, Actor-Critic, Curiosity Q, Neuro-evolution); stacking: Autoencoder+LSTM+ARIMA+XGB |
@@ -69,7 +69,7 @@
 
 ### 1.5 MT5 / Broker Integration
 
-| # | Repo | Stars | Key Takeaway for NeuralFX |
+| # | Repo | Stars | Key Takeaway for PulseTrade |
 |---|---|---|---|
 | 22 | `abdlhannan/MT5_Trade_Connector` | 14 | **Daily loss limit 5% / monthly loss limit 10%** enforcement; trailing stop with thread-safe locking; multi-timeframe M1→D1; position sizing by account equity % |
 | 23 | `HFTHaidra/HFT-Arbitrage-EA-MQL4-MQL5` | 110 | Two-broker arbitrage: fast feed vs. slow broker; latency-based entry; spread comparison per tick |
@@ -79,7 +79,7 @@
 
 ### 1.6 Market Data & TradingView
 
-| # | Repo | Stars | Key Takeaway for NeuralFX |
+| # | Repo | Stars | Key Takeaway for PulseTrade |
 |---|---|---|---|
 | 25 | `Mathieu2301/TradingView-API` | 2.9k | Node.js real-time TradingView socket: prices, indicator values, screener top values, hotlists, invite-only indicators, backtesting API |
 | 26 | `koreainvestment/open-trading-api` | *(institutional)* | Korea Investment open brokerage API with LLM support; KIS API reference for regulated brokerage patterns |
@@ -88,7 +88,7 @@
 
 ### 1.7 Exchange & Portfolio Libraries
 
-| # | Repo | Stars | Key Takeaway for NeuralFX |
+| # | Repo | Stars | Key Takeaway for PulseTrade |
 |---|---|---|---|
 | 27 | `knowm/XChange` | *(Java, large)* | Unified Java interface for 60+ crypto exchanges; order book, trades, account data; candle OHLCV streaming |
 | 28 | `Superalgos/Superalgos` | *(large)* | Visual strategy designer (node graph); community-shared strategies; slippage simulation; multi-exchange crypto |
@@ -97,10 +97,10 @@
 
 ### 1.8 Specialized Tools
 
-| # | Repo | Stars | Key Takeaway for NeuralFX |
+| # | Repo | Stars | Key Takeaway for PulseTrade |
 |---|---|---|---|
 | 29 | `tiero/claw-cash` | *(small)* | Bitcoin wallet primitives for AI agent payment flows; PSBT signing |
-| 30 | `MSL135/GODMOD3` | *(small)* | AI red-teaming; not relevant to NeuralFX |
+| 30 | `MSL135/GODMOD3` | *(small)* | AI red-teaming; not relevant to PulseTrade |
 | 31 | `public-apis/public-apis` | *(large)* | Directory of free APIs: Alpha Vantage (financial), Quandl, Polygon.io, CoinGecko, OpenFIGI |
 
 ---
@@ -444,7 +444,7 @@ class DilatedTemporalBlock(nn.Module):
 
 **What it does:** Use TimeGAN (Generative Adversarial Network for time series) to synthesize additional OHLCV training samples for rare market conditions (high volatility, flash crashes, trend reversals). Augments the 2-year H1 dataset to improve LSTM generalization.
 
-**Why it matters:** NeuralFX currently trains on **~1,750 H1 candles per symbol** (2 years). TimeGAN can expand this to 10,000+ statistically consistent samples without look-ahead bias.
+**Why it matters:** PulseTrade currently trains on **~1,750 H1 candles per symbol** (2 years). TimeGAN can expand this to 10,000+ statistically consistent samples without look-ahead bias.
 
 **Time estimate:** ~4 days (GAN training is slow; GPU recommended).
 
@@ -508,7 +508,7 @@ model = arch_model(
 
 **Source:** `tradesdontlie/tradingview-mcp` (1.1k stars, 78 tools)
 
-**What it does:** Connect NeuralFX to TradingView Desktop via Chrome DevTools Protocol (port 9222). Enables:
+**What it does:** Connect PulseTrade to TradingView Desktop via Chrome DevTools Protocol (port 9222). Enables:
 - Screenshot trading setups to the dashboard
 - Fetch Pine Script indicator values in real time (as a second data source)
 - Auto-draw S/R levels, order blocks, FVGs on the chart
@@ -582,12 +582,12 @@ Based on impact-to-effort ratio and zero risk of breaking the existing pipeline:
 
 ## Notes on What NOT to Build
 
-Based on the research, several repo patterns are explicitly **not appropriate** for NeuralFX:
+Based on the research, several repo patterns are explicitly **not appropriate** for PulseTrade:
 
 | Pattern | Why Skip |
 |---|---|
-| Multi-exchange crypto arbitrage (HFT-Arbitrage-EA) | NeuralFX is MT5/forex-only; HFT latency not achievable via Python |
-| P&F chart indicator (EarnForex) | NeuralFX uses H1 OHLCV natively; P&F adds no signal value |
+| Multi-exchange crypto arbitrage (HFT-Arbitrage-EA) | PulseTrade is MT5/forex-only; HFT latency not achievable via Python |
+| P&F chart indicator (EarnForex) | PulseTrade uses H1 OHLCV natively; P&F adds no signal value |
 | Zipline backtesting | Archived, Python 2.7 — use backtrader instead |
 | Gekko patterns | Archived, Node.js, crypto-only |
 | Bitcoin wallet / PSBT (claw-cash) | Irrelevant — not a crypto custody product |

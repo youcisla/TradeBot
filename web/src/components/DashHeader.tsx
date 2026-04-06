@@ -1,30 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
-
-interface StatusData {
-  state: string;
-  equity: number;
-  daily_pnl: number;
-  balance: number;
-}
+import { useAppShell } from "@/components/AppShell";
 
 export default function DashHeader() {
-  const [status, setStatus] = useState<StatusData | null>(null);
+  const { status, isRunning } = useAppShell();
 
-  useEffect(() => {
-    let active = true;
-    const load = () =>
-      fetch("/api/status")
-        .then((r) => { if (!r.ok) throw new Error(r.statusText); return r.json(); })
-        .then((data: StatusData) => { if (active) setStatus(data); })
-        .catch(() => {});
-    load();
-    const id = setInterval(load, 8_000);
-    return () => { active = false; clearInterval(id); };
-  }, []);
-
-  const isRunning = status?.state === "running";
   const equity = status ? Number(status.equity) : null;
   const dailyPnl = status ? Number(status.daily_pnl) : null;
   const pnlPositive = dailyPnl !== null && dailyPnl >= 0;
@@ -74,7 +54,7 @@ export default function DashHeader() {
               textTransform: "uppercase",
             }}
           >
-            NeuralFX
+            PulseTrade
           </span>
           <div
             style={{

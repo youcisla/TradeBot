@@ -145,7 +145,7 @@ def build_mcp_app():
         logger.error("fastmcp not installed — pip install fastmcp")
         return None
 
-    mcp = FastMCP("NeuralFX TradingBot")
+    mcp = FastMCP("PulseTrade TradingBot")
 
     @mcp.tool()
     def bot_status() -> dict:
@@ -187,7 +187,7 @@ def main() -> None:
     if app is None:
         sys.exit(1)
 
-    logger.info("Starting NeuralFX MCP server on port %d", port)
+    logger.info("Starting PulseTrade MCP server on port %d", port)
     try:
         app.run(transport="sse", port=port)
     except Exception as exc:  # noqa: BLE001

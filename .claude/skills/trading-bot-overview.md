@@ -1,6 +1,6 @@
 ---
 name: trading-bot-overview
-description: "Full NeuralFX system reference — architecture, agent pipeline, key files, DB schema, strategy stack."
+description: "Full PulseTrade system reference — architecture, agent pipeline, key files, DB schema, strategy stack."
 category: project
 risk: none
 source: project
@@ -8,10 +8,10 @@ date_added: "2026-03-28"
 date_updated: "2026-04-06"
 ---
 
-# NeuralFX TradingBot — System Overview
+# PulseTrade TradingBot — System Overview
 
 ## Identity
-- **Name:** NeuralFX TradingBot
+- **Name:** PulseTrade TradingBot
 - **Stack:** Python (bot) + Next.js 14 App Router (dashboard)
 - **Broker:** PU Prime via MetaTrader 5 (Windows only)
 - **DB:** PostgreSQL (Supabase) — 7 tables

@@ -112,21 +112,21 @@ export default function BrainPage() {
     return matchAgent && matchSearch;
   }).slice(0, 200);
 
-  //  Styles 
+  //  Styles
 
-  const MONO = '"SF Mono", SFMono-Regular, ui-monospace, monospace';
+  const MONO = "var(--font-mono-stack)";
   const card: React.CSSProperties = {
-    background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.09)", borderRadius: 12,
+    background: "var(--card-bg)", border: "1px solid var(--card-border)", borderRadius: "var(--card-radius)",
   };
 
   return (
     <>
       {/*  Agent health grid  */}
       <div style={{ ...card, padding: "20px", marginBottom: 20 }}>
-        <div style={{ fontSize: 11, fontWeight: 600, color: "rgba(232,234,237,0.40)", letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 16 }}>
+        <div style={{ fontSize: 11, fontWeight: 600, color: "var(--section-label)", letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 16 }}>
           Agent Health · {AGENTS.length} agents
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(6,1fr)", gap: 10 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(6,1fr)", gap: 10, minWidth: 0 }}>
           {agentHealth.map(a => (
             <div
               key={a.key}
@@ -135,6 +135,8 @@ export default function BrainPage() {
                 padding: "12px 14px", borderRadius: 10, cursor: "pointer", transition: "all 0.15s",
                 background: filter === a.key ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.04)",
                 border: `1px solid ${filter === a.key ? a.color + "55" : "rgba(255,255,255,0.07)"}`,
+                overflow: "hidden",
+                minWidth: 0,
               }}
             >
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
@@ -159,10 +161,10 @@ export default function BrainPage() {
       </div>
 
       {/*  Event stream  */}
-      <div style={{ ...card, display: "flex", flexDirection: "column", minHeight: 480 }}>
+      <div style={{ ...card, display: "flex", flexDirection: "column", minHeight: 480, overflow: "hidden" }}>
         {/* Header + controls */}
-        <div style={{ padding: "18px 20px 14px", borderBottom: "1px solid rgba(255,255,255,0.07)", display: "flex", alignItems: "center", gap: 12 }}>
-          <div style={{ fontSize: 11, fontWeight: 600, color: "rgba(232,234,237,0.40)", letterSpacing: 0.5, textTransform: "uppercase", flex: 1 }}>
+        <div style={{ padding: "18px 20px 14px", borderBottom: "1px solid rgba(255,255,255,0.07)", display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center", overflow: "hidden" }}>
+          <div style={{ fontSize: 11, fontWeight: 600, color: "var(--section-label)", letterSpacing: 0.5, textTransform: "uppercase", flex: "1 1 auto", minWidth: 0 }}>
             Event Stream · {filteredEvents.length} shown
           </div>
           {/* Search */}
@@ -172,11 +174,11 @@ export default function BrainPage() {
             style={{
               background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.10)",
               borderRadius: 8, padding: "6px 12px", fontSize: 12, color: "#E8EAED",
-              outline: "none", width: 180,
+              outline: "none", width: 180, flex: "0 0 auto",
             }}
           />
           {/* Agent filter pills */}
-          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", flex: "1 1 auto" }}>
             {["ALL", ...AGENTS.map(a => a.key)].slice(0, 8).map(k => {
               const a = AGENTS.find(x => x.key === k);
               return (
@@ -246,7 +248,7 @@ export default function BrainPage() {
                 {agentLabel(evt.agent)}
               </span>
               {/* Message */}
-              <span style={{ fontSize: 12, color: "rgba(232,234,237,0.75)", flex: 1, lineHeight: 1.5, wordBreak: "break-word" }}>
+              <span style={{ fontSize: 12, color: "rgba(232,234,237,0.75)", flex: 1, lineHeight: 1.5, wordBreak: "break-word", minWidth: 0 }}>
                 {evt.message}
               </span>
               {/* Type tag */}

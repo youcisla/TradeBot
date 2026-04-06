@@ -117,7 +117,7 @@ export default function LoginPage() {
             letterSpacing: "-0.02em",
             marginBottom: 4,
           }}>
-            NeuralFX
+            PulseTrade
           </div>
           <div style={{
             ...SF,

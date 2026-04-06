@@ -1,6 +1,6 @@
 ---
 name: learning-system
-description: "Reward scoring, confidence adjustment, and strategy performance tracking in NeuralFX."
+description: "Reward scoring, confidence adjustment, and strategy performance tracking in PulseTrade."
 category: project
 risk: none
 source: project
