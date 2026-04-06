@@ -86,8 +86,8 @@ export default function DashSidebar() {
               width: 14,
               height: 14,
               borderRadius: 4,
-              background: "linear-gradient(145deg, #30d6ff 0%, #66f6a5 100%)",
-              boxShadow: "0 0 10px rgba(48,214,255,0.9), 0 0 20px rgba(102,246,165,0.35)",
+              background: "linear-gradient(145deg, var(--accent) 0%, var(--buy) 100%)",
+              boxShadow: "0 0 10px var(--accent-glow), 0 0 20px rgba(34,197,94,0.35)",
               transform: "rotate(45deg)",
               flexShrink: 0,
             }}
@@ -156,7 +156,7 @@ export default function DashSidebar() {
                       if (!active) {
                         (e.currentTarget as HTMLAnchorElement).style.background =
                           "var(--sidebar-hover-bg)";
-                        (e.currentTarget as HTMLAnchorElement).style.color = "#FFFFFF";
+                        (e.currentTarget as HTMLAnchorElement).style.color = "var(--text-primary)";
                       }
                     }}
                     onMouseLeave={(e) => {
@@ -204,7 +204,7 @@ export default function DashSidebar() {
                 width: 6,
                 height: 6,
                 borderRadius: "50%",
-                background: isRunning ? "#66f6a5" : botStatus == null ? "#FF9F0A" : "#FF3B30",
+                background: isRunning ? "var(--buy)" : botStatus == null ? "var(--health-warn)" : "var(--sell)",
                 display: "inline-block",
                 animation: isRunning ? "sidebarDotPulse 2s ease-in-out infinite" : undefined,
               }}

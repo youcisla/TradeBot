@@ -25,10 +25,10 @@ export default function DashBottomNav() {
           right: 10,
           height: 62,
           zIndex: 100,
-          background: "rgba(10,14,19,0.86)",
+          background: "var(--surface-2)",
           backdropFilter: "blur(14px)",
           WebkitBackdropFilter: "blur(14px)",
-          border: "1px solid rgba(112,143,179,0.42)",
+          border: "1px solid var(--border)",
           borderRadius: 16,
           boxShadow: "0 18px 26px rgba(0,0,0,0.44)",
           display: "flex",
@@ -55,7 +55,7 @@ export default function DashBottomNav() {
                 gap: 2,
                 minWidth: 44,
                 textDecoration: "none",
-                color: active ? "#6bd9ff" : "rgba(224,235,248,0.55)",
+                color: active ? "var(--accent)" : "var(--text-secondary)",
                 transition: "color 150ms ease",
               }}
             >

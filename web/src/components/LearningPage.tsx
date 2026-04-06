@@ -47,10 +47,10 @@ function relTime(ts: string | undefined): string {
 }
 
 function scoreColor(score: number): string {
-  if (score >= 75) return "#34C759";
-  if (score >= 50) return "#FF9F0A";
-  if (score >= 25) return "#FF6B35";
-  return "#FF453A";
+  if (score >= 75) return "var(--buy)";
+  if (score >= 50) return "var(--health-warn)";
+  if (score >= 25) return "var(--sell)";
+  return "var(--agent-risk)";
 }
 
 function scoreLabel(score: number): string {
@@ -60,9 +60,9 @@ function scoreLabel(score: number): string {
 }
 
 function scoreBg(score: number): string {
-  if (score >= 80) return "rgba(52,215,89,0.10)";
+  if (score >= 80) return "rgba(34,197,94,0.10)";
   if (score >= 50) return "rgba(255,159,10,0.10)";
-  return "rgba(255,69,58,0.10)";
+  return "rgba(239,68,68,0.10)";
 }
 
 // ── Sub-components ─────────────────────────────────────────────────────────────
@@ -82,7 +82,7 @@ function ConfBar({ value, max = 100 }: { value: number; max?: number }) {
   const pct = Math.min(100, Math.max(0, (value / max) * 100));
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-      <div style={{ flex: 1, height: 6, background: "rgba(255,255,255,0.08)", borderRadius: 3, overflow: "hidden" }}>
+      <div style={{ flex: 1, height: 6, background: "var(--border)", borderRadius: 3, overflow: "hidden" }}>
         <div style={{
           height: "100%",
           width: `${pct}%`,
@@ -101,7 +101,7 @@ function DriftBanner({ driftScore, threshold }: { driftScore: number; threshold:
   const pct = Math.min(100, (driftScore / threshold) * 100);
   const status = driftScore < threshold * 0.5 ? "NOMINAL" : driftScore < threshold ? "DRIFTING" : "CRITICAL";
 
-  const statusColors: Record<string, string> = { NOMINAL: "#34C759", DRIFTING: "#FF9F0A", CRITICAL: "#FF453A" };
+  const statusColors: Record<string, string> = { NOMINAL: "var(--buy)", DRIFTING: "var(--health-warn)", CRITICAL: "var(--sell)" };
 
   return (
     <div style={{
@@ -124,7 +124,7 @@ function DriftBanner({ driftScore, threshold }: { driftScore: number; threshold:
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
         <div style={{ flex: 1 }}>
-          <div style={{ height: 8, background: "rgba(255,255,255,0.08)", borderRadius: 4, overflow: "hidden" }}>
+          <div style={{ height: 8, background: "var(--border)", borderRadius: 4, overflow: "hidden" }}>
             <div style={{
               height: "100%",
               width: `${pct}%`,
@@ -159,8 +159,8 @@ function ConfidenceTable({ confidences }: { confidences: StrategyConfidence[] })
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           {confidences.map(c => (
             <div key={c.strategy} style={{
-              background: "rgba(255,255,255,0.03)",
-              border: "1px solid rgba(255,255,255,0.07)",
+              background: "var(--surface-2)",
+              border: "1px solid var(--border)",
               borderRadius: 8,
               padding: "12px 14px",
             }}>
@@ -244,7 +244,7 @@ function RewardScoringFeed({ scores }: { scores: TradeScore[] }) {
               {/* PnL */}
               <span style={{
                 fontSize: 13, fontWeight: 700, fontFamily: "var(--font-mono-stack)",
-                color: s.pnl >= 0 ? "#34C759" : "#FF453A",
+                color: s.pnl >= 0 ? "var(--buy)" : "var(--sell)",
               }}>
                 {s.pnl >= 0 ? "+" : ""}{s.pnl.toFixed(2)}
               </span>
@@ -302,13 +302,13 @@ function PostMortemQuality({ scores }: { scores: TradeScore[] }) {
         {stats.total > 0 && (
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {[
-              { label: "Clean", count: stats.clean, color: "#34C759" },
-              { label: "Mixed", count: stats.mixed, color: "#FF9F0A" },
-              { label: "Messy", count: stats.messy, color: "#FF453A" },
+              { label: "Clean", count: stats.clean, color: "var(--buy)" },
+              { label: "Mixed", count: stats.mixed, color: "var(--health-warn)" },
+              { label: "Messy", count: stats.messy, color: "var(--sell)" },
             ].map(({ label, count, color }) => (
               <div key={label} style={{ display: "flex", alignItems: "center", gap: 10 }}>
                 <div style={{ width: 50, fontSize: 12, color: "var(--text-secondary)" }}>{label}</div>
-                <div style={{ flex: 1, height: 6, background: "rgba(255,255,255,0.06)", borderRadius: 3, overflow: "hidden" }}>
+                <div style={{ flex: 1, height: 6, background: "var(--surface-2)", borderRadius: 3, overflow: "hidden" }}>
                   <div style={{
                     height: "100%",
                     width: `${(count / stats.total) * 100}%`,
@@ -325,7 +325,7 @@ function PostMortemQuality({ scores }: { scores: TradeScore[] }) {
         )}
 
         {/* Total */}
-        <div style={{ display: "flex", justifyContent: "space-between", paddingTop: 4, borderTop: "1px solid rgba(255,255,255,0.07)" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", paddingTop: 4, borderTop: "1px solid var(--border)" }}>
           <span style={{ fontSize: 12, color: "var(--text-muted)" }}>Total scored</span>
           <span style={{ fontSize: 13, fontWeight: 700, color: "var(--text-primary)", fontFamily: "var(--font-mono-stack)" }}>
             {stats.total}
@@ -403,8 +403,8 @@ export default function LearningPage() {
         {[
           { label: "Total Scored",   value: scores.length,      color: "var(--text-primary)" },
           { label: "Avg Score",      value: scores.length > 0 ? (scores.reduce((s, t) => s + t.score, 0) / scores.length).toFixed(1) : "—", color: scoreColor(scores.length > 0 ? scores.reduce((s, t) => s + t.score, 0) / scores.length : 0) },
-          { label: "Clean Setups",   value: scores.filter(s => s.score >= 80).length, color: "#34C759" },
-          { label: "Training",       value: trainingStatus,       color: trainingStatus === "TRAINING" ? "#FF9F0A" : "#34C759" },
+          { label: "Clean Setups",   value: scores.filter(s => s.score >= 80).length, color: "var(--buy)" },
+          { label: "Training",       value: trainingStatus,       color: trainingStatus === "TRAINING" ? "var(--health-warn)" : "var(--buy)" },
         ].map(({ label, value, color }) => (
           <div key={label} style={{
             background: "var(--card-bg)", border: "1px solid var(--card-border)",
@@ -446,14 +446,14 @@ export default function LearningPage() {
                 style={{
                   display: "flex", gap: 12, padding: "8px 10px",
                   borderRadius: 6, alignItems: "flex-start",
-                  background: /error|critical/i.test(ev.level ?? "") ? "rgba(255,69,58,0.04)" : "transparent",
-                  borderLeft: /error|critical/i.test(ev.level ?? "") ? "2px solid rgba(255,69,58,0.4)" : "2px solid transparent",
+                  background: /error|critical/i.test(ev.level ?? "") ? "rgba(239,68,68,0.04)" : "transparent",
+                  borderLeft: /error|critical/i.test(ev.level ?? "") ? "2px solid rgba(239,68,68,0.4)" : "2px solid transparent",
                 }}
               >
-                <span style={{ fontSize: 10, color: "rgba(232,234,237,0.25)", fontFamily: MONO, flexShrink: 0, marginTop: 1 }}>
+                <span style={{ fontSize: 10, color: "var(--text-muted)", fontFamily: MONO, flexShrink: 0, marginTop: 1 }}>
                   {relTime(ev.ts ?? ev.created_at)}
                 </span>
-                <span style={{ fontSize: 12, color: "rgba(232,234,237,0.75)", flex: 1, lineHeight: 1.5 }}>
+                <span style={{ fontSize: 12, color: "var(--text-secondary)", flex: 1, lineHeight: 1.5 }}>
                   {ev.message ?? ev.msg ?? "—"}
                 </span>
               </div>

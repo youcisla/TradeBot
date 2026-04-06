@@ -2,69 +2,76 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ── iOS Design System — PulseTrade TradingBot ─────────────────────────────── */
+/* ── REDESIGN Design System — PulseTrade TradingBot ─────────────────────────── */
 
-/* System fonts — SF Pro (iOS/macOS native rendering) */
+/* System fonts */
 :root {
   --font-system: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text",
     system-ui, "Helvetica Neue", Arial, sans-serif;
   --font-mono: "SF Mono", SFMono-Regular, ui-monospace, Menlo, Monaco,
     "Courier New", monospace;
+  --font-mono-stack: var(--font-mono);
 
-  /* ── iOS Dark Mode System Colors ──────────────────────────────────────── */
-  --ios-bg:           #000000;
-  --ios-bg-2:         #1C1C1E;
-  --ios-bg-3:         #2C2C2E;
-  --ios-bg-4:         #3A3A3C;
-  --ios-separator:    rgba(84, 84, 88, 0.65);
-  --ios-separator-opaque: #38383A;
+  /* ── REDESIGN Core Palette ─────────────────────────────────────────────── */
+  --bg:             #08090B;   /* near-black, slightly blue-tinted */
+  --surface-1:      #0D0F12;   /* card background */
+  --surface-2:      #12151A;   /* elevated card / modal */
+  --surface-3:      #1A1D24;   /* higher elevation */
 
-  /* Labels */
-  --ios-label:        #FFFFFF;
-  --ios-label-2:      rgba(235, 235, 245, 0.6);
-  --ios-label-3:      rgba(235, 235, 245, 0.3);
-  --ios-label-4:      rgba(235, 235, 245, 0.18);
+  /* Text */
+  --text-primary:   #E8EAF0;   /* primary text */
+  --text-secondary: #9CA3AF;  /* secondary / dimmed */
+  --text-muted:     #6B7280;   /* muted / placeholder */
+  --text-disabled:  #374151;   /* disabled */
 
-  /* System Colors — Dark Mode */
-  --ios-blue:         #0A84FF;
-  --ios-green:        #30D158;
-  --ios-red:          #FF453A;
-  --ios-orange:       #FF9F0A;
-  --ios-yellow:       #FFD60A;
-  --ios-teal:         #64D2FF;
-  --ios-cyan:         #32ADE6;
-  --ios-purple:       #BF5AF2;
-  --ios-indigo:       #5E5CE6;
-  --ios-pink:         #FF375F;
-  --ios-mint:         #63E6E2;
+  /* Borders */
+  --border:         rgba(255, 255, 255, 0.08);
+  --border-subtle:  rgba(255, 255, 255, 0.04);
+  --border-accent:  rgba(99, 179, 237, 0.35);
 
-  /* Grays */
-  --ios-gray:         #8E8E93;
-  --ios-gray-2:       #636366;
-  --ios-gray-3:       #48484A;
-  --ios-gray-4:       #3A3A3C;
-  --ios-gray-5:       #2C2C2E;
-  --ios-gray-6:       #1C1C1E;
+  /* Accent */
+  --accent:         #63B3ED;   /* primary interactive accent */
+  --accent-dim:     rgba(99, 179, 237, 0.12);
+  --accent-glow:    rgba(99, 179, 237, 0.25);
 
-  /* Fills */
-  --ios-fill:              rgba(120, 120, 128, 0.36);
-  --ios-fill-2:            rgba(120, 120, 128, 0.32);
-  --ios-fill-3:            rgba(118, 118, 128, 0.24);
-  --ios-fill-4:            rgba(116, 116, 128, 0.18);
+  /* Semantic — Buy / Sell */
+  --buy:            #22C55E;
+  --buy-dim:        rgba(34, 197, 94, 0.12);
+  --sell:           #EF4444;
+  --sell-dim:       rgba(239, 68, 68, 0.12);
 
-  /* Agent accent colors (preserved, mapped to iOS palette) */
-  --agent-crucix:        #64D2FF;
-  --agent-market:        #32ADE6;
-  --agent-analysis:      #FFFFFF;
-  --agent-strategy:      #30D158;
-  --agent-neural:        #BF5AF2;
-  --agent-council:       #FF9F0A;
-  --agent-risk:          #FF453A;
-  --agent-execution:     #FFFFFF;
-  --agent-trade-manager: #63E6E2;
-  --agent-learning:      #64D2FF;
-  --agent-logging:       #636366;
-  --agent-model-manager: #5E5CE6;
+  /* Semantic — P&L */
+  --pnl-positive:   #22C55E;
+  --pnl-negative:   #EF4444;
+  --pnl-neutral:    #9CA3AF;
+
+  /* Agent Colors */
+  --agent-crucix:        #06B6D4;
+  --agent-market:        #3B82F6;
+  --agent-analysis:      #E8EAF0;
+  --agent-strategy:      #22C55E;
+  --agent-neural:        #A78BFA;
+  --agent-council:       #F59E0B;
+  --agent-risk:          #EF4444;
+  --agent-execution:     #E8EAF0;
+  --agent-trade-manager: #06B6D4;
+  --agent-learning:      #60A5FA;
+  --agent-logging:       #6B7280;
+  --agent-model-manager: #8B5CF6;
+  --agent-debate:        #F97316;
+  --agent-exposure:      #EC4899;
+
+  /* Health / Regime */
+  --health-good:     #22C55E;
+  --health-warn:     #F59E0B;
+  --health-bad:      #EF4444;
+  --health-unknown:  #6B7280;
+
+  /* Regimes */
+  --regime-bull:     #22C55E;
+  --regime-bear:     #EF4444;
+  --regime-range:    #F59E0B;
+  --regime-volatile: #A78BFA;
 
   /* Z-index scale */
   --z-base:    10;
@@ -73,7 +80,7 @@
   --z-modal:   50;
   --z-top:     100;
 
-  /* ── Spacing Scale ─────────────────────────────────────────────────────── */
+  /* Spacing Scale */
   --space-1:  4px;
   --space-2:  8px;
   --space-3:  12px;
@@ -81,40 +88,32 @@
   --space-5:  20px;
   --space-6:  24px;
   --space-8:  32px;
+  --space-10: 40px;
+  --space-12: 48px;
 
-  /* ── Dashboard Background ───────────────────────────────────────────────── */
-  --bg-radial-start: #1a2a3f;
-  --bg-radial-mid:   #06070a;
-  --bg-radial-end:   #030303;
+  /* ── Sidebar tokens ────────────────────────────────────────────────────── */
+  --sidebar-bg:         rgba(13, 15, 18, 0.97);
+  --sidebar-bg-hover:   rgba(99, 179, 237, 0.08);
+  --sidebar-text:      rgba(226, 234, 240, 0.65);
+  --sidebar-text-dim:  rgba(226, 234, 240, 0.38);
+  --sidebar-border:    rgba(255, 255, 255, 0.06);
+  --sidebar-icon:      #63B3ED;
+  --sidebar-accent:    rgba(99, 179, 237, 0.40);
 
-  /* ── Sidebar ────────────────────────────────────────────────────────────── */
-  --sidebar-bg:         rgba(16, 19, 26, 0.96);
-  --sidebar-bg-2:       rgba(10, 12, 15, 0.97);
-  --sidebar-bg-3:       rgba(8, 9, 11, 0.98);
-  --sidebar-border:     rgba(100, 120, 150, 0.22);
-  --sidebar-separator:  rgba(100, 120, 150, 0.25);
-  --sidebar-accent:     rgba(108, 184, 255, 0.45);
-  --sidebar-accent-bg:  rgba(38, 120, 176, 0.34);
-  --sidebar-accent-bg-2:rgba(24, 38, 59, 0.70);
-  --sidebar-text:       rgba(226, 235, 247, 0.68);
-  --sidebar-text-dim:   rgba(226, 235, 247, 0.40);
-  --sidebar-text-muted: rgba(180, 200, 228, 0.58);
-  --sidebar-brand:      #e7f0ff;
-  --sidebar-hover-bg:   rgba(88, 122, 160, 0.18);
-  --sidebar-icon:       #63d4ff;
+  /* ── Card tokens ────────────────────────────────────────────────────────── */
+  --card-bg:      var(--surface-1);
+  --card-border:  var(--border);
+  --card-radius:  10px;
+  --card-padding: 20px;
+  --card-padding-sm: 14px;
 
-  /* ── Card tokens (shared across all pages) ─────────────────────────────── */
-  --card-bg:            var(--ios-bg-2);
-  --card-border:        rgba(255, 255, 255, 0.09);
-  --card-radius:        12px;
-  --card-padding:       20px;
-  --card-padding-sm:    16px;
+  /* ── Section label ──────────────────────────────────────────────────────── */
+  --section-label: rgba(232, 234, 240, 0.55);
 
-  /* ── Section label token ───────────────────────────────────────────────── */
-  --section-label:     rgba(232, 234, 237, 0.60);
-
-  /* ── Mono font ──────────────────────────────────────────────────────────── */
-  --font-mono-stack:    "SF Mono", SFMono-Regular, ui-monospace, Menlo, Monaco, "Courier New", monospace;
+  /* ── Shadows ─────────────────────────────────────────────────────────────── */
+  --shadow-sm:  0 1px 3px rgba(0, 0, 0, 0.4);
+  --shadow-md:  0 4px 12px rgba(0, 0, 0, 0.5);
+  --shadow-lg:  0 8px 24px rgba(0, 0, 0, 0.6);
 }
 
 /* ── Base Reset ──────────────────────────────────────────────────────────── */
@@ -128,8 +127,8 @@ html {
 
 body {
   font-family: var(--font-system);
-  background: var(--ios-bg);
-  color: var(--ios-label);
+  background: var(--bg);
+  color: var(--text-primary);
   min-height: 100dvh;
   line-height: 1.5;
   font-size: 17px;
@@ -147,24 +146,24 @@ body {
 /* ── Scrollbar ───────────────────────────────────────────────────────────── */
 ::-webkit-scrollbar       { width: 3px; height: 3px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--ios-gray-3); border-radius: 2px; }
-::-webkit-scrollbar-thumb:hover { background: var(--ios-gray-2); }
+::-webkit-scrollbar-thumb { background: var(--text-muted); border-radius: 2px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-secondary); }
 
 /* ── iOS Card ────────────────────────────────────────────────────────────── */
 .ios-card {
-  background: var(--ios-bg-2);
+  background: var(--surface-1);
   border-radius: 12px;
   overflow: hidden;
 }
 
 .ios-card-inset {
-  background: var(--ios-bg-3);
+  background: var(--surface-2);
   border-radius: 10px;
 }
 
 /* ── iOS Grouped List ────────────────────────────────────────────────────── */
 .ios-grouped {
-  background: var(--ios-bg-2);
+  background: var(--surface-1);
   border-radius: 12px;
   overflow: hidden;
 }
@@ -174,7 +173,7 @@ body {
   align-items: center;
   min-height: 44px;
   padding: 0 16px;
-  border-bottom: 0.5px solid var(--ios-separator);
+  border-bottom: 0.5px solid var(--border);
 }
 
 .ios-grouped-row:last-child {
@@ -185,7 +184,7 @@ body {
 .ios-section-header {
   font-size: 13px;
   font-weight: 400;
-  color: var(--ios-label-2);
+  color: var(--text-secondary);
   padding: 6px 16px 6px;
   text-transform: uppercase;
   letter-spacing: 0.02em;
@@ -200,20 +199,20 @@ body {
   border-radius: 10px;
   font-size: 15px;
   font-weight: 500;
-  color: var(--ios-label-2);
+  color: var(--text-secondary);
   cursor: pointer;
   transition: background 150ms ease, color 150ms ease;
   text-decoration: none;
 }
 
 .ios-nav-item:hover {
-  background: var(--ios-fill-3);
-  color: var(--ios-label);
+  background: var(--surface-2);
+  color: var(--text-primary);
 }
 
 .ios-nav-item.active {
-  background: var(--ios-fill);
-  color: var(--ios-label);
+  background: var(--surface-2);
+  color: var(--text-primary);
 }
 
 /* ── iOS Button ──────────────────────────────────────────────────────────── */
@@ -237,18 +236,18 @@ body {
 .ios-btn:active { opacity: 0.75; transform: scale(0.97); }
 
 .ios-btn-primary {
-  background: var(--ios-blue);
+  background: var(--accent);
   color: #fff;
 }
 
 .ios-btn-secondary {
-  background: var(--ios-fill-3);
-  color: var(--ios-blue);
+  background: var(--surface-2);
+  color: var(--accent);
 }
 
 .ios-btn-danger {
   background: rgba(255, 69, 58, 0.15);
-  color: var(--ios-red);
+  color: var(--sell);
 }
 
 .ios-btn-sm {
@@ -270,55 +269,55 @@ body {
   letter-spacing: -0.01em;
 }
 
-.ios-badge-green  { background: rgba(48, 209, 88, 0.15);  color: var(--ios-green);  }
-.ios-badge-red    { background: rgba(255, 69, 58, 0.15);   color: var(--ios-red);    }
-.ios-badge-blue   { background: rgba(10, 132, 255, 0.15);  color: var(--ios-blue);   }
-.ios-badge-orange { background: rgba(255, 159, 10, 0.15);  color: var(--ios-orange); }
-.ios-badge-gray   { background: var(--ios-fill-3);          color: var(--ios-gray);   }
-.ios-badge-purple { background: rgba(191, 90, 242, 0.15);  color: var(--ios-purple); }
-.ios-badge-teal   { background: rgba(100, 210, 255, 0.15); color: var(--ios-teal);   }
+.ios-badge-green  { background: var(--buy-dim);     color: var(--buy);  }
+.ios-badge-red    { background: var(--sell-dim);   color: var(--sell);    }
+.ios-badge-blue   { background: var(--accent-dim);  color: var(--accent);   }
+.ios-badge-orange { background: rgba(245, 158, 11, 0.12); color: var(--health-warn); }
+.ios-badge-gray   { background: var(--surface-2);   color: var(--text-muted);   }
+.ios-badge-purple { background: rgba(167, 139, 250, 0.12); color: var(--agent-neural); }
+.ios-badge-teal   { background: rgba(6, 182, 212, 0.12);  color: var(--agent-crucix);   }
 
 /* ── iOS Input ───────────────────────────────────────────────────────────── */
 .ios-input {
-  background: var(--ios-fill-4);
+  background: var(--surface-1);
   border: none;
   border-radius: 10px;
   padding: 10px 14px;
   font-family: var(--font-system);
   font-size: 17px;
-  color: var(--ios-label);
+  color: var(--text-primary);
   outline: none;
   width: 100%;
   transition: background 150ms ease;
 }
 
 .ios-input:focus {
-  background: var(--ios-fill-3);
-  box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.3);
+  background: var(--surface-2);
+  box-shadow: 0 0 0 3px var(--accent-glow);
 }
 
 .ios-input::placeholder {
-  color: var(--ios-label-3);
+  color: var(--text-muted);
 }
 
 /* ── iOS Search Bar ──────────────────────────────────────────────────────── */
 .ios-search {
-  background: var(--ios-fill-4);
+  background: var(--surface-1);
   border-radius: 10px;
   padding: 8px 12px;
   font-family: var(--font-system);
   font-size: 15px;
-  color: var(--ios-label);
+  color: var(--text-primary);
   border: none;
   outline: none;
   width: 100%;
 }
 
-.ios-search:focus { box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.3); }
+.ios-search:focus { box-shadow: 0 0 0 3px var(--accent-glow); }
 
 /* ── iOS Sheet / Modal ───────────────────────────────────────────────────── */
 .ios-sheet {
-  background: var(--ios-bg-2);
+  background: var(--surface-1);
   border-radius: 20px 20px 0 0;
   box-shadow: 0 -4px 40px rgba(0, 0, 0, 0.5);
 }
@@ -372,12 +371,12 @@ body {
 /* ── Divider ─────────────────────────────────────────────────────────────── */
 .ios-divider {
   height: 0.5px;
-  background: var(--ios-separator);
+  background: var(--border);
 }
 
 .ios-divider-inset {
   height: 0.5px;
-  background: var(--ios-separator);
+  background: var(--border);
   margin-left: 56px;
 }
 
@@ -401,9 +400,9 @@ body {
 .ios-skeleton {
   background: linear-gradient(
     90deg,
-    var(--ios-bg-3) 25%,
-    var(--ios-bg-4) 50%,
-    var(--ios-bg-3) 75%
+    var(--surface-2) 25%,
+    var(--surface-3) 50%,
+    var(--surface-2) 75%
   );
   background-size: 800px 100%;
   animation: ios-shimmer 1.4s ease-in-out infinite;
@@ -449,7 +448,7 @@ main > * { animation: ios-fade-up 200ms cubic-bezier(0.25, 0.46, 0.45, 0.94) bot
 
 /* ── Focus ───────────────────────────────────────────────────────────────── */
 :focus-visible {
-  outline: 3px solid rgba(10, 132, 255, 0.5);
+  outline: 3px solid var(--accent-glow);
   outline-offset: 2px;
   border-radius: 4px;
 }
@@ -471,7 +470,7 @@ button, [role="button"], [role="tab"], select, label[for], a, .interactive {
 /* ── iOS Segment Control ─────────────────────────────────────────────────── */
 .ios-segment {
   display: inline-flex;
-  background: var(--ios-fill-4);
+  background: var(--surface-1);
   border-radius: 9px;
   padding: 2px;
   gap: 2px;
@@ -482,7 +481,7 @@ button, [role="button"], [role="tab"], select, label[for], a, .interactive {
   border-radius: 7px;
   font-size: 13px;
   font-weight: 600;
-  color: var(--ios-label-2);
+  color: var(--text-secondary);
   cursor: pointer;
   transition: all 120ms ease;
   border: none;
@@ -491,8 +490,8 @@ button, [role="button"], [role="tab"], select, label[for], a, .interactive {
 }
 
 .ios-segment-item.active {
-  background: var(--ios-bg-3);
-  color: var(--ios-label);
+  background: var(--surface-2);
+  color: var(--text-primary);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
 }
 
@@ -501,7 +500,7 @@ button, [role="button"], [role="tab"], select, label[for], a, .interactive {
   width: 51px;
   height: 31px;
   border-radius: 16px;
-  background: var(--ios-gray-3);
+  background: var(--text-muted);
   position: relative;
   cursor: pointer;
   transition: background 200ms ease;
@@ -510,7 +509,7 @@ button, [role="button"], [role="tab"], select, label[for], a, .interactive {
   flex-shrink: 0;
 }
 
-.ios-toggle.on { background: var(--ios-green); }
+.ios-toggle.on { background: var(--buy); }
 
 .ios-toggle-thumb {
   position: absolute;
@@ -534,16 +533,16 @@ button, [role="button"], [role="tab"], select, label[for], a, .interactive {
   text-align: left;
   font-size: 12px;
   font-weight: 600;
-  color: var(--ios-label-3);
+  color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  border-bottom: 0.5px solid var(--ios-separator);
+  border-bottom: 0.5px solid var(--border);
 }
 
 .ios-table td {
   padding: 12px 16px;
   font-size: 15px;
-  color: var(--ios-label);
+  color: var(--text-primary);
   border-bottom: 0.5px solid rgba(84, 84, 88, 0.3);
 }
 
@@ -551,14 +550,14 @@ button, [role="button"], [role="tab"], select, label[for], a, .interactive {
 .ios-table tr:hover td { background: rgba(255, 255, 255, 0.03); }
 
 /* ── Utility classes ─────────────────────────────────────────────────────── */
-.text-green  { color: var(--ios-green);  }
-.text-red    { color: var(--ios-red);    }
-.text-blue   { color: var(--ios-blue);   }
-.text-orange { color: var(--ios-orange); }
-.text-teal   { color: var(--ios-teal);   }
-.text-purple { color: var(--ios-purple); }
-.text-muted  { color: var(--ios-label-2); }
-.text-dim    { color: var(--ios-label-3); }
+.text-green  { color: var(--buy);  }
+.text-red    { color: var(--sell);    }
+.text-blue   { color: var(--accent);   }
+.text-orange { color: var(--health-warn); }
+.text-teal   { color: var(--agent-crucix);   }
+.text-purple { color: var(--agent-neural); }
+.text-muted  { color: var(--text-secondary); }
+.text-dim    { color: var(--text-muted); }
 
 /* ── Material Symbols — locally served (avoids render-blocking Google Fonts) ── */
 /* MUST be at the end so @tailwind processes first */

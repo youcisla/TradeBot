@@ -222,6 +222,68 @@ def main() -> None:
     strategy_agent = StrategyAgent(strategies, learning.get_confidence, db=db)
     weekend_strategy_agent = StrategyAgent(weekend_strategies, learning.get_confidence, db=db)
 
+    # ── 5b. Warmup: load all ML models eagerly before the main loop ──────────
+    def _warmup_models() -> None:
+        """Eagerly load all ML/prediction models at startup.
+
+        This ensures models are ready before the first signal evaluation,
+        avoiding lazy-load latency spikes during trading.
+        """
+        import time as _time
+        _t0 = _time.monotonic()
+        _loaded: list[str] = []
+        _skipped: list[str] = []
+
+        # LGBM Ensemble
+        if settings.LGBM_ENSEMBLE_ENABLED:
+            from models.lgbm_ensemble import LGBMEnsemble
+            _ens = LGBMEnsemble()
+            if _ens.is_ready:
+                _loaded.append(f"lgbm_ensemble (trained)")
+                logger.info("LGBM ensemble ready at startup (shap features: %d)",
+                            len(_ens.get_shap_importance()))
+            else:
+                _skipped.append("lgbm_ensemble (not trained)")
+                logger.warning("LGBM ensemble not ready at startup — will train on demand")
+
+            # LGBM per-symbol price models
+            from models.lgbm_price_model import LGBMPriceModel
+            _price = LGBMPriceModel()
+            _trained_syms = _price.symbols_trained()
+            if _trained_syms:
+                _loaded.append(f"lgbm_price ({len(_trained_syms)} symbols: {', '.join(_trained_syms[:8])}{'...' if len(_trained_syms) > 8 else ''})")
+                logger.info("LGBM price models ready at startup: %d symbols", len(_trained_syms))
+            else:
+                _skipped.append("lgbm_price (no trained symbols)")
+                logger.info("No LGBM price models at startup — will train on demand")
+
+            # Pre-initialize the StrategyAgent lazy singleton
+            _ = strategy_agent._lgbm   # noqa: F841 — triggers lazy init
+            _loaded.append("strategy_agent.lgbm_singleton")
+            logger.info("StrategyAgent LGBM singleton initialized")
+        else:
+            logger.info("LGBM models skipped at startup (LGBM_ENSEMBLE_ENABLED=false)")
+            _skipped.append("lgbm (disabled)")
+
+        # Kalman filter — stateless, no warmup needed beyond the singleton check
+        if settings.KALMAN_ENABLED:
+            _loaded.append("kalman (stateless)")
+            logger.info("Kalman filter enabled (stateless, no warmup needed)")
+
+        # GARCH regime — per-symbol, initialized on first market data
+        if settings.GARCH_ENABLED:
+            _loaded.append("garch_regime (on-demand per symbol)")
+            logger.info("GARCH regime detection enabled (initializes on first candle)")
+
+        _elapsed = _time.monotonic() - _t0
+        _msg = f"Model warmup complete in {_elapsed*1000:.1f}ms — loaded: {', '.join(_loaded) if _loaded else 'none'}"
+        if _skipped:
+            _msg += f" | skipped: {', '.join(_skipped)}"
+        logger.info(_msg)
+        log_agent.record("STARTUP", _msg)
+
+    _warmup_models()
+
     def _get_active_symbols_local() -> list[str]:
         return _active_symbols[:]
 

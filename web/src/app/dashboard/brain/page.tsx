@@ -30,18 +30,18 @@ interface AgentHealth {
 // ── Agent config ───────────────────────────────────────────────────────────────
 
 const AGENTS = [
-  { key: "crucix",        label: "Crucix",    color: "#5AC8FA" },
-  { key: "market",        label: "Market",    color: "#0A84FF" },
-  { key: "analysis",      label: "Analysis",  color: "#E8EAED" },
-  { key: "strategy",      label: "Strategy",  color: "#34C759" },
-  { key: "neural",        label: "Neural",    color: "#BF5AF2" },
-  { key: "council",       label: "Council",   color: "#FF9F0A" },
-  { key: "risk",          label: "Risk",      color: "#FF3B30" },
-  { key: "execution",     label: "Execution", color: "#E8EAED" },
-  { key: "trade_manager", label: "TradeMgr",  color: "#5AC8FA" },
-  { key: "learning",      label: "Learning",  color: "#30D158" },
-  { key: "model_manager", label: "Models",    color: "#BF5AF2" },
-  { key: "logging",       label: "Logging",   color: "rgba(232,234,237,0.35)" },
+  { key: "crucix",        label: "Crucix",    color: "var(--accent)" },
+  { key: "market",        label: "Market",    color: "var(--accent)" },
+  { key: "analysis",      label: "Analysis",  color: "var(--text-primary)" },
+  { key: "strategy",      label: "Strategy",  color: "var(--agent-strategy)" },
+  { key: "neural",        label: "Neural",    color: "var(--agent-neural)" },
+  { key: "council",       label: "Council",   color: "var(--health-warn)" },
+  { key: "risk",          label: "Risk",      color: "var(--agent-risk)" },
+  { key: "execution",     label: "Execution", color: "var(--text-primary)" },
+  { key: "trade_manager", label: "TradeMgr",  color: "var(--accent)" },
+  { key: "learning",      label: "Learning",  color: "var(--agent-strategy)" },
+  { key: "model_manager", label: "Models",    color: "var(--agent-neural)" },
+  { key: "logging",       label: "Logging",   color: "var(--text-muted)" },
 ];
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -67,7 +67,7 @@ function fmtTime(iso: string | null | undefined): string {
 }
 
 function agentColor(key: string): string {
-  return AGENTS.find(a => a.key === key)?.color ?? "rgba(232,234,237,0.45)";
+  return AGENTS.find(a => a.key === key)?.color ?? "var(--text-muted)";
 }
 
 function agentLabel(key: string): string {
@@ -75,13 +75,13 @@ function agentLabel(key: string): string {
 }
 
 function healthBadge(lastSeen: string | null): { label: string; color: string } {
-  if (!lastSeen) return { label: "DORMANT", color: "rgba(232,234,237,0.20)" };
+  if (!lastSeen) return { label: "DORMANT", color: "var(--text-muted)" };
   const ms   = Date.now() - new Date(lastSeen).getTime();
   const mins = ms / 60_000;
-  if (mins < 2)  return { label: "ACTIVE",  color: "#34C759" };
-  if (mins < 10) return { label: "IDLE",   color: "#FF9F0A" };
-  if (mins < 60) return { label: "SLOW",   color: "#FF9F0A" };
-  return            { label: "STALE",  color: "#FF3B30" };
+  if (mins < 2)  return { label: "ACTIVE",  color: "var(--buy)" };
+  if (mins < 10) return { label: "IDLE",   color: "var(--health-warn)" };
+  if (mins < 60) return { label: "SLOW",   color: "var(--health-warn)" };
+  return            { label: "STALE",  color: "var(--sell)" };
 }
 
 function severityOf(evt: AgentEvent): string {
@@ -107,18 +107,18 @@ function SkeletonCard() {
   return (
     <div style={{
       borderRadius: 10,
-      background: "rgba(255,255,255,0.03)",
-      border: "1px solid rgba(255,255,255,0.06)",
+      background: "var(--surface-2)",
+      border: "1px solid var(--surface-2)",
       padding: "12px 14px",
       height: 90,
       overflow: "hidden",
     }}>
       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
-        <div style={{ height: 11, width: 52, borderRadius: 3, background: "rgba(255,255,255,0.08)" }} />
-        <div style={{ height: 11, width: 48, borderRadius: 3, background: "rgba(255,255,255,0.06)" }} />
+        <div style={{ height: 11, width: 52, borderRadius: 3, background: "var(--border)" }} />
+        <div style={{ height: 11, width: 48, borderRadius: 3, background: "var(--surface-2)" }} />
       </div>
-      <div style={{ height: 9, width: "80%", borderRadius: 3, background: "rgba(255,255,255,0.05)", marginBottom: 6 }} />
-      <div style={{ height: 9, width: "55%", borderRadius: 3, background: "rgba(255,255,255,0.04)" }} />
+      <div style={{ height: 9, width: "80%", borderRadius: 3, background: "var(--surface-1)", marginBottom: 6 }} />
+      <div style={{ height: 9, width: "55%", borderRadius: 3, background: "var(--surface-2)" }} />
     </div>
   );
 }
@@ -204,7 +204,7 @@ function AgentDetailDrawer({
         }}>
           {[
             { label: "Events",     value: health.count },
-            { label: "Errors",     value: errors,        color: errors > 0 ? "var(--negative)" : undefined },
+            { label: "Errors",     value: errors,        color: errors > 0 ? "var(--sell)" : undefined },
             { label: "Last Seen",  value: relTime(health.last) },
           ].map(({ label, value, color }) => (
             <div key={label} style={{ textAlign: "center" }}>
@@ -246,8 +246,8 @@ function AgentDetailDrawer({
               style={{
                 display: "flex", gap: 10, padding: "8px 10px",
                 borderRadius: 6,
-                background: ev.level === "error" ? "rgba(255,59,58,0.06)" : "transparent",
-                borderLeft: ev.level === "error" ? `2px solid var(--negative)` : "2px solid transparent",
+                background: ev.level === "error" ? "rgba(239,68,68,0.06)" : "transparent",
+                borderLeft: ev.level === "error" ? `2px solid var(--sell)` : "2px solid transparent",
                 alignItems: "flex-start",
               }}
             >
@@ -255,7 +255,7 @@ function AgentDetailDrawer({
                 {fmtTime(ev.ts)}
               </span>
               <span style={{
-                fontSize: 12, color: ev.level === "error" ? "var(--negative)" : ev.level === "warn" ? "var(--warning)" : "var(--text-secondary)",
+                fontSize: 12, color: ev.level === "error" ? "var(--sell)" : ev.level === "warn" ? "var(--health-warn)" : "var(--text-secondary)",
                 flex: 1, lineHeight: 1.5, wordBreak: "break-word",
               }}>
                 {ev.msg}
@@ -263,7 +263,7 @@ function AgentDetailDrawer({
               {ev.level !== "info" && (
                 <span style={{
                   fontSize: 9, fontWeight: 700, flexShrink: 0,
-                  color: ev.level === "error" ? "var(--negative)" : "var(--warning)",
+                  color: ev.level === "error" ? "var(--sell)" : "var(--health-warn)",
                   textTransform: "uppercase", letterSpacing: 0.4, marginTop: 2,
                 }}>
                   {ev.level}
@@ -363,9 +363,9 @@ export default function BrainPage() {
 
       {/* Agent health grid */}
       <div style={{
-        background: "var(--card-bg)",
-        border: "1px solid var(--card-border)",
-        borderRadius: "var(--card-radius)",
+        background: "var(--surface-2)",
+        border: "1px solid var(--border)",
+        borderRadius: 10,
         padding: "20px",
         marginBottom: 20,
       }}>
@@ -373,7 +373,7 @@ export default function BrainPage() {
           display: "flex", alignItems: "center", justifyContent: "space-between",
           marginBottom: 16,
         }}>
-          <div style={{ fontSize: 11, fontWeight: 600, color: "var(--section-label)", letterSpacing: 0.5, textTransform: "uppercase" }}>
+          <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text-muted)", letterSpacing: 0.5, textTransform: "uppercase" }}>
             Pipeline Health · {AGENTS.length} agents
           </div>
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
@@ -381,8 +381,8 @@ export default function BrainPage() {
             {shellStatus && (
               <span style={{
                 fontSize: 10, fontWeight: 700,
-                color: isRunning ? "#34C759" : shellStatus.state === "paused" ? "#FF9F0A" : "#FF3B30",
-                background: (isRunning ? "#34C759" : shellStatus.state === "paused" ? "#FF9F0A" : "#FF3B30") + "18",
+                color: isRunning ? "var(--buy)" : shellStatus.state === "paused" ? "var(--health-warn)" : "var(--sell)",
+                background: isRunning ? "var(--surface-2)" : shellStatus.state === "paused" ? "var(--surface-2)" : "var(--surface-2)",
                 padding: "2px 8px", borderRadius: 4, letterSpacing: 0.5,
                 textTransform: "uppercase",
               }}>
@@ -409,19 +409,19 @@ export default function BrainPage() {
                   borderRadius: 10,
                   cursor: "pointer",
                   transition: "all 150ms ease",
-                  background: selectedAgent?.key === a.key ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.04)",
-                  border: `1px solid ${selectedAgent?.key === a.key ? a.color + "55" : "rgba(255,255,255,0.07)"}`,
+                  background: selectedAgent?.key === a.key ? "var(--border)" : "var(--surface-2)",
+                  border: `1px solid ${selectedAgent?.key === a.key ? a.color + "55" : "var(--border)"}`,
                   overflow: "hidden",
                   minWidth: 0,
                 }}
                 onMouseEnter={e => {
                   if (selectedAgent?.key !== a.key) {
-                    (e.currentTarget as HTMLDivElement).style.background = "rgba(255,255,255,0.07)";
+                    (e.currentTarget as HTMLDivElement).style.background = "var(--border)";
                   }
                 }}
                 onMouseLeave={e => {
                   if (selectedAgent?.key !== a.key) {
-                    (e.currentTarget as HTMLDivElement).style.background = "rgba(255,255,255,0.04)";
+                    (e.currentTarget as HTMLDivElement).style.background = "var(--surface-2)";
                   }
                 }}
               >
@@ -437,18 +437,18 @@ export default function BrainPage() {
                   </span>
                 </div>
                 <div style={{
-                  fontSize: 11, color: "rgba(232,234,237,0.40)",
+                  fontSize: 11, color: "var(--text-muted)",
                   whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
                   marginBottom: 4, minWidth: 0,
                 }}>
                   {a.msg.slice(0, 42)}{a.msg.length > 42 ? "…" : ""}
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <span style={{ fontSize: 10, color: "rgba(232,234,237,0.25)", fontFamily: MONO }}>
+                  <span style={{ fontSize: 10, color: "var(--text-muted)", fontFamily: MONO }}>
                     {a.count} evt{a.count !== 1 ? "s" : ""}
-                    {a.errors > 0 && <span style={{ color: "var(--negative)" }}> · {a.errors} err</span>}
+                    {a.errors > 0 && <span style={{ color: "var(--sell)" }}> · {a.errors} err</span>}
                   </span>
-                  <span style={{ fontSize: 10, color: "rgba(232,234,237,0.25)" }}>
+                  <span style={{ fontSize: 10, color: "var(--text-muted)" }}>
                     {a.last ? relTime(a.last) : "—"}
                   </span>
                 </div>
@@ -460,9 +460,9 @@ export default function BrainPage() {
 
       {/* Event stream */}
       <div style={{
-        background: "var(--card-bg)",
-        border: "1px solid var(--card-border)",
-        borderRadius: "var(--card-radius)",
+        background: "var(--surface-2)",
+        border: "1px solid var(--border)",
+        borderRadius: 10,
         display: "flex",
         flexDirection: "column",
         minHeight: 480,
@@ -471,14 +471,14 @@ export default function BrainPage() {
         {/* Controls */}
         <div style={{
           padding: "16px 20px 12px",
-          borderBottom: "1px solid rgba(255,255,255,0.07)",
+          borderBottom: "1px solid var(--border)",
           display: "flex",
           flexWrap: "wrap",
           gap: 10,
           alignItems: "center",
         }}>
           <div style={{
-            fontSize: 11, fontWeight: 600, color: "var(--section-label)",
+            fontSize: 11, fontWeight: 600, color: "var(--text-muted)",
             letterSpacing: 0.5, textTransform: "uppercase",
             flex: "0 0 auto",
           }}>
@@ -495,11 +495,11 @@ export default function BrainPage() {
                   padding: "3px 9px", borderRadius: 5, fontSize: 10, fontWeight: 700,
                   cursor: "pointer", border: "none", letterSpacing: 0.4, textTransform: "uppercase",
                   background: sevFilter === sev
-                    ? sev === "error" ? "rgba(255,59,58,0.18)" : sev === "warn" ? "rgba(255,159,10,0.18)" : "rgba(48,209,88,0.15)"
-                    : "rgba(255,255,255,0.05)",
+                    ? sev === "error" ? "rgba(239,68,68,0.18)" : sev === "warn" ? "rgba(255,159,10,0.18)" : "rgba(34,197,94,0.15)"
+                    : "var(--surface-1)",
                   color: sevFilter === sev
-                    ? sev === "error" ? "#FF453A" : sev === "warn" ? "#FF9F0A" : "#30D158"
-                    : "rgba(232,234,237,0.40)",
+                    ? sev === "error" ? "var(--sell)" : sev === "warn" ? "var(--health-warn)" : "var(--buy)"
+                    : "var(--text-muted)",
                   transition: "all 100ms ease",
                 }}
               >
@@ -514,8 +514,8 @@ export default function BrainPage() {
             onChange={e => setSearch(e.target.value)}
             placeholder="Search events…"
             style={{
-              background: "rgba(255,255,255,0.06)",
-              border: "1px solid rgba(255,255,255,0.10)",
+              background: "var(--surface-2)",
+              border: "1px solid var(--border)",
               borderRadius: 8, padding: "5px 11px", fontSize: 12,
               color: "var(--text-primary)", outline: "none",
               width: 160, flex: "0 0 auto",
@@ -535,12 +535,12 @@ export default function BrainPage() {
                     padding: "3px 9px", borderRadius: 5, fontSize: 10, fontWeight: 600,
                     cursor: "pointer", border: "none",
                     background: agentFilter === k
-                      ? (a?.color ?? "#E8EAED") + "22"
-                      : "rgba(255,255,255,0.05)",
+                      ? (a?.color ?? "var(--text-primary)") + "22"
+                      : "var(--surface-1)",
                     color: agentFilter === k
-                      ? (a?.color ?? "#E8EAED")
-                      : "rgba(232,234,237,0.40)",
-                    outline: agentFilter === k ? `1px solid ${a?.color ?? "#E8EAED"}44` : "none",
+                      ? (a?.color ?? "var(--text-primary)")
+                      : "var(--text-muted)",
+                    outline: agentFilter === k ? `1px solid ${a?.color ?? "var(--text-primary)"}44` : "none",
                     transition: "all 100ms ease",
                     letterSpacing: 0.3,
                   }}
@@ -557,9 +557,9 @@ export default function BrainPage() {
             style={{
               padding: "3px 9px", borderRadius: 5, fontSize: 10, fontWeight: 600,
               cursor: "pointer", border: "none",
-              background: autoScroll ? "rgba(48,209,88,0.12)" : "rgba(255,255,255,0.05)",
-              color: autoScroll ? "#30D158" : "rgba(232,234,237,0.40)",
-              outline: autoScroll ? "1px solid rgba(48,209,88,0.3)" : "none",
+              background: autoScroll ? "rgba(34,197,94,0.12)" : "var(--surface-1)",
+              color: autoScroll ? "var(--buy)" : "var(--text-muted)",
+              outline: autoScroll ? "1px solid rgba(34,197,94,0.3)" : "none",
               transition: "all 100ms ease",
               letterSpacing: 0.3,
             }}
@@ -583,7 +583,7 @@ export default function BrainPage() {
               {Array.from({ length: 8 }).map((_, i) => (
                 <div key={i} style={{
                   height: 36, borderRadius: 6,
-                  background: "rgba(255,255,255,0.03)",
+                  background: "var(--surface-2)",
                   animation: "shimmer 1.4s ease-in-out infinite",
                   animationDelay: `${i * 80}ms`,
                 }} />
@@ -591,7 +591,7 @@ export default function BrainPage() {
             </div>
           )}
           {!loading && filteredEvents.length === 0 && (
-            <div style={{ fontSize: 13, color: "rgba(232,234,237,0.20)", padding: "60px 0", textAlign: "center" }}>
+            <div style={{ fontSize: 13, color: "var(--text-muted)", padding: "60px 0", textAlign: "center" }}>
               No events match the current filter
             </div>
           )}
@@ -602,18 +602,18 @@ export default function BrainPage() {
                 display: "flex", alignItems: "flex-start", gap: 10,
                 padding: "7px 10px", borderRadius: 6, transition: "background 100ms ease",
                 background: evt.level === "error"
-                  ? "rgba(255,59,58,0.05)"
+                  ? "rgba(239,68,68,0.05)"
                   : evt.level === "warn"
                   ? "rgba(255,159,10,0.04)"
                   : "transparent",
                 borderLeft: evt.level === "error"
-                  ? "2px solid var(--negative)"
+                  ? "2px solid var(--sell)"
                   : evt.level === "warn"
-                  ? "2px solid var(--warning)"
+                  ? "2px solid var(--health-warn)"
                   : "2px solid transparent",
               }}
-              onMouseEnter={e => (e.currentTarget.style.background = evt.level === "error" ? "rgba(255,59,58,0.09)" : evt.level === "warn" ? "rgba(255,159,10,0.07)" : "rgba(255,255,255,0.04)")}
-              onMouseLeave={e => (e.currentTarget.style.background = evt.level === "error" ? "rgba(255,59,58,0.05)" : evt.level === "warn" ? "rgba(255,159,10,0.04)" : "transparent")}
+              onMouseEnter={e => (e.currentTarget.style.background = evt.level === "error" ? "rgba(239,68,68,0.09)" : evt.level === "warn" ? "rgba(255,159,10,0.07)" : "var(--surface-2)")}
+              onMouseLeave={e => (e.currentTarget.style.background = evt.level === "error" ? "rgba(239,68,68,0.05)" : evt.level === "warn" ? "rgba(255,159,10,0.04)" : "transparent")}
             >
               {/* Agent badge */}
               <span style={{
@@ -626,7 +626,7 @@ export default function BrainPage() {
               </span>
               {/* Message */}
               <span style={{
-                fontSize: 12, color: "rgba(232,234,237,0.75)",
+                fontSize: 12, color: "var(--text-secondary)",
                 flex: 1, lineHeight: 1.5, wordBreak: "break-word", minWidth: 0,
               }}>
                 {evt.msg}
@@ -635,14 +635,14 @@ export default function BrainPage() {
               {evt.level !== "info" && (
                 <span style={{
                   fontSize: 9, fontWeight: 700, flexShrink: 0, marginTop: 1,
-                  color: evt.level === "error" ? "var(--negative)" : "var(--warning)",
+                  color: evt.level === "error" ? "var(--sell)" : "var(--health-warn)",
                   textTransform: "uppercase", letterSpacing: 0.4,
                 }}>
                   {evt.level}
                 </span>
               )}
               {/* Time */}
-              <span style={{ fontSize: 10, color: "rgba(232,234,237,0.25)", flexShrink: 0, marginTop: 1, fontFamily: MONO }}>
+              <span style={{ fontSize: 10, color: "var(--text-muted)", flexShrink: 0, marginTop: 1, fontFamily: MONO }}>
                 {relTime(evt.ts ?? null)}
               </span>
             </div>

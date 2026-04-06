@@ -29,9 +29,9 @@ export default function DashboardLoading() {
           <div
             key={i}
             style={{
-              background: "var(--card-bg)",
-              border: "1px solid var(--card-border)",
-              borderRadius: "var(--card-radius)",
+              background: "var(--surface-2)",
+              border: "1px solid var(--border)",
+              borderRadius: 10,
               padding: "18px 20px",
             }}
           >
@@ -45,7 +45,7 @@ export default function DashboardLoading() {
       {/* Main content area skeleton */}
       <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
         <div style={{ flex: "1 1 320px", minWidth: 0 }}>
-          <div style={{ background: "var(--card-bg)", border: "1px solid var(--card-border)", borderRadius: "var(--card-radius)", padding: 20 }}>
+          <div style={{ background: "var(--surface-1)", border: "1px solid var(--border)", borderRadius: 10, padding: 20 }}>
             <div className="ios-skeleton" style={{ height: 11, width: "40%", borderRadius: 4, marginBottom: 14 }} />
             {[0,1,2,3,4,5,6,7,8].map(i => (
               <div key={i} className="skel-row" style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 10px", marginBottom: 2 }}>
@@ -58,17 +58,17 @@ export default function DashboardLoading() {
           </div>
         </div>
         <div style={{ flex: "0 1 380px", minWidth: 280, display: "flex", flexDirection: "column", gap: 16 }}>
-          <div style={{ background: "var(--card-bg)", border: "1px solid var(--card-border)", borderRadius: "var(--card-radius)", padding: 20 }}>
+          <div style={{ background: "var(--surface-2)", border: "1px solid var(--border)", borderRadius: 10, padding: 20 }}>
             <div className="ios-skeleton" style={{ height: 11, width: "50%", borderRadius: 4, marginBottom: 12 }} />
             {[0,1,2,3].map(i => (
-              <div key={i} className="skel-row" style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 0", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+              <div key={i} className="skel-row" style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 0", borderBottom: "1px solid var(--border-subtle)" }}>
                 <div className="ios-skeleton" style={{ width: 60, height: 13, borderRadius: 4 }} />
                 <div className="ios-skeleton" style={{ flex: 1, height: 12, borderRadius: 4 }} />
                 <div className="ios-skeleton" style={{ width: 52, height: 12, borderRadius: 4 }} />
               </div>
             ))}
           </div>
-          <div style={{ background: "var(--card-bg)", border: "1px solid var(--card-border)", borderRadius: "var(--card-radius)", padding: 20 }}>
+          <div style={{ background: "var(--surface-1)", border: "1px solid var(--border)", borderRadius: 10, padding: 20 }}>
             <div className="ios-skeleton" style={{ height: 11, width: "40%", borderRadius: 4, marginBottom: 14 }} />
             <SkelRow style={{ marginBottom: 8 }} />
             <SkelRow style={{ marginBottom: 8 }} />

@@ -74,12 +74,12 @@ const C = {
   radius:   "var(--card-radius)",
   mono:     "var(--font-mono-stack)",
   label:    "var(--section-label)",
-  positive:  "#30D158",
-  negative:  "#FF453A",
-  warning:   "#FF9F0A",
-  cyan:     "#63D4FF",
-  textDim:   "rgba(232,234,237,0.30)",
-  textMid:   "rgba(232,234,237,0.55)",
+  positive:  "var(--buy)",
+  negative:  "var(--sell)",
+  warning:   "var(--health-warn)",
+  accent:   "var(--accent)",
+  textDim:   "var(--text-muted)",
+  textMid:   "var(--text-secondary)",
 };
 
 const MONO = C.mono;
@@ -111,10 +111,10 @@ function TpProgression({ trade }: { trade: Trade }) {
           <div key={i} style={{ display: "flex", alignItems: "center" }}>
             <div style={{
               width: 12, height: 12, borderRadius: "50%",
-              background: hit ? C.positive : "rgba(255,255,255,0.10)",
-              border: `1.5px solid ${hit ? C.positive : "rgba(255,255,255,0.20)"}`,
+              background: hit ? C.positive : "var(--border)",
+              border: `1.5px solid ${hit ? C.positive : "var(--border)"}`,
               display: "flex", alignItems: "center", justifyContent: "center",
-              fontSize: 7, fontWeight: 700, color: hit ? "#fff" : "rgba(255,255,255,0.30)",
+              fontSize: 7, fontWeight: 700, color: hit ? "#ffffff" : "var(--text-muted)",
               flexShrink: 0,
             }}>
               {i + 1}
@@ -124,7 +124,7 @@ function TpProgression({ trade }: { trade: Trade }) {
                 width: 20, height: 2,
                 background: hits.slice(0, i + 1).every(Boolean)
                   ? C.positive + "60"
-                  : "rgba(255,255,255,0.10)",
+                  : "var(--border)",
                 transition: "background .3s",
               }} />
             )}
@@ -132,13 +132,13 @@ function TpProgression({ trade }: { trade: Trade }) {
         ))}
       </div>
       {/* Lot bar */}
-      <div style={{ display: "flex", height: 3, borderRadius: 2, overflow: "hidden", background: "rgba(255,255,255,0.06)" }}>
+      <div style={{ display: "flex", height: 3, borderRadius: 2, overflow: "hidden", background: "var(--surface-2)" }}>
         {hits.map((hit, i) => {
           const pct = ((lots[i] ?? 0) / total) * 100;
           return pct > 0 ? (
             <div key={i} style={{
               width: `${pct}%`, height: "100%",
-              background: hit ? C.positive : "rgba(255,255,255,0.20)",
+              background: hit ? C.positive : "var(--surface-3)",
               transition: "background .3s",
             }} />
           ) : null;
@@ -171,37 +171,37 @@ function TradeDrawer({ trade, onClose }: { trade: Trade; onClose: () => void }) 
     >
       <div style={{
         width: 520, maxWidth: "95vw", height: "100vh",
-        background: "#0D0F14",
-        borderLeft: "1px solid rgba(255,255,255,0.10)",
+        background: "var(--surface-2)",
+        borderLeft: "1px solid var(--border)",
         overflowY: "auto",
         display: "flex", flexDirection: "column",
         animation: "slideIn .2s ease",
       }}>
         {/* Header */}
-        <div style={{ padding: "20px 24px 16px", borderBottom: "1px solid rgba(255,255,255,0.08)", flexShrink: 0 }}>
+        <div style={{ padding: "20px 24px 16px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-              <span style={{ fontSize: 24, fontWeight: 700, color: "#E8EAED" }}>{trade.symbol}</span>
+              <span style={{ fontSize: 24, fontWeight: 700, color: "var(--text-primary)" }}>{trade.symbol}</span>
               <span style={{
                 fontSize: 10, fontWeight: 700, letterSpacing: 0.5,
                 color: isLong ? C.positive : C.negative,
-                background: (isLong ? C.positive : C.negative) + "18",
+                background: "var(--surface-2)",
                 padding: "3px 8px", borderRadius: 4,
               }}>
                 {isLong ? "LONG" : "SHORT"}
               </span>
               <span style={{
                 fontSize: 10, fontWeight: 600,
-                color: trade.status === "OPEN" ? C.cyan : C.textMid,
-                background: (trade.status === "OPEN" ? C.cyan : "rgba(255,255,255,0.06)") + "18",
+                color: trade.status === "OPEN" ? C.accent : C.textMid,
+                background: "var(--surface-2)",
                 padding: "3px 8px", borderRadius: 4,
               }}>
                 {trade.status}
               </span>
             </div>
             <button onClick={onClose} style={{
-              background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.10)",
-              borderRadius: 8, color: "rgba(232,234,237,0.60)", cursor: "pointer",
+              background: "var(--surface-2)", border: "1px solid var(--border)",
+              borderRadius: 8, color: "var(--text-secondary)", cursor: "pointer",
               width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center",
               fontSize: 18, fontFamily: "inherit",
             }}>×</button>
@@ -211,8 +211,8 @@ function TradeDrawer({ trade, onClose }: { trade: Trade; onClose: () => void }) 
           <div style={{ marginTop: 12, display: "flex", gap: 20 }}>
             {[
               { label: "Unrealized P&L", value: trade.pnl != null ? fmtUsd(trade.pnl) : "—", color: (trade.pnl ?? 0) >= 0 ? C.positive : C.negative },
-              { label: "Entry", value: fmtPrice(trade.entry_price), color: "#E8EAED" },
-              { label: "Current", value: trade.current_price ? fmtPrice(trade.current_price) : "—", color: "#E8EAED" },
+              { label: "Entry", value: fmtPrice(trade.entry_price), color: "var(--text-primary)" },
+              { label: "Current", value: trade.current_price ? fmtPrice(trade.current_price) : "—", color: "var(--text-primary)" },
               { label: "Strategy", value: trade.strategy || "—", color: C.textMid },
             ].map(({ label, value, color }) => (
               <div key={label}>
@@ -232,13 +232,13 @@ function TradeDrawer({ trade, onClose }: { trade: Trade; onClose: () => void }) 
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 8 }}>
               {[
-                { label: "Entry",   value: trade.entry_price,    color: "#E8EAED" },
+                { label: "Entry",   value: trade.entry_price,    color: "var(--text-primary)" },
                 { label: "SL",       value: trade.stop_loss,     color: C.negative },
                 { label: "TP1",      value: trade.take_profit_1,  color: C.positive },
                 { label: "TP2",      value: trade.take_profit_2,  color: C.positive },
                 { label: "TP3",      value: trade.take_profit_3,  color: C.positive },
               ].map(({ label, value, color }) => (
-                <div key={label} style={{ background: "rgba(255,255,255,0.04)", borderRadius: 8, padding: "8px 10px", textAlign: "center" }}>
+                <div key={label} style={{ background: "var(--surface-2)", borderRadius: 8, padding: "8px 10px", textAlign: "center" }}>
                   <div style={{ fontSize: 10, color: C.textDim, letterSpacing: 0.4, textTransform: "uppercase", marginBottom: 4 }}>{label}</div>
                   <div style={{ fontSize: 12, fontFamily: MONO, fontWeight: 600, color: value ? color : C.textDim }}>
                     {value ? fmtPrice(value) : "—"}
@@ -253,7 +253,7 @@ function TradeDrawer({ trade, onClose }: { trade: Trade; onClose: () => void }) 
             <div style={{ fontSize: 11, fontWeight: 600, color: C.label, letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 10 }}>
               TP Progression
             </div>
-            <div style={{ background: "rgba(255,255,255,0.03)", borderRadius: 10, padding: "14px 16px", border: "1px solid rgba(255,255,255,0.07)" }}>
+            <div style={{ background: "var(--surface-2)", borderRadius: 10, padding: "14px 16px", border: "1px solid var(--border)" }}>
               <TpProgression trade={trade} />
             </div>
           </div>
@@ -272,7 +272,7 @@ function TradeDrawer({ trade, onClose }: { trade: Trade; onClose: () => void }) 
               ].map(({ label, value }) => (
                 <div key={label}>
                   <div style={{ fontSize: 10, color: C.textDim, marginBottom: 3 }}>{label}</div>
-                  <div style={{ fontSize: 12, fontFamily: MONO, color: "#E8EAED" }}>{value}</div>
+                  <div style={{ fontSize: 12, fontFamily: MONO, color: "var(--text-primary)" }}>{value}</div>
                 </div>
               ))}
             </div>
@@ -285,8 +285,8 @@ function TradeDrawer({ trade, onClose }: { trade: Trade; onClose: () => void }) 
                 Outcome
               </div>
               <div style={{
-                background: (trade.pnl ?? 0) >= 0 ? "rgba(48,209,88,0.08)" : "rgba(255,69,58,0.08)",
-                border: `1px solid ${(trade.pnl ?? 0) >= 0 ? "rgba(48,209,88,0.20)" : "rgba(255,69,58,0.20)"}`,
+                background: (trade.pnl ?? 0) >= 0 ? "rgba(34,197,94,0.08)" : "rgba(239,68,68,0.08)",
+                border: `1px solid ${(trade.pnl ?? 0) >= 0 ? "rgba(34,197,94,0.20)" : "rgba(239,68,68,0.20)"}`,
                 borderRadius: 10, padding: "12px 14px",
               }}>
                 <div style={{ fontSize: 10, color: C.label, textTransform: "uppercase", marginBottom: 6 }}>
@@ -374,10 +374,10 @@ export default function TradesPage() {
           ))
         ) : (
           [
-            { label: "Total Trades", value: String(trades.length), color: "#E8EAED", sub: `${open.length} open · ${closed.length} closed` },
+            { label: "Total Trades", value: String(trades.length), color: "var(--text-primary)", sub: `${open.length} open · ${closed.length} closed` },
             { label: "Win Rate",     value: winRate.toFixed(1)+"%", color: winRate >= 50 ? C.positive : C.warning, sub: `${wins}/${closed.length} closed` },
-            { label: "Net P&L",     value: fmtUsd(totalPnl), color: totalPnl > 0 ? C.positive : totalPnl < 0 ? C.negative : "#E8EAED", sub: "Closed trades" },
-            { label: "Avg P&L",      value: fmtUsd(avgPnl), color: avgPnl > 0 ? C.positive : avgPnl < 0 ? C.negative : "#E8EAED", sub: "Per trade" },
+            { label: "Net P&L",     value: fmtUsd(totalPnl), color: totalPnl > 0 ? C.positive : totalPnl < 0 ? C.negative : "var(--text-primary)", sub: "Closed trades" },
+            { label: "Avg P&L",      value: fmtUsd(avgPnl), color: avgPnl > 0 ? C.positive : avgPnl < 0 ? C.negative : "var(--text-primary)", sub: "Per trade" },
           ].map(({ label, value, color, sub }) => (
             <div key={label} style={{ ...card, padding: "18px 20px" }}>
               <div style={{ fontSize: 11, fontWeight: 600, color: C.label, letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 6 }}>{label}</div>
@@ -392,9 +392,9 @@ export default function TradesPage() {
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
         {/* Search */}
         <div style={{ position: "relative", flex: "0 1 200px" }}>
-          <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", fontSize: 18, color: "rgba(232,234,237,0.30)", fontFamily: "Material Symbols Outlined", fontWeight: 400, pointerEvents: "none" }}>search</span>
+          <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", fontSize: 18, color: "var(--text-muted)", fontFamily: "Material Symbols Outlined", fontWeight: 400, pointerEvents: "none" }}>search</span>
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Symbol…"
-            style={{ width: "100%", height: 38, paddingLeft: 36, paddingRight: 12, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.09)", borderRadius: 8, color: "#E8EAED", fontSize: 13, fontFamily: "inherit", outline: "none", boxSizing: "border-box" }} />
+            style={{ width: "100%", height: 38, paddingLeft: 36, paddingRight: 12, background: "var(--surface-1)", border: "1px solid var(--border)", borderRadius: 8, color: "var(--text-primary)", fontSize: 13, fontFamily: "inherit", outline: "none", boxSizing: "border-box" }} />
         </div>
 
         {/* Tabs */}
@@ -403,9 +403,9 @@ export default function TradesPage() {
             <button key={t} onClick={() => setTab(t)} style={{
               height: 34, padding: "0 16px", borderRadius: 6, cursor: "pointer", fontFamily: "inherit",
               fontSize: 12, fontWeight: 600,
-              background: tab === t ? "rgba(99,212,255,0.15)" : "rgba(255,255,255,0.05)",
-              border: `1px solid ${tab === t ? "rgba(99,212,255,0.40)" : "rgba(255,255,255,0.08)"}`,
-              color: tab === t ? C.cyan : C.textMid,
+              background: tab === t ? "var(--accent-dim)" : "var(--surface-1)",
+              border: `1px solid ${tab === t ? "var(--accent)" : "var(--border)"}`,
+              color: tab === t ? C.accent : C.textMid,
               transition: "all .1s",
             }}>
               {t} {t === "OPEN" ? `(${open.length})` : t === "CLOSED" ? `(${closed.length})` : ""}
@@ -419,9 +419,9 @@ export default function TradesPage() {
             <button key={d} onClick={() => setDirFlt(d)} style={{
               height: 34, padding: "0 14px", borderRadius: 6, cursor: "pointer", fontFamily: "inherit",
               fontSize: 12, fontWeight: 600,
-              background: dirFlt === d ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,0.05)",
-              border: `1px solid ${dirFlt === d ? "rgba(255,255,255,0.25)" : "rgba(255,255,255,0.08)"}`,
-              color: dirFlt === d ? "#E8EAED" : C.textMid,
+              background: dirFlt === d ? "var(--surface-3)" : "var(--surface-1)",
+              border: `1px solid ${dirFlt === d ? "var(--border)" : "var(--border)"}`,
+              color: dirFlt === d ? "var(--text-primary)" : C.textMid,
               transition: "all .1s",
             }}>
               {d}
@@ -431,7 +431,7 @@ export default function TradesPage() {
 
         <button onClick={loadTrades} title="Refresh" style={{
           height: 38, width: 38, borderRadius: 8, cursor: "pointer", fontFamily: "Material Symbols Outlined",
-          background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.09)",
+          background: "var(--surface-2)", border: "1px solid var(--border)",
           color: C.textMid, fontSize: 20, fontWeight: 400, display: "flex", alignItems: "center", justifyContent: "center",
         }}>refresh</button>
 
@@ -448,7 +448,7 @@ export default function TradesPage() {
             display: "grid",
             gridTemplateColumns: "90px 52px 90px 90px 60px 90px 70px 90px 100px",
             gap: 8, padding: "12px 20px", minWidth: 700,
-            borderBottom: "1px solid rgba(255,255,255,0.06)",
+            borderBottom: "1px solid var(--surface-2)",
             fontSize: 10, fontWeight: 600, color: C.label,
             letterSpacing: 0.4, textTransform: "uppercase",
           }}>
@@ -462,7 +462,7 @@ export default function TradesPage() {
             [0,1,2,3,4,5].map(i => (
               <div key={i} style={{
                 display: "grid", gridTemplateColumns: "90px 52px 90px 90px 60px 90px 70px 90px 100px",
-                gap: 8, padding: "10px 20px", minWidth: 700, borderBottom: "1px solid rgba(255,255,255,0.04)",
+                gap: 8, padding: "10px 20px", minWidth: 700, borderBottom: "1px solid var(--surface-2)",
                 alignItems: "center",
               }}>
                 {[0,1,2,3,4,5,6,7,8].map(j => <div key={j} className="ios-skeleton" style={{ height: 12, borderRadius: 4 }} />)}
@@ -486,19 +486,19 @@ export default function TradesPage() {
                   display: "grid",
                   gridTemplateColumns: "90px 52px 90px 90px 60px 90px 70px 90px 100px",
                   gap: 8, padding: "10px 20px", minWidth: 700,
-                  borderBottom: i < pageSlice.length - 1 ? "1px solid rgba(255,255,255,0.04)" : "none",
+                  borderBottom: i < pageSlice.length - 1 ? "1px solid var(--surface-2)" : "none",
                   alignItems: "center", cursor: "pointer",
                   transition: "background .1s",
                 }}
-                onMouseEnter={e => (e.currentTarget.style.background = "rgba(255,255,255,0.03)")}
+                onMouseEnter={e => (e.currentTarget.style.background = "var(--surface-2)")}
                 onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
               >
-                <span style={{ fontWeight: 600, color: "#E8EAED", fontSize: 13 }}>{t.symbol}</span>
+                <span style={{ fontWeight: 600, color: "var(--text-primary)", fontSize: 13 }}>{t.symbol}</span>
                 <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.3, color: isLong ? C.positive : C.negative }}>
                   {isLong ? "LONG" : "SHORT"}
                 </span>
-                <span style={{ fontFamily: MONO, fontSize: 12, color: "rgba(232,234,237,0.65)" }}>{fmtPrice(t.entry_price)}</span>
-                <span style={{ fontFamily: MONO, fontSize: 12, color: "rgba(232,234,237,0.40)" }}>
+                <span style={{ fontFamily: MONO, fontSize: 12, color: "var(--text-secondary)" }}>{fmtPrice(t.entry_price)}</span>
+                <span style={{ fontFamily: MONO, fontSize: 12, color: "var(--text-muted)" }}>
                   {isOpen ? "—" : fmtPrice(t.stop_loss)}
                 </span>
                 <span style={{ fontFamily: MONO, fontSize: 12, color: C.textMid }}>
@@ -525,15 +525,15 @@ export default function TradesPage() {
         <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginTop: 16 }}>
           <button disabled={page === 0} onClick={() => setPage(p => p - 1)} style={{
             height: 32, padding: "0 16px", borderRadius: 8, cursor: page === 0 ? "default" : "pointer",
-            background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.09)",
-            color: page === 0 ? "rgba(232,234,237,0.20)" : "#E8EAED", fontSize: 13, fontFamily: "inherit",
+            background: "var(--surface-2)", border: "1px solid var(--border)",
+            color: page === 0 ? "var(--text-muted)" : "var(--text-primary)", fontSize: 13, fontFamily: "inherit",
             opacity: page === 0 ? 0.4 : 1,
           }}>Prev</button>
           <span style={{ fontSize: 13, color: C.textDim }}>{page + 1} / {pageCount}</span>
           <button disabled={page >= pageCount - 1} onClick={() => setPage(p => p + 1)} style={{
             height: 32, padding: "0 16px", borderRadius: 8, cursor: page >= pageCount - 1 ? "default" : "pointer",
-            background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.09)",
-            color: page >= pageCount - 1 ? "rgba(232,234,237,0.20)" : "#E8EAED", fontSize: 13, fontFamily: "inherit",
+            background: "var(--surface-2)", border: "1px solid var(--border)",
+            color: page >= pageCount - 1 ? "var(--text-muted)" : "var(--text-primary)", fontSize: 13, fontFamily: "inherit",
             opacity: page >= pageCount - 1 ? 0.4 : 1,
           }}>Next</button>
         </div>

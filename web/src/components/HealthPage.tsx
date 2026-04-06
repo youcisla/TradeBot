@@ -73,8 +73,8 @@ function StatusDot({ ok, label }: { ok: boolean; label: string }) {
     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
       <span style={{
         width: 8, height: 8, borderRadius: "50%", flexShrink: 0,
-        background: ok ? "#34C759" : "#FF453A",
-        boxShadow: ok ? "0 0 6px rgba(52,215,89,0.6)" : "0 0 6px rgba(255,69,58,0.6)",
+        background: ok ? "var(--buy)" : "var(--sell)",
+        boxShadow: ok ? "0 0 6px rgba(34,197,94,0.6)" : "0 0 6px rgba(239,68,68,0.6)",
       }} />
       <span style={{ fontSize: 13, color: "var(--text-secondary)" }}>{label}</span>
     </div>
@@ -90,10 +90,10 @@ function ServiceStatusCard({
   uptime?: string;
 }) {
   const colors = {
-    ok:      { dot: "#34C759", text: "var(--text-primary)",   bg: "rgba(52,215,89,0.08)",   border: "rgba(52,215,89,0.25)" },
-    warn:    { dot: "#FF9F0A", text: "#FF9F0A",               bg: "rgba(255,159,10,0.08)",  border: "rgba(255,159,10,0.25)" },
-    error:   { dot: "#FF453A", text: "#FF453A",               bg: "rgba(255,69,58,0.08)",   border: "rgba(255,69,58,0.25)" },
-    unknown: { dot: "rgba(232,234,237,0.3)", text: "var(--text-muted)", bg: "rgba(255,255,255,0.03)", border: "rgba(255,255,255,0.07)" },
+    ok:      { dot: "var(--buy)", text: "var(--text-primary)",   bg: "rgba(34,197,94,0.08)",   border: "rgba(34,197,94,0.25)" },
+    warn:    { dot: "var(--health-warn)", text: "var(--health-warn)",               bg: "rgba(245,158,11,0.08)",  border: "rgba(245,158,11,0.25)" },
+    error:   { dot: "var(--sell)", text: "var(--sell)",               bg: "rgba(239,68,68,0.08)",   border: "rgba(239,68,68,0.25)" },
+    unknown: { dot: "rgba(232,234,237,0.3)", text: "var(--text-muted)", bg: "var(--surface-2)", border: "var(--border)" },
   };
   const c = colors[status];
 
@@ -118,7 +118,7 @@ function ServiceStatusCard({
       <div style={{ display: "flex", gap: 12 }}>
         {latency !== undefined && (
           <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
-            Latency: <span style={{ fontFamily: "var(--font-mono-stack)", color: status === "ok" ? "#34C759" : c.text }}>
+            Latency: <span style={{ fontFamily: "var(--font-mono-stack)", color: status === "ok" ? "var(--buy)" : c.text }}>
               {latency}
             </span>
           </span>
@@ -174,13 +174,13 @@ function ErrorRateChart({ events }: { events: AgentEvent[] }) {
               <div style={{ display: "flex", flexDirection: "column", justifyContent: "flex-end", height: 80, gap: 1 }}>
                 {errH > 0 && (
                   <div style={{
-                    height: errH, background: "#FF453A", borderRadius: "2px 2px 0 0",
+                    height: errH, background: "var(--sell)", borderRadius: "2px 2px 0 0",
                     minWidth: 3, opacity: 0.8,
                   }} />
                 )}
                 {warH > 0 && (
                   <div style={{
-                    height: warH, background: "#FF9F0A", borderRadius: errH > 0 ? "0" : "2px 2px 0 0",
+                    height: warH, background: "var(--health-warn)", borderRadius: errH > 0 ? "0" : "2px 2px 0 0",
                     minWidth: 3, opacity: 0.7,
                   }} />
                 )}
@@ -195,11 +195,11 @@ function ErrorRateChart({ events }: { events: AgentEvent[] }) {
       </div>
       <div style={{ display: "flex", gap: 16, marginTop: 10 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-          <span style={{ width: 8, height: 8, borderRadius: 2, background: "#FF453A", display: "inline-block" }} />
+          <span style={{ width: 8, height: 8, borderRadius: 2, background: "var(--sell)", display: "inline-block" }} />
           <span style={{ fontSize: 11, color: "var(--text-muted)" }}>Errors</span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-          <span style={{ width: 8, height: 8, borderRadius: 2, background: "#FF9F0A", display: "inline-block" }} />
+          <span style={{ width: 8, height: 8, borderRadius: 2, background: "var(--health-warn)", display: "inline-block" }} />
           <span style={{ fontSize: 11, color: "var(--text-muted)" }}>Warnings</span>
         </div>
       </div>
@@ -302,12 +302,12 @@ export default function HealthPage() {
         marginBottom: 20,
       }}>
         {[
-          { label: "Bot State",    value: status?.state?.toUpperCase() ?? "—",      color: isRunning ? "#34C759" : status?.state === "paused" ? "#FF9F0A" : "#FF453A" },
+          { label: "Bot State",    value: status?.state?.toUpperCase() ?? "—",      color: isRunning ? "var(--buy)" : status?.state === "paused" ? "var(--health-warn)" : "var(--sell)" },
           { label: "Uptime",      value: uptime,                                        color: "var(--text-primary)" },
           { label: "Last Tick",   value: lastTick,                                      color: "var(--text-primary)" },
           { label: "Open Trades",  value: status?.open_trades ?? "—",                   color: "var(--text-primary)" },
-          { label: "Errors (24h)",value: errorCount,                                    color: errorCount > 0 ? "#FF453A" : "#34C759" },
-          { label: "Warnings (24h)", value: warnCount,                                  color: warnCount > 0 ? "#FF9F0A" : "#34C759" },
+          { label: "Errors (24h)",value: errorCount,                                    color: errorCount > 0 ? "var(--sell)" : "var(--buy)" },
+          { label: "Warnings (24h)", value: warnCount,                                  color: warnCount > 0 ? "var(--health-warn)" : "var(--buy)" },
         ].map(({ label, value, color }) => (
           <div key={label} style={{
             background: "var(--card-bg)", border: "1px solid var(--card-border)",
@@ -336,7 +336,7 @@ export default function HealthPage() {
         }}>
           <SectionLabel>Recent Errors</SectionLabel>
           {recentErrors.length === 0 ? (
-            <div style={{ fontSize: 13, color: "#34C759", padding: "20px 0", textAlign: "center" }}>
+            <div style={{ fontSize: 13, color: "var(--buy)", padding: "20px 0", textAlign: "center" }}>
               No errors in the last 500 events
             </div>
           ) : (
@@ -347,15 +347,15 @@ export default function HealthPage() {
                   style={{
                     padding: "8px 10px",
                     borderRadius: 6,
-                    background: "rgba(255,69,58,0.05)",
-                    borderLeft: "2px solid rgba(255,69,58,0.5)",
+                    background: "rgba(239,68,68,0.05)",
+                    borderLeft: "2px solid rgba(239,68,68,0.5)",
                     display: "flex", flexDirection: "column", gap: 3,
                   }}
                 >
-                  <span style={{ fontSize: 12, color: "rgba(232,234,237,0.75)", lineHeight: 1.4 }}>
+                  <span style={{ fontSize: 12, color: "var(--text-primary)", lineHeight: 1.4 }}>
                     {ev.message ?? ev.msg ?? "—"}
                   </span>
-                  <span style={{ fontSize: 10, color: "rgba(232,234,237,0.30)", fontFamily: MONO }}>
+                  <span style={{ fontSize: 10, color: "var(--text-muted)", fontFamily: MONO }}>
                     {relTime(ev.ts ?? ev.created_at)} · {(ev.agent ?? "").toLowerCase()}
                   </span>
                 </div>
@@ -384,8 +384,8 @@ export default function HealthPage() {
               { label: "Last Tick", value: lastTick },
             ].map(({ label, value }) => (
               <div key={label} style={{
-                background: "rgba(255,255,255,0.03)",
-                border: "1px solid rgba(255,255,255,0.07)",
+                background: "var(--surface-2)",
+                border: "1px solid var(--border)",
                 borderRadius: 8, padding: "10px 14px",
               }}>
                 <div style={{ fontSize: 10, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>

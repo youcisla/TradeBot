@@ -96,36 +96,36 @@ const ACTIONS = [
     cmd:     "pause",
     label:   "Pause",
     icon:    <IconPause />,
-    color:   "#FF9F0A",
-    bg:      "rgba(255,159,10,0.12)",
-    border:  "rgba(255,159,10,0.25)",
+    color:   "var(--health-warn)",
+    bg:      "rgba(245,158,11,0.12)",
+    border:  "rgba(245,158,11,0.25)",
     danger:  false,
   },
   {
     cmd:     "resume",
     label:   "Resume",
     icon:    <IconPlay />,
-    color:   "#30D158",
-    bg:      "rgba(48,209,88,0.12)",
-    border:  "rgba(48,209,88,0.25)",
+    color:   "var(--buy)",
+    bg:      "rgba(34,197,94,0.12)",
+    border:  "rgba(34,197,94,0.25)",
     danger:  false,
   },
   {
     cmd:     "kill",
     label:   "Kill Bot",
     icon:    <IconStop />,
-    color:   "#FF453A",
-    bg:      "rgba(255,69,58,0.12)",
-    border:  "rgba(255,69,58,0.25)",
+    color:   "var(--sell)",
+    bg:      "rgba(239,68,68,0.12)",
+    border:  "rgba(239,68,68,0.25)",
     danger:  true,
   },
   {
     cmd:     "close_all",
     label:   "Close All",
     icon:    <IconClose />,
-    color:   "#FF453A",
-    bg:      "rgba(255,69,58,0.12)",
-    border:  "rgba(255,69,58,0.25)",
+    color:   "var(--sell)",
+    bg:      "rgba(239,68,68,0.12)",
+    border:  "rgba(239,68,68,0.25)",
     danger:  true,
   },
 ] as const;
@@ -311,9 +311,9 @@ export default function CommandPanel({ onCommand }: Props) {
   }
 
   const stateColor =
-    botState === "running" ? "#30D158"
+    botState === "running" ? "var(--buy)"
     : botState === "paused" ? "#FF9F0A"
-    : "#8E8E93";
+    : "var(--text-muted)";
 
   const stateLabel =
     botState === "running" ? "Running"
@@ -324,7 +324,7 @@ export default function CommandPanel({ onCommand }: Props) {
     <div style={{
       background: "linear-gradient(180deg, rgba(19,24,32,0.92) 0%, rgba(12,15,20,0.96) 100%)",
       borderRadius: 14,
-      border: "1px solid rgba(95,122,158,0.32)",
+      border: "1px solid var(--border)",
       padding:       16,
       boxShadow: "0 20px 34px rgba(0,0,0,0.35)",
       fontFamily:    '-apple-system, BlinkMacSystemFont, "SF Pro Display", system-ui, sans-serif',
@@ -338,7 +338,7 @@ export default function CommandPanel({ onCommand }: Props) {
         justifyContent: "space-between",
         marginBottom:   16,
       }}>
-        <span style={{ fontSize: 15, fontWeight: 700, color: "#eff5ff" }}>
+        <span style={{ fontSize: 15, fontWeight: 700, color: "var(--text-primary)" }}>
           Bot Controls
         </span>
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -379,10 +379,10 @@ export default function CommandPanel({ onCommand }: Props) {
                 justifyContent: "center",
                 gap:            6,
                 height:         56,
-                background:     disabled && !isLoading ? "rgba(44,44,46,0.5)" : action.bg,
-                border:         `0.5px solid ${disabled && !isLoading ? "rgba(84,84,88,0.3)" : action.border}`,
+                background:     disabled && !isLoading ? "var(--surface-3)" : action.bg,
+                border:         `0.5px solid ${disabled && !isLoading ? "var(--border)" : action.border}`,
                 borderRadius:   12,
-                color:          disabled && !isLoading ? "rgba(235,235,245,0.25)" : action.color,
+                color:          disabled && !isLoading ? "var(--text-muted)" : action.color,
                 cursor:         disabled ? "not-allowed" : "pointer",
                 fontSize:       13,
                 fontWeight:     600,
@@ -415,12 +415,12 @@ export default function CommandPanel({ onCommand }: Props) {
         <div style={{
           marginTop:    12,
           padding:      "10px 14px",
-          background:   feedback.ok ? "rgba(48,209,88,0.12)" : "rgba(255,69,58,0.12)",
+          background:   feedback.ok ? "rgba(34,197,94,0.12)" : "rgba(239,68,68,0.12)",
           borderRadius: 8,
-          border:       `0.5px solid ${feedback.ok ? "rgba(48,209,88,0.3)" : "rgba(255,69,58,0.3)"}`,
+          border:       `0.5px solid ${feedback.ok ? "rgba(34,197,94,0.3)" : "rgba(239,68,68,0.3)"}`,
           fontSize:     13,
           fontWeight:   500,
-          color:        feedback.ok ? "#30D158" : "#FF453A",
+          color:        feedback.ok ? "var(--buy)" : "var(--sell)",
           animation:    "toastFadeIn 0.2s ease",
         }}>
           {feedback.ok ? "✓ " : "✗ "}{feedback.msg}
@@ -433,7 +433,7 @@ export default function CommandPanel({ onCommand }: Props) {
             style={{
               fontSize: 12,
               fontWeight: 700,
-              color: "#ffd08a",
+              color: "var(--health-warn)",
               marginBottom: 8,
             }}
           >
@@ -454,8 +454,8 @@ export default function CommandPanel({ onCommand }: Props) {
                   key={item.id}
                   style={{
                     borderRadius: 10,
-                    border: "1px solid rgba(255, 159, 10, 0.3)",
-                    background: "rgba(255, 159, 10, 0.08)",
+                    border: "1px solid rgba(245, 158, 11, 0.3)",
+                    background: "rgba(245, 158, 11, 0.08)",
                     padding: 8,
                   }}
                 >
@@ -467,12 +467,12 @@ export default function CommandPanel({ onCommand }: Props) {
                       gap: 8,
                     }}
                   >
-                    <span style={{ fontSize: 12, color: "#f5f7fb", fontWeight: 600 }}>
+                    <span style={{ fontSize: 12, color: "var(--text-primary)", fontWeight: 600 }}>
                       #{item.id} {item.command}
                     </span>
-                    <span style={{ fontSize: 11, color: "#ffd08a" }}>{risk}</span>
+                    <span style={{ fontSize: 11, color: "var(--health-warn)" }}>{risk}</span>
                   </div>
-                  <div style={{ fontSize: 11, color: "rgba(235,235,245,0.75)", marginTop: 4 }}>
+                  <div style={{ fontSize: 11, color: "var(--text-primary)", marginTop: 4 }}>
                     {createdAt} · {trace}
                   </div>
                   <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
@@ -483,9 +483,9 @@ export default function CommandPanel({ onCommand }: Props) {
                         flex: 1,
                         height: 30,
                         borderRadius: 8,
-                        border: "1px solid rgba(48,209,88,0.35)",
-                        background: "rgba(48,209,88,0.16)",
-                        color: "#30D158",
+                        border: "1px solid rgba(34,197,94,0.35)",
+                        background: "rgba(34,197,94,0.16)",
+                        color: "var(--buy)",
                         fontSize: 12,
                         fontWeight: 600,
                         cursor: busy ? "not-allowed" : "pointer",
@@ -501,9 +501,9 @@ export default function CommandPanel({ onCommand }: Props) {
                         flex: 1,
                         height: 30,
                         borderRadius: 8,
-                        border: "1px solid rgba(255,69,58,0.35)",
-                        background: "rgba(255,69,58,0.16)",
-                        color: "#FF453A",
+                        border: "1px solid rgba(239,68,68,0.35)",
+                        background: "rgba(239,68,68,0.16)",
+                        color: "var(--sell)",
                         fontSize: 12,
                         fontWeight: 600,
                         cursor: busy ? "not-allowed" : "pointer",
@@ -531,7 +531,7 @@ export default function CommandPanel({ onCommand }: Props) {
           style={{
             background: "none",
             border: "none",
-            color: "rgba(235,235,245,0.45)",
+            color: "var(--text-secondary)",
             fontSize: 12,
             cursor: "pointer",
             padding: 0,
@@ -545,7 +545,7 @@ export default function CommandPanel({ onCommand }: Props) {
         {showHistory && (
           <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 6 }}>
             {history.length === 0 ? (
-              <div style={{ fontSize: 12, color: "rgba(235,235,245,0.35)" }}>
+              <div style={{ fontSize: 12, color: "var(--text-muted)" }}>
                 No resolved commands in the last 24 hours.
               </div>
             ) : (
@@ -560,22 +560,22 @@ export default function CommandPanel({ onCommand }: Props) {
                     key={item.id}
                     style={{
                       borderRadius: 8,
-                      border: `1px solid ${isDone ? "rgba(48,209,88,0.2)" : "rgba(255,69,58,0.2)"}`,
-                      background: isDone ? "rgba(48,209,88,0.06)" : "rgba(255,69,58,0.06)",
+                      border: `1px solid ${isDone ? "rgba(34,197,94,0.2)" : "rgba(239,68,68,0.2)"}`,
+                      background: isDone ? "rgba(34,197,94,0.06)" : "rgba(239,68,68,0.06)",
                       padding: "6px 8px",
                     }}
                   >
                     <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                       <span style={{ fontSize: 12 }}>{badge}</span>
-                      <span style={{ fontSize: 12, color: "#eff5ff", fontWeight: 600 }}>
+                      <span style={{ fontSize: 12, color: "var(--text-primary)", fontWeight: 600 }}>
                         #{item.id} {item.command}
                       </span>
-                      <span style={{ fontSize: 11, color: "rgba(235,235,245,0.4)", marginLeft: "auto" }}>
+                      <span style={{ fontSize: 11, color: "var(--text-secondary)", marginLeft: "auto" }}>
                         {resolvedAt}
                       </span>
                     </div>
                     {item.review && (
-                      <div style={{ fontSize: 11, color: "rgba(235,235,245,0.55)", marginTop: 3 }}>
+                      <div style={{ fontSize: 11, color: "var(--text-secondary)", marginTop: 3 }}>
                         {item.review.decision} by {item.review.reviewedBy}
                         {item.review.reason ? ` · ${item.review.reason.slice(0, 60)}` : ""}
                       </div>

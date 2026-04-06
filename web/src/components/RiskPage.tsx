@@ -54,13 +54,13 @@ function fmtUsd(v?: number): string {
 }
 
 function pnlColor(v?: number): string {
-  if (v == null) return "rgba(232,234,237,0.40)";
-  return v > 0 ? "#30D158" : v < 0 ? "#FF453A" : "rgba(232,234,237,0.40)";
+  if (v == null) return "var(--text-muted)";
+  return v > 0 ? "var(--positive)" : v < 0 ? "var(--negative)" : "var(--text-muted)";
 }
 
 function limitBar(value: number, max: number): { used: number; color: string } {
   const pct = max !== 0 ? Math.min(Math.abs(value / max), 1) * 100 : 0;
-  const color = pct > 90 ? "#FF453A" : pct > 60 ? "#FF9F0A" : "#30D158";
+  const color = pct > 90 ? "var(--negative)" : pct > 60 ? "var(--health-warn)" : "var(--positive)";
   return { used: pct, color };
 }
 
@@ -84,17 +84,17 @@ function relAge(ts?: string): string {
 // ── Tokens ─────────────────────────────────────────────────────────────────────
 
 const C = {
-  bg:       "var(--card-bg)",
-  border:   "var(--card-border)",
-  radius:   "var(--card-radius)",
+  bg:       "var(--surface-2)",
+  border:   "var(--border)",
+  radius:   10,
   mono:     "var(--font-mono-stack)",
-  label:    "var(--section-label)",
-  positive:  "#30D158",
-  negative:  "#FF453A",
-  warning:   "#FF9F0A",
-  cyan:     "#63D4FF",
-  textDim:   "rgba(232,234,237,0.30)",
-  textMid:   "rgba(232,234,237,0.55)",
+  label:    "var(--text-muted)",
+  positive:  "var(--buy)",
+  negative:  "var(--sell)",
+  warning:   "var(--health-warn)",
+  accent:   "var(--accent)",
+  textDim:   "var(--text-muted)",
+  textMid:   "var(--text-secondary)",
 };
 const MONO = C.mono;
 
@@ -132,7 +132,7 @@ function ExposureHeatmap({ trades }: { trades: Trade[] }) {
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             {/* Header row */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 70px 70px 50px", gap: 8, fontSize: 10, color: C.label, letterSpacing: 0.4, textTransform: "uppercase", paddingBottom: 6, borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 70px 70px 50px", gap: 8, fontSize: 10, color: C.label, letterSpacing: 0.4, textTransform: "uppercase", paddingBottom: 6, borderBottom: "1px solid var(--surface-2)" }}>
               <span>Symbol</span><span style={{ textAlign: "right" }}>Long</span><span style={{ textAlign: "right" }}>Short</span><span style={{ textAlign: "right" }}>Net</span>
             </div>
             {symbols.map(sym => {
@@ -143,7 +143,7 @@ function ExposureHeatmap({ trades }: { trades: Trade[] }) {
               return (
                 <div key={sym}>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 70px 70px 50px", gap: 8, marginBottom: 4, alignItems: "center" }}>
-                    <span style={{ fontSize: 13, fontWeight: 600, color: "#E8EAED" }}>{sym}</span>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)" }}>{sym}</span>
                     <span style={{ fontSize: 12, fontFamily: MONO, color: C.positive, textAlign: "right" }}>{long.toFixed(2)}</span>
                     <span style={{ fontSize: 12, fontFamily: MONO, color: C.negative, textAlign: "right" }}>{short.toFixed(2)}</span>
                     <span style={{ fontSize: 12, fontFamily: MONO, color: net > 0 ? C.positive : net < 0 ? C.negative : C.textMid, textAlign: "right", fontWeight: 600 }}>
@@ -196,14 +196,14 @@ function BlockedSignals({ events }: { events: AgentEvent[] }) {
                 <div key={ev.id ?? i} style={{
                   display: "flex", alignItems: "flex-start", gap: 10,
                   padding: "10px 12px",
-                  background: "rgba(255,69,58,0.06)",
-                  border: "1px solid rgba(255,69,58,0.18)",
+                  background: "rgba(239,68,68,0.06)",
+                  border: "1px solid rgba(239,68,68,0.18)",
                   borderRadius: 8,
                 }}>
                   <span style={{ fontSize: 14, color: C.negative, flexShrink: 0, marginTop: 1 }}>⊘</span>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}>
-                      <span style={{ fontSize: 12, fontWeight: 600, color: "#E8EAED" }}>
+                      <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-primary)" }}>
                         {symbolMatch ? symbolMatch[1] : "Signal"}
                       </span>
                       <span style={{ fontSize: 11, color: C.textDim, fontFamily: MONO }}>
@@ -230,7 +230,7 @@ function CrucixCard({ events }: { events: AgentEvent[] }) {
 
   // Determine tier
   let tier: "CLEAR" | "ROUTINE" | "PRIORITY" | "FLASH" = "ROUTINE";
-  let tierColor = C.cyan;
+  let tierColor = C.accent;
   if (/flash/i.test(msg)) { tier = "FLASH"; tierColor = C.negative; }
   else if (/priority|crisis|elevated/i.test(msg)) { tier = "PRIORITY"; tierColor = C.warning; }
   else if (/clear|safe/i.test(msg)) { tier = "CLEAR"; tierColor = C.positive; }
@@ -246,7 +246,7 @@ function CrucixCard({ events }: { events: AgentEvent[] }) {
         {isBlackout && (
           <div style={{
             marginBottom: 12, padding: "8px 12px", borderRadius: 8,
-            background: "rgba(255,69,58,0.15)", border: "1px solid rgba(255,69,58,0.35)",
+            background: "rgba(239,68,68,0.15)", border: "1px solid rgba(239,68,68,0.35)",
             display: "flex", alignItems: "center", gap: 8,
           }}>
             <span style={{ fontSize: 14, color: C.negative }}>⚠</span>
@@ -278,7 +278,7 @@ function CrucixCard({ events }: { events: AgentEvent[] }) {
           { label: "Status", value: isBlackout ? "Blackout" : "Active", color: isBlackout ? C.negative : C.positive },
           { label: "Last Sweep", value: latestCrucix ? relAge(latestCrucix.created_at) : "—", color: C.textMid },
         ].map(({ label, value, color }) => (
-          <div key={label} style={{ display: "flex", justifyContent: "space-between", padding: "7px 0", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+          <div key={label} style={{ display: "flex", justifyContent: "space-between", padding: "7px 0", borderBottom: "1px solid var(--surface-2)" }}>
             <span style={{ fontSize: 12, color: C.textMid }}>{label}</span>
             <span style={{ fontSize: 12, fontFamily: MONO, fontWeight: 600, color }}>{value}</span>
           </div>
@@ -353,7 +353,7 @@ export default function RiskPage() {
       {riskData.emergency_stop && (
         <div style={{
           marginBottom: 20, padding: "14px 20px", borderRadius: 12,
-          background: "rgba(255,59,48,0.12)", border: "1px solid rgba(255,59,48,0.35)",
+          background: "rgba(239,68,68,0.12)", border: "1px solid rgba(239,68,68,0.35)",
           display: "flex", alignItems: "center", gap: 12,
         }}>
           <span style={{ fontSize: 18, fontFamily: "Material Symbols Outlined", color: C.negative }}>emergency</span>
@@ -370,7 +370,7 @@ export default function RiskPage() {
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 12, marginBottom: 20 }}>
         {[
           { label: "Equity", value: fmtUsd(equity), color: equity >= balance ? C.positive : C.negative },
-          { label: "Balance", value: fmtUsd(balance), color: "#E8EAED" },
+          { label: "Balance", value: fmtUsd(balance), color: "var(--text-primary)" },
           { label: "Daily P&L", value: fmtUsd(dailyPnl), color: dailyPnl >= 0 ? C.positive : C.negative },
           { label: "Daily %", value: fmtPct(dailyPct), color: dailyPnl >= 0 ? C.positive : C.negative },
         ].map(({ label, value, color }) => (
@@ -395,7 +395,7 @@ export default function RiskPage() {
                 / {fmtUsd(riskData.max_daily_loss)}
               </span>
             </div>
-            <div style={{ height: 8, background: "rgba(255,255,255,0.06)", borderRadius: 4, overflow: "hidden", marginBottom: 8 }}>
+            <div style={{ height: 8, background: "var(--surface-2)", borderRadius: 4, overflow: "hidden", marginBottom: 8 }}>
               <div style={{ height: "100%", width: `${dailyBar.used}%`, background: dailyBar.color, borderRadius: 4, transition: "width .3s" }} />
             </div>
             <div style={{ fontSize: 11, color: C.textDim, fontFamily: MONO }}>
@@ -409,14 +409,14 @@ export default function RiskPage() {
           <div style={{ padding: "20px" }}>
             <SectionLabel>Open Positions</SectionLabel>
             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
-              <span style={{ fontSize: 40, fontWeight: 700, color: C.cyan, fontFamily: MONO, lineHeight: 1 }}>
+              <span style={{ fontSize: 40, fontWeight: 700, color: C.accent, fontFamily: MONO, lineHeight: 1 }}>
                 {trades.filter(t => t.status !== "CLOSED").length}
               </span>
               <span style={{ fontSize: 13, color: C.textMid, fontFamily: MONO, alignSelf: "flex-end", marginBottom: 6 }}>
                 / {riskData.max_concurrent_trades ?? "—"} allowed
               </span>
             </div>
-            <div style={{ height: 8, background: "rgba(255,255,255,0.06)", borderRadius: 4, overflow: "hidden", marginBottom: 8 }}>
+            <div style={{ height: 8, background: "var(--surface-2)", borderRadius: 4, overflow: "hidden", marginBottom: 8 }}>
               <div style={{ height: "100%", width: `${tradCntBar.used}%`, background: tradCntBar.color, borderRadius: 4, transition: "width .3s" }} />
             </div>
             <div style={{ fontSize: 11, color: C.textDim, fontFamily: MONO }}>
@@ -443,9 +443,9 @@ export default function RiskPage() {
               { label: "Max Lot Size", value: riskData.max_lot_size != null ? String(riskData.max_lot_size) : "—" },
               { label: "Max Concurrent Trades", value: riskData.max_concurrent_trades != null ? String(riskData.max_concurrent_trades) : "—" },
             ].map(({ label, value }) => (
-              <div key={label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+              <div key={label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderBottom: "1px solid var(--surface-1)" }}>
                 <span style={{ fontSize: 12, color: C.textMid }}>{label}</span>
-                <span style={{ fontSize: 14, fontWeight: 600, color: "#E8EAED", fontFamily: MONO }}>{value}</span>
+                <span style={{ fontSize: 14, fontWeight: 600, color: "var(--text-primary)", fontFamily: MONO }}>{value}</span>
               </div>
             ))}
           </div>
@@ -468,9 +468,9 @@ export default function RiskPage() {
               { label: "Retrain Period", value: riskData.wfo_period != null ? `${riskData.wfo_period}d` : "—" },
               { label: "Last Retrain",   value: relTime(riskData.last_retrain) },
             ].map(({ label, value }) => (
-              <div key={label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+              <div key={label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderBottom: "1px solid var(--surface-1)" }}>
                 <span style={{ fontSize: 12, color: C.textMid }}>{label}</span>
-                <span style={{ fontSize: 13, fontWeight: 600, color: "#E8EAED", fontFamily: MONO }}>{value}</span>
+                <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)", fontFamily: MONO }}>{value}</span>
               </div>
             ))}
           </div>

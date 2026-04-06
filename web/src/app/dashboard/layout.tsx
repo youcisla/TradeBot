@@ -9,7 +9,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <div
         style={{
           minHeight: "100vh",
-          background: "radial-gradient(circle at 12% -10%, var(--bg-radial-start) 0%, var(--bg-radial-mid) 45%, var(--bg-radial-end) 100%)",
+          background: "radial-gradient(circle at 12% -10%, var(--surface-2) 0%, var(--surface-1) 45%, var(--bg) 100%)",
           fontFamily: "var(--font-system)",
           position: "relative",
         }}
@@ -21,8 +21,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             pointerEvents: "none",
             zIndex: 0,
             background:
-              "radial-gradient(circle at 82% 8%, rgba(20,182,255,0.20), transparent 34%)," +
-              "radial-gradient(circle at 12% 72%, rgba(255,160,65,0.12), transparent 38%)," +
+              "radial-gradient(circle at 82% 8%, rgba(99,179,237,0.20), transparent 34%)," +
+              "radial-gradient(circle at 12% 72%, rgba(245,158,11,0.12), transparent 38%)," +
               "linear-gradient(120deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0) 55%)",
           }}
         />

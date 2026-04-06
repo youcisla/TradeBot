@@ -48,11 +48,11 @@ interface ParsedSignal {
 // ── Agent config ───────────────────────────────────────────────────────────────
 
 const AGENTS = [
-  { key: "strategy",      label: "Strategy",  color: "#34C759" },
-  { key: "council",       label: "Council",   color: "#FF9F0A" },
-  { key: "risk",          label: "Risk",      color: "#FF453A" },
-  { key: "neural",        label: "Neural",    color: "#BF5AF2" },
-  { key: "crucix",        label: "Crucix",    color: "#5AC8FA" },
+  { key: "strategy",      label: "Strategy",  color: "var(--agent-strategy)" },
+  { key: "council",       label: "Council",   color: "var(--agent-council)" },
+  { key: "risk",          label: "Risk",      color: "var(--agent-risk)" },
+  { key: "neural",        label: "Neural",    color: "var(--agent-neural)" },
+  { key: "crucix",        label: "Crucix",    color: "var(--agent-crucix)" },
 ];
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -74,7 +74,7 @@ function fmtTime(ts: string | undefined): string {
 }
 
 function agentColor(key: string): string {
-  return AGENTS.find(a => a.key === key)?.color ?? "rgba(232,234,237,0.45)";
+  return AGENTS.find(a => a.key === key)?.color ?? "var(--text-muted)";
 }
 function agentLabel(key: string): string {
   return AGENTS.find(a => a.key === key)?.label ?? key;
@@ -180,12 +180,12 @@ const C = {
   radius:   "var(--card-radius)",
   mono:     "var(--font-mono-stack)",
   label:    "var(--section-label)",
-  positive: "#30D158",
-  negative: "#FF453A",
-  warning:  "#FF9F0A",
-  cyan:     "#63D4FF",
-  textDim:  "rgba(232,234,237,0.30)",
-  textMid:  "rgba(232,234,237,0.55)",
+  positive: "var(--buy)",
+  negative: "var(--sell)",
+  warning:  "var(--health-warn)",
+  accent:   "var(--accent)",
+  textDim:  "var(--text-muted)",
+  textMid:  "var(--text-secondary)",
 };
 
 // ── Sub-components ────────────────────────────────────────────────────────────
@@ -209,10 +209,10 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 /** Confidence bar with tier coloring */
 function ConfBar({ value }: { value: number }) {
   const pct = Math.min(100, Math.max(0, value));
-  const color = pct >= 85 ? C.positive : pct >= 65 ? C.cyan : pct >= 40 ? C.warning : C.negative;
+  const color = pct >= 85 ? C.positive : pct >= 65 ? C.accent : pct >= 40 ? C.warning : C.negative;
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 8, width: 120 }}>
-      <div style={{ flex: 1, height: 4, background: "rgba(255,255,255,0.08)", borderRadius: 2, overflow: "hidden" }}>
+      <div style={{ flex: 1, height: 4, background: "var(--surface-3)", borderRadius: 2, overflow: "hidden" }}>
         <div style={{ width: `${pct}%`, height: "100%", background: color, borderRadius: 2, transition: "width .3s" }} />
       </div>
       <span style={{ fontSize: 11, fontFamily: C.mono, color, fontWeight: 600, minWidth: 36, textAlign: "right" }}>
@@ -225,17 +225,17 @@ function ConfBar({ value }: { value: number }) {
 /** Verdict badge */
 function VerdictBadge({ verdict, reason }: { verdict: ParsedSignal["riskVerdict"]; reason?: string }) {
   if (verdict === "APPROVED") return (
-    <span style={{ fontSize: 10, fontWeight: 700, color: C.positive, background: "rgba(48,209,88,0.15)", padding: "3px 8px", borderRadius: 4, letterSpacing: 0.4 }}>
+    <span style={{ fontSize: 10, fontWeight: 700, color: C.positive, background: "var(--buy-dim)", padding: "3px 8px", borderRadius: 4, letterSpacing: 0.4 }}>
       APPROVED
     </span>
   );
   if (verdict === "BLOCKED") return (
-    <span title={reason} style={{ fontSize: 10, fontWeight: 700, color: C.negative, background: "rgba(255,69,58,0.15)", padding: "3px 8px", borderRadius: 4, letterSpacing: 0.4, cursor: "help" }}>
+    <span title={reason} style={{ fontSize: 10, fontWeight: 700, color: C.negative, background: "var(--sell-dim)", padding: "3px 8px", borderRadius: 4, letterSpacing: 0.4, cursor: "help" }}>
       BLOCKED
     </span>
   );
   if (verdict === "PENDING") return (
-    <span style={{ fontSize: 10, fontWeight: 700, color: C.warning, background: "rgba(255,159,10,0.15)", padding: "3px 8px", borderRadius: 4, letterSpacing: 0.4 }}>
+    <span style={{ fontSize: 10, fontWeight: 700, color: C.warning, background: "rgba(245,158,11,0.12)", padding: "3px 8px", borderRadius: 4, letterSpacing: 0.4 }}>
       PENDING
     </span>
   );
@@ -247,7 +247,7 @@ function DirBadge({ dir }: { dir: "BUY" | "SELL" | undefined }) {
   if (!dir) return null;
   const color = dir === "BUY" ? C.positive : C.negative;
   return (
-    <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.5, color, background: color + "18", padding: "2px 7px", borderRadius: 4 }}>
+    <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.5, color, background: "var(--surface-2)", padding: "2px 7px", borderRadius: 4 }}>
       {dir}
     </span>
   );
@@ -257,7 +257,7 @@ function DirBadge({ dir }: { dir: "BUY" | "SELL" | undefined }) {
 function AgentBadge({ agent }: { agent: string }) {
   const color = agentColor(agent);
   return (
-    <span style={{ fontSize: 9, fontWeight: 700, color: color, background: color + "18", padding: "2px 6px", borderRadius: 4, letterSpacing: 0.4, textTransform: "uppercase" }}>
+    <span style={{ fontSize: 9, fontWeight: 700, color: color, background: "var(--surface-2)", padding: "2px 6px", borderRadius: 4, letterSpacing: 0.4, textTransform: "uppercase" }}>
       {agentLabel(agent)}
     </span>
   );
@@ -286,17 +286,17 @@ function SignalDrawer({ signal, onClose }: { signal: ParsedSignal; onClose: () =
     >
       <div style={{
         width: 480, maxWidth: "95vw", height: "100vh",
-        background: "#0D0F14",
-        borderLeft: "1px solid rgba(255,255,255,0.10)",
+        background: "var(--surface-2)",
+        borderLeft: "1px solid var(--border)",
         overflowY: "auto",
         display: "flex", flexDirection: "column",
         animation: "slideIn .2s ease",
       }}>
         {/* Header */}
-        <div style={{ padding: "20px 24px 16px", borderBottom: "1px solid rgba(255,255,255,0.08)", display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexShrink: 0 }}>
+        <div style={{ padding: "20px 24px 16px", borderBottom: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexShrink: 0 }}>
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
-              {signal.symbol && <span style={{ fontSize: 22, fontWeight: 700, color: "#E8EAED" }}>{signal.symbol}</span>}
+              {signal.symbol && <span style={{ fontSize: 22, fontWeight: 700, color: "var(--text-primary)" }}>{signal.symbol}</span>}
               <DirBadge dir={signal.direction} />
               <AgentBadge agent={signal.agent} />
             </div>
@@ -306,8 +306,8 @@ function SignalDrawer({ signal, onClose }: { signal: ParsedSignal; onClose: () =
             </div>
           </div>
           <button onClick={onClose} style={{
-            background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.10)",
-            borderRadius: 8, color: "rgba(232,234,237,0.60)", cursor: "pointer",
+            background: "var(--surface-2)", border: "1px solid var(--border)",
+            borderRadius: 8, color: "var(--text-secondary)", cursor: "pointer",
             width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center",
             fontSize: 18, fontFamily: "inherit",
           }}>×</button>
@@ -323,9 +323,9 @@ function SignalDrawer({ signal, onClose }: { signal: ParsedSignal; onClose: () =
 
           {/* Block reason */}
           {signal.riskVerdict === "BLOCKED" && signal.blockReason && (
-            <div style={{ background: "rgba(255,69,58,0.10)", border: "1px solid rgba(255,69,58,0.25)", borderRadius: 10, padding: "12px 14px" }}>
+            <div style={{ background: "var(--sell-dim)", border: "1px solid var(--sell)", borderRadius: 10, padding: "12px 14px" }}>
               <div style={{ fontSize: 10, fontWeight: 700, color: C.negative, letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 6 }}>Block Reason</div>
-              <div style={{ fontSize: 13, color: "rgba(255,69,58,0.90)", lineHeight: 1.5 }}>{signal.blockReason}</div>
+              <div style={{ fontSize: 13, color: "var(--text-primary)", lineHeight: 1.5 }}>{signal.blockReason}</div>
             </div>
           )}
 
@@ -335,13 +335,13 @@ function SignalDrawer({ signal, onClose }: { signal: ParsedSignal; onClose: () =
               <SectionLabel>Entry Levels</SectionLabel>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 8 }}>
                 {[
-                  { label: "Entry", value: signal.entry_price, color: "#E8EAED" },
+                  { label: "Entry", value: signal.entry_price, color: "var(--text-primary)" },
                   { label: "SL",    value: signal.sl,           color: C.negative },
                   { label: "TP1",   value: signal.tp1,           color: C.positive },
                   { label: "TP2",   value: signal.tp2,           color: C.positive },
                   { label: "TP3",   value: signal.tp3,           color: C.positive },
                 ].map(({ label, value, color }) => (
-                  <div key={label} style={{ background: "rgba(255,255,255,0.04)", borderRadius: 8, padding: "8px 10px", textAlign: "center" }}>
+                  <div key={label} style={{ background: "var(--surface-2)", borderRadius: 8, padding: "8px 10px", textAlign: "center" }}>
                     <div style={{ fontSize: 10, color: C.textDim, letterSpacing: 0.4, textTransform: "uppercase", marginBottom: 4 }}>{label}</div>
                     <div style={{ fontSize: 12, fontFamily: C.mono, fontWeight: 600, color: value ? color : C.textDim }}>
                       {value ? (Number(value)).toFixed(5) : "—"}
@@ -356,9 +356,9 @@ function SignalDrawer({ signal, onClose }: { signal: ParsedSignal; onClose: () =
           <div>
             <SectionLabel>Reasoning</SectionLabel>
             <div style={{
-              background: "rgba(255,255,255,0.03)", borderRadius: 10,
-              border: "1px solid rgba(255,255,255,0.07)",
-              padding: "12px 14px", fontSize: 13, color: "rgba(229,239,253,0.85)",
+              background: "var(--surface-2)", borderRadius: 10,
+              border: "1px solid var(--border)",
+              padding: "12px 14px", fontSize: 13, color: "var(--text-primary)",
               lineHeight: 1.6, maxHeight: 200, overflowY: "auto",
             }}>
               {signal.reason || "—"}
@@ -371,15 +371,15 @@ function SignalDrawer({ signal, onClose }: { signal: ParsedSignal; onClose: () =
               <SectionLabel>LLM Debate</SectionLabel>
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                 {signal.bullCase && (
-                  <div style={{ background: "rgba(48,209,88,0.08)", border: "1px solid rgba(48,209,88,0.20)", borderRadius: 8, padding: "10px 12px" }}>
+                  <div style={{ background: "rgba(34,197,94,0.08)", border: "1px solid rgba(34,197,94,0.20)", borderRadius: 8, padding: "10px 12px" }}>
                     <div style={{ fontSize: 10, fontWeight: 700, color: C.positive, letterSpacing: 0.4, textTransform: "uppercase", marginBottom: 5 }}>Bull Case</div>
-                    <div style={{ fontSize: 12, color: "rgba(48,209,88,0.90)", lineHeight: 1.5 }}>{signal.bullCase}</div>
+                    <div style={{ fontSize: 12, color: "var(--text-primary)", lineHeight: 1.5 }}>{signal.bullCase}</div>
                   </div>
                 )}
                 {signal.bearCase && (
-                  <div style={{ background: "rgba(255,69,58,0.08)", border: "1px solid rgba(255,69,58,0.20)", borderRadius: 8, padding: "10px 12px" }}>
+                  <div style={{ background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.20)", borderRadius: 8, padding: "10px 12px" }}>
                     <div style={{ fontSize: 10, fontWeight: 700, color: C.negative, letterSpacing: 0.4, textTransform: "uppercase", marginBottom: 5 }}>Bear Case</div>
-                    <div style={{ fontSize: 12, color: "rgba(255,69,58,0.90)", lineHeight: 1.5 }}>{signal.bearCase}</div>
+                    <div style={{ fontSize: 12, color: "var(--text-primary)", lineHeight: 1.5 }}>{signal.bearCase}</div>
                   </div>
                 )}
               </div>
@@ -397,8 +397,8 @@ function SignalDrawer({ signal, onClose }: { signal: ParsedSignal; onClose: () =
                   return (
                     <div key={m} style={{
                       padding: "6px 12px", borderRadius: 8,
-                      background: active ? color + "18" : "rgba(255,255,255,0.04)",
-                      border: `1px solid ${active ? color + "40" : "rgba(255,255,255,0.08)"}`,
+                      background: active ? "var(--surface-2)" : "var(--surface-1)",
+                      border: `1px solid ${active ? color : "var(--border)"}`,
                       fontSize: 12, fontWeight: active ? 600 : 400,
                       color: active ? color : C.textMid,
                     }}>
@@ -428,8 +428,8 @@ function SignalDrawer({ signal, onClose }: { signal: ParsedSignal; onClose: () =
                     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 0 }}>
                       <div style={{
                         width: 28, height: 28, borderRadius: "50%",
-                        background: verdict === "pass" ? color + "20" : verdict === "fail" ? "rgba(255,69,58,0.15)" : "rgba(255,255,255,0.05)",
-                        border: `1.5px solid ${verdict === "pass" ? color : verdict === "fail" ? C.negative : "rgba(255,255,255,0.15)"}`,
+                        background: verdict === "pass" ? "var(--surface-2)" : verdict === "fail" ? "var(--sell-dim)" : "var(--surface-1)",
+                        border: `1.5px solid ${verdict === "pass" ? color : verdict === "fail" ? C.negative : "var(--border)"}`,
                         display: "flex", alignItems: "center", justifyContent: "center",
                         fontSize: 10, fontWeight: 700,
                         color: verdict === "pass" ? color : verdict === "fail" ? C.negative : C.textDim,
@@ -438,7 +438,7 @@ function SignalDrawer({ signal, onClose }: { signal: ParsedSignal; onClose: () =
                         {verdict === "pass" ? "✓" : verdict === "fail" ? "⊘" : "—"}
                       </div>
                       {!isLast && (
-                        <div style={{ width: 1, height: 12, background: verdict !== "skip" ? color + "40" : "rgba(255,255,255,0.10)" }} />
+                        <div style={{ width: 1, height: 12, background: verdict !== "skip" ? color : "var(--border)" }} />
                       )}
                     </div>
                     <div>
@@ -520,8 +520,8 @@ export default function SignalsPage() {
           onChange={e => setSearch(e.target.value)}
           placeholder="Search signals…"
           style={{
-            background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.10)",
-            borderRadius: 8, padding: "8px 14px", fontSize: 13, color: "#E8EAED",
+            background: "var(--surface-2)", border: "1px solid var(--border)",
+            borderRadius: 8, padding: "8px 14px", fontSize: 13, color: "var(--text-primary)",
             outline: "none", width: 200, fontFamily: "inherit",
           }}
         />
@@ -532,9 +532,9 @@ export default function SignalsPage() {
             <button key={f} onClick={() => setFilter(f)} style={{
               padding: "6px 14px", borderRadius: 6, fontSize: 12, fontWeight: 600,
               cursor: "pointer", border: "none",
-              background: filter === f ? "rgba(99,212,255,0.15)" : "rgba(255,255,255,0.05)",
-              color: filter === f ? C.cyan : C.textMid,
-              outline: filter === f ? `1px solid rgba(99,212,255,0.40)` : "none",
+              background: filter === f ? "var(--accent-dim)" : "var(--surface-1)",
+              color: filter === f ? C.accent : C.textMid,
+              outline: filter === f ? `1px solid var(--border-accent)` : "none",
               fontFamily: "inherit", transition: "all .1s",
             }}>
               {f}
@@ -549,12 +549,12 @@ export default function SignalsPage() {
               padding: "6px 14px", borderRadius: 6, fontSize: 12, fontWeight: 600,
               cursor: "pointer", border: "none",
               background: verdict === f
-                ? f === "APPROVED" ? "rgba(48,209,88,0.15)" : f === "BLOCKED" ? "rgba(255,69,58,0.15)" : "rgba(99,212,255,0.15)"
-                : "rgba(255,255,255,0.05)",
+                ? f === "APPROVED" ? "var(--buy-dim)" : f === "BLOCKED" ? "var(--sell-dim)" : "var(--accent-dim)"
+                : "var(--surface-1)",
               color: verdict === f
-                ? f === "APPROVED" ? C.positive : f === "BLOCKED" ? C.negative : C.cyan
+                ? f === "APPROVED" ? C.positive : f === "BLOCKED" ? C.negative : C.accent
                 : C.textMid,
-              outline: verdict === f ? `1px solid ${f === "APPROVED" ? "rgba(48,209,88,0.40)" : f === "BLOCKED" ? "rgba(255,69,58,0.40)" : "rgba(99,212,255,0.40)"}` : "none",
+              outline: verdict === f ? `1px solid ${f === "APPROVED" ? "var(--buy)" : f === "BLOCKED" ? "var(--sell)" : "var(--accent)"}` : "none",
               fontFamily: "inherit", transition: "all .1s",
             }}>
               {f}
@@ -576,7 +576,7 @@ export default function SignalsPage() {
           gap: 8,
           padding: "10px 16px",
           fontSize: 10, color: C.label, letterSpacing: 0.4, textTransform: "uppercase",
-          borderBottom: "1px solid rgba(255,255,255,0.08)",
+          borderBottom: "1px solid var(--border)",
         }}>
           <span>Symbol</span>
           <span>Dir</span>
@@ -604,15 +604,15 @@ export default function SignalsPage() {
                 padding: "10px 16px",
                 fontSize: 13,
                 alignItems: "center",
-                borderBottom: i === filtered.length - 1 ? "none" : "1px solid rgba(255,255,255,0.04)",
+                borderBottom: i === filtered.length - 1 ? "none" : "1px solid var(--border-subtle)",
                 cursor: "pointer",
                 transition: "background .1s",
               }}
-              onMouseEnter={e => (e.currentTarget.style.background = "rgba(255,255,255,0.03)")}
+              onMouseEnter={e => (e.currentTarget.style.background = "var(--surface-2)")}
               onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
             >
               {/* Symbol */}
-              <span style={{ fontWeight: 600, color: "#E8EAED", fontSize: 13 }}>
+              <span style={{ fontWeight: 600, color: "var(--text-primary)", fontSize: 13 }}>
                 {sig.symbol || "—"}
               </span>
 

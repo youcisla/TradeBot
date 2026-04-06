@@ -26,7 +26,7 @@ function fmtUsd(v: number): string {
 }
 
 function pnlColor(v: number): string {
-  return v > 0 ? "#34C759" : v < 0 ? "#FF3B30" : "rgba(232,234,237,0.40)";
+  return v > 0 ? "var(--buy)" : v < 0 ? "var(--sell)" : "var(--text-muted)";
 }
 
 // SVG sparkline helpers
@@ -131,10 +131,10 @@ export default function PerformancePage() {
 
   const MONO = "var(--font-mono-stack)";
   const card: React.CSSProperties = {
-    background: "var(--card-bg)", border: "1px solid var(--card-border)", borderRadius: "var(--card-radius)",
+    background: "var(--surface-2)", border: "1px solid var(--border)", borderRadius: 10,
   };
   const sectionLabel: React.CSSProperties = {
-    fontSize: 11, fontWeight: 600, color: "var(--section-label)",
+    fontSize: 11, fontWeight: 600, color: "var(--text-muted)",
     letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 14,
   };
 
@@ -155,12 +155,12 @@ export default function PerformancePage() {
             ))
           : [
               { label: "Net P&L",        value: fmtUsd(totalPnl),          color: pnlColor(totalPnl) },
-              { label: "Win Rate",       value: winRate.toFixed(1) + "%",   color: winRate >= 50 ? "#34C759" : "#FF9F0A" },
-              { label: "Risk / Reward",  value: rr.toFixed(2) + "×",       color: rr >= 1.5 ? "#34C759" : rr >= 1 ? "#FF9F0A" : "#FF3B30" },
-              { label: "Profit Factor",  value: profitFactor.toFixed(2),   color: profitFactor >= 1.5 ? "#34C759" : profitFactor >= 1 ? "#FF9F0A" : "#FF3B30" },
+              { label: "Win Rate",       value: winRate.toFixed(1) + "%",   color: winRate >= 50 ? "var(--buy)" : "var(--health-warn)" },
+              { label: "Risk / Reward",  value: rr.toFixed(2) + "×",       color: rr >= 1.5 ? "var(--buy)" : rr >= 1 ? "var(--health-warn)" : "var(--sell)" },
+              { label: "Profit Factor",  value: profitFactor.toFixed(2),   color: profitFactor >= 1.5 ? "var(--buy)" : profitFactor >= 1 ? "var(--health-warn)" : "var(--sell)" },
             ].map(({ label, value, color }) => (
               <div key={label} style={{ ...card, padding: "18px 20px" }}>
-                <div style={{ fontSize: 11, fontWeight: 600, color: "rgba(232,234,237,0.60)", letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 6 }}>{label}</div>
+                <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text-secondary)", letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 6 }}>{label}</div>
                 <div style={{ fontSize: 24, fontWeight: 700, color, fontFamily: MONO, letterSpacing: -0.5 }}>{value}</div>
               </div>
             ))
@@ -179,13 +179,13 @@ export default function PerformancePage() {
           : [
               { label: "Total Trades",  value: String(trades.length) },
               { label: "Closed",        value: String(closed.length) },
-              { label: "Open",          value: String(open_.length),  color: "#0A84FF" },
-              { label: "Avg Win",       value: fmtUsd(avgWin),        color: "#34C759" },
-              { label: "Avg Loss",      value: fmtUsd(-avgLoss),      color: "#FF3B30" },
+              { label: "Open",          value: String(open_.length),  color: "var(--accent)" },
+              { label: "Avg Win",       value: fmtUsd(avgWin),        color: "var(--buy)" },
+              { label: "Avg Loss",      value: fmtUsd(-avgLoss),      color: "var(--sell)" },
             ].map(({ label, value, color }) => (
               <div key={label} style={{ ...card, padding: "14px 18px" }}>
-                <div style={{ fontSize: 11, fontWeight: 600, color: "rgba(232,234,237,0.60)", letterSpacing: 0.4, textTransform: "uppercase", marginBottom: 4 }}>{label}</div>
-                <div style={{ fontSize: 18, fontWeight: 700, color: color ?? "#E8EAED", fontFamily: MONO }}>{value}</div>
+                <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text-secondary)", letterSpacing: 0.4, textTransform: "uppercase", marginBottom: 4 }}>{label}</div>
+                <div style={{ fontSize: 18, fontWeight: 700, color: color ?? "var(--text-primary)", fontFamily: MONO }}>{value}</div>
               </div>
             ))
         }
@@ -197,7 +197,7 @@ export default function PerformancePage() {
         {loading ? (
           <div className="ios-skeleton" style={{ height: 120, borderRadius: 6 }} />
         ) : equityCurve.length < 2 ? (
-          <div style={{ height: 120, display: "flex", alignItems: "center", justifyContent: "center", color: "rgba(232,234,237,0.20)", fontSize: 13 }}>
+          <div style={{ height: 120, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-muted)", fontSize: 13 }}>
             Not enough closed trades
           </div>
         ) : (
@@ -210,7 +210,7 @@ export default function PerformancePage() {
               const mx = Math.max(...nums);
               const range = mx - mn || 1;
               const zeroY = 120 - ((-mn) / range) * 120;
-              return <line x1={0} x2={800} y1={zeroY} y2={zeroY} stroke="rgba(255,255,255,0.08)" strokeWidth={1} />;
+              return <line x1={0} x2={800} y1={zeroY} y2={zeroY} stroke="var(--border)" strokeWidth={1} />;
             })()}
             {/* Fill under curve */}
             {(() => {
@@ -221,19 +221,19 @@ export default function PerformancePage() {
                 <>
                   <defs>
                     <linearGradient id="fillGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor={isPositive ? "#34C759" : "#FF3B30"} stopOpacity={0.15} />
-                      <stop offset="100%" stopColor={isPositive ? "#34C759" : "#FF3B30"} stopOpacity={0} />
+                      <stop offset="0%" stopColor={isPositive ? "var(--buy)" : "var(--sell)"} stopOpacity={0.15} />
+                      <stop offset="100%" stopColor={isPositive ? "var(--buy)" : "var(--sell)"} stopOpacity={0} />
                     </linearGradient>
                   </defs>
                   <path d={path + `L800,120 L0,120 Z`} fill="url(#fillGrad)" />
-                  <path d={path} fill="none" stroke={isPositive ? "#34C759" : "#FF3B30"} strokeWidth={1.5} />
+                  <path d={path} fill="none" stroke={isPositive ? "var(--buy)" : "var(--sell)"} strokeWidth={1.5} />
                 </>
               );
             })()}
           </svg>
         )}
         {equityCurve.length >= 2 && (
-          <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6, fontSize: 11, color: "rgba(232,234,237,0.25)", fontFamily: MONO }}>
+          <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6, fontSize: 11, color: "var(--text-muted)", fontFamily: MONO }}>
             <span>Trade 1</span>
             <span style={{ color: pnlColor(equityCurve[equityCurve.length - 1]) }}>{fmtUsd(equityCurve[equityCurve.length - 1])} cumulative</span>
             <span>Trade {equityCurve.length}</span>
@@ -259,20 +259,20 @@ export default function PerformancePage() {
                 </div>
               ))
             ) : bySymbol.length === 0 ? (
-              <div style={{ fontSize: 13, color: "rgba(232,234,237,0.20)", textAlign: "center", padding: "20px 0" }}>No data</div>
+              <div style={{ fontSize: 13, color: "var(--text-muted)", textAlign: "center", padding: "20px 0" }}>No data</div>
             ) : bySymbol.map(({ sym, pnl, count }) => (
               <div key={sym} style={{ marginBottom: 10 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                  <span style={{ fontSize: 12, color: "#E8EAED", fontWeight: 600 }}>{sym}</span>
+                  <span style={{ fontSize: 12, color: "var(--text-primary)", fontWeight: 600 }}>{sym}</span>
                   <span style={{ fontSize: 12, fontFamily: MONO, color: pnlColor(pnl) }}>{fmtUsd(pnl)}</span>
                 </div>
-                <div style={{ height: 4, background: "rgba(255,255,255,0.06)", borderRadius: 2, overflow: "hidden" }}>
+                <div style={{ height: 4, background: "var(--surface-2)", borderRadius: 2, overflow: "hidden" }}>
                   <div style={{
                     height: "100%", width: `${(Math.abs(pnl) / maxAbsPnl) * 100}%`,
-                    background: pnl > 0 ? "#34C759" : "#FF3B30", borderRadius: 2,
+                    background: pnl > 0 ? "var(--buy)" : "var(--sell)", borderRadius: 2,
                   }} />
                 </div>
-                <div style={{ fontSize: 10, color: "rgba(232,234,237,0.25)", marginTop: 3, fontFamily: MONO }}>{count} trade{count !== 1 ? "s" : ""}</div>
+                <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 3, fontFamily: MONO }}>{count} trade{count !== 1 ? "s" : ""}</div>
               </div>
             ))}
           </div>
@@ -293,19 +293,19 @@ export default function PerformancePage() {
                 </div>
               ))
             ) : byMonth.length === 0 ? (
-              <div style={{ fontSize: 13, color: "rgba(232,234,237,0.20)", textAlign: "center", padding: "20px 0" }}>No closed trades</div>
+              <div style={{ fontSize: 13, color: "var(--text-muted)", textAlign: "center", padding: "20px 0" }}>No closed trades</div>
             ) : byMonth.map(([month, pnl]) => (
               <div key={month} style={{ marginBottom: 12 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                  <span style={{ fontSize: 12, color: "rgba(232,234,237,0.55)" }}>
+                  <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>
                     {new Date(month + "-15").toLocaleDateString("en-US", { month: "short", year: "2-digit" })}
                   </span>
                   <span style={{ fontSize: 13, fontFamily: MONO, fontWeight: 700, color: pnlColor(pnl) }}>{fmtUsd(pnl)}</span>
                 </div>
-                <div style={{ height: 6, background: "rgba(255,255,255,0.06)", borderRadius: 3, overflow: "hidden" }}>
+                <div style={{ height: 6, background: "var(--surface-2)", borderRadius: 3, overflow: "hidden" }}>
                   <div style={{
                     height: "100%", width: `${(Math.abs(pnl) / maxMonthPnl) * 100}%`,
-                    background: pnl > 0 ? "#34C759" : "#FF3B30", borderRadius: 3,
+                    background: pnl > 0 ? "var(--buy)" : "var(--sell)", borderRadius: 3,
                   }} />
                 </div>
               </div>
@@ -319,7 +319,7 @@ export default function PerformancePage() {
             <div style={sectionLabel}>P&L by Strategy</div>
             {loading ? (
               [0,1,2,3].map(i => (
-                <div key={i} className="skel-row" style={{ padding: "10px 12px", marginBottom: 8, borderRadius: 8, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)" }}>
+                <div key={i} className="skel-row" style={{ padding: "10px 12px", marginBottom: 8, borderRadius: 8, background: "var(--surface-2)", border: "1px solid var(--border)" }}>
                   <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
                     <div className="ios-skeleton" style={{ height: 12, width: "45%", borderRadius: 4 }} />
                     <div className="ios-skeleton" style={{ height: 13, width: "25%", borderRadius: 4 }} />
@@ -331,14 +331,14 @@ export default function PerformancePage() {
                 </div>
               ))
             ) : byStrategy.length === 0 ? (
-              <div style={{ fontSize: 13, color: "rgba(232,234,237,0.20)", textAlign: "center", padding: "20px 0" }}>No data</div>
+              <div style={{ fontSize: 13, color: "var(--text-muted)", textAlign: "center", padding: "20px 0" }}>No data</div>
             ) : byStrategy.map(({ strat, pnl, total, wr }) => (
               <div key={strat} style={{
                 padding: "10px 12px", marginBottom: 8, borderRadius: 8,
-                background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)",
+                background: "var(--surface-2)", border: "1px solid var(--border)",
               }}>
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-                  <span style={{ fontSize: 12, fontWeight: 600, color: "#E8EAED", maxWidth: "60%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-primary)", maxWidth: "60%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {strat}
                   </span>
                   <span style={{ fontSize: 13, fontFamily: MONO, fontWeight: 700, color: pnlColor(pnl) }}>
@@ -346,8 +346,8 @@ export default function PerformancePage() {
                   </span>
                 </div>
                 <div style={{ display: "flex", gap: 16 }}>
-                  <span style={{ fontSize: 11, color: "rgba(232,234,237,0.35)" }}>{total} trades</span>
-                  <span style={{ fontSize: 11, color: wr >= 50 ? "#34C759" : "#FF9F0A" }}>{wr.toFixed(0)}% WR</span>
+                  <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{total} trades</span>
+                  <span style={{ fontSize: 11, color: wr >= 50 ? "var(--buy)" : "var(--health-warn)" }}>{wr.toFixed(0)}% WR</span>
                 </div>
               </div>
             ))}

@@ -73,7 +73,7 @@ KALMAN_ENABLED: bool = os.getenv("KALMAN_ENABLED", "true").lower() == "true"
 GARCH_ENABLED: bool = os.getenv("GARCH_ENABLED", "true").lower() == "true"
 GARCH_HIGH_VOL_THRESHOLD: float = float(os.getenv("GARCH_HIGH_VOL_THRESHOLD", "2.0"))
 LGBM_ENSEMBLE_ENABLED: bool = (
-    os.getenv("LGBM_ENSEMBLE_ENABLED", "false").lower() == "true"
+    os.getenv("LGBM_ENSEMBLE_ENABLED", "true").lower() == "true"
 )
 HEDGE_STRIP_ENABLED: bool = (
     os.getenv("HEDGE_STRIP_ENABLED", "true").lower() == "true"

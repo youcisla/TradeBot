@@ -36,13 +36,13 @@ function fmtUsd(v?: number): string {
 }
 
 function pnlColor(v?: number): string {
-  if (v == null) return "rgba(232,234,237,0.40)";
-  return v > 0 ? "#34C759" : v < 0 ? "#FF3B30" : "rgba(232,234,237,0.40)";
+  if (v == null) return "var(--text-muted)";
+  return v > 0 ? "var(--buy)" : v < 0 ? "var(--sell)" : "var(--text-muted)";
 }
 
 function limitBar(value: number, max: number, good?: boolean): { used: number; color: string } {
   const pct = max !== 0 ? Math.min(Math.abs(value / max), 1) * 100 : 0;
-  const color = pct > 90 ? "#FF3B30" : pct > 60 ? "#FF9F0A" : (good ? "#34C759" : "#0A84FF");
+  const color = pct > 90 ? "var(--sell)" : pct > 60 ? "var(--health-warn)" : (good ? "var(--buy)" : "var(--accent)");
   return { used: pct, color };
 }
 
@@ -83,10 +83,10 @@ export default function RiskPage() {
 
   const MONO = "var(--font-mono-stack)";
   const card: React.CSSProperties = {
-    background: "var(--card-bg)", border: "1px solid var(--card-border)", borderRadius: "var(--card-radius)",
+    background: "var(--surface-2)", border: "1px solid var(--border)", borderRadius: 10,
   };
   const sectionLabel: React.CSSProperties = {
-    fontSize: 11, fontWeight: 600, color: "var(--section-label)",
+    fontSize: 11, fontWeight: 600, color: "var(--text-muted)",
     letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 16,
   };
 
@@ -100,14 +100,14 @@ export default function RiskPage() {
       {data.emergency_stop && (
         <div style={{
           marginBottom: 20, padding: "14px 20px", borderRadius: 12,
-          background: "rgba(255,59,48,0.12)", border: "1px solid rgba(255,59,48,0.35)",
+          background: "var(--sell-dim)", border: "1px solid rgba(239,68,68,0.35)",
           display: "flex", alignItems: "center", gap: 12,
         }}>
-          <span style={{ fontSize: 18, fontFamily: "Material Symbols Outlined", color: "#FF3B30" }}>emergency</span>
+          <span style={{ fontSize: 18, fontFamily: "Material Symbols Outlined", color: "var(--sell)" }}>emergency</span>
           <div>
-            <div style={{ fontSize: 14, fontWeight: 700, color: "#FF3B30", letterSpacing: -0.2 }}>EMERGENCY STOP ACTIVE</div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: "var(--sell)", letterSpacing: -0.2 }}>EMERGENCY STOP ACTIVE</div>
             {data.emergency_reason && (
-              <div style={{ fontSize: 12, color: "rgba(232,234,237,0.55)", marginTop: 2 }}>{data.emergency_reason}</div>
+              <div style={{ fontSize: 12, color: "var(--text-secondary)", marginTop: 2 }}>{data.emergency_reason}</div>
             )}
           </div>
         </div>
@@ -116,13 +116,13 @@ export default function RiskPage() {
       {/*  Equity / Balance strip  */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 12, marginBottom: 20 }}>
         {[
-          { label: "Equity",          value: fmtUsd(data.equity),       color: "#E8EAED" },
-          { label: "Balance",         value: fmtUsd(data.balance),      color: "#E8EAED" },
+          { label: "Equity",          value: fmtUsd(data.equity),       color: "var(--text-primary)" },
+          { label: "Balance",         value: fmtUsd(data.balance),      color: "var(--text-primary)" },
           { label: "Daily P&L",       value: data.daily_pnl != null ? `${fmtUsd(data.daily_pnl)} (${(data.daily_pnl_pct ?? 0).toFixed(2)}%)` : "—", color: pnlColor(data.daily_pnl) },
           { label: "Monthly P&L",     value: data.monthly_pnl != null ? `${fmtUsd(data.monthly_pnl)} (${(data.monthly_pnl_pct ?? 0).toFixed(2)}%)` : "—", color: pnlColor(data.monthly_pnl) },
         ].map(({ label, value, color }) => (
           <div key={label} style={{ ...card, padding: "18px 20px" }}>
-            <div style={{ fontSize: 11, fontWeight: 600, color: "rgba(232,234,237,0.60)", letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 6 }}>{label}</div>
+            <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text-secondary)", letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 6 }}>{label}</div>
             <div style={{ fontSize: 20, fontWeight: 700, color, fontFamily: MONO, letterSpacing: -0.5 }}>
               {loading ? "—" : value}
             </div>
@@ -140,18 +140,18 @@ export default function RiskPage() {
             <span style={{ fontSize: 20, fontWeight: 700, color: pnlColor(data.daily_pnl), fontFamily: MONO }}>
               {fmtUsd(data.daily_pnl)}
             </span>
-            <span style={{ fontSize: 13, color: "rgba(232,234,237,0.40)", fontFamily: MONO }}>
+            <span style={{ fontSize: 13, color: "var(--text-muted)", fontFamily: MONO }}>
               / {fmtUsd(data.max_daily_loss)}
             </span>
           </div>
-          <div style={{ height: 8, background: "rgba(255,255,255,0.06)", borderRadius: 4, overflow: "hidden", marginBottom: 6 }}>
+          <div style={{ height: 8, background: "var(--surface-3)", borderRadius: 4, overflow: "hidden", marginBottom: 6 }}>
             <div style={{ height: "100%", width: `${dailyBar.used}%`, background: dailyBar.color, borderRadius: 4, transition: "width 0.3s" }} />
           </div>
-          <div style={{ fontSize: 11, color: "rgba(232,234,237,0.30)", fontFamily: MONO }}>
+          <div style={{ fontSize: 11, color: "var(--text-muted)", fontFamily: MONO }}>
             {dailyBar.used.toFixed(1)}% of daily limit consumed
           </div>
           {data.max_daily_loss_pct != null && (
-            <div style={{ fontSize: 11, color: "rgba(232,234,237,0.25)", marginTop: 4 }}>
+            <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>
               Cap: {data.max_daily_loss_pct.toFixed(2)}% of balance
             </div>
           )}
@@ -161,17 +161,17 @@ export default function RiskPage() {
         <div style={{ ...card, padding: "20px" }}>
           <div style={sectionLabel}>Max Total Drawdown</div>
           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
-            <span style={{ fontSize: 20, fontWeight: 700, color: "#FF9F0A", fontFamily: MONO }}>
+            <span style={{ fontSize: 20, fontWeight: 700, color: "var(--health-warn)", fontFamily: MONO }}>
               {data.max_total_drawdown != null ? fmtUsd(data.max_total_drawdown) : "—"}
             </span>
-            <span style={{ fontSize: 12, color: "rgba(232,234,237,0.35)" }}>
+            <span style={{ fontSize: 12, color: "var(--text-muted)" }}>
               {data.max_total_drawdown_pct != null ? `${data.max_total_drawdown_pct.toFixed(2)}% limit` : "not set"}
             </span>
           </div>
-          <div style={{ height: 8, background: "rgba(255,255,255,0.06)", borderRadius: 4, overflow: "hidden", marginBottom: 6 }}>
-            <div style={{ height: "100%", width: "0%", background: "#FF9F0A", borderRadius: 4 }} />
+          <div style={{ height: 8, background: "var(--surface-3)", borderRadius: 4, overflow: "hidden", marginBottom: 6 }}>
+            <div style={{ height: "100%", width: "0%", background: "var(--health-warn)", borderRadius: 4 }} />
           </div>
-          <div style={{ fontSize: 11, color: "rgba(232,234,237,0.30)", fontFamily: MONO }}>Absolute drawdown ceiling</div>
+          <div style={{ fontSize: 11, color: "var(--text-muted)", fontFamily: MONO }}>Absolute drawdown ceiling</div>
         </div>
       </div>
 
@@ -186,9 +186,9 @@ export default function RiskPage() {
             { label: "Max Lot Size",            value: data.max_lot_size != null ? String(data.max_lot_size) : "—" },
             { label: "Max Concurrent Trades",   value: data.max_concurrent_trades != null ? String(data.max_concurrent_trades) : "—" },
           ].map(({ label, value }) => (
-            <div key={label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
-              <span style={{ fontSize: 12, color: "rgba(232,234,237,0.50)" }}>{label}</span>
-              <span style={{ fontSize: 14, fontWeight: 600, color: "#E8EAED", fontFamily: MONO }}>{value}</span>
+            <div key={label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderBottom: "1px solid var(--border-subtle)" }}>
+              <span style={{ fontSize: 12, color: "var(--text-muted)" }}>{label}</span>
+              <span style={{ fontSize: 14, fontWeight: 600, color: "var(--text-primary)", fontFamily: MONO }}>{value}</span>
             </div>
           ))}
         </div>
@@ -197,17 +197,17 @@ export default function RiskPage() {
         <div style={{ ...card, padding: "20px" }}>
           <div style={sectionLabel}>Open Positions</div>
           <div style={{ textAlign: "center", padding: "10px 0 6px" }}>
-            <div style={{ fontSize: 48, fontWeight: 700, color: "#0A84FF", fontFamily: MONO, lineHeight: 1 }}>
+            <div style={{ fontSize: 48, fontWeight: 700, color: "var(--accent)", fontFamily: MONO, lineHeight: 1 }}>
               {data.open_trades ?? 0}
             </div>
-            <div style={{ fontSize: 12, color: "rgba(232,234,237,0.35)", marginTop: 8 }}>
+            <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 8 }}>
               of {data.max_concurrent_trades ?? "—"} allowed
             </div>
           </div>
-          <div style={{ height: 8, background: "rgba(255,255,255,0.06)", borderRadius: 4, overflow: "hidden", margin: "12px 0 8px" }}>
+          <div style={{ height: 8, background: "var(--surface-3)", borderRadius: 4, overflow: "hidden", margin: "12px 0 8px" }}>
             <div style={{ height: "100%", width: `${tradCntBar.used}%`, background: tradCntBar.color, borderRadius: 4, transition: "width 0.3s" }} />
           </div>
-          <div style={{ fontSize: 11, color: "rgba(232,234,237,0.30)", fontFamily: MONO, textAlign: "center" }}>
+          <div style={{ fontSize: 11, color: "var(--text-muted)", fontFamily: MONO, textAlign: "center" }}>
             {tradCntBar.used.toFixed(0)}% slot utilisation
           </div>
         </div>
@@ -218,10 +218,10 @@ export default function RiskPage() {
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
             <div style={{
               width: 8, height: 8, borderRadius: "50%",
-              background: data.wfo_enabled ? "#34C759" : "rgba(232,234,237,0.20)",
-              boxShadow: data.wfo_enabled ? "0 0 6px #34C759" : "none",
+              background: data.wfo_enabled ? "var(--buy)" : "var(--text-muted)",
+              boxShadow: data.wfo_enabled ? "0 0 6px var(--buy)" : "none",
             }} />
-            <span style={{ fontSize: 14, fontWeight: 600, color: data.wfo_enabled ? "#34C759" : "rgba(232,234,237,0.35)" }}>
+            <span style={{ fontSize: 14, fontWeight: 600, color: data.wfo_enabled ? "var(--buy)" : "var(--text-muted)" }}>
               {data.wfo_enabled ? "Enabled" : "Disabled"}
             </span>
           </div>
@@ -229,9 +229,9 @@ export default function RiskPage() {
             { label: "Retrain Period", value: data.wfo_period != null ? `${data.wfo_period}d` : "—" },
             { label: "Last Retrain",   value: relTime(data.last_retrain) },
           ].map(({ label, value }) => (
-            <div key={label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
-              <span style={{ fontSize: 12, color: "rgba(232,234,237,0.50)" }}>{label}</span>
-              <span style={{ fontSize: 13, fontWeight: 600, color: "#E8EAED", fontFamily: MONO }}>{value}</span>
+            <div key={label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderBottom: "1px solid var(--border-subtle)" }}>
+              <span style={{ fontSize: 12, color: "var(--text-muted)" }}>{label}</span>
+              <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)", fontFamily: MONO }}>{value}</span>
             </div>
           ))}
         </div>
