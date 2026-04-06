@@ -56,6 +56,26 @@ _N_WARMUP = 60
 
 _BUY, _HOLD, _SELL = 0, 1, 2
 
+
+def _compute_recency_weights(n: int, weight_factor: float) -> np.ndarray:
+    """Exponential decay weights so recent bars are weighted more heavily.
+
+    Formula (Freqtrade FreqAI pattern)::
+        weights[i] = exp(-i / (weight_factor * n))
+
+    where i=0 is the OLDEST sample and i=n-1 is the MOST RECENT.
+    The array is reversed before returning so index 0 → oldest weight.
+    weight_factor=0 disables weighting (all weights = 1.0).
+    """
+    if weight_factor <= 0:
+        return np.ones(n, dtype=np.float32)
+    indices = np.arange(n, dtype=np.float32)
+    weights = np.exp(-indices / (weight_factor * n))
+    # Most recent sample (last index) should have the highest weight;
+    # reverse so index 0 = oldest but weight is still correct for .fit().
+    # LGBM sees samples in array order; we want recent = higher weight.
+    return weights.astype(np.float32)
+
 # Session / Day encoding — MUST match models/lgbm_price_model.py exactly.
 _SESSION_MAP: dict[str, int] = {
     "london":   0, "ny":       1, "new york": 1, "newyork": 1,
@@ -274,6 +294,7 @@ def train_symbol(
     df: pd.DataFrame,
     n_forward: int,
     atr_mult: float,
+    weight_factor: float = 0.0,
 ) -> "object | None":
     """Train one LGBMClassifier for *symbol* and return it (or None on failure)."""
     try:
@@ -326,7 +347,15 @@ def train_symbol(
         random_state=42,
         verbose=-1,
     )
-    model.fit(X, y)
+    # Recency-weighted training (Freqtrade/FreqAI pattern)
+    weights = _compute_recency_weights(len(X), weight_factor)
+    if weight_factor > 0:
+        logger.info(
+            "  Recency weighting active (factor=%.2f) — "
+            "weight range: %.4f … %.4f",
+            weight_factor, weights.min(), weights.max(),
+        )
+    model.fit(X, y, sample_weight=weights)
     logger.info(
         "%s — ✓ trained on %d samples (%d features)",
         symbol, len(X), X.shape[1],
@@ -370,6 +399,15 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--min-samples", type=int, default=100, dest="min_samples",
         help="Minimum valid training samples per symbol (default: 100).",
     )
+    parser.add_argument(
+        "--weight-factor", type=float, default=0.0, dest="weight_factor",
+        help=(
+            "Recency weight factor (0=disabled, 0.1=recommended). "
+            "Weights recent bars exponentially more in training via "
+            "exp(-i / (factor * n)). Higher = more recency emphasis. "
+            "Freqtrade-style exponential decay."
+        ),
+    )
     return parser.parse_args(argv)
 
 
@@ -392,6 +430,14 @@ def main(argv: list[str] | None = None) -> int:
 
     saved = 0
     failed: list[str] = []
+
+    logger.info(
+        "Price-LGBM training — %d symbol(s)  TF=%s  years=%.1f  "
+        "forward=%d  atr_mult=%.2f  weight_factor=%s",
+        len(symbols), args.timeframe, args.years,
+        args.forward_bars, args.atr_mult,
+        f"{args.weight_factor:.2f}" if args.weight_factor > 0 else "disabled",
+    )
 
     for sym in symbols:
         logger.info("=" * 60)
@@ -421,7 +467,7 @@ def main(argv: list[str] | None = None) -> int:
             continue
 
         # ── Train ─────────────────────────────────────────────────────────
-        model = train_symbol(sym, df, args.forward_bars, args.atr_mult)
+        model = train_symbol(sym, df, args.forward_bars, args.atr_mult, args.weight_factor)
         if model is None:
             failed.append(sym)
             continue

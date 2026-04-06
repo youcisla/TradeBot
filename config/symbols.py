@@ -220,3 +220,6 @@ SYMBOLS: list[str] = (
     if _env_active
     else ALL_SYMBOLS  # default: scan everything
 )
+
+# Alias — some scripts import the old name
+ACTIVE_SYMBOLS = SYMBOLS

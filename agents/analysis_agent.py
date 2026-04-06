@@ -154,6 +154,7 @@ class AnalysisAgent:
             candles=data.candles,
             m30_candles=data.m30_candles,
             m15_candles=data.m15_candles,
+            m5_candles=data.m5_candles,
             h4_candles=data.h4_candles,
             d1_candles=data.d1_candles,
             m30_trend=m30_trend,

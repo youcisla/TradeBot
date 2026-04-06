@@ -86,7 +86,7 @@ export default function SettingsPage() {
     letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 14,
   };
 
-  const isRunning = !!(status as any)?.running ?? false;
+  const isRunning = !!(status as any)?.running;
 
   return (
     <>

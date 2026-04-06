@@ -215,11 +215,12 @@ def main() -> None:
     # ── 6. Agents (db passed for persona events) ────────────────────────
     market_agent = MarketAgent(broker, db=db)
     analysis_agent = AnalysisAgent(crucix_agent, db=db)
-    trade_manager = TradeManagerAgent(broker, state, db)
+    risk_agent = RiskAgent(broker, lambda: [], crucix_agent, db=db)  # placeholder; updated below
+    execution_agent = ExecutionAgent(broker, state, risk_agent.calculate_position_size, db=db)
+    trade_manager = TradeManagerAgent(broker, state, db, guard_pipeline=execution_agent.guard_pipeline)
     risk_agent = RiskAgent(broker, trade_manager.get_open_trades, crucix_agent, db=db)
     strategy_agent = StrategyAgent(strategies, learning.get_confidence, db=db)
     weekend_strategy_agent = StrategyAgent(weekend_strategies, learning.get_confidence, db=db)
-    execution_agent = ExecutionAgent(broker, state, risk_agent.calculate_position_size, db=db)
 
     def _get_active_symbols_local() -> list[str]:
         return _active_symbols[:]

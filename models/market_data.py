@@ -36,6 +36,7 @@ class MarketData:
     # Entry TFs:    M15 trigger
     m30_candles: list[Candle] = field(default_factory=list)
     m15_candles: list[Candle] = field(default_factory=list)
+    m5_candles: list[Candle] = field(default_factory=list)
     h4_candles: list[Candle] = field(default_factory=list)
     d1_candles: list[Candle] = field(default_factory=list)
     # Ultra-short horizon microstructure features from MarketAgent tick memory.
@@ -90,6 +91,7 @@ class MarketContext:
     # Multi-timeframe candles (empty = not fetched)
     m30_candles: list[Candle] = field(default_factory=list)
     m15_candles: list[Candle] = field(default_factory=list)
+    m5_candles: list[Candle] = field(default_factory=list)
     h4_candles: list[Candle] = field(default_factory=list)
     d1_candles: list[Candle] = field(default_factory=list)
     # ADX value computed by AnalysisAgent and consumed by strategy regime logic.

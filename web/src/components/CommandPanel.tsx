@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import ConfirmModal from "@/components/ConfirmModal";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -152,6 +153,7 @@ export default function CommandPanel({ onCommand }: Props) {
   const [reviewingId, setReviewingId] = useState<number | null>(null);
   const [history, setHistory] = useState<CommandHistoryItem[]>([]);
   const [showHistory, setShowHistory] = useState(false);
+  const [pendingDanger, setPendingDanger] = useState<string | null>(null);
   const feedTO                    = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Poll bot state
@@ -204,16 +206,39 @@ export default function CommandPanel({ onCommand }: Props) {
   }
 
   async function send(cmd: string, danger: boolean) {
-    if (danger && !window.confirm(`Are you sure you want to ${cmd.replace("_", " ")}?`)) return;
+    if (danger) { setPendingDanger(cmd); return; }
+    setLoading(cmd);
+    try {
+      const r = await fetch("/api/commands", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ command: cmd, payload: { source: "dashboard-ui" } }),
+      });
+      const d = await r.json();
+      if (d?.ok !== false) {
+        showFeedback(d?.requiresApproval ? `${cmd} queued for approval` : `${cmd} acknowledged`, true);
+        if (cmd === "pause")  setBotState("paused");
+        if (cmd === "resume") setBotState("running");
+        onCommand?.(cmd);
+      } else {
+        showFeedback(d?.error?.message ?? d?.error ?? "Command failed", false);
+      }
+    } catch {
+      showFeedback("Network error", false);
+    } finally {
+      setLoading(null);
+    }
+  }
+
+  async function executeDangerous(cmd: string) {
+    setPendingDanger(null);
     setLoading(cmd);
     try {
       const payload: Record<string, unknown> = {
         source: "dashboard-ui",
+        confirmed: true,
+        reason: `Manual confirmation from dashboard for ${cmd}`,
       };
-      if (danger) {
-        payload.confirmed = true;
-        payload.reason = `Manual confirmation from dashboard for ${cmd}`;
-      }
 
       const r = await fetch("/api/commands", {
         method:  "POST",
@@ -562,6 +587,23 @@ export default function CommandPanel({ onCommand }: Props) {
           </div>
         )}
       </div>
+
+      {/* Danger confirmation modal */}
+      <ConfirmModal
+        open={pendingDanger !== null}
+        title={pendingDanger === "kill" ? "Kill Bot?" : pendingDanger === "close_all" ? "Close All Positions?" : "Confirm Action"}
+        body={
+          pendingDanger === "kill"
+            ? "This will immediately terminate the trading bot. All open positions will remain open until the broker closes them. Are you sure?"
+            : pendingDanger === "close_all"
+            ? "This will send close commands to all open positions at market price. This action cannot be undone. Are you sure?"
+            : `Are you sure you want to execute ${pendingDanger}?`
+        }
+        confirmLabel={pendingDanger === "kill" ? "Kill Bot" : pendingDanger === "close_all" ? "Close All" : "Confirm"}
+        danger
+        onConfirm={() => pendingDanger && executeDangerous(pendingDanger)}
+        onCancel={() => setPendingDanger(null)}
+      />
     </div>
   );
 }

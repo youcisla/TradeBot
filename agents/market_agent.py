@@ -42,9 +42,10 @@ class MarketAgent:
         self._tick_history: dict[str, deque[tuple[float, float]]] = {}
         self._htf_cache_base_ttl_seconds: dict[str, float] = {
             "M15": settings.HTF_CACHE_TTL_M15_SECONDS,
+            "M5":  settings.HTF_CACHE_TTL_M5_SECONDS,
             "M30": settings.HTF_CACHE_TTL_M30_SECONDS,
-            "H4": settings.HTF_CACHE_TTL_H4_SECONDS,
-            "D1": settings.HTF_CACHE_TTL_D1_SECONDS,
+            "H4":  settings.HTF_CACHE_TTL_H4_SECONDS,
+            "D1":  settings.HTF_CACHE_TTL_D1_SECONDS,
         }
 
     def _validator(self, symbol: str) -> DataValidator:
@@ -97,16 +98,18 @@ class MarketAgent:
         candles = self._get_candles(symbol)
         m30_candles = self._get_htf_candles(symbol, "M30", settings.M30_CANDLE_COUNT, session_profile)
         m15_candles = self._get_htf_candles(symbol, "M15", settings.M15_CANDLE_COUNT, session_profile)
+        m5_candles  = self._get_htf_candles(symbol, "M5",  settings.M5_CANDLE_COUNT,  session_profile)
         h4_candles = self._get_htf_candles(symbol, "H4", settings.H4_CANDLE_COUNT, session_profile)
         d1_candles = self._get_htf_candles(symbol, "D1", settings.D1_CANDLE_COUNT, session_profile)
 
         self._emit("info",
                    f"{symbol} — bid={bid:.5f} spread={spread:.5f} "
                    f"h1={len(candles)} m30={len(m30_candles)} m15={len(m15_candles)} "
-                   f"h4={len(h4_candles)} d1={len(d1_candles)} vol={volume:.0f}",
+                   f"m5={len(m5_candles)} h4={len(h4_candles)} d1={len(d1_candles)} vol={volume:.0f}",
                    {"bid": bid, "ask": ask, "spread": spread,
                     "volume": volume, "candles": len(candles),
                     "m30": len(m30_candles), "m15": len(m15_candles),
+                    "m5": len(m5_candles),
                     "last_close": candles[-1].close if candles else None})
 
         record_call("market", (time.monotonic() - _t0) * 1000.0, True)
@@ -119,6 +122,7 @@ class MarketAgent:
             candles=candles,
             m30_candles=m30_candles,
             m15_candles=m15_candles,
+            m5_candles=m5_candles,
             h4_candles=h4_candles,
             d1_candles=d1_candles,
             shock_detected=shock_detected,

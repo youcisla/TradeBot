@@ -68,6 +68,11 @@ class MicroBarFeatures:
     # > 0 = upper wick dominates (selling above); < 0 = lower wick dominates
     wick_asymmetry: float = 0.0
 
+    # High-to-low ratio: high / low — measures intraday range as a multiplicative
+    # factor.  E.g. 1.005 means price travelled 0.5% within the bar.
+    # NaN if low == 0.  Clamped to [0.5, 2.0] for downstream stability.
+    high2low_ratio: float = 1.0
+
 
 class MicrostructureFeatures:
     """Stateful microstructure feature extractor.
@@ -127,6 +132,10 @@ class MicrostructureFeatures:
         wick_total = upper_wick + lower_wick
         if wick_total > 0:
             feat.wick_asymmetry = (upper_wick - lower_wick) / wick_total  # [-1, +1]
+
+        # ── High-to-low ratio ───────────────────────────────────────────
+        if low > 0:
+            feat.high2low_ratio = min(2.0, max(0.5, high / low))
 
         # ── Kyle lambda proxy ─────────────────────────────────────────────
         if prev_close and prev_close > 0:

@@ -21,9 +21,12 @@ const NAV_SECTIONS = [
   {
     label: "Intelligence",
     items: [
-      { href: "/dashboard/analytics", label: "Performance",  icon: "bar_chart"  },
+      { href: "/dashboard/signals",   label: "Signals",       icon: "radar"      },
+      { href: "/dashboard/analytics", label: "Performance",   icon: "bar_chart"  },
       { href: "/dashboard/brain",     label: "Agent Brain",  icon: "psychology" },
-      { href: "/dashboard/risk",      label: "Risk Console", icon: "shield"     },
+      { href: "/dashboard/risk",       label: "Risk Console", icon: "shield"     },
+      { href: "/dashboard/learning",  label: "Learning",     icon: "school"     },
+      { href: "/dashboard/health",    label: "System Health", icon: "monitor_heart" },
     ],
   },
   {

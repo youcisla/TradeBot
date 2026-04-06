@@ -41,3 +41,5 @@ Thumbs.db
 crucix/runs/
 crucix/.env
 crucix/node_modules/
+
+*.pkl

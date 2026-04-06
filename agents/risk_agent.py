@@ -281,6 +281,12 @@ class RiskAgent:
             except Exception:
                 pass  # Crucix unavailable — use unscaled lot
 
+        # Scalp-specific lot cap — scalp uses tighter SL so same $ risk
+        # produces larger nominal lots; cap at SCALP_MAX_LOT_SIZE to prevent
+        # a single scalp trade consuming disproportionate capital.
+        if signal.strategy == "scalp_m5":
+            lot_size = min(lot_size, settings.SCALP_MAX_LOT_SIZE)
+
         return max(settings.MIN_LOT_SIZE, min(settings.MAX_LOT_SIZE, lot_size))
 
     def _compute_kelly_fraction(self) -> float:

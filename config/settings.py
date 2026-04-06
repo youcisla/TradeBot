@@ -211,6 +211,7 @@ H4_CANDLE_COUNT: int  = int(os.getenv("H4_CANDLE_COUNT",  "50"))
 D1_CANDLE_COUNT: int  = int(os.getenv("D1_CANDLE_COUNT",  "20"))
 M30_CANDLE_COUNT: int = int(os.getenv("M30_CANDLE_COUNT", "100"))
 M15_CANDLE_COUNT: int = int(os.getenv("M15_CANDLE_COUNT", "100"))
+M5_CANDLE_COUNT: int = int(os.getenv("M5_CANDLE_COUNT", "100"))
 # MTF alignment: confidence boost when all TFs agree, D1 veto when it contradicts
 MTF_ALIGNMENT_BOOST: float = float(os.getenv("MTF_ALIGNMENT_BOOST", "0.05"))
 MTF_D1_VETO: bool = os.getenv("MTF_D1_VETO", "true").lower() == "true"
@@ -238,6 +239,14 @@ MAX_SPREAD_PIPS: float = float(os.getenv("MAX_SPREAD_PIPS", "8.0"))
 DRAWDOWN_COOLDOWN_HOURS: int = int(os.getenv("DRAWDOWN_COOLDOWN_HOURS", "24"))
 MIN_LOT_SIZE: float = float(os.getenv("MIN_LOT_SIZE", "0.01"))
 MAX_LOT_SIZE: float = float(os.getenv("MAX_LOT_SIZE", "50.0"))
+
+# ── Scalp-specific risk limits ───────────────────────────────────────────────
+# Scalp trades (scalp_m5 strategy) use tighter SL → larger lots for same $ risk.
+# These caps prevent scalp from consuming disproportionate balance.
+SCALP_MAX_LOT_SIZE: float = float(os.getenv("SCALP_MAX_LOT_SIZE", "0.50"))
+SCALP_MAX_CONCURRENT: int = int(os.getenv("SCALP_MAX_CONCURRENT", "2"))
+SCALP_MAX_TRADES_PER_HOUR: int = int(os.getenv("SCALP_MAX_TRADES_PER_HOUR", "4"))
+SCALP_DAILY_LOSS_LIMIT: float = float(os.getenv("SCALP_DAILY_LOSS_LIMIT", "0.02"))  # 2% of balance
 # Position sizing mode (MT5-style modes):
 # - equity_pct        : risk percent of equity (default)
 # - balance_pct       : risk percent of balance
@@ -437,6 +446,7 @@ OPPORTUNITY_LIVE_ENABLED: bool = (
 
 # MarketAgent higher-timeframe cache tuning by session profile.
 HTF_CACHE_TTL_M15_SECONDS: float = float(os.getenv("HTF_CACHE_TTL_M15_SECONDS", "20"))
+HTF_CACHE_TTL_M5_SECONDS: float = float(os.getenv("HTF_CACHE_TTL_M5_SECONDS", "15"))
 HTF_CACHE_TTL_M30_SECONDS: float = float(os.getenv("HTF_CACHE_TTL_M30_SECONDS", "30"))
 HTF_CACHE_TTL_H4_SECONDS: float = float(os.getenv("HTF_CACHE_TTL_H4_SECONDS", "120"))
 HTF_CACHE_TTL_D1_SECONDS: float = float(os.getenv("HTF_CACHE_TTL_D1_SECONDS", "300"))

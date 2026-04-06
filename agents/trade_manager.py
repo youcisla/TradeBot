@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import logging
 from datetime import UTC, datetime
-from typing import Callable
+from typing import TYPE_CHECKING, Callable
 
 from broker.connector import BrokerConnector
 from utils.mesh_bus import mesh_span
@@ -25,6 +25,9 @@ from database.db import Database
 from models.trade import Trade
 from state.persistence import StatePersistence
 from utils import telegram_bot
+
+if TYPE_CHECKING:
+    from agents.guards import GuardPipeline
 
 logger = logging.getLogger(__name__)
 
@@ -37,10 +40,12 @@ class TradeManagerAgent:
         broker: BrokerConnector,
         state: StatePersistence,
         db: Database,
+        guard_pipeline: "GuardPipeline | None" = None,
     ) -> None:
         self._broker = broker
         self._state = state
         self._db = db
+        self._guard_pipeline = guard_pipeline
         self._open_trades: list[Trade] = []
 
     # ── lifecycle ────────────────────────────────────────────────────────
@@ -428,6 +433,7 @@ class TradeManagerAgent:
         expected_gap = round(true_pnl - float(trade.expected_pnl or 0.0), 2)
         self._state.save_trade(trade)
         if not has_runner:
+            self._record_scalp_close(trade, true_pnl)
             self._close_thesis(trade, "CLOSED_WIN")
         self._emit("info",
                    f"TP3 hit on {trade.symbol}! "
@@ -461,6 +467,7 @@ class TradeManagerAgent:
         true_pnl = round(trade.pnl - trade.commission, 2)
         expected_gap = round(true_pnl - float(trade.expected_pnl or 0.0), 2)
         self._state.save_trade(trade)
+        self._record_scalp_close(trade, true_pnl)
         self._close_thesis(trade, "CLOSED_WIN")
         self._emit("info",
                    f"TP4 (runner) hit on {trade.symbol}! Trade fully closed at HTF liquidity "
@@ -486,6 +493,7 @@ class TradeManagerAgent:
         true_pnl = round(trade.pnl - trade.commission, 2)
         expected_gap = round(true_pnl - float(trade.expected_pnl or 0.0), 2)
         self._state.save_trade(trade)
+        self._record_scalp_close(trade, true_pnl)
         self._close_thesis(trade, "CLOSED_LOSS")
         self._emit("warn",
                    f"SL hit on {trade.symbol} — closed at loss "
@@ -514,6 +522,7 @@ class TradeManagerAgent:
         true_pnl = round(trade.pnl - trade.commission, 2)
         expected_gap = round(true_pnl - float(trade.expected_pnl or 0.0), 2)
         self._state.save_trade(trade)
+        self._record_scalp_close(trade, true_pnl)
         _tl_outcome = (
             "CLOSED_WIN" if trade.pnl > 0
             else "CLOSED_LOSS" if trade.pnl < -0.01
@@ -548,7 +557,9 @@ class TradeManagerAgent:
             trade.status = "CLOSED"
             trade.close_time = datetime.now(UTC)
             trade.close_reason = reason
+            true_pnl = round(trade.pnl - trade.commission, 2)
             self._state.save_trade(trade)
+            self._record_scalp_close(trade, true_pnl)
             self._close_thesis(trade, "CLOSED_SCRATCH")
         self._open_trades.clear()
         self._emit("critical", f"CLOSE ALL: {reason} — all positions closed")
@@ -560,7 +571,9 @@ class TradeManagerAgent:
                 trade.status = "CLOSED"
                 trade.close_time = datetime.now(UTC)
                 trade.close_reason = reason
+                true_pnl = round(trade.pnl - trade.commission, 2)
                 self._state.save_trade(trade)
+                self._record_scalp_close(trade, true_pnl)
                 self._close_thesis(trade, "CLOSED_SCRATCH")
                 self._emit("info",
                            f"Trade {trade.symbol} closed: {reason} (PnL {trade.pnl:.2f})",
@@ -636,3 +649,14 @@ class TradeManagerAgent:
     def add_trade(self, trade: Trade) -> None:
         """Register a newly opened trade for monitoring."""
         self._open_trades.append(trade)
+
+    # ── scalp guard integration ──────────────────────────────────────────
+
+    def _record_scalp_close(self, trade: Trade, true_pnl: float) -> None:
+        """Tell guards when a scalp_m5 trade fully closes."""
+        if self._guard_pipeline is not None:
+            # ScalpExposureGuard — scalp-specific tracking
+            if trade.strategy == "scalp_m5":
+                self._guard_pipeline.record_scalp_close(true_pnl)
+            # DailyDrawdownGuard — realised P&L for ALL trades (equity mode)
+            self._guard_pipeline.record_closed_trade_pnl(true_pnl)

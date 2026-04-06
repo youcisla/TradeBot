@@ -67,6 +67,11 @@ class ExecutionAgent:
         if self._db:
             self._db.log_agent_event("execution", level, msg, data)
 
+    @property
+    def guard_pipeline(self) -> GuardPipeline:
+        """Exposed so TradeManagerAgent can record scalp closes against the same guard state."""
+        return self._guards
+
     def _open_inner(self, signal: Signal) -> Trade | None:
         # ── GuardPipeline gate ────────────────────────────────────────────
         if getattr(settings, "GUARD_PIPELINE_ENABLED", True):
