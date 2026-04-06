@@ -18,7 +18,7 @@ Covers the GuardPipeline and all pre-execution safety checks.
 
 | Guard | What it checks | Blocks on |
 |---|---|---|
-| `MaxPositionSizeGuard` | `lot_size > MAX_POSITION_SIZE` | Oversized orders |
+| `MaxPositionSizeGuard` | `signal.lot_size_override` exceeds hard cap (2.0 lots) — skipped when no override is set | Explicitly oversized orders |
 | `SymbolWhitelistGuard` | `symbol in WHITELISTED_SYMBOLS` | Unknown instruments |
 | `CooldownGuard` | Time since last trade on same symbol | Rapid re-entries within `GUARD_COOLDOWN_SECONDS` |
 | `DailyDrawdownGuard` | Today's realised loss > `GUARD_MAX_DAILY_LOSS_PCT`% | Blown daily draw limit |
@@ -90,10 +90,15 @@ signal → GuardPipeline.check() → blocked? → return None (log "warn")
 
 ## Adding a New Guard
 
-1. Subclass `BaseGuard` in `agents/guards.py`
-2. Implement `check(self, signal, open_trades, broker, db) -> tuple[bool, str]`
-3. Add an instance to `GuardPipeline.__init__` `self._guards` list
+1. Subclass `Guard` (abstract base) in `agents/guards.py`
+2. Implement `check(self, signal, open_trades, broker) -> tuple[bool, str]`
+3. Add an instance to the `self._guards` list in `GuardPipeline.__init__`
 4. Guard auto-participates in `GuardPipeline.check()` immediately
+
+## Important: MaxPositionSizeGuard Behaviour
+`MaxPositionSizeGuard` only enforces the cap when `signal.lot_size_override` is explicitly set.
+It does NOT compare `settings.MAX_LOT_SIZE` against the cap — that was a bug (fixed 2026-04-06).
+`settings.MAX_LOT_SIZE` is a user-facing ceiling (can be 50+); the guard cap (2.0) is independent.
 
 ---
 

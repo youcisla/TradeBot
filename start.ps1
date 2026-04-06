@@ -117,41 +117,19 @@ if ($existingBot -or $existingWeb) {
     exit 1
 }
 
-# 2. Launch Crucix intelligence server (optional)
+# 2. Check Crucix intelligence (hosted on Vercel)
 
-$crucixDir    = Join-Path $Root "crucix"
-$crucixServer = Join-Path $crucixDir "server.mjs"
-$crucixJob    = $null
-
-if (Test-Path $crucixServer) {
-    Write-Host "[*] Starting Crucix on http://localhost:3117 ..." -ForegroundColor Magenta
-    $crucixJob = Start-Process `
-        -FilePath "node" `
-        -ArgumentList $crucixServer `
-        -WorkingDirectory $crucixDir `
-        -PassThru `
-        -NoNewWindow
-    Write-Host "    PID: $($crucixJob.Id)" -ForegroundColor DarkGray
-    $crucixHealthy = $false
-    for ($i = 0; $i -lt 15; $i++) {
-        try {
-            $resp = Invoke-WebRequest -Uri "http://localhost:3117/api/health" -UseBasicParsing -TimeoutSec 2
-            if ($resp.StatusCode -eq 200) {
-                $crucixHealthy = $true
-                break
-            }
-        } catch {
-            # Crucix is still booting.
-        }
-        Start-Sleep -Seconds 2
-    }
-    if ($crucixHealthy) {
-        Write-Host "[OK] Crucix health check passed." -ForegroundColor Green
+$crucixUrl = "https://crucix-pi.vercel.app"
+Write-Host "[*] Checking Crucix at $crucixUrl ..." -ForegroundColor Magenta
+try {
+    $resp = Invoke-WebRequest -Uri "$crucixUrl/api/health" -UseBasicParsing -TimeoutSec 8 -ErrorAction Stop
+    if ($resp.StatusCode -eq 200) {
+        Write-Host "[OK] Crucix is live at $crucixUrl" -ForegroundColor Green
     } else {
-            Write-Host "[WARN] Crucix health check timed out - bot may start with safe defaults." -ForegroundColor Yellow
+        Write-Host "[WARN] Crucix returned $($resp.StatusCode) - bot will use safe defaults." -ForegroundColor Yellow
     }
-} else {
-    Write-Host "[*] crucix/server.mjs not found - skipping (bot runs without it)" -ForegroundColor DarkGray
+} catch {
+    Write-Host "[WARN] Crucix unreachable - bot will use safe defaults." -ForegroundColor Yellow
 }
 
 # 3. Launch Python trading bot
@@ -182,9 +160,7 @@ Write-Host "    PID: $($webJob.Id)" -ForegroundColor DarkGray
 
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Cyan
-if ($null -ne $crucixJob) {
-    Write-Host "  Crucix PID  : $($crucixJob.Id)  (http://localhost:3117)" -ForegroundColor White
-}
+Write-Host "  Crucix      : $crucixUrl" -ForegroundColor White
 Write-Host "  Bot PID     : $($botJob.Id)" -ForegroundColor White
 Write-Host "  Web PID     : $($webJob.Id)  (http://localhost:3000)" -ForegroundColor White
 Write-Host "========================================" -ForegroundColor Cyan
@@ -205,11 +181,6 @@ try {
     if (-not $botJob.HasExited) {
         Stop-Process -Id $botJob.Id -Force -ErrorAction SilentlyContinue
         Write-Host "    Stopped bot     (PID $($botJob.Id))" -ForegroundColor DarkGray
-    }
-
-    if ($null -ne $crucixJob -and -not $crucixJob.HasExited) {
-        Stop-Process -Id $crucixJob.Id -Force -ErrorAction SilentlyContinue
-        Write-Host "    Stopped Crucix  (PID $($crucixJob.Id))" -ForegroundColor DarkGray
     }
 
     if (-not $webJob.HasExited) {

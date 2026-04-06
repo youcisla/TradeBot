@@ -193,8 +193,8 @@ def train(rows: list[dict], output_path: Path) -> bool:
 
 def _parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Train the LGBMEnsemble from closed trades.")
-    p.add_argument("--min-trades", type=int, default=30,
-                   help="Minimum closed trades required to proceed (default: 30).")
+    p.add_argument("--min-trades", type=int, default=20,
+                   help="Minimum closed trades required to proceed (default: 20).")
     p.add_argument("--output", type=Path, default=Path("models/lgbm_model.pkl"),
                    help="Path to save the trained model file.")
     p.add_argument("--db-url", type=str, default=None,

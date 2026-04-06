@@ -82,6 +82,57 @@ _DAY_MAP: dict[str, float] = {
 _MIN_CANDLES = 60
 
 
+# ── SHAP / feature-importance helper ─────────────────────────────────────────
+
+def compute_shap_importance(
+    model: object,
+    X: list[list[float]],
+    feature_names: list[str] | None = None,
+) -> dict[str, float]:
+    """Compute per-feature SHAP importance (mean |SHAP| across samples & classes).
+
+    Uses the ``shap`` package when available; falls back to LightGBM gain-based
+    importance.  Returns an empty dict on any error.
+    The returned dict is ordered highest → lowest importance.
+
+    This function is also callable from training scripts::
+
+        from models.lgbm_price_model import compute_shap_importance
+        imp = compute_shap_importance(model, X_train)
+    """
+    names = feature_names if feature_names is not None else FEATURE_NAMES
+
+    try:
+        import numpy as np
+        import shap as _shap
+
+        X_arr = np.array(X)
+        explainer = _shap.TreeExplainer(model)
+        sv = explainer.shap_values(X_arr)
+        arr = np.array(sv) if isinstance(sv, list) else sv
+        importance_arr = np.abs(arr).mean(axis=tuple(range(arr.ndim - 1)))
+        n = len(importance_arr)
+        return dict(
+            sorted(zip(names[:n], importance_arr.tolist()), key=lambda t: -t[1])
+        )
+    except ImportError:
+        logger.debug("shap not installed — falling back to LightGBM gain importance")
+    except Exception as exc:
+        logger.debug("SHAP computation failed: %s — falling back to gain importance", exc)
+
+    # Fallback: LightGBM built-in gain importance
+    try:
+        gains = model.booster_.feature_importance(importance_type="gain")
+        n = len(gains)
+        return dict(
+            sorted(zip(names[:n], [float(g) for g in gains]), key=lambda t: -t[1])
+        )
+    except Exception as exc:
+        logger.debug("LightGBM gain fallback also failed: %s", exc)
+
+    return {}
+
+
 # ── Prediction dataclass (mirrors lgbm_ensemble.LGBMPrediction shape) ────────
 
 @dataclass
@@ -248,6 +299,7 @@ class LGBMPriceModel:
     def __init__(self) -> None:
         self._lock   = threading.Lock()
         self._models: dict[str, object] = {}   # safe_key → fitted LGBMClassifier
+        self._shap_importance: dict[str, dict[str, float]] = {}  # safe_key → importance
         self._enabled: bool = self._check_enabled()
         if self._enabled:
             self._load_available_models()
@@ -297,8 +349,24 @@ class LGBMPriceModel:
         with self._lock:
             return list(self._models)
 
-    def save_model(self, symbol: str, model: object) -> None:
-        """Persist *model* to disk and register it in the in-memory store."""
+    def save_model(
+        self,
+        symbol: str,
+        model: object,
+        X_train: list[list[float]] | None = None,
+    ) -> None:
+        """Persist *model* to disk and register it in the in-memory store.
+
+        Parameters
+        ----------
+        symbol : str
+            Trading symbol (e.g. ``"EURUSD"``).
+        model : fitted LGBMClassifier
+            The trained model to persist.
+        X_train : list of feature vectors, optional
+            When provided, SHAP feature importance is computed immediately
+            after saving and stored via ``get_shap_importance(symbol)``.
+        """
         path = self._model_path(symbol)
         path.parent.mkdir(parents=True, exist_ok=True)
         with open(path, "wb") as fh:
@@ -307,6 +375,39 @@ class LGBMPriceModel:
         with self._lock:
             self._models[key] = model
         logger.info("Saved price-LGBM for %s → %s", symbol, path)
+
+        # ── SHAP feature importance ────────────────────────────────────────
+        if X_train is not None:
+            importance = compute_shap_importance(model, X_train)
+            with self._lock:
+                self._shap_importance[key] = importance
+            if importance:
+                top5 = list(importance.items())[:5]
+                logger.info(
+                    "Price-LGBM SHAP top-5 features for %s: %s", symbol, top5
+                )
+
+    def get_shap_importance(self, symbol: str | None = None) -> dict[str, float]:
+        """Return the SHAP importance dict for *symbol*.
+
+        Parameters
+        ----------
+        symbol : str or None
+            Symbol to look up.  When *None* and only one symbol has been
+            trained, returns that symbol's importance.
+
+        Returns
+        -------
+        dict
+            ``{feature_name: mean_abs_shap}``, ordered highest → lowest.
+            Empty dict when SHAP has not been computed for this symbol.
+        """
+        with self._lock:
+            if symbol is None:
+                if len(self._shap_importance) == 1:
+                    return dict(next(iter(self._shap_importance.values())))
+                return {}
+            return dict(self._shap_importance.get(self._sym_key(symbol), {}))
 
     @staticmethod
     def _default_prediction() -> LGBMPrediction:

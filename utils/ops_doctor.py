@@ -104,8 +104,7 @@ def _log_checks(repo_root: Path, recommendations: list[str]) -> list[CheckResult
     out: list[CheckResult] = []
     logs_dir = repo_root / "logs"
     if not logs_dir.exists():
-        out.append(CheckResult("Logs", "warn", "logs/ directory does not exist yet"))
-        return out
+        logs_dir.mkdir(parents=True, exist_ok=True)
 
     bot_logs = sorted(logs_dir.glob("bot_*.log*"), key=lambda p: p.stat().st_mtime, reverse=True)
     if not bot_logs:

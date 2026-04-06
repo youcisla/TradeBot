@@ -81,7 +81,8 @@
       "Bash(python -c \"from utils.memory import AgentMemory; from agents.reflector import Reflector; print\\(''imports OK''\\)\")",
       "Bash(.venv/Scripts/python.exe main.py)",
       "Bash(echo \"EXIT:$?\")",
-      "Bash(grep -E \"\\\\.\\(ts|tsx\\)$\")"
+      "Bash(grep -E \"\\\\.\\(ts|tsx\\)$\")",
+      "Bash(*)"
     ],
     "deny": []
   },

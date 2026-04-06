@@ -46,3 +46,7 @@ class Signal:
     timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
     reason: str = ""
     entry_snapshot: EntrySnapshot = field(default_factory=EntrySnapshot)
+    # Bull/Bear Debate Agent output — populated by BullBearDebateAgent.evaluate().
+    # Stored in trade_theses by ExecutionAgent when the trade is opened.
+    bull_case: str = ""
+    bear_case: str = ""

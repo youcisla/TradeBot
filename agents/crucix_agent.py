@@ -37,6 +37,15 @@ class CrucixAgent:
     def __init__(self, db: "Database | None" = None) -> None:
         self._db = db
         self._client: CrucixClient = get_client()
+        self._memory_instance: object | None = None   # MemoryAgent — lazy
+
+    @property
+    def _memory(self) -> object:
+        """Return a MemoryAgent instance, constructing it on first access."""
+        if self._memory_instance is None:
+            from agents.memory_agent import MemoryAgent
+            self._memory_instance = MemoryAgent(db=self._db)
+        return self._memory_instance
 
     # ── public API ───────────────────────────────────────────────────────
 
@@ -75,11 +84,36 @@ class CrucixAgent:
                     )
             else:
                 logger.debug("CrucixAgent: Crucix not available — macro context skipped")
+            # Persist regime to memory for cross-session warm-start.
+            try:
+                self._memory.update_market_regime({  # type: ignore[union-attr]
+                    "risk_tier": ctx.risk_tier,
+                    "vix": ctx.vix,
+                    "osint_sentiment": ctx.osint_sentiment,
+                    "lot_scale_factor": ctx.lot_scale_factor,
+                })
+            except Exception:
+                pass
             record_call("crucix", (time.monotonic() - _t0) * 1000.0, True)
             return ctx
         except Exception:
             logger.exception("CrucixAgent.run failed")
             record_call("crucix", (time.monotonic() - _t0) * 1000.0, False)
+            # Cross-session fallback: use last persisted regime.
+            try:
+                stored = self._memory.read_market_regime()  # type: ignore[union-attr]
+                if stored:
+                    import json as _json
+                    _payload = _json.loads(stored)
+                    _ctx = MacroContext(
+                        risk_tier=_payload.get("risk_tier", "CLEAR"),
+                        vix=float(_payload.get("vix", 0.0)),
+                        osint_sentiment=_payload.get("osint_sentiment", "neutral"),
+                    )
+                    logger.info("CrucixAgent: using persisted regime (cross-session fallback)")
+                    return _ctx
+            except Exception:
+                pass
             return MacroContext()
 
     def is_blackout(self, symbol: str) -> bool:

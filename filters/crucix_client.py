@@ -123,7 +123,7 @@ class CrucixClient:
         self,
         base_url: str | None = None,
         cache_ttl_seconds: float = 900.0,   # 15 min — matches Crucix sweep interval
-        timeout_seconds: float = 3.0,        # fail fast — Crucix is optional
+        timeout_seconds: float = 8.0,        # remote Vercel host — allow for cold starts
     ) -> None:
         from config import settings
         self._base_url = (base_url or getattr(settings, "CRUCIX_URL", "http://localhost:3117")).rstrip("/")
@@ -176,7 +176,7 @@ class CrucixClient:
                 f"{self._base_url}/api/health",
                 headers={"Accept": "application/json"},
             )
-            with urllib.request.urlopen(req, timeout=2.0) as resp:
+            with urllib.request.urlopen(req, timeout=5.0) as resp:
                 return resp.status == 200
         except Exception:
             return False

@@ -288,6 +288,34 @@ class ExecutionAgent:
             snap_day_of_week=snap.day_of_week,
         )
         self._state.save_trade(trade)
+        # ── persist trade thesis ──────────────────────────────────────────
+        if self._db:
+            try:
+                stop_distance = abs(trade.entry_price - trade.stop_loss)
+                target_price = (
+                    signal.take_profit_4
+                    or signal.take_profit_3
+                    or signal.take_profit_2
+                    or signal.take_profit_1
+                )
+                target_distance = abs(target_price - trade.entry_price) if target_price else 0.0
+                rr = round(target_distance / stop_distance, 2) if stop_distance > 0 else None
+                entry_reason = getattr(signal, "reason", "") or ""
+                self._db.save_trade_thesis(
+                    symbol=trade.symbol,
+                    direction=trade.direction,
+                    stage="ACTIVE",
+                    trade_id=trade.id,
+                    entry_price=trade.entry_price,
+                    sl_price=trade.stop_loss,
+                    tp_price=float(target_price) if target_price else None,
+                    rr_ratio=rr,
+                    entry_reason=entry_reason,
+                    bull_case=getattr(signal, "bull_case", "") or "",
+                    bear_case=getattr(signal, "bear_case", "") or "",
+                )
+            except Exception:
+                logger.debug("save_trade_thesis failed (non-fatal)", exc_info=True)
         self._emit("info",
                    f"Trade opened! {trade.direction} {trade.symbol} {lot_size:.2f} lots "
                    f"@ {trade.entry_price:.5f}  SL={trade.stop_loss:.5f}  "

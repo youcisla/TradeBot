@@ -427,6 +427,8 @@ class TradeManagerAgent:
         true_pnl = round(trade.pnl - trade.commission, 2)
         expected_gap = round(true_pnl - float(trade.expected_pnl or 0.0), 2)
         self._state.save_trade(trade)
+        if not has_runner:
+            self._close_thesis(trade, "CLOSED_WIN")
         self._emit("info",
                    f"TP3 hit on {trade.symbol}! "
                    + (f"Closed {trade.tp3_lots:.2f} lots — runner active to TP4={trade.take_profit_4:.5f}"
@@ -459,6 +461,7 @@ class TradeManagerAgent:
         true_pnl = round(trade.pnl - trade.commission, 2)
         expected_gap = round(true_pnl - float(trade.expected_pnl or 0.0), 2)
         self._state.save_trade(trade)
+        self._close_thesis(trade, "CLOSED_WIN")
         self._emit("info",
                    f"TP4 (runner) hit on {trade.symbol}! Trade fully closed at HTF liquidity "
                    f"(gross {trade.pnl:.2f} − commission {trade.commission:.2f} = {true_pnl:.2f}; "
@@ -483,6 +486,7 @@ class TradeManagerAgent:
         true_pnl = round(trade.pnl - trade.commission, 2)
         expected_gap = round(true_pnl - float(trade.expected_pnl or 0.0), 2)
         self._state.save_trade(trade)
+        self._close_thesis(trade, "CLOSED_LOSS")
         self._emit("warn",
                    f"SL hit on {trade.symbol} — closed at loss "
                    f"(gross {trade.pnl:.2f} − commission {trade.commission:.2f} = {true_pnl:.2f}; "
@@ -510,6 +514,12 @@ class TradeManagerAgent:
         true_pnl = round(trade.pnl - trade.commission, 2)
         expected_gap = round(true_pnl - float(trade.expected_pnl or 0.0), 2)
         self._state.save_trade(trade)
+        _tl_outcome = (
+            "CLOSED_WIN" if trade.pnl > 0
+            else "CLOSED_LOSS" if trade.pnl < -0.01
+            else "CLOSED_SCRATCH"
+        )
+        self._close_thesis(trade, _tl_outcome)
         self._emit("warn",
                    f"Time limit: {trade.symbol} closed after {hours_open:.1f}h "
                    f"(max={settings.MAX_HOURS_IN_TRADE}h) "
@@ -539,6 +549,7 @@ class TradeManagerAgent:
             trade.close_time = datetime.now(UTC)
             trade.close_reason = reason
             self._state.save_trade(trade)
+            self._close_thesis(trade, "CLOSED_SCRATCH")
         self._open_trades.clear()
         self._emit("critical", f"CLOSE ALL: {reason} — all positions closed")
 
@@ -550,6 +561,7 @@ class TradeManagerAgent:
                 trade.close_time = datetime.now(UTC)
                 trade.close_reason = reason
                 self._state.save_trade(trade)
+                self._close_thesis(trade, "CLOSED_SCRATCH")
                 self._emit("info",
                            f"Trade {trade.symbol} closed: {reason} (PnL {trade.pnl:.2f})",
                            {"trade_id": trade.id, "reason": reason})
@@ -557,6 +569,20 @@ class TradeManagerAgent:
                 return
 
     # ── helpers ──────────────────────────────────────────────────────────
+
+    def _close_thesis(self, trade: "Trade", outcome: str) -> None:
+        """Fire-and-forget — update trade_theses row when a trade fully closes."""
+        if not self._db:
+            return
+        try:
+            true_pnl = round(trade.pnl - trade.commission, 2)
+            self._db.update_trade_outcome(
+                trade.id,
+                actual_outcome=outcome,
+                notes=f"pnl={true_pnl:.2f} reason={trade.close_reason}",
+            )
+        except Exception:
+            logger.debug("update_trade_outcome failed (non-fatal)", exc_info=True)
 
     @staticmethod
     def _tp_reached(trade: Trade, current: float, tp: float) -> bool:

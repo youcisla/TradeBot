@@ -23,6 +23,7 @@ way out of a losing streak.
 from __future__ import annotations
 
 import logging
+import threading
 import time
 from datetime import UTC, date, datetime, timedelta
 from typing import TYPE_CHECKING
@@ -142,6 +143,9 @@ class LearningAgent:
         # Trigger async post-trade reflection (non-blocking)
         if self._reflector is not None:
             self._reflector.reflect_async(trade, context)
+
+        # Check adaptive LGBM retrain threshold (non-blocking)
+        self._maybe_retrain_lgbm()
 
         record_call("learning", (time.monotonic() - _t0) * 1000.0, True)
         return score
@@ -540,6 +544,77 @@ class LearningAgent:
             cs = contract_size(trade.symbol)
             return sl_distance * (trade.lot_size or 0) * cs
         return 1.0
+
+    # ── adaptive LGBM retraining ──────────────────────────────────────────
+
+    def _maybe_retrain_lgbm(self) -> None:
+        """Check the adaptive threshold and trigger a background retrain if due."""
+        try:
+            from models.lgbm_train_state import get_state
+            state = get_state()
+            total = self._db.count_closed_trades()
+            if not state.should_train(total):
+                return
+
+            threshold = state.next_threshold
+            next_threshold = state.bump()   # advance now so concurrent calls don't double-fire
+
+            logger.info(
+                "LGBM auto-retrain triggered: %d closed trades >= threshold %d "
+                "(next threshold: %d)",
+                total, threshold, next_threshold,
+            )
+            self._emit(
+                "info",
+                f"LGBM auto-retrain triggered ({total} trades >= {threshold}); "
+                f"next threshold: {next_threshold}",
+                {"total_trades": total, "threshold": threshold,
+                 "next_threshold": next_threshold, "train_count": state.train_count},
+            )
+
+            threading.Thread(
+                target=self._run_lgbm_training,
+                args=(total, threshold),
+                daemon=True,
+                name="lgbm-retrain",
+            ).start()
+
+        except Exception:
+            logger.exception("LearningAgent: adaptive LGBM check failed")
+
+    def _run_lgbm_training(self, total_trades: int, threshold: int) -> None:
+        """Background thread: run LGBM training and notify via Telegram."""
+        from utils import telegram_bot
+        try:
+            from scripts.train_lgbm import load_closed_trades, train
+            from pathlib import Path
+
+            telegram_bot.send_message(
+                f"🤖 *LGBM Auto-Retrain Started*\n"
+                f"{total_trades} closed trades ≥ threshold {threshold}"
+            )
+
+            rows = load_closed_trades()
+            output = Path("models/lgbm_model.pkl")
+            ok = train(rows, output)
+
+            if ok:
+                logger.info("LGBM auto-retrain complete (%d samples).", len(rows))
+                telegram_bot.send_message(
+                    f"✅ *LGBM Retrained* — {len(rows)} trades\n"
+                    f"Model saved to {output}"
+                )
+                self._emit("info", "LGBM auto-retrain succeeded",
+                           {"samples": len(rows), "model": str(output)})
+            else:
+                logger.warning("LGBM auto-retrain returned False.")
+                telegram_bot.send_message("⚠️ LGBM auto-retrain failed — check logs.")
+                self._emit("warn", "LGBM auto-retrain failed")
+
+        except Exception as exc:
+            logger.exception("LGBM auto-retrain thread crashed")
+            from utils import telegram_bot as _tg
+            _tg.send_message(f"❌ LGBM auto-retrain crashed: {exc}")
 
     def _emit(self, level: str, msg: str, data: dict | None = None) -> None:
         if self._db:

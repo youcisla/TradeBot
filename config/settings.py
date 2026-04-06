@@ -162,6 +162,35 @@ COUNCIL_DEEPSEEK_WORLD_WEIGHT: float = float(
 )
 # Minimum candle count required before the council will vote.
 COUNCIL_MIN_CANDLES: int = int(os.getenv("COUNCIL_MIN_CANDLES", "20"))
+
+# ── Bull/Bear Debate Agent ───────────────────────────────────────────────
+# Set DEBATE_ENABLED=true to run a pre-trade LLM bull/bear debate.
+# The debate adjusts signal confidence but never blocks trading on LLM failure.
+# Requires OPENROUTER_API_KEY.  Each call costs 1 LLM request per signal.
+DEBATE_ENABLED: bool = os.getenv("DEBATE_ENABLED", "false").lower() == "true"
+# Override the LLM used for debates (empty = inherit OPENROUTER_MODEL).
+DEBATE_LLM_MODEL: str = os.getenv("DEBATE_LLM_MODEL", "")
+# Hard timeout per debate call.  Keep well below signal loop latency.
+DEBATE_TIMEOUT_SECONDS: int = int(os.getenv("DEBATE_TIMEOUT_SECONDS", "8"))
+# bear_score threshold to issue a SKIP verdict (confidence −25 %).
+DEBATE_BEAR_VETO_THRESHOLD: float = float(os.getenv("DEBATE_BEAR_VETO_THRESHOLD", "0.75"))
+# bear_score threshold to issue a CAUTIOUS verdict (confidence −10 %).
+DEBATE_BEAR_CAUTION_THRESHOLD: float = float(os.getenv("DEBATE_BEAR_CAUTION_THRESHOLD", "0.60"))
+
+# ── Exposure Coach ───────────────────────────────────────────────────────
+# Synthesises 8 market-environment signals (P&L, open-count, GARCH vol,
+# macro regime, correlation, session, win-rate, LGBM confidence) into a
+# single exposure directive.  Enable with EXPOSURE_ENABLED=true.
+# Signals blocked by REDUCE_ONLY or CASH_PRIORITY are logged; a coach
+# failure always falls back to NEW_ENTRY_ALLOWED (fail-open).
+EXPOSURE_ENABLED: bool = os.getenv("EXPOSURE_ENABLED", "false").lower() == "true"
+# Composite score below this threshold → REDUCE_ONLY (no new entries).
+EXPOSURE_REDUCE_THRESHOLD: float = float(os.getenv("EXPOSURE_REDUCE_THRESHOLD", "0.40"))
+# Composite score below this threshold → CASH_PRIORITY (protect capital).
+EXPOSURE_CASH_THRESHOLD: float = float(os.getenv("EXPOSURE_CASH_THRESHOLD", "0.20"))
+# Number of recent closed trades used for the win-rate look-back window.
+EXPOSURE_WIN_RATE_LOOKBACK: int = int(os.getenv("EXPOSURE_WIN_RATE_LOOKBACK", "10"))
+
 # Minimum candle count required before the neural strategy will infer.
 NEURAL_MIN_CANDLES: int = int(os.getenv("NEURAL_MIN_CANDLES", "65"))
 # LSTM architecture & training
@@ -698,7 +727,7 @@ WEEKEND_SYMBOLS: str = os.getenv(
 )
 
 # ── Crucix World Intelligence (optional) ─────────────────────────────
-CRUCIX_URL: str = os.getenv("CRUCIX_URL", "http://localhost:3117")
+CRUCIX_URL: str = os.getenv("CRUCIX_URL", "https://crucix-pi.vercel.app")
 
 # ── Strategy plugin loader ───────────────────────────────────────────────
 # Comma-separated dotted paths to strategy classes, e.g.

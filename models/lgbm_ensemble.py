@@ -38,6 +38,55 @@ _MODEL_PATH = Path("models") / "lgbm_model.pkl"
 _LABELS = ["BUY", "HOLD", "SELL"]   # class indices 0, 1, 2
 
 
+def _compute_shap_importance(
+    model: object,
+    X: list[list[float]],
+    feature_names: list[str] | None = None,
+) -> dict[str, float]:
+    """Compute per-feature SHAP importance (mean |SHAP| across samples & classes).
+
+    Falls back to LightGBM built-in gain importance if the ``shap`` package is
+    unavailable or the computation fails.  Returns an empty dict on any error.
+    The returned dict is ordered highest → lowest importance.
+    """
+    try:
+        import numpy as np
+        import shap as _shap
+
+        X_arr = __import__("numpy").array(X)
+        explainer = _shap.TreeExplainer(model)
+        sv = explainer.shap_values(X_arr)
+        # Multi-class: sv is a list of (n_samples, n_features) arrays
+        arr = __import__("numpy").array(sv) if isinstance(sv, list) else sv
+        importance_arr = __import__("numpy").abs(arr).mean(
+            axis=tuple(range(arr.ndim - 1))
+        )
+        n = len(importance_arr)
+        names = feature_names or [f"f{i}" for i in range(n)]
+        return dict(
+            sorted(zip(names[:n], importance_arr.tolist()), key=lambda t: -t[1])
+        )
+    except ImportError:
+        logger.debug("shap not installed — falling back to LightGBM gain importance")
+    except Exception as exc:
+        logger.debug("SHAP computation failed: %s — falling back to gain importance", exc)
+
+    # Fallback: LightGBM built-in gain importance
+    try:
+        import numpy as np  # noqa: F811
+
+        gains = model.booster_.feature_importance(importance_type="gain")
+        n = len(gains)
+        names = feature_names or [f"f{i}" for i in range(n)]
+        return dict(
+            sorted(zip(names[:n], [float(g) for g in gains]), key=lambda t: -t[1])
+        )
+    except Exception as exc:
+        logger.debug("LightGBM gain fallback also failed: %s", exc)
+
+    return {}
+
+
 @dataclass
 class LGBMPrediction:
     direction: str          # "BUY" | "SELL" | "HOLD"
@@ -54,6 +103,7 @@ class LGBMEnsemble:
         self._model = None          # lgb.Booster or sklearn wrapper
         self._enabled: bool = self._check_enabled()
         self._trained: bool = False
+        self._shap_importance: dict[str, float] = {}  # feature_name → mean |SHAP|
 
         if self._enabled:
             self._try_load_model()
@@ -75,7 +125,26 @@ class LGBMEnsemble:
         with self._lock:
             try:
                 X = self._build_input(macro_vec, micro_vec)
-                proba = self._model.predict_proba([X])[0]   # shape (3,)
+                # Guard: if the saved model has a different feature count than
+                # the current pipeline produces, skip prediction and return
+                # the safe default rather than triggering a sklearn warning.
+                n_model = len(getattr(self._model, "feature_name_", []) or [])
+                if n_model and n_model != len(X):
+                    logger.warning(
+                        "LGBMEnsemble: model expects %d features, got %d — "
+                        "retrain with: python scripts/train_lgbm.py",
+                        n_model, len(X),
+                    )
+                    return self._default_prediction()
+                # Pass a named DataFrame when the model knows its feature names
+                # so sklearn does not emit a UserWarning.
+                feature_names = getattr(self._model, "feature_name_", None)
+                if feature_names:
+                    import pandas as _pd
+                    X_input = _pd.DataFrame([X], columns=feature_names)
+                else:
+                    X_input = [X]
+                proba = self._model.predict_proba(X_input)[0]   # shape (3,)
                 idx = int(proba.argmax())
                 return LGBMPrediction(
                     direction=_LABELS[idx],
@@ -124,7 +193,8 @@ class LGBMEnsemble:
                 class_weight="balanced",
                 verbose=-1,
             )
-            clf.fit(list(X), list(y))
+            X_list = list(X)
+            clf.fit(X_list, list(y))
 
             with self._lock:
                 self._model = clf
@@ -132,6 +202,14 @@ class LGBMEnsemble:
 
             self._save_model(clf)
             logger.info("LGBMEnsemble trained on %d samples", len(list(y)))
+
+            # ── SHAP feature importance ───────────────────────────────────────
+            importance = _compute_shap_importance(clf, X_list)
+            self._shap_importance = importance
+            if importance:
+                top5 = list(importance.items())[:5]
+                logger.info("LGBMEnsemble SHAP top-5 features: %s", top5)
+
             return True
 
         except Exception as exc:  # noqa: BLE001
@@ -147,6 +225,15 @@ class LGBMEnsemble:
         """Online update stub — reserved for future warm-start logic."""
         # LightGBM supports continue_training; implement when needed
         pass  # noqa: PIE790
+
+    def get_shap_importance(self) -> dict[str, float]:
+        """Return the most recent SHAP importance dict (feature → mean |SHAP|).
+
+        Keys are ordered from highest to lowest importance.  Returns an empty
+        dict when SHAP has not been computed yet (model not trained or SHAP
+        computation failed).
+        """
+        return dict(self._shap_importance)
 
     @property
     def is_ready(self) -> bool:

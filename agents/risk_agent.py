@@ -31,6 +31,7 @@ from utils.mesh_bus import mesh_span
 
 if TYPE_CHECKING:
     from agents.crucix_agent import CrucixAgent
+    from agents.exposure_agent import ExposureCoach
     from database.db import Database
 
 logger = logging.getLogger(__name__)
@@ -135,8 +136,23 @@ class RiskAgent:
         self._last_reject_hard: bool = True
         self._last_reject_message: str = ""
         # Monthly loss gate cache (60 s TTL — same batch = same answer)
+        self._daily_cache_ts: float = 0.0
+        self._daily_loss_blocked: bool = False
         self._monthly_cache_ts: float = 0.0
         self._monthly_loss_blocked: bool = False
+        # Exposure Coach singleton — lazily constructed on first _exposure access.
+        self._exposure_instance: "ExposureCoach | None" = None
+
+    # ── lazy singletons ──────────────────────────────────────────────────
+
+    @property
+    def _exposure(self) -> "ExposureCoach":
+        if self._exposure_instance is None:
+            from agents.exposure_agent import ExposureCoach
+            self._exposure_instance = ExposureCoach(
+                db=self._db, crucix_agent=self._crucix
+            )
+        return self._exposure_instance
 
     # ── public API ───────────────────────────────────────────────────────
 
@@ -415,7 +431,19 @@ class RiskAgent:
             self._emit("warn", "Drawdown breaker is ON — no trades allowed!", {"check": "drawdown"})
             return False
 
-        # 1a. Monthly loss gate (MT5_Trade_Connector RiskManagement_v1 pattern)
+        # 1a. Daily realised-PnL gate — blocks rest-of-day when closed-trade loss ≥ MAX_DAILY_LOSS.
+        # Complements the equity-based drawdown circuit breaker (check 1 above) with a
+        # realised-only view so partial-close profits don't mask locked-in losses.
+        if self._check_daily_loss():
+            self._emit(
+                "warn",
+                f"DAILY LOSS GATE: today's realised PnL loss ≥ {settings.MAX_DAILY_LOSS:.0%}"
+                " — no new trades today",
+                {"check": "daily_loss"},
+            )
+            return False
+
+        # 1b. Monthly realised-PnL gate (MT5_Trade_Connector RiskManagement_v1 pattern)
         if self._check_monthly_loss():
             self._emit(
                 "warn",
@@ -476,6 +504,31 @@ class RiskAgent:
             return False
 
         open_trades = self._get_open_trades()
+
+        # 1g. Exposure Coach — synthesises 8 environment signals into a
+        # single directive.  Skipped on post-entry checks (the exposure
+        # evaluation already ran before the trade was opened).
+        if settings.EXPOSURE_ENABLED and not skip_duplicate:
+            _exp = self._exposure.evaluate(
+                signal,
+                open_trades=open_trades,
+                account_equity=self._broker.get_equity(),
+            )
+            if not _exp.skipped and _exp.directive != "NEW_ENTRY_ALLOWED":
+                logger.warning(
+                    "RISK REJECT [EXPOSURE]: %s — %s",
+                    _exp.directive, _exp.reason,
+                )
+                self._emit(
+                    "warn",
+                    f"EXPOSURE COACH: {_exp.directive} — {_exp.reason}",
+                    {
+                        "check": "exposure",
+                        "directive": _exp.directive,
+                        "ceiling": _exp.exposure_ceiling_pct,
+                    },
+                )
+                return False
 
         # 2. Duplicate signal guard — skipped on post-entry validation because
         # the trade we just opened would always trigger this as a false positive.
@@ -1041,8 +1094,51 @@ class RiskAgent:
 
         return False
 
-    # ── monthly loss gate ────────────────────────────────────────────────
+    # ── daily / monthly loss gates ──────────────────────────────────────
     # Pattern: MT5_Trade_Connector RiskManagement_v1 (daily 5% / monthly 10%)
+
+    def _check_daily_loss(self) -> bool:
+        """Return True (block trading) if today's realised PnL loss >= MAX_DAILY_LOSS.
+
+        Complements ``_check_drawdown()`` (equity-based) with a realised-only
+        view: open floating profits cannot mask locked-in losses.
+        Cached for 60 s to avoid a DB round-trip on every signal in a batch.
+        """
+        if self._db is None:
+            return False
+
+        now_mono = time.monotonic()
+        if now_mono - self._daily_cache_ts < 60.0:
+            return self._daily_loss_blocked
+
+        now_utc = datetime.now(UTC)
+        today_start = now_utc.replace(hour=0, minute=0, second=0, microsecond=0)
+        try:
+            trades = self._db.get_closed_trades_since(today_start, limit=500)
+        except Exception:
+            logger.exception("_check_daily_loss: DB query failed — skipping gate (non-fatal)")
+            self._daily_cache_ts = now_mono
+            self._daily_loss_blocked = False
+            return False
+
+        daily_pnl = sum(t.pnl for t in trades if t.pnl is not None)
+
+        equity = self._broker.get_equity()
+        if equity <= 0:
+            self._daily_cache_ts = now_mono
+            self._daily_loss_blocked = False
+            return False
+
+        daily_loss_pct = -daily_pnl / equity  # positive when losing
+        self._daily_cache_ts = now_mono
+        self._daily_loss_blocked = daily_loss_pct >= settings.MAX_DAILY_LOSS
+
+        if self._daily_loss_blocked:
+            logger.critical(
+                "DAILY LOSS GATE: today's PnL=%.2f (%.1f%%) exceeds limit %.1f%%",
+                daily_pnl, daily_loss_pct * 100, settings.MAX_DAILY_LOSS * 100,
+            )
+        return self._daily_loss_blocked
 
     def _check_monthly_loss(self) -> bool:
         """Return True (block trading) if month-to-date PnL loss exceeds MAX_MONTHLY_LOSS.
@@ -1050,6 +1146,8 @@ class RiskAgent:
         Computes MTD loss from closed trades in the DB.  Cached for 60 s to
         avoid hammering the database on every signal in a ranked batch.
         """
+        if self._db is None:
+            return False
         now_mono = time.monotonic()
         if now_mono - self._monthly_cache_ts < 60.0:
             return self._monthly_loss_blocked

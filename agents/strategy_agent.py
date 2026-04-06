@@ -16,6 +16,7 @@ from strategies.base_strategy import BaseStrategy
 from utils.mesh_bus import mesh_span
 
 if TYPE_CHECKING:
+    from agents.debate_agent import BullBearDebateAgent
     from database.db import Database
     from models.lgbm_ensemble import LGBMEnsemble
     from models.lgbm_price_model import LGBMPriceModel
@@ -41,6 +42,15 @@ class StrategyAgent:
         self._db = db
         self._lgbm_instance: "LGBMEnsemble | None" = None
         self._price_lgbm_instance: "LGBMPriceModel | None" = None
+        self._debate_instance: "BullBearDebateAgent | None" = None
+
+    @property
+    def _debate(self) -> "BullBearDebateAgent":
+        """Lazy singleton for the debate agent."""
+        if self._debate_instance is None:
+            from agents.debate_agent import BullBearDebateAgent
+            self._debate_instance = BullBearDebateAgent(db=self._db)
+        return self._debate_instance
 
     @property
     def _lgbm(self) -> "LGBMEnsemble":
@@ -273,6 +283,8 @@ class StrategyAgent:
                 signal = self._apply_lgbm_filter(signal, context)
                 # Price-bar LGBM: second opinion from per-symbol OHLCV history.
                 signal = self._apply_price_lgbm_filter(signal, context)
+                # Bull/Bear Debate: LLM debates the trade; adjusts confidence ±5-25%.
+                self._debate.evaluate(signal)
 
                 # Dynamic confidence floor by regime + asset class.
                 if signal.confidence < min_conf:

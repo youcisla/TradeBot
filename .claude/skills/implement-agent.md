@@ -38,7 +38,7 @@ class XxxAgent:
 
 ## Agent Event Keys
 These keys appear in the dashboard AgentFeed. Use the correct key for your agent:
-`crucix`, `market`, `analysis`, `strategy`, `neural`, `council`, `risk`, `execution`, `trade_manager`, `learning`, `model_manager`, `logging`
+`crucix`, `market`, `analysis`, `strategy`, `neural`, `council`, `risk`, `execution`, `trade_manager`, `learning`, `model_manager`, `logging`, `debate`, `exposure`, `memory`
 
 ## Logging Pattern
 ```python

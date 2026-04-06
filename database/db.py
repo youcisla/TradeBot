@@ -312,6 +312,36 @@ CREATE TABLE IF NOT EXISTS bot_sessions (
 );
 """
 
+_CREATE_TRADE_THESES = """
+CREATE TABLE IF NOT EXISTS trade_theses (
+    id              SERIAL PRIMARY KEY,
+    trade_id        TEXT REFERENCES trades(id) ON DELETE SET NULL,
+    symbol          VARCHAR(20) NOT NULL,
+    direction       VARCHAR(5),
+    stage           VARCHAR(20) NOT NULL DEFAULT 'IDEA',
+    entry_price     NUMERIC(10, 5),
+    sl_price        NUMERIC(10, 5),
+    tp_price        NUMERIC(10, 5),
+    rr_ratio        NUMERIC(5, 2),
+    bull_case       TEXT DEFAULT '',
+    bear_case       TEXT DEFAULT '',
+    entry_reason    TEXT DEFAULT '',
+    actual_outcome  VARCHAR(20),
+    mae_pips        NUMERIC(8, 1),
+    mfe_pips        NUMERIC(8, 1),
+    notes           TEXT DEFAULT '',
+    created_at      TIMESTAMPTZ DEFAULT NOW(),
+    closed_at       TIMESTAMPTZ
+);
+"""
+
+_CREATE_TRADE_THESES_INDEXES = """
+CREATE INDEX IF NOT EXISTS idx_trade_theses_trade_id   ON trade_theses (trade_id);
+CREATE INDEX IF NOT EXISTS idx_trade_theses_symbol     ON trade_theses (symbol);
+CREATE INDEX IF NOT EXISTS idx_trade_theses_stage      ON trade_theses (stage);
+CREATE INDEX IF NOT EXISTS idx_trade_theses_created    ON trade_theses (created_at DESC);
+"""
+
 _CREATE_INDEXES = """
 CREATE INDEX IF NOT EXISTS idx_agent_events_created_at        ON agent_events (created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_agent_events_agent             ON agent_events (agent);
@@ -334,6 +364,14 @@ CREATE INDEX IF NOT EXISTS idx_trade_scores_created_at        ON trade_scores (c
 CREATE INDEX IF NOT EXISTS idx_trade_scores_strategy_time     ON trade_scores (strategy, created_at DESC);
 """
 
+_CREATE_BOT_MEMORY = """
+CREATE TABLE IF NOT EXISTS bot_memory (
+    block_name   TEXT PRIMARY KEY,
+    content      TEXT NOT NULL DEFAULT '',
+    updated_at   TIMESTAMPTZ DEFAULT NOW()
+);
+"""
+
 _ALL_TABLES = [
     _CREATE_TRADES,
     _CREATE_TRADE_SCORES,
@@ -347,6 +385,8 @@ _ALL_TABLES = [
     _CREATE_PERFORMANCE_SNAPSHOTS,
     _CREATE_SYMBOL_FAULT,
     _CREATE_BOT_SESSIONS,
+    _CREATE_TRADE_THESES,
+    _CREATE_BOT_MEMORY,
 ]
 
 
@@ -444,6 +484,7 @@ class Database:
                     cur.execute(_ALTER_STRATEGY_CONFIDENCE_STREAK)
                     cur.execute(_ALTER_BOT_COMMANDS_RUNNING)
                     cur.execute(_CREATE_INDEXES)
+                    cur.execute(_CREATE_TRADE_THESES_INDEXES)
             logger.info("Database tables verified")
         finally:
             self._put_conn(conn)
@@ -1281,6 +1322,20 @@ class Database:
         finally:
             self._put_conn(conn)
 
+    def count_closed_trades(self) -> int:
+        """Return total number of closed trades with non-null, non-zero pnl."""
+        conn = self._get_conn()
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT COUNT(*) FROM trades "
+                    "WHERE status='CLOSED' AND pnl IS NOT NULL AND pnl != 0"
+                )
+                row = cur.fetchone()
+                return int(row[0]) if row else 0
+        finally:
+            self._put_conn(conn)
+
     def get_closed_trades_since(self, since: "datetime", limit: int = 500) -> list[Trade]:
         """Return closed trades with close_time >= since ordered by close_time asc."""
         conn = self._get_conn()
@@ -1294,6 +1349,39 @@ class Database:
                     (since, max(1, int(limit))),
                 )
                 return [self._row_to_trade(r) for r in cur.fetchall()]
+        finally:
+            self._put_conn(conn)
+
+    # ── persistent agent memory (bot_memory table) ───────────────────────
+
+    def write_memory_block(self, block_name: str, content: str) -> None:
+        """Upsert a named memory block (INSERT … ON CONFLICT UPDATE)."""
+        conn = self._get_conn()
+        try:
+            with conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """INSERT INTO bot_memory (block_name, content, updated_at)
+                           VALUES (%s, %s, NOW())
+                           ON CONFLICT (block_name)
+                           DO UPDATE SET content = EXCLUDED.content,
+                                         updated_at = NOW()""",
+                        (block_name, content),
+                    )
+        finally:
+            self._put_conn(conn)
+
+    def read_memory_block(self, block_name: str) -> str | None:
+        """Return the stored content for a memory block, or None."""
+        conn = self._get_conn()
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT content FROM bot_memory WHERE block_name = %s",
+                    (block_name,),
+                )
+                row = cur.fetchone()
+                return row[0] if row else None
         finally:
             self._put_conn(conn)
 
@@ -1437,6 +1525,90 @@ class Database:
                 with conn.cursor() as cur:
                     cur.execute("DELETE FROM broker_accounts WHERE id = %s",
                                 (account_id,))
+        finally:
+            self._put_conn(conn)
+
+    # ── trade thesis ────────────────────────────────────────────────────
+
+    def save_trade_thesis(
+        self,
+        *,
+        symbol: str,
+        direction: str = "",
+        stage: str = "IDEA",
+        trade_id: str | None = None,
+        entry_price: float | None = None,
+        sl_price: float | None = None,
+        tp_price: float | None = None,
+        rr_ratio: float | None = None,
+        bull_case: str = "",
+        bear_case: str = "",
+        entry_reason: str = "",
+        notes: str = "",
+    ) -> int:
+        """Insert a new trade thesis row.  Returns the new row id."""
+        conn = self._get_conn()
+        try:
+            with conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """INSERT INTO trade_theses
+                           (trade_id, symbol, direction, stage,
+                            entry_price, sl_price, tp_price, rr_ratio,
+                            bull_case, bear_case, entry_reason, notes)
+                           VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                           RETURNING id""",
+                        (trade_id, symbol, direction, stage,
+                         entry_price, sl_price, tp_price, rr_ratio,
+                         bull_case, bear_case, entry_reason, notes),
+                    )
+                    return cur.fetchone()[0]
+        finally:
+            self._put_conn(conn)
+
+    def get_trade_thesis(self, trade_id: str) -> dict | None:
+        """Return the most recent thesis for *trade_id*, or None."""
+        conn = self._get_conn()
+        try:
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute(
+                    """SELECT * FROM trade_theses
+                       WHERE trade_id = %s
+                       ORDER BY created_at DESC
+                       LIMIT 1""",
+                    (trade_id,),
+                )
+                row = cur.fetchone()
+                return dict(row) if row else None
+        finally:
+            self._put_conn(conn)
+
+    def update_trade_outcome(
+        self,
+        trade_id: str,
+        *,
+        actual_outcome: str,
+        mae_pips: float | None = None,
+        mfe_pips: float | None = None,
+        notes: str = "",
+    ) -> None:
+        """Mark the thesis for *trade_id* as closed with outcome + MAE/MFE."""
+        conn = self._get_conn()
+        try:
+            with conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """UPDATE trade_theses
+                           SET stage          = 'CLOSED',
+                               actual_outcome = %s,
+                               mae_pips       = %s,
+                               mfe_pips       = %s,
+                               notes          = CASE WHEN %s = '' THEN notes ELSE %s END,
+                               closed_at      = NOW()
+                           WHERE trade_id = %s""",
+                        (actual_outcome, mae_pips, mfe_pips,
+                         notes, notes, trade_id),
+                    )
         finally:
             self._put_conn(conn)
 

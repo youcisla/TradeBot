@@ -58,11 +58,14 @@ class MaxPositionSizeGuard(Guard):
 
     def check(self, signal, open_trades, broker):
         lot = getattr(signal, "lot_size_override", None)
-        # We can't know the final lot here, but we guard the maximum allowed
-        max_allowed = getattr(settings, "MAX_LOT_SIZE", self._max)
-        if max_allowed > self._max:
+        # Only enforce the cap when the signal carries an explicit lot override.
+        # The final lot is computed by calculate_position_size *after* guard
+        # checks run, so we cannot validate it here.  settings.MAX_LOT_SIZE is a
+        # user-configured ceiling (e.g. 50 for large accounts) — comparing it
+        # against this guard's hard cap is incorrect and would always block.
+        if lot is not None and lot > self._max:
             return False, (
-                f"MaxPositionSizeGuard: settings.MAX_LOT_SIZE={max_allowed} "
+                f"MaxPositionSizeGuard: signal.lot_size_override={lot} "
                 f"exceeds hard cap {self._max}"
             )
         return True, ""

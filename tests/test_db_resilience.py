@@ -63,103 +63,74 @@ class TestConnectionResilience:
         stale = _make_stale_conn()
         good = _make_good_conn()
 
-        first_pool = _make_pool([stale, good])
-        second_pool = _make_pool([good, good])   # after reconnect
+        # first_pool serves the stale conn; second_pool (via _reconnect) serves good
+        first_pool = _make_pool([stale])
+        second_pool = _make_pool([good])
 
-        pool_sequence = [first_pool, second_pool]
-        pool_call_idx = [0]
+        # _reconnect() uses SimpleConnectionPool — patch that to return second_pool
+        with patch("psycopg2.pool.SimpleConnectionPool", return_value=second_pool):
+            from database.db import Database
+            db = Database.__new__(Database)
+            db._dsn = "postgresql://test"
+            db._pool = first_pool  # bypass _connect(); set pool directly
 
-        def _fake_pool(*args, **kwargs):
-            pool = pool_sequence[pool_call_idx[0]]
-            pool_call_idx[0] = min(pool_call_idx[0] + 1, len(pool_sequence) - 1)
-            return pool
-
-        with patch("psycopg2.pool.SimpleConnectionPool", side_effect=_fake_pool):
-            with patch("database.db.settings") as mock_settings:
-                mock_settings.DATABASE_URL = "postgresql://test"
-                from database.db import Database
-                db = Database.__new__(Database)
-                db._dsn = "postgresql://test"
-                db._pool = None
-                db._connect()
-
-                # Trigger a get that hits the stale path
-                # _get_conn will call getconn, detect OperationalError, reconnect, call getconn again
-                conn = db._get_conn()
-                assert conn is good
+            conn = db._get_conn()
+            assert conn is good
 
     def test_reconnect_creates_new_pool(self):
         """_reconnect() must tear down the old pool and build a fresh one."""
-        with patch("psycopg2.pool.SimpleConnectionPool") as mock_cls:
-            good = _make_good_conn()
-            pool = _make_pool([good])
-            mock_cls.return_value = pool
+        good = _make_good_conn()
+        new_pool = _make_pool([good])
 
-            with patch("database.db.settings") as mock_settings:
-                mock_settings.DATABASE_URL = "postgresql://test"
-                from database.db import Database
-                db = Database.__new__(Database)
-                db._dsn = "postgresql://test"
-                db._pool = None
-                db._connect()
+        with patch("psycopg2.pool.SimpleConnectionPool", return_value=new_pool) as mock_cls:
+            from database.db import Database
+            db = Database.__new__(Database)
+            db._dsn = "postgresql://test"
+            old_pool = MagicMock()
+            old_pool.closeall = MagicMock()
+            db._pool = old_pool  # bypass _connect(); set pool directly
 
-                old_pool = db._pool
-                db._reconnect()
+            db._reconnect()
 
-                # Pool constructor called at least twice (initial + reconnect)
-                assert mock_cls.call_count >= 2
-                old_pool.closeall.assert_called_once()
+            # _reconnect() must have built a new pool and closed the old one
+            assert mock_cls.call_count >= 1
+            old_pool.closeall.assert_called_once()
 
     def test_get_conn_returns_fresh_after_reconnect(self):
         """After reconnect, _get_conn must return a working connection."""
         stale = _make_stale_conn()
         fresh = _make_good_conn()
 
-        # Pools: first pool serves stale then fresh (for reconnect's getconn)
-        first_pool = _make_pool([stale, fresh])
+        first_pool = _make_pool([stale])
         second_pool = _make_pool([fresh])
 
-        pools = [first_pool, second_pool]
-        idx = [0]
+        with patch("psycopg2.pool.SimpleConnectionPool", return_value=second_pool):
+            from database.db import Database
+            db = Database.__new__(Database)
+            db._dsn = "postgresql://test"
+            db._pool = first_pool  # bypass _connect(); set pool directly
 
-        def _factory(*a, **kw):
-            p = pools[min(idx[0], len(pools) - 1)]
-            idx[0] += 1
-            return p
-
-        with patch("psycopg2.pool.SimpleConnectionPool", side_effect=_factory):
-            with patch("database.db.settings") as mock_settings:
-                mock_settings.DATABASE_URL = "postgresql://test"
-                from database.db import Database
-                db = Database.__new__(Database)
-                db._dsn = "postgresql://test"
-                db._pool = None
-                db._connect()
-
-                conn = db._get_conn()
-                assert conn is fresh
+            conn = db._get_conn()
+            assert conn is fresh
 
     def test_good_connection_not_reconnected(self):
         """A healthy connection must not trigger any pool rebuild."""
         good = _make_good_conn()
         pool = _make_pool([good])
 
-        with patch("psycopg2.pool.SimpleConnectionPool", return_value=pool):
-            with patch("database.db.settings") as mock_settings:
-                mock_settings.DATABASE_URL = "postgresql://test"
-                from database.db import Database
-                db = Database.__new__(Database)
-                db._dsn = "postgresql://test"
-                db._pool = None
-                db._connect()
+        with patch("psycopg2.pool.SimpleConnectionPool") as mock_cls:
+            from database.db import Database
+            db = Database.__new__(Database)
+            db._dsn = "postgresql://test"
+            db._pool = pool  # bypass _connect(); set pool directly
 
-                call_count_before = psycopg2.pool.SimpleConnectionPool.call_count
-                conn = db._get_conn()
-                call_count_after = psycopg2.pool.SimpleConnectionPool.call_count
+            call_count_before = mock_cls.call_count
+            conn = db._get_conn()
+            call_count_after = mock_cls.call_count
 
-                assert conn is good
-                # No additional pool creation
-                assert call_count_after == call_count_before
+            assert conn is good
+            # No pool rebuild should have occurred
+            assert call_count_after == call_count_before
 
 
 class TestPutConn:

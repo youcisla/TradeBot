@@ -11,6 +11,9 @@ class _ProtectionDb:
     def __init__(self, trades):
         self._trades = trades
 
+    def log_agent_event(self, *a, **kw):
+        pass
+
     def get_closed_trades_since(self, since, limit=1000):
         filtered = [
             t for t in self._trades
@@ -253,3 +256,73 @@ class TestRiskAgent:
 
         assert agent._check_drawdown() is True
         assert agent._circuit_breaker_active is True
+
+    # ── Daily / Monthly loss gate tests ──────────────────────────────────────
+
+    def test_daily_loss_gate_blocks_when_limit_reached(self, broker, crucix_agent, monkeypatch):
+        """Daily gate fires when today's closed-trade loss >= MAX_DAILY_LOSS."""
+        from config import settings as _settings
+
+        monkeypatch.setattr(_settings, "MAX_DAILY_LOSS", 0.05)
+        now = datetime.now(UTC)
+        trade = make_trade(symbol="EURUSD", direction="BUY")
+        trade.pnl = -500.0  # -500 / 10,000 equity = 5% >= 5% threshold
+        trade.close_time = now
+        trade.status = "CLOSED"
+
+        db = _ProtectionDb([trade])
+        agent = self._make_agent(broker, crucix_agent=crucix_agent, db=db)
+        agent._daily_cache_ts = 0.0  # force cache expiry
+
+        assert agent._check_daily_loss() is True
+
+    def test_daily_loss_gate_allows_when_profitable(self, broker, crucix_agent, monkeypatch):
+        """Daily gate does not block when today's realised PnL is positive."""
+        from config import settings as _settings
+
+        monkeypatch.setattr(_settings, "MAX_DAILY_LOSS", 0.05)
+        now = datetime.now(UTC)
+        trade = make_trade(symbol="EURUSD", direction="BUY")
+        trade.pnl = 200.0
+        trade.close_time = now
+        trade.status = "CLOSED"
+
+        db = _ProtectionDb([trade])
+        agent = self._make_agent(broker, crucix_agent=crucix_agent, db=db)
+        agent._daily_cache_ts = 0.0
+
+        assert agent._check_daily_loss() is False
+
+    def test_daily_loss_gate_blocks_validate(self, broker, crucix_agent, monkeypatch):
+        """validate() returns False when day's closed-trade loss >= MAX_DAILY_LOSS."""
+        from config import settings as _settings
+
+        monkeypatch.setattr(_settings, "MAX_DAILY_LOSS", 0.05)
+        now = datetime.now(UTC)
+        trade = make_trade(symbol="EURUSD", direction="BUY")
+        trade.pnl = -500.0
+        trade.close_time = now
+        trade.status = "CLOSED"
+
+        db = _ProtectionDb([trade])
+        agent = self._make_agent(broker, crucix_agent=crucix_agent, db=db)
+        agent._daily_cache_ts = 0.0
+
+        assert agent.validate(self._signal()) is False
+
+    def test_monthly_loss_gate_blocks_when_limit_reached(self, broker, crucix_agent, monkeypatch):
+        """Monthly gate fires when MTD closed-trade loss >= MAX_MONTHLY_LOSS."""
+        from config import settings as _settings
+
+        monkeypatch.setattr(_settings, "MAX_MONTHLY_LOSS", 0.10)
+        now = datetime.now(UTC)
+        trade = make_trade(symbol="EURUSD", direction="BUY")
+        trade.pnl = -1000.0  # -1000 / 10,000 equity = 10% >= 10% threshold
+        trade.close_time = now
+        trade.status = "CLOSED"
+
+        db = _ProtectionDb([trade])
+        agent = self._make_agent(broker, crucix_agent=crucix_agent, db=db)
+        agent._monthly_cache_ts = 0.0  # force cache expiry
+
+        assert agent._check_monthly_loss() is True
