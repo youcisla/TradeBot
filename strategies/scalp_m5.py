@@ -101,7 +101,10 @@ def _volume_okay(candles: list[Candle], lookback: int = 20, threshold: float = 0
         return False
     recent = candles[-lookback:]
     avg = sum(c.volume for c in recent[:-1]) / max(1, len(recent) - 1)
-    return avg > 0 and recent[-1].volume >= avg * threshold
+    if avg <= 0:
+        # Broker returned no volume data (common on MT5) — skip volume filter
+        return True
+    return recent[-1].volume >= avg * threshold
 
 
 def _htf_runner_target(
@@ -157,6 +160,7 @@ class ScalpM5Strategy(BaseStrategy):
         # ── M5 candles from context (populated by MarketAgent) ──────────────
         m5 = ctx.m5_candles
         if len(m5) < self.MIN_CANDLES:
+            logger.debug("ScalpM5 %s: insufficient M5 candles %d < %d", ctx.symbol, len(m5), self.MIN_CANDLES)
             return None
 
         closes = [c.close for c in m5]
@@ -177,6 +181,7 @@ class ScalpM5Strategy(BaseStrategy):
             # Fall back to context ATR if M5 ATR unavailable
             atr = ctx.atr
         if atr <= 0:
+            logger.debug("ScalpM5 %s: no ATR available", ctx.symbol)
             return None
 
         # ── Crossover detection ──────────────────────────────────────────────
@@ -188,14 +193,18 @@ class ScalpM5Strategy(BaseStrategy):
         elif ema_fast < ema_slow and prev_fast >= prev_slow:
             direction = "SELL"
         else:
+            logger.debug("ScalpM5 %s: no EMA crossover this bar ema_fast=%.5f ema_slow=%.5f prev_fast=%.5f prev_slow=%.5f",
+                         ctx.symbol, ema_fast, ema_slow, prev_fast, prev_slow)
             return None
 
         # ── RSI confirmation ─────────────────────────────────────────────────
         # BUY: RSI should be < 70 and rising (not overbought)
         # SELL: RSI should be > 30 and falling (not oversold)
         if direction == "BUY" and rsi_val > 70:
+            logger.debug("ScalpM5 %s: RSI %s > 70 blocks BUY", ctx.symbol, rsi_val)
             return None
         if direction == "SELL" and rsi_val < 30:
+            logger.debug("ScalpM5 %s: RSI %s < 30 blocks SELL", ctx.symbol, rsi_val)
             return None
 
         # ── Bollinger squeeze filter ─────────────────────────────────────────
@@ -217,11 +226,11 @@ class ScalpM5Strategy(BaseStrategy):
         if is_crypto:
             spread_pct = ctx.spread / ctx.current_price
             if spread_pct > self.MAX_SPREAD_CRYPTO:
-                logger.debug("ScalpM5: spread %s (%.4f) exceeds crypto cap", ctx.symbol, spread_pct)
+                logger.debug("ScalpM5 %s: spread %.4f exceeds crypto cap %.4f", ctx.symbol, spread_pct, self.MAX_SPREAD_CRYPTO)
                 return None
         else:
             if spread_pips > self.MAX_SPREAD_FOREX:
-                logger.debug("ScalpM5: spread %spips exceeds %.1f cap", ctx.symbol, spread_pips, self.MAX_SPREAD_FOREX)
+                logger.debug("ScalpM5 %s: spread %.1fpips exceeds %.1f cap", ctx.symbol, spread_pips, self.MAX_SPREAD_FOREX)
                 return None
 
         # ── News filter ──────────────────────────────────────────────────────
