@@ -2,19 +2,10 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useAppShell } from "@/components/AppShell";
+import { useAgentEvents } from "@/lib/swr";
+import type { AgentEvent } from "@/lib/swr";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
-
-interface AgentEvent {
-  id?: number;
-  agent: string;
-  level?: string;
-  message?: string;
-  msg?: string;
-  created_at?: string;
-  ts?: string;
-  data?: Record<string, unknown>;
-}
 
 interface MacroIndicator {
   label: string;
@@ -352,24 +343,9 @@ function BlackoutOverlay({ active }: { active: boolean }) {
 export default function MacroPage() {
   const { status: shellStatus } = useAppShell();
 
-  const [events,  setEvents]  = useState<AgentEvent[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data: events } = useAgentEvents(400);
+  const [loading, setLoading] = useState(false);
   const [nowUtc,  setNowUtc] = useState(new Date());
-
-  // Poll events (for FLASH alerts)
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const r = await fetch("/api/events?limit=400");
-        const d = await r.json();
-        setEvents(Array.isArray(d) ? d : []);
-      } catch { /* silent */ }
-      finally { setLoading(false); }
-    };
-    load();
-    const t = setInterval(load, 10_000);
-    return () => clearInterval(t);
-  }, []);
 
   // Clock
   useEffect(() => {
@@ -379,7 +355,7 @@ export default function MacroPage() {
 
   // Derived: FLASH alerts from Crucix events
   const flashEvents = useMemo(() =>
-    events.filter(e =>
+    (events ?? []).filter(e =>
       (e.agent ?? "").toLowerCase() === "crucix" &&
       (severityOf(e) === "error" || /flash|blackout|critical/i.test(evMsg(e)))
     ).slice(0, 5),
@@ -448,7 +424,7 @@ export default function MacroPage() {
           {nowUtc.toUTCString().slice(0, -4).replace("GMT", "UTC")}
         </span>
         <span style={{ marginLeft: "auto", fontSize: 12, color: "var(--text-muted)" }}>
-          {events.length} events
+          {(events ?? []).length} events
         </span>
       </div>
 

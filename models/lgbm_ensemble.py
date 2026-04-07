@@ -136,14 +136,14 @@ class LGBMEnsemble:
                         n_model, len(X),
                     )
                     return self._default_prediction()
-                # Pass a named DataFrame when the model knows its feature names
-                # so sklearn does not emit a UserWarning.
+                # Always use a DataFrame to avoid sklearn feature-name warnings.
+                # When feature_name_ is available use it; otherwise generate f0..fN.
+                import pandas as _pd
+                n_features = len(X)
                 feature_names = getattr(self._model, "feature_name_", None)
-                if feature_names:
-                    import pandas as _pd
-                    X_input = _pd.DataFrame([X], columns=feature_names)
-                else:
-                    X_input = [X]
+                if not feature_names:
+                    feature_names = [f"f{i}" for i in range(n_features)]
+                X_input = _pd.DataFrame([X], columns=feature_names[:n_features])
                 proba = self._model.predict_proba(X_input)[0]   # shape (3,)
                 idx = int(proba.argmax())
                 return LGBMPrediction(

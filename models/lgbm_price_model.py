@@ -444,7 +444,9 @@ class LGBMPriceModel:
             if features is None:
                 return self._default_prediction()
 
-            proba = model.predict_proba([features])[0]   # shape (3,)
+            # Wrap in a DataFrame so sklearn sees feature names — suppresses warning.
+            import pandas as _pd
+            proba = model.predict_proba(_pd.DataFrame([features], columns=FEATURE_NAMES))[0]
             idx   = int(proba.argmax())
             return LGBMPrediction(
                 direction=_LABELS[idx],

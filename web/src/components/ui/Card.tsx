@@ -5,11 +5,12 @@ type CardProps = {
   variant?: 'default' | 'elevated' | 'ghost';
   accent?: 'gold' | 'cyan' | 'red' | 'none';
   className?: string;
+  style?: React.CSSProperties;
 };
 
-export const Card = ({ children, variant = 'default', accent = 'none', className = '' }: CardProps) => {
+export const Card = ({ children, variant = 'default', accent = 'none', className = '', style }: CardProps) => {
   const baseStyle = "rounded-sm overflow-hidden border border-border";
-  
+
   const variantStyles = {
     default: "bg-bg-2",
     elevated: "bg-bg-3 shadow-md",
@@ -24,14 +25,14 @@ export const Card = ({ children, variant = 'default', accent = 'none', className
   };
 
   return (
-    <div className={`${baseStyle} ${variantStyles[variant]} ${accentStyles[accent]} ${className}`}>
+    <div className={`${baseStyle} ${variantStyles[variant]} ${accentStyles[accent]} ${className}`} style={style}>
       {children}
     </div>
   );
 };
 
-export const CardHeader = ({ children, className = '' }: { children: React.ReactNode, className?: string }) => (
-  <div className={`px-4 py-3 border-b border-border text-ui uppercase text-text-2 text-sm tracking-wider ${className}`}>
+export const CardHeader = ({ children, className = '', style }: { children: React.ReactNode, className?: string, style?: React.CSSProperties }) => (
+  <div className={`px-4 py-3 border-b border-border text-ui uppercase text-text-2 text-sm tracking-wider ${className}`} style={style}>
     {children}
   </div>
 );

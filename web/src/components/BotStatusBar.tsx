@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import useSWR from "swr";
 import { timeSince } from "@/lib/time";
 
 interface BotStatus {
@@ -122,20 +122,14 @@ function StateChip({ state }: { state: string }) {
   );
 }
 
-export default function BotStatusBar() {
-  const [status, setStatus] = useState<BotStatus | null>(null);
+const fetcher = (url: string) => fetch(url).then(r => r.json());
 
-  useEffect(() => {
-    let active = true;
-    const load = () =>
-      fetch("/api/status")
-        .then((r) => { if (!r.ok) throw new Error(r.statusText); return r.json(); })
-        .then((data: BotStatus) => { if (active) setStatus(data); })
-        .catch(() => {});
-    load();
-    const id = setInterval(load, 8_000);
-    return () => { active = false; clearInterval(id); };
-  }, []);
+export default function BotStatusBar() {
+  const { data: status } = useSWR<BotStatus>("/api/status", fetcher, {
+    refreshInterval: 8_000,
+    revalidateOnFocus: true,
+    keepPreviousData: true,
+  });
 
   if (!status) {
     return (

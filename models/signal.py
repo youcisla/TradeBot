@@ -20,6 +20,10 @@ class EntrySnapshot:
     market_condition: str = ""  # trending / ranging / volatile
     session: str = ""  # London / NY / Asian / overlap
     day_of_week: str = ""
+    # ICT/SMC enrichment fields (populated by DeepSeekStrategy when using ICT prompt)
+    ict_score: int = 0          # 0-70 ICT confluence score
+    smc_confirmed: bool = False  # SMC secondary confirmed
+    confluence_flags: list[str] = field(default_factory=list)  # ["FVG", "OB", "BOS", ...]
 
 
 @dataclass

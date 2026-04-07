@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useAppShell } from "@/components/AppShell";
+import { useAgentEvents, useTrades } from "@/lib/swr";
 import { Card, CardHeader, CardBody } from "@/components/ui/Card";
 import { StatChip } from "@/components/ui/StatChip";
 import { AgentBadge, DirectionBadge } from "@/components/ui/Badges";
@@ -10,16 +11,6 @@ import { EventFeed, FeedEvent } from "@/components/ui/EventFeed";
 import { CommandButton } from "@/components/ui/CommandButton";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
-interface AgentEvent {
-  id?: string | number;
-  agent: string;
-  level: string;
-  message?: string;
-  msg?: string;
-  created_at?: string;
-  ts?: string;
-  data?: any;
-}
 
 interface Trade {
   id: number;
@@ -42,37 +33,9 @@ function fmtUsd(v: number): string {
 export default function MissionControl() {
   const { status: shellStatus, isRunning } = useAppShell();
 
-  const [events, setEvents] = useState<AgentEvent[]>([]);
-  const [positions, setPositions] = useState<Trade[]>([]);
+  const { data: events } = useAgentEvents(80);
+  const { data: positions } = useTrades();
   const [cmdFeedback, setCmdFeedback] = useState<{ msg: string; ok: boolean } | null>(null);
-
-  // Poll events every 8s
-  useEffect(() => {
-    let active = true;
-    const run = async () => {
-      try {
-        const r = await fetch("/api/events?limit=80");
-        const d = await r.json();
-        if (active) setEvents(Array.isArray(d) ? d : (d.events ?? []));
-      } catch { /* silent */ }
-    };
-    run(); const id = setInterval(run, 8_000);
-    return () => { active = false; clearInterval(id); };
-  }, []);
-
-  // Poll positions every 12s
-  useEffect(() => {
-    let active = true;
-    const run = async () => {
-      try {
-        const r = await fetch("/api/trades");
-        const d = await r.json();
-        if (active) setPositions(Array.isArray(d) ? d : (d.trades ?? []));
-      } catch { /* silent */ }
-    };
-    run(); const id = setInterval(run, 12_000);
-    return () => { active = false; clearInterval(id); };
-  }, []);
 
   const sendCommand = useCallback(async (command: string) => {
     setCmdFeedback(null);
@@ -90,13 +53,12 @@ export default function MissionControl() {
     }
   }, []);
 
-  // Format data
   const equity = Number(shellStatus?.equity ?? 0);
   const balance = Number(shellStatus?.balance ?? 0);
   const dailyPnl = Number(shellStatus?.daily_pnl ?? 0);
-  const openTrades = positions.filter(t => t.status === "OPEN" || t.status === "PARTIAL");
+  const openTrades = (positions ?? []).filter(t => t.status === "OPEN" || t.status === "PARTIAL");
 
-  const feedEvents: FeedEvent[] = events.map(ev => ({
+  const feedEvents: FeedEvent[] = (events ?? []).map(ev => ({
     id: String(ev.id ?? Math.random()),
     timestamp: ev.created_at ?? ev.ts ?? new Date().toISOString(),
     agent: ev.agent ?? "system",
@@ -105,15 +67,15 @@ export default function MissionControl() {
     data: ev.data
   })).reverse();
 
-  // Extract latest event per agent for the pipeline
   const pipelineAgents = useMemo(() => {
-    const map = new Map<string, AgentEvent>();
-    for (const ev of events) {
+    const evts = events ?? [];
+    const map = new Map<string, (typeof evts)[number]>();
+    for (const ev of evts) {
       if (ev.agent && !map.has(ev.agent)) {
         map.set(ev.agent, ev);
       }
     }
-    return Array.from(map.values()).slice(0, 6); // Just show top 6 recent active agents
+    return Array.from(map.values()).slice(0, 6);
   }, [events]);
 
   const tradeColumns: ColumnDef<Trade>[] = [
@@ -128,9 +90,9 @@ export default function MissionControl() {
   ];
 
   return (
-    <div className="p-4 md:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto pb-24">
+    <div style={{ padding: "16px 24px 96px", maxWidth: 1400, margin: "0 auto" }}>
       {/* ROW 1: Bot Status Bar */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 12, marginBottom: 24 }}>
         <StatChip label="Balance" value={balance} format="currency" />
         <StatChip label="Equity" value={equity} format="currency" trend={equity >= balance ? "Nominal" : "Drawdown"} />
         <StatChip label="Daily P&L" value={dailyPnl} format="currency" trend={dailyPnl >= 0 ? "+" : "-"} />
@@ -138,61 +100,57 @@ export default function MissionControl() {
       </div>
 
       {/* Main Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        
-        {/* COL 1: Agent Pipeline (60% -> 7 cols) */}
-        <div className="lg:col-span-7 space-y-4">
-          <Card className="h-full">
-            <CardHeader>Agent Pipeline Status</CardHeader>
-            <CardBody className="space-y-3">
-              {pipelineAgents.length === 0 ? (
-                <div className="text-text-3 italic text-sm py-4">No recent agent activity</div>
-              ) : (
-                pipelineAgents.map(ev => {
-                  const isActive = (new Date().getTime() - new Date(ev.created_at || ev.ts || 0).getTime()) < 60000;
-                  const isErr = ev.level?.toLowerCase() === 'error';
-                  return (
-                    <div key={ev.id || Math.random()} className="flex items-center gap-4 bg-bg-3 p-3 rounded-sm border border-border/50">
-                       <span className={`w-2 h-2 rounded-full shrink-0 ${isErr ? 'bg-red' : isActive ? 'bg-green animate-pulse' : 'bg-text-3'}`} />
-                       <span className="shrink-0 w-24"><AgentBadge agent={ev.agent} /></span>
-                       <span className="text-xs font-mono text-text-2 truncate flex-1">{ev.message || ev.msg}</span>
-                    </div>
-                  );
-                })
-              )}
-            </CardBody>
-          </Card>
-        </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 24, marginBottom: 24 }}>
+        {/* Agent Pipeline */}
+        <Card>
+          <CardHeader>Agent Pipeline Status</CardHeader>
+          <CardBody>
+            {pipelineAgents.length === 0 ? (
+              <div style={{ color: "rgba(235,235,245,0.4)", fontStyle: "italic", fontSize: 14, padding: "8px 0" }}>No recent agent activity</div>
+            ) : (
+              pipelineAgents.map(ev => {
+                const isActive = (new Date().getTime() - new Date(ev.created_at || ev.ts || 0).getTime()) < 60000;
+                const isErr = ev.level?.toLowerCase() === 'error';
+                return (
+                  <div key={ev.id || Math.random()} style={{ display: "flex", alignItems: "center", gap: 16, background: "#1C1C1E", padding: "12px 16px", borderRadius: 6, border: "0.5px solid rgba(95,122,158,0.2)", marginBottom: 12 }}>
+                     <span style={{ width: 8, height: 8, borderRadius: "50%", background: isErr ? "#FF453A" : isActive ? "#30D158" : "#8E8E93", flexShrink: 0, animation: isActive ? "feedPulse 2s ease-in-out infinite" : undefined }} />
+                     <span style={{ width: 96, flexShrink: 0 }}><AgentBadge agent={ev.agent} /></span>
+                     <span style={{ fontSize: 12, fontFamily: "ui-monospace, monospace", color: "rgba(235,235,245,0.7)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{ev.message || ev.msg}</span>
+                  </div>
+                );
+              })
+            )}
+          </CardBody>
+        </Card>
+      </div>
 
-        {/* COL 2: Open Trades (40% -> 5 cols) */}
-        <div className="lg:col-span-5 space-y-4">
-          <Card className="h-full">
-            <CardHeader>Live Positions</CardHeader>
-            <CardBody className="p-0">
-               <DataTable data={openTrades.slice(0, 5)} columns={tradeColumns} />
-               {openTrades.length > 5 && (
-                 <div className="p-3 text-center text-xs text-text-3 bg-bg-3 border-t border-border">
-                   + {openTrades.length - 5} more positions
-                 </div>
-               )}
-            </CardBody>
-          </Card>
-        </div>
-
+      {/* Live Positions */}
+      <div style={{ marginBottom: 24 }}>
+        <Card>
+          <CardHeader>Live Positions</CardHeader>
+          <CardBody>
+            <DataTable data={openTrades.slice(0, 5)} columns={tradeColumns} />
+            {openTrades.length > 5 && (
+              <div style={{ padding: "12px 16px", textAlign: "center", fontSize: 12, color: "rgba(235,235,245,0.4)", borderTop: "0.5px solid rgba(95,122,158,0.2)" }}>
+                + {openTrades.length - 5} more positions
+              </div>
+            )}
+          </CardBody>
+        </Card>
       </div>
 
       {/* ROW 3: Live Agent Feed */}
-      <div>
-        <CardHeader className="px-0 pt-4 pb-2 border-none">Live Intel Feed</CardHeader>
+      <div style={{ marginBottom: 24 }}>
+        <CardHeader style={{ padding: "16px 0 8px", borderBottom: "none" }}>Live Intel Feed</CardHeader>
         <EventFeed events={feedEvents} />
       </div>
 
-      {/* BOTTOM ROW */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-4">
-        <Card variant="ghost" className="border-none">
-          <CardHeader className="px-0 pb-3 border-none">Quick Commands</CardHeader>
-          <div className="flex flex-wrap gap-3">
-             <CommandButton 
+      {/* Quick Commands + Equity placeholder */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
+        <Card variant="ghost" style={{ border: "none" }}>
+          <CardHeader style={{ padding: "0 0 12px", border: "none" }}>Quick Commands</CardHeader>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
+             <CommandButton
                onClick={() => sendCommand(isRunning ? "pause" : "resume")}
                variant={isRunning ? "info" : "warning"}
                confirmMessage={isRunning ? "Pause Bot?" : "Resume Bot?"}
@@ -200,7 +158,7 @@ export default function MissionControl() {
                {isRunning ? "Pause Bot" : "Resume Bot"}
              </CommandButton>
 
-             <CommandButton 
+             <CommandButton
                onClick={() => sendCommand("close_all")}
                variant="danger"
                confirmMessage="Confirm Close All?"
@@ -208,7 +166,7 @@ export default function MissionControl() {
                Close All Positions
              </CommandButton>
 
-             <CommandButton 
+             <CommandButton
                onClick={() => sendCommand("force_weekly_snap")}
                variant="info"
                confirmMessage="Confirm Snapshot?"
@@ -218,20 +176,37 @@ export default function MissionControl() {
           </div>
         </Card>
 
-        {/* Equity placeholder */}
-        <Card className="flex items-center justify-center p-8 border-dashed border-border text-text-3 font-mono text-sm h-[140px]">
-           [ Equity Curve Visualizer Placeholder ]
+        <Card style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: 32, border: "1px dashed rgba(95,122,158,0.3)", minHeight: 140 }}>
+           <span style={{ color: "rgba(235,235,245,0.3)", fontFamily: "ui-monospace, monospace", fontSize: 14 }}>[ Equity Curve Visualizer Placeholder ]</span>
         </Card>
       </div>
 
       {/* Feedback Toast */}
       {cmdFeedback && (
-        <div className={`fixed bottom-6 right-6 px-4 py-3 rounded-sm font-ui uppercase font-bold text-sm z-50 border shadow-lg animate-in slide-in-from-bottom flex items-center gap-2 ${cmdFeedback.ok ? 'bg-bg-3 border-green text-green' : 'bg-bg-3 border-red text-red'}`}>
-          <span>{cmdFeedback.ok ? '✓' : '✗'}</span>
+        <div style={{
+          position: "fixed",
+          bottom: 24,
+          right: 24,
+          padding: "12px 16px",
+          borderRadius: 6,
+          fontFamily: "var(--font-ui)",
+          fontWeight: 700,
+          fontSize: 14,
+          textTransform: "uppercase",
+          zIndex: 50,
+          border: `1px solid ${cmdFeedback.ok ? "var(--buy)" : "var(--sell)"}`,
+          boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
+          background: "var(--surface-2)",
+          color: cmdFeedback.ok ? "var(--buy)" : "var(--sell)",
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          animation: "toastFadeIn 0.2s ease",
+        }}>
+          <span>{cmdFeedback.ok ? "✓" : "✗"}</span>
           {cmdFeedback.msg}
         </div>
       )}
-
     </div>
   );
 }

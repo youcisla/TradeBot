@@ -1,30 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import { useAppShell } from "@/components/AppShell";
-
-// ── Types ─────────────────────────────────────────────────────────────────────
-
-interface BotStatus {
-  state: string;
-  last_tick: string | null;
-  equity: number;
-  open_trades: number;
-  daily_pnl: number;
-  uptime_start: string | null;
-  broker_account: string;
-  broker_server: string;
-}
-
-interface AgentEvent {
-  id?: number;
-  agent: string;
-  level?: string;
-  message?: string;
-  msg?: string;
-  created_at?: string;
-  ts?: string;
-}
+import { useBotStatus, useAgentEvents } from "@/lib/swr";
+import type { AgentEvent } from "@/lib/swr";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -210,46 +189,26 @@ function ErrorRateChart({ events }: { events: AgentEvent[] }) {
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function HealthPage() {
-  const { status: shellStatus, isRunning } = useAppShell();
-
-  const [status,  setStatus]  = useState<BotStatus | null>(null);
-  const [events,  setEvents]  = useState<AgentEvent[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const [statusRes, eventsRes] = await Promise.all([
-          fetch("/api/status"),
-          fetch("/api/events?limit=500"),
-        ]);
-        const s = await statusRes.json();
-        const e = await eventsRes.json();
-        setStatus(s);
-        setEvents(Array.isArray(e) ? e : []);
-      } catch { /* silent */ }
-      finally { setLoading(false); }
-    };
-    load();
-    const t = setInterval(load, 15_000);
-    return () => clearInterval(t);
-  }, []);
+  const { isRunning } = useAppShell();
+  const { data: status } = useBotStatus();
+  const { data: events, isLoading } = useAgentEvents(500);
 
   const uptime     = status?.uptime_start ? fmtUptime(status.uptime_start) : "—";
   const lastTick   = relTime(status?.last_tick ?? null);
+  const evts = events ?? [];
 
   const recentErrors = useMemo(() =>
-    events.filter(e => severityOf(e) === "error").slice(0, 10),
-    [events]
+    evts.filter(e => severityOf(e) === "error").slice(0, 10),
+    [evts]
   );
 
   const errorCount = useMemo(() =>
-    events.filter(e => severityOf(e) === "error").length,
-    [events]
+    evts.filter(e => severityOf(e) === "error").length,
+    [evts]
   );
   const warnCount = useMemo(() =>
-    events.filter(e => severityOf(e) === "warn").length,
-    [events]
+    evts.filter(e => severityOf(e) === "warn").length,
+    [evts]
   );
 
   const MONO = "var(--font-mono-stack)";
@@ -325,7 +284,7 @@ export default function HealthPage() {
 
       {/* Error rate chart + recent errors */}
       <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginBottom: 20 }}>
-        <ErrorRateChart events={events} />
+        <ErrorRateChart events={evts} />
 
         <div style={{
           background: "var(--card-bg)",
@@ -379,7 +338,7 @@ export default function HealthPage() {
               { label: "Account",  value: status.broker_account || "—" },
               { label: "Server",   value: status.broker_server  || "—" },
               { label: "Equity",   value: status.equity != null ? `$${Number(status.equity).toLocaleString("en-US", { minimumFractionDigits: 2 })}` : "—" },
-              { label: "Daily PnL",value: status.daily_pnl != null ? `${status.daily_pnl >= 0 ? "+" : ""}$${Number(status.daily_pnl).toFixed(2)}` : "—" },
+              { label: "Daily PnL",value: status.daily_pnl != null ? `${Number(status.daily_pnl) >= 0 ? "+" : ""}$${Number(status.daily_pnl).toFixed(2)}` : "—" },
               { label: "Open Positions", value: status.open_trades ?? 0 },
               { label: "Last Tick", value: lastTick },
             ].map(({ label, value }) => (

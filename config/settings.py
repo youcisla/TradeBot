@@ -162,6 +162,9 @@ COUNCIL_DEEPSEEK_WORLD_WEIGHT: float = float(
 )
 # Minimum candle count required before the council will vote.
 COUNCIL_MIN_CANDLES: int = int(os.getenv("COUNCIL_MIN_CANDLES", "20"))
+# Minimum ICT confluence score (0-70) for a valid ICT/SMC signal.
+# ICT score < 40 AND no SMC confirmation always returns NONE.
+ICT_MIN_CONFIDENCE: int = int(os.getenv("ICT_MIN_CONFIDENCE", "40"))
 
 # ── Bull/Bear Debate Agent ───────────────────────────────────────────────
 # Set DEBATE_ENABLED=true to run a pre-trade LLM bull/bear debate.
@@ -538,7 +541,7 @@ ORCHESTRATION_HARD_BUDGET_ENABLED: bool = (
     os.getenv("ORCHESTRATION_HARD_BUDGET_ENABLED", "true").lower() == "true"
 )
 ORCHESTRATION_MAX_SCAN_MS: float = float(
-    os.getenv("ORCHESTRATION_MAX_SCAN_MS", "2200")
+    os.getenv("ORCHESTRATION_MAX_SCAN_MS", "25000")
 )
 ORCHESTRATION_MAX_RANK_MS: float = float(
     os.getenv("ORCHESTRATION_MAX_RANK_MS", "300")
@@ -547,7 +550,7 @@ ORCHESTRATION_MAX_EXEC_MS: float = float(
     os.getenv("ORCHESTRATION_MAX_EXEC_MS", "1300")
 )
 ORCHESTRATION_MAX_ITERATION_MS: float = float(
-    os.getenv("ORCHESTRATION_MAX_ITERATION_MS", "5000")
+    os.getenv("ORCHESTRATION_MAX_ITERATION_MS", "30000")
 )
 # Safety margin: when remaining execution budget is below this threshold,
 # skip council reviews to preserve order-placement latency.

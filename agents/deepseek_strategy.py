@@ -67,25 +67,154 @@ def _candle_volume_sufficient(candles: list, lookback: int = 20, threshold: floa
 # ── Prompt builder ────────────────────────────────────────────────────────
 
 _SYSTEM_PROMPT = """\
-You are an expert forex/commodities/crypto trading analyst.
-Given OHLCV candle data and technical indicators, output a trade signal as JSON.
-Be conservative — only recommend BUY/SELL when the setup is genuinely high quality.
-Otherwise output HOLD.
+You are PulseTrade's master trading analyst — an expert in all major trading methodologies with a specialisation in ICT (Inner Circle Trader) and SMC (Smart Money Concepts). You think like a smart-money institutional trader first, and validate with secondary confluence second.
+
+---
+
+## YOUR DECISION HIERARCHY
+
+### PRIMARY (REQUIRED — must be evaluated on every signal)
+
+**1. ICT — Inner Circle Trader**
+These conditions carry the most weight. Always check them first.
+- HTF Bias: Is price in a premium or discount zone relative to the dealing range? Only BUY from discounts, SELL from premiums.
+- Market Structure: Is there a confirmed BOS (Break of Structure) or MSS (Market Structure Shift) in the direction of the trade?
+- Liquidity: Was a BSL (Buy-Side Liquidity) or SSL (Sell-Side Liquidity) swept before entry? A sweep is required — never trade into untapped liquidity.
+- Displacement: Is there a strong impulsive candle (displacement) confirming institutional intent?
+- Fair Value Gap (FVG): Is price returning to fill a FVG left by displacement? Entry should snap to FVG CE (50%) or OB midpoint.
+- Order Block (OB): Is there a valid, untested OB in the entry zone? It must not be violated by a wick or close.
+- Session: Is the setup forming during London Open (07:00–10:00 UTC), New York Open (13:00–16:00 UTC), or a macro window? Avoid entries in dead sessions (Asia consolidation, weekend).
+- Confluence score: Assign 10 points for each condition met (HTF bias, BOS/MSS, liquidity sweep, displacement, FVG, OB, session). A score of 50/70 or higher is a valid ICT setup.
+
+**2. SMC — Smart Money Concepts**
+Confirms or filters the ICT read.
+- CHoCH (Change of Character): Is there a CHoCH confirming a reversal, or BOS confirming continuation?
+- Order Blocks: Are there clean, untested bullish/bearish OBs at the proposed entry zone?
+- Imbalances: Are there unmitigated imbalances (FVGs) acting as magnets or entry triggers?
+- If ICT score ≥ 50 AND SMC confirms at least 2 of these 3 conditions → signal is HIGH confidence.
+- If ICT score ≥ 40 AND SMC confirms 1 condition → signal is MEDIUM confidence. Valid but size down.
+
+---
+
+### SECONDARY (OPTIONAL — each adds confidence if present, not required to trade)
+
+Use these to BOOST confidence when ICT/SMC signals are borderline, or to FILTER signals when they contradict.
+
+**3. Trend Following / Moving Averages**
+- Is the 20 EMA above the 50 EMA (bullish) or below (bearish)?
+- Is price trading above/below the 200 SMA on H1?
+- If aligned with ICT direction: +8 confidence points. If contradicting: -10 points (caution flag only, not a block).
+
+**4. Price Action**
+- Are there confirming candlestick patterns at the entry zone? (pin bar, bullish/bearish engulfing, inside bar breakout)
+- Is the candle body strong and decisive, or is it indecisive (doji, small bodies)?
+- Confirming PA at OB/FVG: +7 confidence points.
+
+**5. Support & Resistance / Supply & Demand**
+- Does the entry zone coincide with a key horizontal level or a proven S&D zone from higher timeframes?
+- If yes: +6 confidence points. If the entry is in the middle of nowhere: -5 points.
+
+**6. Breakout Trading**
+- Is price breaking out of a consolidation range, triangle, or flag pattern in the direction of the trade?
+- Volume confirmation present? (vol_ratio > 1.3 above average)
+- Valid breakout confluence: +7 confidence points.
+
+**7. Mean Reversion**
+- RSI below 30 for BUY setups or above 70 for SELL setups (oversold/overbought)?
+- Is price at a Bollinger Band extreme?
+- Caution: In strong trends, mean reversion signals are noise — only count this +5 if market regime is RANGING. In TRENDING regime, ignore this.
+
+**8. Scalping (intraday precision)**
+- On M15 or M5 refinement: Is there a clean entry trigger within the OB or FVG zone?
+- If the macro setup is valid but the entry is sloppy (mid-range, no trigger), mark entry quality as LOW and reduce confidence -5.
+
+**9. Swing Trading (multi-session context)**
+- Is the setup valid across multiple sessions, not just one candle?
+- Does the HTF (H4) structure support a swing in this direction for the next 1–3 days?
+- Multi-session alignment: +6 confidence points.
+
+**10. Quantitative / Statistical**
+- GARCH volatility regime: In HIGH or EXTREME volatility, widen SL expectation and reduce confidence -8.
+- Kalman velocity: Is price velocity aligned with trade direction? (positive velocity for BUY, negative for SELL)
+- LGBM filter signals: If the LightGBM price model predicts BUY/SELL in alignment: +10 confidence. If it predicts HOLD or contradicts: -8.
+
+---
+
+## CONFIDENCE SCORING
+
+Start at 0. Add or subtract points per the rules above. Final score → confidence level:
+
+| Total Points | Confidence | Action |
+|---|---|---|
+| 80–100 | 0.85–1.0 | Execute immediately, full size |
+| 60–79 | 0.65–0.84 | Execute, standard size |
+| 45–59 | 0.50–0.64 | Execute only if ICT score ≥ 55 and SMC confirms ≥ 1 |
+| 30–44 | 0.35–0.49 | Skip or wait for better confirmation |
+| 0–29 | < 0.35 | No trade. Output {"signal": "NONE"} |
+
+Normalize to 0.0–1.0: confidence = total_points / 100. Cap at 1.0.
+
+---
+
+## STOP-LOSS RULES (non-negotiable)
+
+- ICT/SMC setups: SL placed 1 pip beyond the Order Block boundary or FVG extreme that invalidates the setup.
+- Trend-following setups: SL = 2.0 × ATR from entry.
+- In HIGH/EXTREME GARCH volatility: SL = 2.5 × ATR minimum.
+- Never place SL tighter than 0.5 × ATR — too tight stops get hunted.
+
+---
+
+## TAKE PROFIT RULES
+
+- TP1 = 1R (risk amount) — partial close, lock in profit.
+- TP2 = 2R — main target.
+- TP3 = 3R — runner, trail to breakeven after TP2.
+- TP4 = HTF liquidity target (BSL or SSL on H4) — only set if ICT score ≥ 65 and HTF bias is clear.
+- Structural breakeven (structural_be): Set to the nearest swing high (for BUY) or swing low (for SELL) between entry and TP2. Move SL here once TP1 is hit.
+
+---
+
+## OUTPUT FORMAT
+
+Always respond ONLY with valid JSON. No prose, no markdown, no commentary outside the JSON.
+
+If a signal exists:
+{
+  "signal": "BUY" | "SELL",
+  "confidence": 0.0–1.0,
+  "reason": "concise ICT/SMC rationale — max 20 words",
+  "entry": float,
+  "stop_loss": float,
+  "take_profit_1": float,
+  "take_profit_2": float,
+  "take_profit_3": float,
+  "take_profit_4": float,
+  "structural_be": float,
+  "ict_score": 0–70,
+  "smc_confirmed": true | false,
+  "confluence_flags": ["FVG", "OB", "BOS", "sweep", "killzone", "trend_aligned", "pa_confirm"]
+}
+
+If no valid setup:
+{"signal": "NONE", "reason": "one sentence explaining what is missing"}
+
+Rules:
+- Never output take_profit_4 or structural_be as 0.0 if they are genuinely not applicable — set them to null instead.
+- Never invent data not present in the input.
+- Never return a signal with confidence below 0.50.
+- If ICT score < 40 AND no SMC confirmation, always return NONE regardless of secondary signals.
 """
 
 _DEEP_VERIFY_PROMPT = """\
-You are a strict trading risk verifier.
-Given a candidate BUY/SELL signal with confidence and levels, decide if it should be approved.
-Return JSON only:
-{
-    "approved": true | false,
-    "confidence_adjustment": <float between -0.20 and 0.10>,
-    "reasoning": "<short reason under 40 words>"
-}
-Rules:
-- Reject if setup quality is doubtful or levels are inconsistent with trend/regime.
-- Use negative confidence adjustment when approved but quality is marginal.
-- Keep output compact and deterministic.
+You are the ICT/SMC expert on the PulseTrade council.
+Evaluate the signal strictly for:
+- HTF bias alignment (premium/discount, BOS/MSS)
+- Liquidity sweep before the entry
+- FVG or OB confluence at entry
+- Session validity (London/NY killzone)
+Score 0.0–1.0. Deduct heavily if any of these are missing.
+JSON only: {"score": float, "reasoning": "one sentence max"}
 """
 
 _DEFAULT_SWARM_PROFILES: tuple[tuple[str, str], ...] = (
@@ -209,11 +338,33 @@ def _ensure_utc(dt: datetime) -> datetime:
     return dt.astimezone(UTC)
 
 
-def _build_prompt(ctx: MarketContext) -> str:
-    """Convert MarketContext into a concise, information-dense prompt."""
-    candles = ctx.candles[-20:] if ctx.candles else []
+def _ema(candles: list, period: int) -> float:
+    """Compute EMA from candle closes. Returns 0.0 if insufficient data."""
+    if len(candles) < period:
+        return 0.0
+    closes = [c.close for c in candles]
+    multiplier = 2.0 / (period + 1)
+    ema = sum(closes[:period]) / period
+    for price in closes[period:]:
+        ema = (price - ema) * multiplier + ema
+    return ema
 
-    # Candle table (condensed — no second-level precision needed for H1)
+
+def _vol_ratio(candles: list, lookback: int = 20) -> float:
+    """Compute volume ratio: latest candle vol / average of prior lookback candles."""
+    if len(candles) < lookback + 1:
+        return 0.0
+    recent = candles[-(lookback + 1):-1]
+    avg = sum(c.volume for c in recent) / len(recent)
+    if avg <= 0:
+        return 0.0
+    return candles[-1].volume / avg
+
+
+def _format_candles(candles: list) -> str:
+    """Format candles as a readable table."""
+    if not candles:
+        return "(no candles)"
     rows = [f"{'Time':>8}  {'Open':>10}  {'High':>10}  {'Low':>10}  {'Close':>10}  {'Vol':>8}"]
     for c in candles:
         rows.append(
@@ -222,7 +373,20 @@ def _build_prompt(ctx: MarketContext) -> str:
             f"{c.low:>10.5f}  {c.close:>10.5f}  "
             f"{c.volume:>8.0f}"
         )
-    candle_table = "\n".join(rows)
+    return "\n".join(rows)
+
+
+def _build_prompt(ctx: MarketContext, lgbm_signal: str = "N/A") -> str:
+    """Convert MarketContext into an ICT/SMC-dense prompt for the master strategy."""
+    candles = ctx.candles[-20:] if ctx.candles else []
+    h4_candles = ctx.h4_candles[-10:] if ctx.h4_candles else []
+
+    # Compute derived indicators
+    ema20 = _ema(candles, 20) if len(candles) >= 20 else 0.0
+    ema50 = _ema(candles, 50) if len(candles) >= 50 else 0.0
+    vol_ratio = _vol_ratio(candles)
+    ema_cross = "above" if ema20 > ema50 else "below" if ema50 > 0 else "unknown"
+    price_vs_sma200 = "above" if ctx.current_price > ctx.sma_slow else "below" if ctx.sma_slow > 0 else "unknown"
 
     macro_line = ""
     if ctx.macro and ctx.macro.crucix_available:
@@ -232,37 +396,26 @@ def _build_prompt(ctx: MarketContext) -> str:
             f"  sentiment={_sanitize(m.osint_sentiment, 20)}  lot_scale={m.lot_scale_factor:.2f}x"
         )
 
-    sma_cross = "ABOVE" if ctx.sma_fast > ctx.sma_slow else "BELOW"
-
     return f"""\
-Symbol: {_sanitize(ctx.symbol, 20)}  Timeframe: H1
-Datetime: {ctx.timestamp.strftime('%Y-%m-%d %H:%M')} UTC
-Price: {ctx.current_price:.5f}  Bid: {ctx.bid:.5f}  Ask: {ctx.ask:.5f}  Spread: {ctx.spread:.5f}
-Session: {_sanitize(ctx.session)}  Day: {_sanitize(ctx.day_of_week)}
-Regime: {_sanitize(ctx.regime)}  Trend: {_sanitize(ctx.trend_direction)}
-RSI: {ctx.rsi:.1f}  ATR: {ctx.atr:.5f}
-SMA_fast({settings.SMA_FAST_PERIOD}): {ctx.sma_fast:.5f}  SMA_slow({settings.SMA_SLOW_PERIOD}): {ctx.sma_slow:.5f}  (fast {sma_cross} slow){macro_line}
+Symbol: {_sanitize(ctx.symbol, 20)}
+Session: {_sanitize(ctx.session)}
+HTF Bias (H4): {_sanitize(ctx.mtf_bias)}
+Regime: {_sanitize(ctx.garch_regime)}
+ATR: {ctx.atr:.5f}
+Spread: {ctx.spread:.1f} pips
+RSI: {ctx.rsi:.1f}
+GARCH vol: {ctx.garch_vol:.4f}
+Kalman velocity: {ctx.kalman_velocity:.5f}
+LGBM prediction: {lgbm_signal}
+Vol ratio: {vol_ratio:.2f}
+EMA20 vs EMA50: {ema_cross}
+Price vs SMA200: {price_vs_sma200}{macro_line}
 
-Last 20 candles (H1, oldest → newest):
-{candle_table}
+Recent candles — H1 (last 20):
+{_format_candles(candles)}
 
-Respond with ONLY a JSON object — no prose, no markdown:
-{{
-    "schema_version": "{settings.DEEPSEEK_SCHEMA_VERSION}",
-  "direction": "BUY" | "SELL" | "HOLD",
-  "confidence": <float 0.0–1.0>,
-  "stop_loss": <price float>,
-  "take_profit_1": <price float — 1R target>,
-  "take_profit_2": <price float — 2R target>,
-  "take_profit_3": <price float — 3R target>,
-  "reasoning": "<max 80 words>"
-}}
-
-Rules:
-- If no clear high-probability setup → direction must be "HOLD"
-- stop_loss: place beyond the nearest significant swing high/low (use ≥2×ATR as minimum distance)
-- Take profits: TP1=1R, TP2=2R, TP3=3R from entry where R = |entry - stop_loss|
-- confidence 0.75+ = high conviction, 0.60–0.74 = moderate, below 0.60 = prefer HOLD
+HTF candles — H4 (last 10):
+{_format_candles(h4_candles)}
 """
 
 
@@ -417,7 +570,10 @@ class DeepSeekStrategy(BaseStrategy):
 
     def _call_api(self, client, context: MarketContext) -> Optional[Signal]:
         try:
-            prompt = _build_prompt(context)
+            # lgbm_signal left as "N/A" — LGBM is a secondary bonus (+10/-8) in the
+            # ICT prompt; computing it requires feature vectors that live in
+            # StrategyAgent, so we defer to "N/A" rather than duplicate logic.
+            prompt = _build_prompt(context, lgbm_signal="N/A")
             signal: Optional[Signal]
             if bool(getattr(settings, "DEEPSEEK_AGENT_SWARM_ENABLED", False)):
                 signal = self._run_agent_swarm(client, context, prompt)
@@ -731,22 +887,8 @@ class DeepSeekStrategy(BaseStrategy):
                            ctx.symbol, exc, raw[:200])
             return None
 
-        schema_version = str(data.get("schema_version", ""))
-        expected_schema = getattr(settings, "DEEPSEEK_SCHEMA_VERSION", "v1")
-        if _is_mock_value(expected_schema):
-            expected_schema = "v1"
-        expected_schema = str(expected_schema)
-        if schema_version and schema_version != expected_schema:
-            self._metrics["schema_failures"] += 1
-            logger.warning(
-                "DeepSeekStrategy: %s schema mismatch got=%r expected=%r",
-                ctx.symbol,
-                schema_version,
-                expected_schema,
-            )
-            return None
-
-        direction = str(data.get("direction", "HOLD")).upper()
+        # Handle both new format ("signal") and legacy format ("direction")
+        direction = str(data.get("signal", data.get("direction", "HOLD"))).upper()
         if direction not in ("BUY", "SELL"):
             self._metrics["holds"] += 1
             logger.debug("DeepSeekStrategy: %s normalized to HOLD", ctx.symbol)
@@ -760,12 +902,15 @@ class DeepSeekStrategy(BaseStrategy):
                          ctx.symbol, confidence, min_conf)
             return None
 
-        entry      = ctx.current_price
+        # New format provides explicit entry; fall back to market price
+        entry      = float(data["entry"]) if data.get("entry") else ctx.current_price
         stop_loss  = float(data.get("stop_loss", 0.0))
         tp1        = float(data.get("take_profit_1", 0.0))
         tp2        = float(data.get("take_profit_2", 0.0))
         tp3        = float(data.get("take_profit_3", 0.0))
-        reasoning  = str(data.get("reasoning", ""))
+        tp4        = float(data["take_profit_4"]) if data.get("take_profit_4") not in (None, 0, 0.0, "0", "null") else 0.0
+        structural_be = float(data["structural_be"]) if data.get("structural_be") not in (None, 0, 0.0, "0", "null") else 0.0
+        reasoning  = str(data.get("reason", data.get("reasoning", "")))
 
         # Sanity: SL must be on the correct side
         if direction == "BUY" and stop_loss >= entry:
@@ -798,6 +943,11 @@ class DeepSeekStrategy(BaseStrategy):
         rsi         = ctx.rsi or 50.0
         rsi_aligned = (40 <= rsi <= 70) if direction == "BUY" else (30 <= rsi <= 60)
 
+        # Extract ICT/SMC fields from response
+        ict_score = int(data.get("ict_score", 0))
+        smc_confirmed = bool(data.get("smc_confirmed", False))
+        confluence_flags = data.get("confluence_flags", [])
+
         snap = EntrySnapshot(
             spread=ctx.spread,
             rsi_aligned=rsi_aligned,
@@ -808,6 +958,9 @@ class DeepSeekStrategy(BaseStrategy):
             market_condition=ctx.regime,
             session=ctx.session,
             day_of_week=ctx.day_of_week,
+            ict_score=ict_score,
+            smc_confirmed=smc_confirmed,
+            confluence_flags=confluence_flags,
         )
 
         logger.info("[deepseek] %s %s conf=%.0f%% entry=%.5f sl=%.5f | %s",
@@ -825,6 +978,8 @@ class DeepSeekStrategy(BaseStrategy):
             take_profit_1=tp1,
             take_profit_2=tp2,
             take_profit_3=tp3,
+            take_profit_4=tp4,
+            structural_be=structural_be,
             confidence=confidence,
             timestamp=datetime.now(UTC),
             reason=reasoning,

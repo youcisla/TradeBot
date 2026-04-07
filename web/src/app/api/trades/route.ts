@@ -12,7 +12,9 @@ export async function GET(request: Request) {
 
     if (!all) {
       const trades = await getOpenTrades();
-      return NextResponse.json(trades);
+      return NextResponse.json(trades, {
+        headers: { "Cache-Control": "public, s-maxage=5, must-revalidate" },
+      });
     }
 
     const limitParam = searchParams.get("limit");
@@ -24,7 +26,9 @@ export async function GET(request: Request) {
     );
 
     const trades = await getAllTrades(limit, cursorParam ?? undefined);
-    return NextResponse.json(trades);
+    return NextResponse.json(trades, {
+      headers: { "Cache-Control": "public, s-maxage=5, must-revalidate" },
+    });
   } catch (err) {
     console.error("[api/trades]", (err as Error).message);
     return NextResponse.json({ error: "DB temporarily unavailable" }, { status: 503 });

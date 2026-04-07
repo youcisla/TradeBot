@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useAppShell } from "@/components/AppShell";
+import { useAgentEvents } from "@/lib/swr";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -340,29 +341,24 @@ function PostMortemQuality({ scores }: { scores: TradeScore[] }) {
 
 export default function LearningPage() {
   const { status: shellStatus } = useAppShell();
+  const { data: events } = useAgentEvents(50);
 
   const [learningData, setLearningData] = useState<{
     confidences: StrategyConfidence[];
     scores: TradeScore[];
   } | null>(null);
-  const [events,  setEvents]  = useState<AgentEvent[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Poll learning data
+  // Poll learning data (separate endpoint, not yet SWR-ified)
   useEffect(() => {
     const load = async () => {
       try {
-        const [learnRes, eventsRes] = await Promise.all([
-          fetch("/api/learning"),
-          fetch("/api/events?agent=learning&limit=50"),
-        ]);
+        const learnRes = await fetch("/api/learning");
         const learn = await learnRes.json();
-        const evts  = await eventsRes.json();
         setLearningData({
           confidences: Array.isArray(learn.confidences) ? learn.confidences : [],
           scores:      Array.isArray(learn.scores)      ? learn.scores      : [],
         });
-        setEvents(Array.isArray(evts) ? evts : []);
       } catch { /* silent */ }
       finally { setLoading(false); }
     };
@@ -375,7 +371,7 @@ export default function LearningPage() {
   const scores      = learningData?.scores      ?? [];
 
   // Drift score: use last learning event score or derive from avg
-  const lastLearningEvent = events[0];
+  const lastLearningEvent = (events ?? [])[0];
   const driftScore = 0.18; // placeholder — would come from model_drift table
   const driftThreshold = 0.5;
 
@@ -430,7 +426,7 @@ export default function LearningPage() {
       <RewardScoringFeed scores={scores} />
 
       {/* Recent learning events */}
-      {events.length > 0 && (
+      {(events ?? []).length > 0 && (
         <div style={{
           background: "var(--card-bg)",
           border: "1px solid var(--card-border)",
@@ -440,7 +436,7 @@ export default function LearningPage() {
         }}>
           <SectionLabel>Learning Agent Feed</SectionLabel>
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-            {events.slice(0, 15).map((ev, i) => (
+            {(events ?? []).slice(0, 15).map((ev, i) => (
               <div
                 key={ev.id ?? i}
                 style={{

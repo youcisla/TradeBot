@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import useSWR from "swr";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -74,6 +75,8 @@ const KEYFRAMES = `
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
+const fetcher = (url: string) => fetch(url).then(r => r.json());
+
 export default function AgentFeed({
   limit       = 40,
   showHeader  = true,
@@ -81,35 +84,27 @@ export default function AgentFeed({
   limit?:      number;
   showHeader?: boolean;
 }) {
+  const { data: rawEvents } = useSWR<AgentEvent[]>(
+    `/api/events?limit=${limit}`,
+    fetcher,
+    { refreshInterval: 5_000, revalidateOnFocus: true, keepPreviousData: true }
+  );
+
   const [events, setEvents] = useState<NormEvent[]>([]);
   const scrollRef           = useRef<HTMLDivElement>(null);
   const prevTopId           = useRef<number | string | undefined>(undefined);
 
   useEffect(() => {
-    let mounted = true;
-
-    const poll = async () => {
-      try {
-        const r   = await fetch(`/api/events?limit=${limit}`);
-        const raw = await r.json();
-        const arr: AgentEvent[] = Array.isArray(raw) ? raw : (raw.events ?? []);
-
-        const norm: NormEvent[] = arr.map((ev) => ({
-          id:    ev.id,
-          agent: (ev.agent ?? "unknown").toLowerCase(),
-          level: (ev.level ?? "info").toLowerCase(),
-          msg:   String(ev.msg ?? ev.message ?? ""),
-          ts:    String(ev.ts ?? ev.created_at ?? "") || null,
-        }));
-
-        if (mounted) setEvents(norm);
-      } catch { /* silent */ }
-    };
-
-    poll();
-    const id = setInterval(poll, 5_000);
-    return () => { mounted = false; clearInterval(id); };
-  }, [limit]);
+    if (!rawEvents) return;
+    const norm: NormEvent[] = rawEvents.map((ev) => ({
+      id:    ev.id,
+      agent: (ev.agent ?? "unknown").toLowerCase(),
+      level: (ev.level ?? "info").toLowerCase(),
+      msg:   String(ev.msg ?? ev.message ?? ""),
+      ts:    String(ev.ts ?? ev.created_at ?? "") || null,
+    }));
+    setEvents(norm);
+  }, [rawEvents]);
 
   // Scroll to top when new events arrive
   useEffect(() => {
@@ -202,7 +197,6 @@ export default function AgentFeed({
                   padding:       "8px 16px",
                   background:    levelBg(ev.level),
                   borderBottom:  isLast ? "none" : "0.5px solid rgba(84,84,88,0.3)",
-                  // inset separator from left 24px
                   boxSizing:     "border-box",
                 }}
               >

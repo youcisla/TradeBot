@@ -9,7 +9,9 @@ export async function GET(request: Request) {
     const limit = Math.min(Number(searchParams.get("limit") ?? 80), 500);
 
     const events = await getAgentEvents(limit);
-    return NextResponse.json(events);
+    return NextResponse.json(events, {
+      headers: { "Cache-Control": "public, s-maxage=2, must-revalidate" },
+    });
   } catch (err) {
     console.error("[api/events]", (err as Error).message);
     return NextResponse.json({ error: "DB temporarily unavailable" }, { status: 503 });
