@@ -6,14 +6,24 @@ const CANDLE_SERVER = process.env.CANDLE_SERVER_URL || "http://localhost:5555";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const symbol = searchParams.get("symbol") || "EURUSD";
-  const timeframe = searchParams.get("timeframe") || "H1";
+  const rawSymbol = searchParams.get("symbol") || "EURUSD";
+  const rawTimeframe = searchParams.get("timeframe") || "H1";
   const count = searchParams.get("count") || "500";
 
-  // Validate inputs before forwarding to the internal candle server
+  // Normalise: BTC/USD → BTCUSD, remove spaces/dashes
+  const symbol = rawSymbol.replace("/", "").replace(" ", "").replace("-", "").toUpperCase();
   if (!/^[A-Z0-9]{3,10}$/.test(symbol)) {
     return NextResponse.json({ error: "Invalid symbol" }, { status: 400 });
   }
+
+  // Normalise timeframes: 1m→M1, 5m→M5, 15m→M15, 30m→M30, 1h→H1, 4h→H4, 1d→D1, 1w→W1, 1M→MN1
+  const tfMap: Record<string, string> = {
+    "1m": "M1", "5m": "M5", "15m": "M15", "30m": "M30",
+    "1h": "H1", "4h": "H4", "1d": "D1", "1w": "W1", "1M": "MN1",
+    "M1": "M1", "M5": "M5", "M15": "M15", "M30": "M30",
+    "H1": "H1", "H4": "H4", "D1": "D1", "W1": "W1", "MN1": "MN1",
+  };
+  const timeframe = tfMap[rawTimeframe] || rawTimeframe;
   if (!/^(M1|M5|M15|M30|H1|H4|D1|W1|MN1)$/.test(timeframe)) {
     return NextResponse.json({ error: "Invalid timeframe" }, { status: 400 });
   }

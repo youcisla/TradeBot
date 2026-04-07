@@ -223,10 +223,17 @@ class ScalpM5Strategy(BaseStrategy):
         is_crypto = ctx.symbol in ("BTCUSD", "ETHUSD", "BNBUSD", "SOLUSD",
                                     "XRPUSD", "ADAUSD", "DOTUSD", "LTCUSD",
                                     "EOSUSD", "XLMUSD", "TRXUSD", "AVAXUSD")
+        is_oil = ctx.symbol in ("USOUSD", "UKOUSD")
         if is_crypto:
             spread_pct = ctx.spread / ctx.current_price
             if spread_pct > self.MAX_SPREAD_CRYPTO:
                 logger.debug("ScalpM5 %s: spread %.4f exceeds crypto cap %.4f", ctx.symbol, spread_pct, self.MAX_SPREAD_CRYPTO)
+                return None
+        elif is_oil:
+            # Oil: cap at 0.03 (3 cents on WTI/Brent, typical spread is 0.01–0.02)
+            oil_spread_cap = 0.03
+            if ctx.spread > oil_spread_cap:
+                logger.debug("ScalpM5 %s: spread %.4f exceeds oil cap %.2f", ctx.symbol, ctx.spread, oil_spread_cap)
                 return None
         else:
             if spread_pips > self.MAX_SPREAD_FOREX:

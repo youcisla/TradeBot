@@ -5,7 +5,11 @@ export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const symbol = searchParams.get("symbol");
+  const rawSymbol = searchParams.get("symbol");
+  // Normalise: BTC/USD → BTCUSD, remove spaces/dashes
+  const symbol = rawSymbol
+    ? rawSymbol.replace("/", "").replace(" ", "").replace("-", "").toUpperCase()
+    : undefined;
 
   try {
     const allTrades = await getAllTrades(500);
