@@ -5,10 +5,10 @@ import { usePathname } from "next/navigation";
 
 const TABS = [
   { href: "/dashboard",          label: "Home",    icon: "dashboard"         },
-  { href: "/dashboard/signals", label: "Signals", icon: "radar"            },
-  { href: "/dashboard/trades",  label: "Trades",  icon: "swap_horiz"       },
-  { href: "/dashboard/brain",   label: "Brain",  icon: "psychology"       },
-  { href: "/dashboard/settings",label: "Settings",icon: "settings"         },
+  { href: "/dashboard/trades",   label: "Trades",  icon: "swap_horiz"        },
+  { href: "/dashboard/markets",  label: "Markets", icon: "candlestick_chart" },
+  { href: "/dashboard/brain",    label: "Brain",   icon: "psychology"        },
+  { href: "/dashboard/settings", label: "Set",     icon: "settings"          },
 ];
 
 export default function DashBottomNav() {
@@ -16,79 +16,30 @@ export default function DashBottomNav() {
 
   return (
     <>
-      <nav
-        className="dash-bottom-nav"
-        style={{
-          position: "fixed",
-          bottom: 10,
-          left: 10,
-          right: 10,
-          height: 62,
-          zIndex: 100,
-          background: "var(--surface-2)",
-          backdropFilter: "blur(14px)",
-          WebkitBackdropFilter: "blur(14px)",
-          border: "1px solid var(--border)",
-          borderRadius: 16,
-          boxShadow: "0 18px 26px rgba(0,0,0,0.44)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-around",
-          fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", system-ui, sans-serif',
-        }}
-      >
+      <nav className="fixed bottom-0 left-0 right-0 h-[60px] bg-bg-2 border-t border-border z-50 flex items-center justify-around lg:hidden">
         {TABS.map(({ href, label, icon }) => {
-          const active =
-            href === "/dashboard"
-              ? pathname === "/dashboard"
-              : pathname.startsWith(href);
+          const active = href === "/dashboard"
+            ? pathname === "/dashboard"
+            : pathname.startsWith(href);
 
           return (
             <Link
               key={href}
               href={href}
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 2,
-                minWidth: 44,
-                textDecoration: "none",
-                color: active ? "var(--accent)" : "var(--text-secondary)",
-                transition: "color 150ms ease",
-              }}
+              className={`flex flex-col items-center justify-center w-16 h-full transition-colors ${active ? 'text-gold' : 'text-text-3'}`}
             >
-              <span
-                className="material-symbols-outlined"
-                style={{
-                  fontSize: 24,
-                  fontVariationSettings: active ? "'FILL' 1" : "'FILL' 0",
-                }}
-              >
+              <span className={`material-symbols-outlined text-[24px] ${active ? 'mb-1' : ''}`}>
                 {icon}
               </span>
-              <span
-                style={{
-                  fontSize: 10,
-                  fontWeight: active ? 600 : 400,
-                  letterSpacing: "0.02em",
-                }}
-              >
-                {label}
-              </span>
+              {active && (
+                <span className="text-[10px] font-ui uppercase tracking-wider font-bold">
+                  {label}
+                </span>
+              )}
             </Link>
           );
         })}
       </nav>
-
-      <style>{`
-        @media (min-width: 1024px) {
-          .dash-bottom-nav {
-            display: none !important;
-          }
-        }
-      `}</style>
     </>
   );
 }

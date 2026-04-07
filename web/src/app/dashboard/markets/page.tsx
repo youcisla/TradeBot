@@ -1,5 +1,5 @@
-import MacroPage from "@/components/MacroPage";
+import MarketIntel from "@/components/MarketIntel";
 
-export default function MacroIntelligencePage() {
-  return <MacroPage />;
+export default function MarketIntelPage() {
+  return <MarketIntel />;
 }

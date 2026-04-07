@@ -8,8 +8,7 @@ interface EquityCurveProps {
   data: { day: string; pnl: number }[];
 }
 
-const FONT =
-  `-apple-system, BlinkMacSystemFont, "SF Pro Display", system-ui, sans-serif`;
+const FONT = "'IBM Plex Mono', monospace";
 
 interface TooltipPayload {
   value?: number;
@@ -30,20 +29,20 @@ function CustomTooltip({
   return (
     <div
       style={{
-        background: "#2C2C2E",
-        borderRadius: 8,
+        background: "var(--bg-3)",
+        border: "1px solid var(--border)",
+        borderRadius: 4,
         padding: "8px 12px",
         fontFamily: FONT,
         fontSize: 12,
-        color: "#FFFFFF",
-        border: "none",
-        boxShadow: "0 4px 16px rgba(0,0,0,0.4)",
+        color: "var(--text-1)",
+        boxShadow: "0 4px 16px rgba(0,0,0,0.6)",
       }}
     >
-      <div style={{ color: "rgba(235,235,245,0.6)", marginBottom: 4 }}>
+      <div style={{ color: "var(--text-3)", marginBottom: 4, textTransform: "uppercase", letterSpacing: 1 }}>
         {label}
       </div>
-      <div style={{ fontWeight: 700, color: cum >= 0 ? "#30D158" : "#FF453A" }}>
+      <div style={{ fontWeight: 700, color: cum >= 0 ? "var(--gold)" : "var(--red)" }}>
         {cum >= 0 ? "+" : ""}${cum.toFixed(2)}
       </div>
     </div>
@@ -61,7 +60,7 @@ export default function EquityCurve({ data }: EquityCurveProps) {
           justifyContent: "center",
           fontFamily: FONT,
           fontSize: 14,
-          color: "rgba(235,235,245,0.3)",
+          color: "var(--text-3)",
         }}
       >
         Not enough data
@@ -78,8 +77,8 @@ export default function EquityCurve({ data }: EquityCurveProps) {
 
   const lastVal = chartData[chartData.length - 1].cumulative;
   const isPositive = lastVal >= 0;
-  const lineColor = isPositive ? "#30D158" : "#FF453A";
-  const gradientId = isPositive ? "equityGradientGreen" : "equityGradientRed";
+  const lineColor = isPositive ? "var(--gold)" : "var(--red)";
+  const gradientId = isPositive ? "equityGradientGold" : "equityGradientRed";
 
   return (
     <ResponsiveContainer width="100%" height={180}>
@@ -92,13 +91,13 @@ export default function EquityCurve({ data }: EquityCurveProps) {
         </defs>
         <XAxis
           dataKey="day"
-          tick={{ fill: "rgba(235,235,245,0.3)", fontSize: 11, fontFamily: FONT }}
+          tick={{ fill: "var(--text-3)", fontSize: 11, fontFamily: FONT }}
           axisLine={false}
           tickLine={false}
           tickCount={4}
         />
         <YAxis
-          tick={{ fill: "rgba(235,235,245,0.3)", fontSize: 11, fontFamily: FONT }}
+          tick={{ fill: "var(--text-3)", fontSize: 11, fontFamily: FONT }}
           axisLine={false}
           tickLine={false}
           width={52}

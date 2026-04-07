@@ -1,187 +1,92 @@
 "use client";
 
 import { useAppShell } from "@/components/AppShell";
+import React, { useState, useEffect } from "react";
 
 export default function DashHeader() {
   const { status, isRunning } = useAppShell();
+  const [tickers, setTickers] = useState<{symbol: string, price: string, change: number}[]>([
+    { symbol: 'EURUSD', price: '1.0842', change: 0.03 },
+    { symbol: 'XAUUSD', price: '2341.20', change: -0.12 },
+    { symbol: 'BTCUSD', price: '67240', change: 1.2 },
+  ]);
+
+  // Simulate ticker updates
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setTickers(prev => prev.map(t => ({
+        ...t,
+        change: t.change + (Math.random() * 0.1 - 0.05),
+      })));
+    }, 10000);
+    return () => clearInterval(interval);
+  }, []);
 
   const equity = status ? Number(status.equity) : null;
-  const dailyPnl = status ? Number(status.daily_pnl) : null;
-  const pnlPositive = dailyPnl !== null && dailyPnl >= 0;
+  
+  let stateText = "—";
+  let stateIcon = "✗";
+  let stateColor = "text-text-3";
+  if (status) {
+    if (isRunning) {
+      stateText = "LIVE";
+      stateIcon = "●";
+      stateColor = "text-cyan animate-pulse";
+    } else if (status.state === "paused") {
+      stateText = "PAUSED";
+      stateIcon = "⏸";
+      stateColor = "text-orange";
+    } else {
+      stateText = "STOPPED";
+      stateIcon = "✗";
+      stateColor = "text-red";
+    }
+  }
 
   return (
-    <>
-      <header
-        style={{
-          position: "fixed",
-          top: 0,
-          left: 0,
-          right: 0,
-          height: 64,
-          zIndex: 100,
-          background:
-            "linear-gradient(180deg, rgba(13,17,25,0.86) 0%, rgba(10,13,18,0.78) 100%)",
-          backdropFilter: "blur(18px) saturate(145%)",
-          WebkitBackdropFilter: "blur(18px) saturate(145%)",
-          borderBottom: "1px solid rgba(95,122,158,0.35)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          padding: "0 18px",
-          fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", system-ui, sans-serif',
-          boxShadow: "0 14px 30px rgba(0,0,0,0.35)",
-        }}
-      >
-        {/* Left: wordmark + status */}
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <span
-            style={{
-              width: 14,
-              height: 14,
-              borderRadius: 4,
-              background: "linear-gradient(140deg, #30d6ff 0%, #8bf7b4 100%)",
-              boxShadow: "0 0 16px rgba(48,214,255,0.7)",
-              transform: "rotate(45deg)",
-              flexShrink: 0,
-            }}
-          />
-          <span
-            style={{
-              fontSize: 16,
-              fontWeight: 700,
-              color: "#eaf2ff",
-              letterSpacing: "0.03em",
-              textTransform: "uppercase",
-            }}
-          >
-            PulseTrade
+    <header className="fixed top-0 left-0 right-0 h-[52px] z-[100] bg-bg-2 border-b border-border flex items-center justify-between px-4">
+      {/* Left */}
+      <div className="flex items-center gap-2">
+        <span className="text-gold font-mono font-bold">◆ NeuralFX</span>
+      </div>
+
+      {/* Center Tickers */}
+      <div className="hidden md:flex items-center gap-6 font-mono text-sm">
+        {tickers.map(t => {
+          const isUp = t.change >= 0;
+          return (
+            <div key={t.symbol} className="flex flex-row items-center gap-2">
+              <span className="text-text-2">{t.symbol}</span>
+              <span className="text-text-1">{t.price}</span>
+              <span className={isUp ? 'text-gold' : 'text-red'}>
+                {isUp ? '▲' : '▼'}{Math.abs(t.change).toFixed(2)}%
+              </span>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Right */}
+      <div className="flex items-center gap-4">
+        {/* Status Badge */}
+        <div className="flex items-center gap-2 bg-bg-3 border border-border px-3 py-1 rounded-pill">
+          <span className={`font-mono text-[10px] ${stateColor}`}>{stateIcon}</span>
+          <span className="font-ui text-xs font-bold uppercase tracking-wider text-text-1">
+            {stateText}
           </span>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 6,
-              padding: "4px 10px",
-              background: isRunning ? "rgba(102,246,165,0.16)" : "rgba(142,142,147,0.18)",
-              borderRadius: 999,
-            }}
-          >
-            <span
-              style={{
-                width: 6,
-                height: 6,
-                borderRadius: "50%",
-                background: isRunning ? "#66f6a5" : "#8E8E93",
-                display: "inline-block",
-                boxShadow: isRunning ? "0 0 6px #66f6a5" : undefined,
-                animation: isRunning ? "headerDotPulse 2s ease-in-out infinite" : undefined,
-              }}
-            />
-            <span
-              style={{
-                fontSize: 11,
-                fontWeight: 600,
-                color: isRunning ? "#66f6a5" : "#8E8E93",
-                letterSpacing: "0.07em",
-              }}
-            >
-              {status ? (isRunning ? "LIVE" : status.state?.toUpperCase() ?? "—") : "—"}
-            </span>
+        </div>
+        
+        {equity !== null && (
+          <div className="font-mono text-sm text-text-1">
+             {equity.toLocaleString("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2 })}
           </div>
-        </div>
+        )}
 
-        {/* Right: equity, PnL, avatar */}
-        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-          {equity !== null && (
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 1 }}>
-              <span
-                style={{
-                  fontSize: 11,
-                  color: "rgba(184,203,232,0.5)",
-                  textTransform: "uppercase",
-                  letterSpacing: "0.08em",
-                }}
-              >
-                Equity
-              </span>
-              <span
-                style={{
-                  fontSize: 15,
-                  fontWeight: 600,
-                  color: "#f0f5ff",
-                  fontFamily: "ui-monospace, 'SF Mono', monospace",
-                  letterSpacing: "-0.01em",
-                }}
-              >
-                {equity.toLocaleString("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2 })}
-              </span>
-            </div>
-          )}
-
-          {dailyPnl !== null && (
-            <div
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "flex-end",
-                gap: 1,
-              }}
-            >
-              <span
-                style={{
-                  fontSize: 11,
-                  color: "rgba(184,203,232,0.5)",
-                  textTransform: "uppercase",
-                  letterSpacing: "0.08em",
-                }}
-              >
-                Daily P&L
-              </span>
-              <span
-                style={{
-                  fontSize: 15,
-                  fontWeight: 600,
-                  color: pnlPositive ? "#30D158" : "#FF453A",
-                  fontFamily: "ui-monospace, 'SF Mono', monospace",
-                  letterSpacing: "-0.01em",
-                }}
-              >
-                {pnlPositive ? "+" : ""}
-                {dailyPnl.toFixed(2)}
-              </span>
-            </div>
-          )}
-
-          {/* Avatar / settings button */}
-          <button
-            style={{
-              width: 34,
-              height: 34,
-              borderRadius: "50%",
-              background: "rgba(108,146,185,0.24)",
-              border: "1px solid rgba(126,171,214,0.42)",
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              color: "rgba(223,235,253,0.78)",
-              flexShrink: 0,
-            }}
-            aria-label="Settings"
-          >
-            <span className="material-symbols-outlined" style={{ fontSize: 16 }}>
-              person
-            </span>
-          </button>
-        </div>
-      </header>
-
-      <style>{`
-        @keyframes headerDotPulse {
-          0%, 100% { opacity: 1; box-shadow: 0 0 6px #66f6a5; }
-          50% { opacity: 0.5; box-shadow: 0 0 12px #66f6a5; }
-        }
-      `}</style>
-    </>
+        {/* Telegram icon */}
+        <button className="text-text-2 hover:text-cyan transition-colors">
+          <span className="material-symbols-outlined text-[20px]">send</span>
+        </button>
+      </div>
+    </header>
   );
 }

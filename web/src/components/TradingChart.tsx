@@ -133,9 +133,9 @@ export default function TradingChart({ symbol, timeframe, count = 500 }: Props) 
 
     const chart = createChart(containerRef.current, {
       layout: {
-        background: { type: ColorType.Solid, color: "#1C1C1E" },
-        textColor: "rgba(235,235,245,0.5)",
-        fontFamily: `-apple-system, BlinkMacSystemFont, "SF Pro Display", system-ui, sans-serif`,
+        background: { type: ColorType.Solid, color: "#0D0D0F" },
+        textColor: "#8A8A93",
+        fontFamily: "'IBM Plex Mono', monospace",
         fontSize: 11,
       },
       grid: {
@@ -144,8 +144,8 @@ export default function TradingChart({ symbol, timeframe, count = 500 }: Props) 
       },
       crosshair: {
         mode: CrosshairMode.Normal,
-        vertLine: { color: "rgba(10,132,255,0.6)", labelBackgroundColor: "#2C2C2E" },
-        horzLine: { color: "rgba(10,132,255,0.6)", labelBackgroundColor: "#2C2C2E" },
+        vertLine: { color: "rgba(240,180,41,0.4)", labelBackgroundColor: "#1B1B1F" },
+        horzLine: { color: "rgba(240,180,41,0.4)", labelBackgroundColor: "#1B1B1F" },
       },
       rightPriceScale: {
         borderColor: "rgba(84,84,88,0.3)",
@@ -159,12 +159,12 @@ export default function TradingChart({ symbol, timeframe, count = 500 }: Props) 
     });
 
     const candleSeries = chart.addCandlestickSeries({
-      upColor: "#30D158",
-      downColor: "#FF453A",
-      borderUpColor: "#30D158",
-      borderDownColor: "#FF453A",
-      wickUpColor: "#30D158",
-      wickDownColor: "#FF453A",
+      upColor: "#00C278",
+      downColor: "#FF3333",
+      borderUpColor: "#00C278",
+      borderDownColor: "#FF3333",
+      wickUpColor: "#00C278",
+      wickDownColor: "#FF3333",
     });
 
     const volumeSeries = chart.addHistogramSeries({
@@ -233,7 +233,7 @@ export default function TradingChart({ symbol, timeframe, count = 500 }: Props) 
         const volumeData: HistogramData<Time>[] = sorted.map((c) => ({
           time: c.time as Time,
           value: c.volume,
-          color: c.close >= c.open ? "rgba(48,209,88,0.25)" : "rgba(255,69,58,0.25)",
+          color: c.close >= c.open ? "rgba(0,194,120,0.15)" : "rgba(255,51,51,0.15)",
         }));
         candleSeries.setData(candleData);
         volumeSeries.setData(volumeData);
@@ -354,7 +354,7 @@ export default function TradingChart({ symbol, timeframe, count = 500 }: Props) 
         volumeSeries.update({
           time: latest.time as Time,
           value: latest.volume,
-          color: latest.close >= latest.open ? "rgba(48,209,88,0.25)" : "rgba(255,69,58,0.25)",
+          color: latest.close >= latest.open ? "rgba(0,194,120,0.15)" : "rgba(255,51,51,0.15)",
         });
         lastTimeRef.current = latest.time;
       }
@@ -387,8 +387,8 @@ export default function TradingChart({ symbol, timeframe, count = 500 }: Props) 
           flexDirection: "column",
           alignItems: "center",
           justifyContent: "center",
-          background: "#1C1C1E",
-          borderRadius: 12,
+          background: "#0D0D0F",
+          borderRadius: 4,
           gap: 12,
         }}>
           {status === "loading" ? (
@@ -402,9 +402,9 @@ export default function TradingChart({ symbol, timeframe, count = 500 }: Props) 
                 animation: "spin 0.8s linear infinite",
               }} />
               <span style={{
-                fontFamily: `-apple-system, BlinkMacSystemFont, "SF Pro Display", system-ui, sans-serif`,
+                fontFamily: "'IBM Plex Mono', monospace",
                 fontSize: 13,
-                color: "rgba(235,235,245,0.4)",
+                color: "#8A8A93",
               }}>
                 Loading chart data…
               </span>
@@ -413,7 +413,7 @@ export default function TradingChart({ symbol, timeframe, count = 500 }: Props) 
             <>
               <span style={{ fontSize: 28, color: "#FF453A" }}>⚠</span>
               <span style={{
-                fontFamily: `-apple-system, BlinkMacSystemFont, "SF Pro Display", system-ui, sans-serif`,
+                fontFamily: "'IBM Plex Mono', monospace",
                 fontSize: 15,
                 fontWeight: 600,
                 color: "#FF453A",
@@ -421,9 +421,9 @@ export default function TradingChart({ symbol, timeframe, count = 500 }: Props) 
                 Chart unavailable
               </span>
               <span style={{
-                fontFamily: `-apple-system, BlinkMacSystemFont, "SF Pro Display", system-ui, sans-serif`,
+                fontFamily: "'IBM Plex Mono', monospace",
                 fontSize: 13,
-                color: "rgba(235,235,245,0.4)",
+                color: "#8A8A93",
               }}>
                 {errorReasonRef.current === "no_data"
                   ? "No candle data for this symbol / timeframe"
