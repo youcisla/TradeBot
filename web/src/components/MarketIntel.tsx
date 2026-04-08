@@ -9,7 +9,7 @@ import { EventFeed, FeedEvent } from "@/components/ui/EventFeed";
 export default function MarketIntel() {
   const [symbol, setSymbol] = useState("BTC/USD");
   const [timeframe, setTimeframe] = useState("15m");
-  
+
   // Overlays state (not yet fully connected to Chart, but UI ready)
   const [showFVG, setShowFVG] = useState(true);
   const [showOB, setShowOB] = useState(true);
@@ -25,25 +25,24 @@ export default function MarketIntel() {
         const res = await fetch("/api/events?limit=50");
         const data = await res.json();
         if (active && Array.isArray(data)) {
-          // simple filter map
           const mapped: FeedEvent[] = [];
           for (let i = 0; i < data.length; i++) {
             const e = data[i];
             const m = (e.message || e.msg || "").toLowerCase();
             const s = symbol.split("/")[0].toLowerCase();
             if (m.includes(s) || m.includes("all markets")) {
-               mapped.push({
-                 id: String(e.id || Math.random()),
-                 timestamp: String(e.ts || e.created_at || new Date().toISOString()),
-                 agent: String(e.agent || 'SYSTEM'),
-                 level: String(e.level || 'info').toLowerCase(),
-                 message: String(e.message || e.msg || ''),
-               });
+              mapped.push({
+                id: String(e.id || Math.random()),
+                timestamp: String(e.ts || e.created_at || new Date().toISOString()),
+                agent: String(e.agent || "SYSTEM"),
+                level: String(e.level || "info").toLowerCase(),
+                message: String(e.message || e.msg || ""),
+              });
             }
           }
           setEvents(mapped.slice(0, 50));
         }
-      } catch (err) {}
+      } catch (_err) {}
     };
     fetchEm();
     const inv = setInterval(fetchEm, 5000);
@@ -51,42 +50,110 @@ export default function MarketIntel() {
   }, [symbol]);
 
   return (
-    <div className="flex flex-col h-[calc(100vh-52px)] overflow-hidden p-4 md:p-6 lg:p-8 gap-6 max-w-[1800px] mx-auto">
-      {/* Top Toolbar */}
-      <div className="flex items-center gap-6 p-4 bg-bg-2 border border-border rounded-sm shrink-0">
-        <select 
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        minHeight: "calc(100vh - 64px)",
+        padding: "24px",
+        gap: 20,
+        maxWidth: 1800,
+        margin: "0 auto",
+      }}
+    >
+      {/* ── Top Toolbar ─────────────────────────────────────── */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 16,
+          padding: "14px 20px",
+          background: "var(--bg-2)",
+          border: "1px solid var(--border)",
+          borderRadius: "var(--radius-sm)",
+          flexShrink: 0,
+        }}
+      >
+        <select
           value={symbol}
-          onChange={e => setSymbol(e.target.value)}
-          className="bg-bg-3 border border-border text-text-1 font-mono font-bold text-lg px-4 py-2 rounded-sm focus:outline-none"
+          onChange={(e) => setSymbol(e.target.value)}
+          style={{
+            background: "var(--bg-3)",
+            border: "1px solid var(--border)",
+            color: "var(--text-1)",
+            fontFamily: "var(--font-mono)",
+            fontWeight: 700,
+            fontSize: 15,
+            padding: "8px 14px",
+            borderRadius: "var(--radius-sm)",
+            outline: "none",
+            cursor: "pointer",
+          }}
         >
           <option value="BTC/USD">BTC/USD</option>
           <option value="ETH/USD">ETH/USD</option>
           <option value="SOL/USD">SOL/USD</option>
         </select>
 
-        <div className="flex gap-1 bg-bg-3 p-1 rounded-sm border border-border">
-          {["1m", "5m", "15m", "1h", "4h", "1d", "1w"].map(tf => (
+        <div
+          style={{
+            display: "flex",
+            gap: 4,
+            padding: 4,
+            background: "var(--bg-3)",
+            border: "1px solid var(--border)",
+            borderRadius: "var(--radius-sm)",
+          }}
+        >
+          {["1m", "5m", "15m", "1h", "4h", "1d", "1w"].map((tf) => (
             <button
               key={tf}
               onClick={() => setTimeframe(tf)}
-              className={`px-3 py-1.5 font-ui text-xs font-bold uppercase tracking-wider rounded-sm transition-colors ${timeframe === tf ? "bg-bg-4 text-text-1 shadow-sm" : "text-text-3 hover:text-text-2"}`}
+              style={{
+                padding: "6px 12px",
+                fontFamily: "var(--font-ui)",
+                fontSize: 11,
+                fontWeight: 700,
+                textTransform: "uppercase",
+                letterSpacing: "0.08em",
+                borderRadius: "var(--radius-sm)",
+                border: "none",
+                cursor: "pointer",
+                background: timeframe === tf ? "var(--bg-4)" : "transparent",
+                color: timeframe === tf ? "var(--text-1)" : "var(--text-3)",
+                transition: "all 0.15s ease",
+              }}
             >
               {tf}
             </button>
           ))}
         </div>
 
-        <div className="h-6 w-px bg-border mx-2" />
+        <div style={{ width: 1, height: 28, background: "var(--border)", flexShrink: 0 }} />
 
-        <div className="flex gap-2">
-          {[{id: "fvg", label: "FVG", val: showFVG, set: setShowFVG}, 
-            {id: "ob", label: "Order Blocks", val: showOB, set: setShowOB}, 
-            {id: "fib", label: "Fibonacci", val: showFIB, set: setShowFIB}
-           ].map(o => (
+        <div style={{ display: "flex", gap: 10 }}>
+          {[
+            { id: "fvg", label: "FVG", val: showFVG, set: setShowFVG },
+            { id: "ob", label: "Order Blocks", val: showOB, set: setShowOB },
+            { id: "fib", label: "Fibonacci", val: showFIB, set: setShowFIB },
+          ].map((o) => (
             <button
               key={o.id}
               onClick={() => o.set(!o.val)}
-              className={`px-4 py-1.5 font-ui text-xs font-bold tracking-wider rounded-sm border transition-colors ${o.val ? "bg-gold-dim border-gold text-gold" : "bg-bg-3 border-border text-text-3 hover:text-text-2"}`}
+              style={{
+                padding: "6px 14px",
+                fontFamily: "var(--font-ui)",
+                fontSize: 11,
+                fontWeight: 700,
+                textTransform: "uppercase",
+                letterSpacing: "0.08em",
+                borderRadius: "var(--radius-sm)",
+                border: `1px solid ${o.val ? "var(--gold)" : "var(--border)"}`,
+                cursor: "pointer",
+                background: o.val ? "var(--gold-dim)" : "var(--bg-3)",
+                color: o.val ? "var(--gold)" : "var(--text-3)",
+                transition: "all 0.15s ease",
+              }}
             >
               {o.label}
             </button>
@@ -94,77 +161,419 @@ export default function MarketIntel() {
         </div>
       </div>
 
-      {/* Main Content */}
-      <div className="flex flex-1 min-h-0 gap-6">
-        {/* Left: Chart + Events */}
-        <div className="flex-1 flex flex-col gap-6 min-w-0">
-          <div className="flex-1 bg-bg-1 border border-border rounded-sm relative overflow-hidden">
-            {/* The TradingChart expects its container to have relative + size. We give it flex-1. */}
-            <div className="absolute inset-0">
+      {/* ── Main Content ─────────────────────────────────────── */}
+      <div
+        style={{
+          display: "flex",
+          flex: 1,
+          gap: 20,
+          minHeight: 0, // critical: allows flex children to shrink below content size
+        }}
+      >
+        {/* Left: Chart + Activity Stream */}
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            flex: 1,
+            gap: 16,
+            minWidth: 0,
+          }}
+        >
+          {/* Chart */}
+          <div
+            style={{
+              flex: 1,
+              background: "var(--bg-1)",
+              border: "1px solid var(--border)",
+              borderRadius: "var(--radius-sm)",
+              overflow: "hidden",
+              position: "relative",
+              minHeight: 380,
+            }}
+          >
+            <div style={{ position: "absolute", inset: 0 }}>
               <TradingChart symbol={symbol} timeframe={timeframe} />
             </div>
           </div>
-          
-          {/* Bottom Strip: Agent events for symbol */}
-          <div className="h-48 border border-border rounded-sm shrink-0 bg-bg-2 p-4 flex flex-col">
-             <h3 className="font-ui text-xs font-bold tracking-widest text-text-3 uppercase mb-4 shrink-0">
-                Activity Stream: {symbol}
-             </h3>
-             <div className="flex-1 min-h-0">
-               <EventFeed events={events} />
-             </div>
-          </div>
+
+          {/* Activity Stream */}
+          <Card style={{ flexShrink: 0 }}>
+            <CardHeader>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <span>Activity Stream: {symbol}</span>
+                <span style={{ fontSize: 11, color: "var(--text-3)", fontFamily: "var(--font-mono)" }}>
+                  {events.length} events
+                </span>
+              </div>
+            </CardHeader>
+            <CardBody style={{ padding: 0 }}>
+              <div style={{ height: 220, overflow: "hidden" }}>
+                <EventFeed events={events} />
+              </div>
+            </CardBody>
+          </Card>
         </div>
 
         {/* Right: Stats Panel */}
-        <div className="w-[300px] shrink-0 flex flex-col gap-4 overflow-y-auto">
-           <Card>
-             <CardHeader>Live Market Stats</CardHeader>
-             <CardBody className="space-y-6">
-                <div className="flex justify-between items-center pb-4 border-b border-border/50">
-                   <div className="flex flex-col">
-                      <span className="text-[10px] uppercase text-text-3 font-bold tracking-widest">Bid</span>
-                      <span className="font-mono text-text-1">98,241.50</span>
-                   </div>
-                   <div className="flex flex-col text-right">
-                      <span className="text-[10px] uppercase text-text-3 font-bold tracking-widest">Ask</span>
-                      <span className="font-mono text-text-1">98,242.00</span>
-                   </div>
-                </div>
-                
-                <div className="flex justify-between items-center pb-4 border-b border-border/50">
-                   <span className="text-xs uppercase text-text-3 font-bold tracking-widest">Session</span>
-                   <span className="px-2 py-0.5 bg-blue-dim text-blue font-bold rounded-sm text-[10px] uppercase tracking-wider">New York</span>
-                </div>
-
-                <div className="space-y-2 pb-4 border-b border-border/50">
-                   <div className="flex justify-between">
-                     <span className="text-xs uppercase text-text-3 font-bold tracking-widest">Daily Range</span>
-                     <span className="font-mono text-xs text-text-2">2.4%</span>
-                   </div>
-                   <div className="h-1.5 w-full bg-bg-4 rounded-sm overflow-hidden relative">
-                     <div className="absolute left-[20%] right-[30%] bg-text-3 h-full opacity-50" />
-                     <div className="absolute left-[65%] w-1.5 h-full bg-gold" />
-                   </div>
-                   <div className="flex justify-between text-[10px] font-mono text-text-3">
-                     <span>$96,000</span>
-                     <span>$99,200</span>
-                   </div>
-                </div>
-
-                <div className="flex flex-col items-center pb-4 border-b border-border/50">
-                  <span className="text-xs uppercase text-text-3 font-bold tracking-widest w-full text-left mb-2">RSI (14)</span>
-                  <div className="w-32 h-20 -mb-4">
-                    <ArcGauge value={62} max={100} label="" />
+        <div
+          style={{
+            width: 360,
+            flexShrink: 0,
+            display: "flex",
+            flexDirection: "column",
+            gap: 16,
+            overflowY: "auto",
+          }}
+        >
+          {/* Live Market Stats */}
+          <Card>
+            <CardHeader>Live Market Stats</CardHeader>
+            <CardBody style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+              {/* Bid/Ask Row */}
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: 12,
+                  paddingBottom: 16,
+                  borderBottom: "1px solid rgba(255,255,255,0.06)",
+                }}
+              >
+                <div>
+                  <div
+                    style={{
+                      fontSize: 10,
+                      textTransform: "uppercase",
+                      letterSpacing: "0.1em",
+                      color: "var(--text-3)",
+                      fontWeight: 700,
+                      marginBottom: 4,
+                    }}
+                  >
+                    Bid
+                  </div>
+                  <div
+                    style={{
+                      fontFamily: "var(--font-mono)",
+                      fontSize: 18,
+                      fontWeight: 600,
+                      color: "var(--text-1)",
+                    }}
+                  >
+                    98,241.50
                   </div>
                 </div>
-
-                <div className="flex justify-between items-center">
-                   <span className="text-xs uppercase text-text-3 font-bold tracking-widest">ICT Signal</span>
-                   <span className="px-2 py-1 bg-gold-dim text-gold font-bold font-mono text-xs rounded-sm">LONG (92%)</span>
+                <div style={{ textAlign: "right" }}>
+                  <div
+                    style={{
+                      fontSize: 10,
+                      textTransform: "uppercase",
+                      letterSpacing: "0.1em",
+                      color: "var(--text-3)",
+                      fontWeight: 700,
+                      marginBottom: 4,
+                    }}
+                  >
+                    Ask
+                  </div>
+                  <div
+                    style={{
+                      fontFamily: "var(--font-mono)",
+                      fontSize: 18,
+                      fontWeight: 600,
+                      color: "var(--text-1)",
+                    }}
+                  >
+                    98,242.00
+                  </div>
                 </div>
-             </CardBody>
-           </Card>
+              </div>
+
+              {/* Spread */}
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  paddingBottom: 16,
+                  borderBottom: "1px solid rgba(255,255,255,0.06)",
+                }}
+              >
+                <span
+                  style={{
+                    fontSize: 11,
+                    textTransform: "uppercase",
+                    letterSpacing: "0.1em",
+                    color: "var(--text-3)",
+                    fontWeight: 700,
+                  }}
+                >
+                  Spread
+                </span>
+                <span
+                  style={{
+                    fontFamily: "var(--font-mono)",
+                    fontSize: 14,
+                    fontWeight: 600,
+                    color: "var(--cyan)",
+                  }}
+                >
+                  0.50 pips
+                </span>
+              </div>
+
+              {/* Session */}
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  paddingBottom: 16,
+                  borderBottom: "1px solid rgba(255,255,255,0.06)",
+                }}
+              >
+                <span
+                  style={{
+                    fontSize: 11,
+                    textTransform: "uppercase",
+                    letterSpacing: "0.1em",
+                    color: "var(--text-3)",
+                    fontWeight: 700,
+                  }}
+                >
+                  Session
+                </span>
+                <span
+                  style={{
+                    padding: "4px 10px",
+                    background: "var(--blue-dim)",
+                    color: "var(--blue)",
+                    fontFamily: "var(--font-ui)",
+                    fontSize: 10,
+                    fontWeight: 700,
+                    textTransform: "uppercase",
+                    letterSpacing: "0.08em",
+                    borderRadius: "var(--radius-sm)",
+                  }}
+                >
+                  New York
+                </span>
+              </div>
+
+              {/* Daily Range */}
+              <div style={{ paddingBottom: 16, borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    marginBottom: 8,
+                  }}
+                >
+                  <span
+                    style={{
+                      fontSize: 11,
+                      textTransform: "uppercase",
+                      letterSpacing: "0.1em",
+                      color: "var(--text-3)",
+                      fontWeight: 700,
+                    }}
+                  >
+                    Daily Range
+                  </span>
+                  <span
+                    style={{
+                      fontFamily: "var(--font-mono)",
+                      fontSize: 12,
+                      color: "var(--text-2)",
+                    }}
+                  >
+                    2.4%
+                  </span>
+                </div>
+                <div
+                  style={{
+                    height: 6,
+                    width: "100%",
+                    background: "var(--bg-4)",
+                    borderRadius: 3,
+                    overflow: "hidden",
+                    position: "relative",
+                  }}
+                >
+                  <div
+                    style={{
+                      position: "absolute",
+                      left: "20%",
+                      right: "30%",
+                      height: "100%",
+                      background: "var(--text-3)",
+                      opacity: 0.4,
+                    }}
+                  />
+                  <div
+                    style={{
+                      position: "absolute",
+                      left: "65%",
+                      width: 2,
+                      height: "100%",
+                      background: "var(--gold)",
+                    }}
+                  />
+                </div>
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    marginTop: 6,
+                    fontFamily: "var(--font-mono)",
+                    fontSize: 10,
+                    color: "var(--text-3)",
+                  }}
+                >
+                  <span>$96,000</span>
+                  <span>$99,200</span>
+                </div>
+              </div>
+
+              {/* RSI */}
+              <div style={{ paddingBottom: 16, borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+                <div
+                  style={{
+                    fontSize: 11,
+                    textTransform: "uppercase",
+                    letterSpacing: "0.1em",
+                    color: "var(--text-3)",
+                    fontWeight: 700,
+                    marginBottom: 12,
+                  }}
+                >
+                  RSI (14)
+                </div>
+                <div style={{ display: "flex", justifyContent: "center" }}>
+                  <ArcGauge value={62} max={100} label="" size={100} />
+                </div>
+              </div>
+
+              {/* ICT Signal */}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span
+                  style={{
+                    fontSize: 11,
+                    textTransform: "uppercase",
+                    letterSpacing: "0.1em",
+                    color: "var(--text-3)",
+                    fontWeight: 700,
+                  }}
+                >
+                  ICT Signal
+                </span>
+                <span
+                  style={{
+                    padding: "6px 12px",
+                    background: "var(--gold-dim)",
+                    color: "var(--gold)",
+                    fontFamily: "var(--font-mono)",
+                    fontSize: 11,
+                    fontWeight: 700,
+                    borderRadius: "var(--radius-sm)",
+                    border: "1px solid rgba(240,180,41,0.3)",
+                  }}
+                >
+                  LONG (92%)
+                </span>
+              </div>
+            </CardBody>
+          </Card>
+
+          {/* Symbol Info */}
+          <Card>
+            <CardHeader>Symbol Info</CardHeader>
+            <CardBody style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              {[
+                { label: "Symbol", value: "BTC/USD" },
+                { label: "Contract Size", value: "1 BTC" },
+                { label: "Tick Size", value: "0.01" },
+                { label: "Margin Req.", value: "1.0%" },
+                { label: "Swap Long", value: "-0.05%" },
+                { label: "Swap Short", value: "0.02%" },
+              ].map(({ label, value }) => (
+                <div
+                  key={label}
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                  }}
+                >
+                  <span style={{ fontSize: 12, color: "var(--text-3)" }}>{label}</span>
+                  <span
+                    style={{
+                      fontFamily: "var(--font-mono)",
+                      fontSize: 12,
+                      fontWeight: 600,
+                      color: "var(--text-1)",
+                    }}
+                  >
+                    {value}
+                  </span>
+                </div>
+              ))}
+            </CardBody>
+          </Card>
+
+          {/* Quick Overlays Legend */}
+          <Card>
+            <CardHeader>Active Overlays</CardHeader>
+            <CardBody style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {[
+                { label: "Fair Value Gap", active: showFVG, color: "var(--cyan)" },
+                { label: "Order Blocks", active: showOB, color: "var(--gold)" },
+                { label: "Fibonacci", active: showFIB, color: "var(--purple)" },
+              ].map(({ label, active, color }) => (
+                <div
+                  key={label}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 10,
+                    opacity: active ? 1 : 0.35,
+                  }}
+                >
+                  <div
+                    style={{
+                      width: 10,
+                      height: 10,
+                      borderRadius: 2,
+                      background: color,
+                      flexShrink: 0,
+                    }}
+                  />
+                  <span
+                    style={{
+                      fontSize: 12,
+                      color: "var(--text-2)",
+                      fontFamily: "var(--font-ui)",
+                    }}
+                  >
+                    {label}
+                  </span>
+                  <span
+                    style={{
+                      marginLeft: "auto",
+                      fontSize: 10,
+                      fontFamily: "var(--font-mono)",
+                      color: active ? "var(--green)" : "var(--text-3)",
+                      textTransform: "uppercase",
+                      fontWeight: 700,
+                    }}
+                  >
+                    {active ? "ON" : "OFF"}
+                  </span>
+                </div>
+              ))}
+            </CardBody>
+          </Card>
         </div>
       </div>
     </div>

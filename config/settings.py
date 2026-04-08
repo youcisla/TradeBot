@@ -164,7 +164,7 @@ COUNCIL_DEEPSEEK_WORLD_WEIGHT: float = float(
 COUNCIL_MIN_CANDLES: int = int(os.getenv("COUNCIL_MIN_CANDLES", "20"))
 # Minimum ICT confluence score (0-70) for a valid ICT/SMC signal.
 # ICT score < 40 AND no SMC confirmation always returns NONE.
-ICT_MIN_CONFIDENCE: int = int(os.getenv("ICT_MIN_CONFIDENCE", "40"))
+ICT_MIN_CONFIDENCE: int = int(os.getenv("ICT_MIN_CONFIDENCE", "30"))
 
 # ── Bull/Bear Debate Agent ───────────────────────────────────────────────
 # Set DEBATE_ENABLED=true to run a pre-trade LLM bull/bear debate.
@@ -231,7 +231,7 @@ TP_RANGING_TP2_MULT: float  = float(os.getenv("TP_RANGING_TP2_MULT",  "1.5"))
 MAX_HOURS_IN_TRADE: int = int(os.getenv("MAX_HOURS_IN_TRADE", "48"))
 # Minimum ICT engine score for crypto (lower than forex — crypto lacks killzones
 # so the session component caps at 5.0 instead of 7.0, reducing potential max score).
-MIN_ICT_SCORE_CRYPTO: float = float(os.getenv("MIN_ICT_SCORE_CRYPTO", "42.0"))
+MIN_ICT_SCORE_CRYPTO: float = float(os.getenv("MIN_ICT_SCORE_CRYPTO", "35.0"))
 
 # ── Risk ─────────────────────────────────────────────────────────────────
 MAX_RISK_PER_TRADE: float = float(os.getenv("MAX_RISK_PER_TRADE", "0.02"))

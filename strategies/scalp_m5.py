@@ -246,6 +246,7 @@ class ScalpM5Strategy(BaseStrategy):
 
         # ── Session filter (scalps only in liquid sessions) ─────────────────
         # BTC is 24/7 — skip session restrictions for crypto
+        session = ""  # always defined so EntrySnapshot can reference it
         if not is_crypto:
             session = current_session()
             if session == "newyork":

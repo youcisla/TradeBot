@@ -74,7 +74,7 @@ function fmtTime(ts: string | undefined): string {
 }
 
 function agentColor(key: string): string {
-  return AGENTS.find(a => a.key === key)?.color ?? "var(--text-muted)";
+  return AGENTS.find(a => a.key === key)?.color ?? "var(--text-3)";
 }
 function agentLabel(key: string): string {
   return AGENTS.find(a => a.key === key)?.label ?? key;
@@ -175,17 +175,19 @@ function parseSignal(ev: AgentEvent, events: AgentEvent[]): ParsedSignal {
 // ── Style tokens ────────────────────────────────────────────────────────────────
 
 const C = {
-  bg:       "var(--card-bg)",
-  border:   "var(--card-border)",
-  radius:   "var(--card-radius)",
-  mono:     "var(--font-mono-stack)",
-  label:    "var(--section-label)",
-  positive: "var(--buy)",
-  negative: "var(--sell)",
-  warning:  "var(--health-warn)",
-  accent:   "var(--accent)",
-  textDim:  "var(--text-muted)",
-  textMid:  "var(--text-secondary)",
+  bg:        "var(--bg-2)",
+  border:    "var(--border)",
+  radius:    6,
+  mono:      "var(--font-mono)",
+  label:     "var(--text-3)",
+  positive:  "var(--gold)",
+  negative:  "var(--red)",
+  warning:   "var(--orange)",
+  accent:    "var(--cyan)",
+  textDim:   "var(--text-3)",
+  textMid:   "var(--text-2)",
+  surface:   "var(--bg-3)",
+  surface2:  "var(--bg-4)",
 };
 
 // ── Sub-components ────────────────────────────────────────────────────────────
@@ -212,7 +214,7 @@ function ConfBar({ value }: { value: number }) {
   const color = pct >= 85 ? C.positive : pct >= 65 ? C.accent : pct >= 40 ? C.warning : C.negative;
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 8, width: 120 }}>
-      <div style={{ flex: 1, height: 4, background: "var(--surface-3)", borderRadius: 2, overflow: "hidden" }}>
+      <div style={{ flex: 1, height: 4, background: "var(--bg-4)", borderRadius: 2, overflow: "hidden" }}>
         <div style={{ width: `${pct}%`, height: "100%", background: color, borderRadius: 2, transition: "width .3s" }} />
       </div>
       <span style={{ fontSize: 11, fontFamily: C.mono, color, fontWeight: 600, minWidth: 36, textAlign: "right" }}>
@@ -225,12 +227,12 @@ function ConfBar({ value }: { value: number }) {
 /** Verdict badge */
 function VerdictBadge({ verdict, reason }: { verdict: ParsedSignal["riskVerdict"]; reason?: string }) {
   if (verdict === "APPROVED") return (
-    <span style={{ fontSize: 10, fontWeight: 700, color: C.positive, background: "var(--buy-dim)", padding: "3px 8px", borderRadius: 4, letterSpacing: 0.4 }}>
+    <span style={{ fontSize: 10, fontWeight: 700, color: C.positive, background: "var(--gold-dim)", padding: "3px 8px", borderRadius: 4, letterSpacing: 0.4 }}>
       APPROVED
     </span>
   );
   if (verdict === "BLOCKED") return (
-    <span title={reason} style={{ fontSize: 10, fontWeight: 700, color: C.negative, background: "var(--sell-dim)", padding: "3px 8px", borderRadius: 4, letterSpacing: 0.4, cursor: "help" }}>
+    <span title={reason} style={{ fontSize: 10, fontWeight: 700, color: C.negative, background: "var(--red-dim)", padding: "3px 8px", borderRadius: 4, letterSpacing: 0.4, cursor: "help" }}>
       BLOCKED
     </span>
   );
@@ -247,7 +249,7 @@ function DirBadge({ dir }: { dir: "BUY" | "SELL" | undefined }) {
   if (!dir) return null;
   const color = dir === "BUY" ? C.positive : C.negative;
   return (
-    <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.5, color, background: "var(--surface-2)", padding: "2px 7px", borderRadius: 4 }}>
+    <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.5, color, background: "var(--bg-3)", padding: "2px 7px", borderRadius: 4 }}>
       {dir}
     </span>
   );
@@ -257,7 +259,7 @@ function DirBadge({ dir }: { dir: "BUY" | "SELL" | undefined }) {
 function AgentBadge({ agent }: { agent: string }) {
   const color = agentColor(agent);
   return (
-    <span style={{ fontSize: 9, fontWeight: 700, color: color, background: "var(--surface-2)", padding: "2px 6px", borderRadius: 4, letterSpacing: 0.4, textTransform: "uppercase" }}>
+    <span style={{ fontSize: 9, fontWeight: 700, color: color, background: "var(--bg-3)", padding: "2px 6px", borderRadius: 4, letterSpacing: 0.4, textTransform: "uppercase" }}>
       {agentLabel(agent)}
     </span>
   );
@@ -286,7 +288,7 @@ function SignalDrawer({ signal, onClose }: { signal: ParsedSignal; onClose: () =
     >
       <div style={{
         width: 480, maxWidth: "95vw", height: "100vh",
-        background: "var(--surface-2)",
+        background: "var(--bg-3)",
         borderLeft: "1px solid var(--border)",
         overflowY: "auto",
         display: "flex", flexDirection: "column",
@@ -296,7 +298,7 @@ function SignalDrawer({ signal, onClose }: { signal: ParsedSignal; onClose: () =
         <div style={{ padding: "20px 24px 16px", borderBottom: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexShrink: 0 }}>
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
-              {signal.symbol && <span style={{ fontSize: 22, fontWeight: 700, color: "var(--text-primary)" }}>{signal.symbol}</span>}
+              {signal.symbol && <span style={{ fontSize: 22, fontWeight: 700, color: "var(--text-1)" }}>{signal.symbol}</span>}
               <DirBadge dir={signal.direction} />
               <AgentBadge agent={signal.agent} />
             </div>
@@ -306,8 +308,8 @@ function SignalDrawer({ signal, onClose }: { signal: ParsedSignal; onClose: () =
             </div>
           </div>
           <button onClick={onClose} style={{
-            background: "var(--surface-2)", border: "1px solid var(--border)",
-            borderRadius: 8, color: "var(--text-secondary)", cursor: "pointer",
+            background: "var(--bg-3)", border: "1px solid var(--border)",
+            borderRadius: 8, color: "var(--text-2)", cursor: "pointer",
             width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center",
             fontSize: 18, fontFamily: "inherit",
           }}>×</button>
@@ -323,9 +325,9 @@ function SignalDrawer({ signal, onClose }: { signal: ParsedSignal; onClose: () =
 
           {/* Block reason */}
           {signal.riskVerdict === "BLOCKED" && signal.blockReason && (
-            <div style={{ background: "var(--sell-dim)", border: "1px solid var(--sell)", borderRadius: 10, padding: "12px 14px" }}>
+            <div style={{ background: "var(--red-dim)", border: "1px solid var(--red)", borderRadius: 10, padding: "12px 14px" }}>
               <div style={{ fontSize: 10, fontWeight: 700, color: C.negative, letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 6 }}>Block Reason</div>
-              <div style={{ fontSize: 13, color: "var(--text-primary)", lineHeight: 1.5 }}>{signal.blockReason}</div>
+              <div style={{ fontSize: 13, color: "var(--text-1)", lineHeight: 1.5 }}>{signal.blockReason}</div>
             </div>
           )}
 
@@ -335,13 +337,13 @@ function SignalDrawer({ signal, onClose }: { signal: ParsedSignal; onClose: () =
               <SectionLabel>Entry Levels</SectionLabel>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 8 }}>
                 {[
-                  { label: "Entry", value: signal.entry_price, color: "var(--text-primary)" },
+                  { label: "Entry", value: signal.entry_price, color: "var(--text-1)" },
                   { label: "SL",    value: signal.sl,           color: C.negative },
                   { label: "TP1",   value: signal.tp1,           color: C.positive },
                   { label: "TP2",   value: signal.tp2,           color: C.positive },
                   { label: "TP3",   value: signal.tp3,           color: C.positive },
                 ].map(({ label, value, color }) => (
-                  <div key={label} style={{ background: "var(--surface-2)", borderRadius: 8, padding: "8px 10px", textAlign: "center" }}>
+                  <div key={label} style={{ background: "var(--bg-4)", borderRadius: 8, padding: "8px 10px", textAlign: "center" }}>
                     <div style={{ fontSize: 10, color: C.textDim, letterSpacing: 0.4, textTransform: "uppercase", marginBottom: 4 }}>{label}</div>
                     <div style={{ fontSize: 12, fontFamily: C.mono, fontWeight: 600, color: value ? color : C.textDim }}>
                       {value ? (Number(value)).toFixed(5) : "—"}
@@ -356,9 +358,9 @@ function SignalDrawer({ signal, onClose }: { signal: ParsedSignal; onClose: () =
           <div>
             <SectionLabel>Reasoning</SectionLabel>
             <div style={{
-              background: "var(--surface-2)", borderRadius: 10,
+              background: "var(--bg-4)", borderRadius: 10,
               border: "1px solid var(--border)",
-              padding: "12px 14px", fontSize: 13, color: "var(--text-primary)",
+              padding: "12px 14px", fontSize: 13, color: "var(--text-1)",
               lineHeight: 1.6, maxHeight: 200, overflowY: "auto",
             }}>
               {signal.reason || "—"}
@@ -373,13 +375,13 @@ function SignalDrawer({ signal, onClose }: { signal: ParsedSignal; onClose: () =
                 {signal.bullCase && (
                   <div style={{ background: "rgba(34,197,94,0.08)", border: "1px solid rgba(34,197,94,0.20)", borderRadius: 8, padding: "10px 12px" }}>
                     <div style={{ fontSize: 10, fontWeight: 700, color: C.positive, letterSpacing: 0.4, textTransform: "uppercase", marginBottom: 5 }}>Bull Case</div>
-                    <div style={{ fontSize: 12, color: "var(--text-primary)", lineHeight: 1.5 }}>{signal.bullCase}</div>
+                    <div style={{ fontSize: 12, color: "var(--text-1)", lineHeight: 1.5 }}>{signal.bullCase}</div>
                   </div>
                 )}
                 {signal.bearCase && (
                   <div style={{ background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.20)", borderRadius: 8, padding: "10px 12px" }}>
                     <div style={{ fontSize: 10, fontWeight: 700, color: C.negative, letterSpacing: 0.4, textTransform: "uppercase", marginBottom: 5 }}>Bear Case</div>
-                    <div style={{ fontSize: 12, color: "var(--text-primary)", lineHeight: 1.5 }}>{signal.bearCase}</div>
+                    <div style={{ fontSize: 12, color: "var(--text-1)", lineHeight: 1.5 }}>{signal.bearCase}</div>
                   </div>
                 )}
               </div>
@@ -397,7 +399,7 @@ function SignalDrawer({ signal, onClose }: { signal: ParsedSignal; onClose: () =
                   return (
                     <div key={m} style={{
                       padding: "6px 12px", borderRadius: 8,
-                      background: active ? "var(--surface-2)" : "var(--surface-1)",
+                      background: active ? "var(--bg-4)" : "var(--bg-3)",
                       border: `1px solid ${active ? color : "var(--border)"}`,
                       fontSize: 12, fontWeight: active ? 600 : 400,
                       color: active ? color : C.textMid,
@@ -428,7 +430,7 @@ function SignalDrawer({ signal, onClose }: { signal: ParsedSignal; onClose: () =
                     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 0 }}>
                       <div style={{
                         width: 28, height: 28, borderRadius: "50%",
-                        background: verdict === "pass" ? "var(--surface-2)" : verdict === "fail" ? "var(--sell-dim)" : "var(--surface-1)",
+                        background: verdict === "pass" ? "var(--bg-4)" : verdict === "fail" ? "var(--red-dim)" : "var(--bg-3)",
                         border: `1.5px solid ${verdict === "pass" ? color : verdict === "fail" ? C.negative : "var(--border)"}`,
                         display: "flex", alignItems: "center", justifyContent: "center",
                         fontSize: 10, fontWeight: 700,
@@ -508,11 +510,11 @@ export default function SignalsPage() {
   }, [signals, filter, verdict, search]);
 
   return (
-    <>
+    <div style={{ padding: "24px", maxWidth: 1400, margin: "0 auto", display: "flex", flexDirection: "column", gap: 20 }}>
       {/* Filters bar */}
       <div style={{
         display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap",
-        marginBottom: 16,
+        marginBottom: 4,
       }}>
         {/* Search */}
         <input
@@ -520,9 +522,9 @@ export default function SignalsPage() {
           onChange={e => setSearch(e.target.value)}
           placeholder="Search signals…"
           style={{
-            background: "var(--surface-2)", border: "1px solid var(--border)",
-            borderRadius: 8, padding: "8px 14px", fontSize: 13, color: "var(--text-primary)",
-            outline: "none", width: 200, fontFamily: "inherit",
+            background: "var(--bg-3)", border: "1px solid var(--border)",
+            borderRadius: 8, padding: "8px 14px", fontSize: 13, color: "var(--text-1)",
+            outline: "none", minWidth: 180, flex: "1 1 180px", fontFamily: "inherit",
           }}
         />
 
@@ -532,9 +534,9 @@ export default function SignalsPage() {
             <button key={f} onClick={() => setFilter(f)} style={{
               padding: "6px 14px", borderRadius: 6, fontSize: 12, fontWeight: 600,
               cursor: "pointer", border: "none",
-              background: filter === f ? "var(--accent-dim)" : "var(--surface-1)",
+              background: filter === f ? "var(--cyan-dim)" : "var(--bg-3)",
               color: filter === f ? C.accent : C.textMid,
-              outline: filter === f ? `1px solid var(--border-accent)` : "none",
+              outline: filter === f ? `1px solid var(--border-active)` : "none",
               fontFamily: "inherit", transition: "all .1s",
             }}>
               {f}
@@ -549,12 +551,12 @@ export default function SignalsPage() {
               padding: "6px 14px", borderRadius: 6, fontSize: 12, fontWeight: 600,
               cursor: "pointer", border: "none",
               background: verdict === f
-                ? f === "APPROVED" ? "var(--buy-dim)" : f === "BLOCKED" ? "var(--sell-dim)" : "var(--accent-dim)"
-                : "var(--surface-1)",
+                ? f === "APPROVED" ? "var(--gold-dim)" : f === "BLOCKED" ? "var(--red-dim)" : "var(--cyan-dim)"
+                : "var(--bg-3)",
               color: verdict === f
                 ? f === "APPROVED" ? C.positive : f === "BLOCKED" ? C.negative : C.accent
                 : C.textMid,
-              outline: verdict === f ? `1px solid ${f === "APPROVED" ? "var(--buy)" : f === "BLOCKED" ? "var(--sell)" : "var(--accent)"}` : "none",
+              outline: verdict === f ? `1px solid ${f === "APPROVED" ? "var(--gold)" : f === "BLOCKED" ? "var(--red)" : "var(--cyan)"}` : "none",
               fontFamily: "inherit", transition: "all .1s",
             }}>
               {f}
@@ -568,15 +570,15 @@ export default function SignalsPage() {
       </div>
 
       {/* Table */}
-      <Card>
+      <Card style={{ padding: 0 }}>
         {/* Header */}
         <div style={{
           display: "grid",
-          gridTemplateColumns: "80px 60px 90px 1fr 120px 100px 100px",
+          gridTemplateColumns: "80px 60px 90px 1fr 130px 110px 90px",
           gap: 8,
           padding: "10px 16px",
           fontSize: 10, color: C.label, letterSpacing: 0.4, textTransform: "uppercase",
-          borderBottom: "1px solid var(--border)",
+          borderBottom: `1px solid ${C.border}`,
         }}>
           <span>Symbol</span>
           <span>Dir</span>
@@ -597,22 +599,10 @@ export default function SignalsPage() {
             <div
               key={sig.id}
               onClick={() => setSelected(sig)}
-              style={{
-                display: "grid",
-                gridTemplateColumns: "80px 60px 90px 1fr 120px 100px 100px",
-                gap: 8,
-                padding: "10px 16px",
-                fontSize: 13,
-                alignItems: "center",
-                borderBottom: i === filtered.length - 1 ? "none" : "1px solid var(--border-subtle)",
-                cursor: "pointer",
-                transition: "background .1s",
-              }}
-              onMouseEnter={e => (e.currentTarget.style.background = "var(--surface-2)")}
-              onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
+              className="signal-row"
             >
               {/* Symbol */}
-              <span style={{ fontWeight: 600, color: "var(--text-primary)", fontSize: 13 }}>
+              <span style={{ fontWeight: 600, color: "var(--text-1)", fontSize: 13 }}>
                 {sig.symbol || "—"}
               </span>
 
@@ -642,10 +632,26 @@ export default function SignalsPage() {
         )}
       </Card>
 
+      <style>{`
+        .signal-row {
+          display: grid;
+          grid-template-columns: 80px 60px 90px 1fr 130px 110px 90px;
+          gap: 8;
+          padding: 11px 16px;
+          font-size: 13;
+          align-items: center;
+          border-bottom: 1px solid var(--border);
+          cursor: pointer;
+          transition: background 0.15s ease;
+        }
+        .signal-row:last-child { border-bottom: none; }
+        .signal-row:hover { background: var(--bg-4); }
+      `}</style>
+
       {/* Detail drawer */}
       {selected && (
         <SignalDrawer signal={selected} onClose={() => setSelected(null)} />
       )}
-    </>
+    </div>
   );
 }

@@ -173,7 +173,7 @@ def main() -> None:
 
     # ── 4. Unified strategy — one connected decision pipeline
     deepseek_strategy = DeepSeekStrategy()
-    ict_strategy = ICTStrategy(broker=broker, db=db, min_confidence=55.0)
+    ict_strategy = ICTStrategy(broker=broker, db=db, min_confidence=35.0)
     sma_strategy = SmaCrossoverStrategy()
     plugin_strategies = load_strategy_plugins(db=db, broker=broker)
     base_strategies = [deepseek_strategy, ict_strategy, sma_strategy]
@@ -192,12 +192,12 @@ def main() -> None:
     # cover the full timeframe stack: intraday (M15+H4), swing (H1+D1),
     # and macro (H4+W1).  The existing ict_strategy covers M15+H4.
     ict_btc_h1d1 = ICTStrategy(
-        broker=broker, db=db, min_confidence=55.0,
+        broker=broker, db=db, min_confidence=35.0,
         htf_timeframe="D1", htf_candle_count=100,
         entry_timeframe="H1", entry_candle_count=200,
     )
     ict_btc_h4w1 = ICTStrategy(
-        broker=broker, db=db, min_confidence=50.0,  # slightly lower — H4 setups are rarer
+        broker=broker, db=db, min_confidence=35.0,  # slightly lower — H4 setups are rarer
         htf_timeframe="W1", htf_candle_count=52,
         entry_timeframe="H4", entry_candle_count=150,
     )

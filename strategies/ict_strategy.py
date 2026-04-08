@@ -51,7 +51,7 @@ class ICTStrategy(BaseStrategy):
         self,
         broker=None,
         db=None,
-        min_confidence: float = 55.0,
+        min_confidence: float = 35.0,
         htf_timeframe: str = "H4",
         htf_candle_count: int = 200,
         entry_timeframe: str = "M15",

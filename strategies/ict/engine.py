@@ -69,8 +69,8 @@ class ICTEngine:
         )
     """
 
-    def __init__(self, min_confidence: float = 50.0,
-                 range_min_confidence: float = 42.0) -> None:
+    def __init__(self, min_confidence: float = 35.0,
+                 range_min_confidence: float = 30.0) -> None:
         self.min_confidence = min_confidence
         self.range_min_confidence = range_min_confidence
 
