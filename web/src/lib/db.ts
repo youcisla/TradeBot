@@ -659,6 +659,208 @@ export async function getUserCount(): Promise<number> {
   return rows[0].count;
 }
 
+// ── Signals ─────────────────────────────────────────────────────────────
+
+export interface Signal {
+  id: number;
+  signal_intent: string;
+  signal_type: string;
+  strategy: string;
+  symbol: string;
+  direction: string;
+  entry_price: number;
+  stop_loss: number;
+  take_profit_1: number;
+  confidence: number;
+  reason: string;
+  bull_case: string;
+  bear_case: string;
+  author: string;
+  tags: string[];
+  points_awarded: boolean;
+  follower_score: number;
+  created_at: string;
+}
+
+export async function getSignals(params: {
+  intent?: string;
+  type?: string;
+  strategy?: string;
+  author?: string;
+  limit?: number;
+}): Promise<Signal[]> {
+  const conditions: string[] = [];
+  const vals: unknown[] = [];
+  if (params.intent)   { vals.push(params.intent);   conditions.push(`signal_intent = $${vals.length}`); }
+  if (params.type)      { vals.push(params.type);    conditions.push(`signal_type = $${vals.length}`); }
+  if (params.strategy)  { vals.push(params.strategy); conditions.push(`strategy = $${vals.length}`); }
+  if (params.author)    { vals.push(params.author);   conditions.push(`author = $${vals.length}`); }
+  vals.push(params.limit ?? 50);
+  const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+  const rows = await query(
+    `SELECT * FROM signals ${where} ORDER BY created_at DESC LIMIT $${vals.length}`,
+    vals
+  );
+  return rows as Signal[];
+}
+
+export async function publishSignal(body: {
+  signal_intent: string;
+  signal_type: string;
+  strategy: string;
+  symbol?: string;
+  direction?: string;
+  entry_price?: number;
+  stop_loss?: number;
+  take_profit_1?: number;
+  confidence?: number;
+  reason?: string;
+  bull_case?: string;
+  bear_case?: string;
+  author?: string;
+  tags?: string[];
+}): Promise<number> {
+  const rows = await query(
+    `INSERT INTO signals
+       (signal_intent, signal_type, strategy, symbol, direction,
+        entry_price, stop_loss, take_profit_1, confidence,
+        reason, bull_case, bear_case, author, tags)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+     RETURNING id`,
+    [
+      body.signal_intent, body.signal_type, body.strategy,
+      body.symbol ?? "", body.direction ?? "",
+      body.entry_price ?? 0, body.stop_loss ?? 0, body.take_profit_1 ?? 0,
+      body.confidence ?? 0.5,
+      body.reason ?? "", body.bull_case ?? "", body.bear_case ?? "",
+      body.author ?? "bot", body.tags ?? [],
+    ]
+  );
+  return rows[0].id;
+}
+
+// ── Agent Reputation ─────────────────────────────────────────────────────
+
+export interface AgentReputation {
+  agent: string;
+  total_signals: number;
+  adopted_signals: number;
+  total_points: number;
+  win_streak: number;
+  last_score: number;
+  reputation_score: number;
+  updated_at: string;
+}
+
+export async function getAgentReputation(agent: string): Promise<AgentReputation | null> {
+  const rows = await query(
+    "SELECT * FROM agent_reputation WHERE agent = $1",
+    [agent]
+  );
+  return (rows[0] as AgentReputation) ?? null;
+}
+
+export async function getLeaderboard(limit = 10): Promise<AgentReputation[]> {
+  const rows = await query(
+    `SELECT agent, total_signals, adopted_signals, total_points,
+            win_streak, reputation_score, updated_at
+     FROM agent_reputation
+     ORDER BY total_points DESC
+     LIMIT $1`,
+    [limit]
+  );
+  return rows as AgentReputation[];
+}
+
+// ── Subscriptions (copy-trading) ────────────────────────────────────────
+
+export interface Subscription {
+  id: number;
+  follower_id: string;
+  leader_id: string;
+  leader_strategy: string;
+  status: string;
+  created_at: string;
+}
+
+export async function getSubscriptions(params: {
+  follower?: string;
+  leader?: string;
+}): Promise<Subscription[]> {
+  const conditions: string[] = [];
+  const vals: unknown[] = [];
+  if (params.follower) { vals.push(params.follower); conditions.push(`follower_id = $${vals.length}`); }
+  if (params.leader)    { vals.push(params.leader);   conditions.push(`leader_id = $${vals.length}`); }
+  const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+  const rows = await query(`SELECT * FROM subscriptions ${where} ORDER BY created_at DESC`, vals);
+  return rows as Subscription[];
+}
+
+export async function followLeader(
+  followerId: string,
+  leaderId: string,
+  leaderStrategy = "all"
+): Promise<number> {
+  const rows = await query(
+    `INSERT INTO subscriptions (follower_id, leader_id, leader_strategy)
+     VALUES ($1,$2,$3) ON CONFLICT DO NOTHING RETURNING id`,
+    [followerId, leaderId, leaderStrategy]
+  );
+  return rows[0]?.id ?? 0;
+}
+
+export async function unfollowLeader(followerId: string, leaderId: string): Promise<boolean> {
+  const result = await query(
+    `DELETE FROM subscriptions WHERE follower_id = $1 AND leader_id = $2`,
+    [followerId, leaderId]
+  );
+  return (result as { rowCount?: number }).rowCount !== undefined && (result as { rowCount: number }).rowCount > 0;
+}
+
+export async function getFollowers(leaderId: string): Promise<Subscription[]> {
+  const rows = await query(
+    `SELECT * FROM subscriptions WHERE leader_id = $1 AND status = 'ACTIVE' ORDER BY created_at DESC`,
+    [leaderId]
+  );
+  return rows as Subscription[];
+}
+
+// ── Macro Snapshots ─────────────────────────────────────────────────────
+
+export interface MacroSnapshot {
+  id: number;
+  snapshot_json: Record<string, unknown>;
+  risk_tier: string;
+  yield_inverted: boolean;
+  usd_strength: string;
+  gdelt_tone: number | null;
+  fetched_at: string;
+}
+
+export async function getMacroSnapshots(params: {
+  lookback_hours?: number;
+  risk_tier?: string;
+  limit?: number;
+}): Promise<MacroSnapshot[]> {
+  const conditions = [`fetched_at >= NOW() - ($1 || ' hours')::interval`];
+  const vals: unknown[] = [params.lookback_hours ?? 24];
+  if (params.risk_tier) {
+    vals.push(params.risk_tier);
+    conditions.push(`risk_tier = $${vals.length}`);
+  }
+  vals.push(params.limit ?? 100);
+  const rows = await query(
+    `SELECT id, snapshot_json, risk_tier, yield_inverted, usd_strength,
+            gdelt_tone, fetched_at
+     FROM macro_snapshots
+     WHERE ${conditions.join(" AND ")}
+     ORDER BY fetched_at DESC
+     LIMIT $${vals.length}`,
+    vals
+  );
+  return rows as MacroSnapshot[];
+}
+
 // ── Encryption helper (mirrors Python utils/crypto.py) ──────────────────
 
 import crypto from "crypto";

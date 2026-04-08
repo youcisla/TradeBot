@@ -26,6 +26,22 @@ class EntrySnapshot:
     confluence_flags: list[str] = field(default_factory=list)  # ["FVG", "OB", "BOS", ...]
 
 
+class SignalIntent:
+    """Distinguishes discussion-grade signals from execution-grade ones.
+
+    Mirrors AI-Trader's three-message-type model adapted for a single-bot:
+      DISCUSSION  – market analysis / thesis with no execution intent.
+                   Council/debate agents may respond; execution MUST NOT act.
+      STRATEGY   – actionable trade idea after debate/gate. Council or human
+                   review is still recommended before execution.
+      EXECUTION  – ready to trade. RiskAgent and ExecutionAgent should act on it
+                   without further review (subject to RISK_VALIDATION_PROFILE).
+    """
+    DISCUSSION = "DISCUSSION"
+    STRATEGY  = "STRATEGY"
+    EXECUTION = "EXECUTION"
+
+
 @dataclass
 class Signal:
     """A trade signal produced by a strategy."""
@@ -54,3 +70,6 @@ class Signal:
     # Stored in trade_theses by ExecutionAgent when the trade is opened.
     bull_case: str = ""
     bear_case: str = ""
+    # Signal intent: DISCUSSION / STRATEGY / EXECUTION (see SignalIntent).
+    # Controls whether ExecutionAgent may act on this signal without further review.
+    signal_intent: str = SignalIntent.EXECUTION

@@ -8,6 +8,7 @@
   },
   "scripts": {
     "dev": "next dev",
+    "dev:ws": "node --experimental-vm-modules ws-server.js",
     "build": "next build",
     "start": "next start",
     "lint": "tsc --noEmit"
@@ -27,7 +28,8 @@
     "react-markdown": "^10.1.0",
     "recharts": "^3.8.0",
     "swr": "^2.4.1",
-    "three": "^0.183.2"
+    "three": "^0.183.2",
+    "ws": "^8.18.0"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",

@@ -3,7 +3,7 @@
 Wires all agents, runs the time-corrected main loop, handles startup
 reconciliation and graceful shutdown.
 
-Phase 1 uses MockConnector + DEMO_MODE = False — fully runnable end-to-end.
+Real broker mode — MT5Connector only; bot aborts if credentials are missing.
 """
 
 from __future__ import annotations
@@ -25,7 +25,6 @@ from pathlib import Path
 from typing import cast
 
 from broker.connector import BrokerConnector
-from broker.mock_connector import MockConnector
 from config import settings
 from config.symbols import SYMBOLS
 
@@ -112,16 +111,20 @@ def main() -> None:
                 sys.exit(1)
             if _acct_id:
                 db.mark_broker_connected(_acct_id)
-        except ImportError:
-            logger.warning(
-                "MetaTrader5 package not available (requires Python ≤3.13) "
-                "— falling back to MockConnector"
+        except ImportError as exc:
+            logger.critical(
+                "MetaTrader5 package not available — cannot run with real data. "
+                "Install it or ensure your Python environment supports MT5. Error: %s",
+                exc,
             )
-            broker = MockConnector()
-            broker.connect()
+            sys.exit(1)
     else:
-        broker = MockConnector()
-        broker.connect()
+        logger.critical(
+            "Missing broker credentials — set BROKER_ACCOUNT, BROKER_PASSWORD, "
+            "and BROKER_SERVER (or configure an active account in the database). "
+            "Cannot run with real data."
+        )
+        sys.exit(1)
 
     state = StatePersistence(db, broker)
     crucix_agent = CrucixAgent(db=db)
