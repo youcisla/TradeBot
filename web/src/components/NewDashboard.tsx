@@ -1,22 +1,16 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import StatusStrip from "@/components/StatusStrip";
+import TopBar from "@/components/TopBar";
 import SymbolSidebar from "@/components/SymbolSidebar";
-import NewsTicker from "@/components/NewsTicker";
+import AnalyticsPanel from "@/components/AnalyticsPanel";
 import TradingChart from "@/components/TradingChart";
-import TradesWidget from "@/components/TradesWidget";
-
-// ── Layout constants ───────────────────────────────────────────────────────────
-
-const HEADER_H = 48;    // px — matches StatusStrip height
-const SIDEBAR_W = 180;  // px — matches SymbolSidebar width
-
-// ── Page ───────────────────────────────────────────────────────────────────────
+import TradeTable from "@/components/TradeTable";
+import WorldStrip from "@/components/WorldStrip";
 
 export default function DashboardPage() {
   const [symbol, setSymbol] = useState("BTCUSD");
-  const [timeframe, setTimeframe] = useState("M1");
+  const [timeframe, setTimeframe] = useState("H1");
 
   const handleSymbolSelect = useCallback((s: string) => {
     setSymbol(s);
@@ -24,54 +18,50 @@ export default function DashboardPage() {
 
   return (
     <div style={styles.root}>
-      {/* Fixed header */}
-      <StatusStrip />
+      <TopBar />
 
-      {/* Left sidebar */}
-      <SymbolSidebar selected={symbol} onSelect={handleSymbolSelect} />
+      <div style={styles.body}>
+        {/* Left: symbol browser */}
+        <SymbolSidebar selected={symbol} onSelect={handleSymbolSelect} />
 
-      {/* Main content area */}
-      <main style={styles.main}>
-        {/* News ticker */}
-        <NewsTicker symbol={symbol} />
-
-        {/* Timeframe selector */}
-        <div style={styles.tfBar}>
-          <span style={styles.tfLabel}>Chart</span>
-          <div style={styles.tfRow}>
-            {(["M1", "M5", "M15", "M30", "H1", "H4", "D1", "W1"] as const).map((tf) => (
-              <button
-                key={tf}
-                onClick={() => setTimeframe(tf)}
-                style={{
-                  ...styles.tfBtn,
-                  ...(timeframe === tf ? styles.tfBtnActive : {}),
-                }}
-              >
-                {tf}
-              </button>
-            ))}
+        {/* Center: chart + trades */}
+        <div style={styles.center}>
+          {/* Chart controls bar */}
+          <div style={styles.tfBar}>
+            <div style={styles.tfRow}>
+              {(["M1", "M5", "M15", "M30", "H1", "H4", "D1", "W1"] as const).map((tf) => (
+                <button
+                  key={tf}
+                  onClick={() => setTimeframe(tf)}
+                  style={{
+                    ...styles.tfBtn,
+                    ...(timeframe === tf ? styles.tfBtnActive : {}),
+                  }}
+                >
+                  {tf}
+                </button>
+              ))}
+            </div>
+            <span style={styles.symLabel}>{symbol}</span>
           </div>
-          <span style={styles.symLabel}>{symbol}</span>
-        </div>
 
-        {/* Chart + Trades stacked */}
-        <div style={styles.content}>
-          {/* Chart area */}
+          {/* Chart */}
           <div style={styles.chartArea}>
-            <TradingChart
-              symbol={symbol}
-              timeframe={timeframe}
-              count={500}
-            />
+            <TradingChart symbol={symbol} timeframe={timeframe} count={500} />
           </div>
 
-          {/* Trades widget */}
-          <div style={styles.tradesArea}>
-            <TradesWidget />
+          {/* Trade table */}
+          <div style={styles.tableArea}>
+            <TradeTable />
           </div>
         </div>
-      </main>
+
+        {/* Right: analytics */}
+        <AnalyticsPanel />
+      </div>
+
+      {/* Bottom: world strip */}
+      <WorldStrip />
     </div>
   );
 }
@@ -81,33 +71,31 @@ const styles: Record<string, React.CSSProperties> = {
     display: "flex",
     flexDirection: "column",
     minHeight: "100vh",
-    background: "#FFFFFF",
+    background: "#F8F8F8",
   },
-  main: {
-    marginTop: HEADER_H,
-    marginLeft: SIDEBAR_W,
+  body: {
     display: "flex",
-    flexDirection: "column",
     flex: 1,
     minHeight: 0,
-    overflow: "hidden",
+    marginTop: 48,
+  },
+  center: {
+    flex: 1,
+    display: "flex",
+    flexDirection: "column",
+    minWidth: 0,
+    marginLeft: 180,
+    marginRight: 264,
   },
   tfBar: {
     display: "flex",
     alignItems: "center",
-    gap: 14,
+    gap: 12,
     padding: "0 16px",
     background: "#FFFFFF",
-    borderBottom: "1px solid #F5F5F7",
-    height: 38,
+    borderBottom: "1px solid #F0F0F0",
+    height: 36,
     flexShrink: 0,
-  },
-  tfLabel: {
-    fontFamily: "'IBM Plex Mono', monospace",
-    fontSize: 10,
-    color: "#9CA3AF",
-    textTransform: "uppercase",
-    letterSpacing: "0.06em",
   },
   tfRow: {
     display: "flex",
@@ -117,7 +105,7 @@ const styles: Record<string, React.CSSProperties> = {
     background: "none",
     border: "none",
     borderRadius: 3,
-    padding: "3px 7px",
+    padding: "3px 8px",
     cursor: "pointer",
     fontFamily: "'IBM Plex Mono', monospace",
     fontSize: 11,
@@ -125,7 +113,7 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 500,
   },
   tfBtnActive: {
-    background: "#F5F5F7",
+    background: "#F0F0F0",
     color: "#111111",
     fontWeight: 700,
   },
@@ -136,26 +124,20 @@ const styles: Record<string, React.CSSProperties> = {
     color: "#111111",
     marginLeft: "auto",
   },
-  content: {
-    display: "flex",
-    flexDirection: "column",
-    flex: 1,
-    minHeight: 0,
-    overflow: "hidden",
-  },
   chartArea: {
     flex: "1 1 60%",
     minHeight: 0,
     background: "#0D0D0F",
     overflow: "hidden",
   },
-  tradesArea: {
+  tableArea: {
     flex: "0 0 40%",
-    minHeight: 200,
-    maxHeight: 340,
+    minHeight: 180,
+    maxHeight: 380,
     overflow: "hidden",
     display: "flex",
     flexDirection: "column",
-    borderTop: "1px solid #F5F5F7",
+    background: "#FFFFFF",
+    borderTop: "1px solid #F0F0F0",
   },
 };

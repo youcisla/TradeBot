@@ -247,6 +247,10 @@ MAX_SPREAD_PIPS: float = float(os.getenv("MAX_SPREAD_PIPS", "8.0"))
 DRAWDOWN_COOLDOWN_HOURS: int = int(os.getenv("DRAWDOWN_COOLDOWN_HOURS", "24"))
 MIN_LOT_SIZE: float = float(os.getenv("MIN_LOT_SIZE", "0.01"))
 MAX_LOT_SIZE: float = float(os.getenv("MAX_LOT_SIZE", "50.0"))
+# Fixed lot size — when set > 0, ALL trades are forced to this exact size,
+# bypassing the risk calculator's dynamic lot sizing entirely.
+# Set via env: FIXED_LOT_SIZE=0.01
+FIXED_LOT_SIZE: float = float(os.getenv("FIXED_LOT_SIZE", "0.0"))
 
 # ── Scalp-specific risk limits ───────────────────────────────────────────────
 # Scalp trades (scalp_m5 strategy) use tighter SL → larger lots for same $ risk.

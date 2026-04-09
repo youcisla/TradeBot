@@ -53,7 +53,7 @@ export default function TradesWidget() {
 
   const fetchTrades = useCallback(async () => {
     try {
-      const r = await fetch("/api/trades?all=true&limit=500");
+      const r = await fetch("/api/broker/trades?days=30");
       if (r.ok) {
         const data = await r.json();
         if (Array.isArray(data)) setTrades(data);

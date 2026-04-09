@@ -116,19 +116,9 @@ class ExecutionAgent:
                     )
                 return None
 
-        # Duplicate guard: fetch live positions directly from MT5.
-        # Avoids DB-lag where a freshly-opened trade isn't yet committed.
-        live_positions = self._broker.get_open_positions()
-        for pos in live_positions:
-            if (pos.symbol == signal.symbol
-                    and pos.direction == signal.direction
-                    and (pos.comment or "") == signal.strategy):
-                logger.warning(
-                    "EXEC REJECT [DUPLICATE]: %s %s %s already open (ticket %s)",
-                    signal.symbol, signal.direction, signal.strategy, pos.ticket,
-                )
-                return None
-
+        # With FIXED_LOT_SIZE enforced at the broker connector, all trades are
+        # 0.01 lot. Unlimited concurrent trades are allowed — each gets its own
+        # MT5 ticket and cannot override or close another.
         lot_size = self._calc_size(signal)
         if lot_size < settings.MIN_LOT_SIZE:
             logger.warning("EXEC REJECT: lot_size %.2f below minimum", lot_size)

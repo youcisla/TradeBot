@@ -616,7 +616,21 @@ class MT5Connector(BrokerConnector):
         """Normalize volume to broker min/max/step rules.
 
         Returns 0.0 when the requested lot cannot produce a valid volume.
+
+        Hard cap: FIXED_LOT_SIZE from settings — no trade may exceed this
+        regardless of what the risk council or position sizer calculated.
         """
+        # ── Absolute safety cap — fixed lot enforcement ──────────────────────
+        fixed_lot = getattr(settings, "FIXED_LOT_SIZE", None)
+        if fixed_lot is not None and fixed_lot > 0:
+            if requested > fixed_lot:
+                logger.warning(
+                    "FIXED_LOT_SIZE cap applied for %s: requested %.4f → %.4f",
+                    symbol, requested, fixed_lot,
+                )
+            requested = min(requested, fixed_lot)
+        # ─────────────────────────────────────────────────────────────────────
+
         if requested <= 0:
             return 0.0
 

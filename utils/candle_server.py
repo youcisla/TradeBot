@@ -9,6 +9,7 @@ Endpoints
 GET /candles?symbol=EURUSD&timeframe=H1&count=500
 GET /fibonacci?symbol=EURUSD
 GET /api/agent-events?limit=20
+GET /trades?days=7          — open + closed trades directly from MT5
 GET /health
 """
 
@@ -17,10 +18,12 @@ from __future__ import annotations
 import json
 import logging
 import threading
+from datetime import datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 from typing import Any, Optional
 
+import MetaTrader5 as mt5
 import psycopg2.extras
 from database.db import Database
 
@@ -60,6 +63,10 @@ class _CandleHandler(BaseHTTPRequestHandler):
 
         if parsed.path == "/fibonacci":
             self._handle_fibonacci(parsed.query)
+            return
+
+        if parsed.path == "/trades":
+            self._handle_trades(parsed.query)
             return
 
         if parsed.path != "/candles":
@@ -165,6 +172,83 @@ class _CandleHandler(BaseHTTPRequestHandler):
             _db._put_conn(conn)
 
         self._json_response(200, {"events": events})
+
+    def _handle_trades(self, query: str) -> None:
+        """Serve open positions + recent closed trades directly from MT5."""
+        params = parse_qs(query)
+        days = 7
+        try:
+            days = max(1, int((params.get("days") or ["7"])[0]))
+        except ValueError:
+            pass
+
+        if _broker is None:
+            self._json_response(503, {"error": "Broker not connected"})
+            return
+
+        try:
+            # ── Open positions (raw MT5 — has `time` for open timestamp) ───
+            raw_positions = mt5.positions_get() or []
+            open_trades = []
+            for pos in raw_positions:
+                open_time_ts = getattr(pos, "time", 0) or 0
+                open_trades.append({
+                    "id": str(getattr(pos, "ticket", 0) or 0),
+                    "symbol": str(getattr(pos, "symbol", "") or ""),
+                    "direction": "BUY" if getattr(pos, "type", 1) == 0 else "SELL",
+                    "entry_price": float(getattr(pos, "price_open", 0) or 0),
+                    "lot_size": float(getattr(pos, "volume", 0) or 0),
+                    "stop_loss": float(getattr(pos, "sl", 0) or 0),
+                    "take_profit_1": float(getattr(pos, "tp", 0) or 0),
+                    "pnl": float(getattr(pos, "profit", 0) or 0),
+                    "status": "OPEN",
+                    "open_time": datetime.fromtimestamp(open_time_ts, tz=timezone.utc).isoformat()
+                        if open_time_ts else None,
+                })
+
+            # ── Closed trades from deal history ────────────────────────────
+            now = datetime.now(timezone.utc)
+            start = now - timedelta(days=days)
+            deals = mt5.history_deals_get(start, now)
+            closed_trades: dict[int, dict] = {}
+
+            if deals:
+                for deal in deals:
+                    ticket = int(getattr(deal, "position", 0) or 0)
+                    if not ticket:
+                        continue
+                    if ticket not in closed_trades:
+                        closed_trades[ticket] = {
+                            "id": str(ticket),
+                            "symbol": str(getattr(deal, "symbol", "") or ""),
+                            "direction": "BUY" if getattr(deal, "type", 1) == 0 else "SELL",
+                            "entry_price": float(getattr(deal, "price", 0) or 0),
+                            "lot_size": float(getattr(deal, "volume", 0) or 0),
+                            "stop_loss": 0.0,
+                            "take_profit_1": 0.0,
+                            "pnl": 0.0,
+                            "status": "CLOSED",
+                            "open_time": datetime.fromtimestamp(
+                                getattr(deal, "time", 0) or 0, tz=timezone.utc
+                            ).isoformat(),
+                            "close_time": None,
+                        }
+                    # Accumulate P&L across all deals in this position
+                    closed_trades[ticket]["pnl"] += float(getattr(deal, "profit", 0) or 0)
+                    closed_trades[ticket]["close_time"] = datetime.fromtimestamp(
+                        getattr(deal, "time", 0) or 0, tz=timezone.utc
+                    ).isoformat()
+
+            # Merge, deduplicate
+            all_trades = list(open_trades)
+            for t in closed_trades.values():
+                if not any(str(t["id"]) == str(x["id"]) for x in all_trades):
+                    all_trades.append(t)
+
+            self._json_response(200, all_trades)
+        except Exception as exc:
+            logger.warning("trades handler failed: %s", exc)
+            self._json_response(500, {"error": str(exc)})
 
     def _handle_fibonacci(self, query: str) -> None:
         """Serve Fibonacci levels from the latest ICT context."""
