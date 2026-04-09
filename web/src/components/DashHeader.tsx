@@ -3,22 +3,52 @@
 import { useAppShell } from "@/components/AppShell";
 import React, { useState, useEffect } from "react";
 
+const SYMBOLS = ['EURUSD', 'XAUUSD', 'BTCUSD'];
+
+interface Ticker { symbol: string; price: string; change: number; }
+
+async function fetchLiveTickers(): Promise<Ticker[]> {
+  try {
+    const results = await Promise.all(
+      SYMBOLS.map(async (symbol) => {
+        const res = await fetch(`/api/candles?symbol=${symbol}&timeframe=M1&count=2`);
+        if (!res.ok) return { symbol, price: '—', change: 0 };
+        const data = await res.json();
+        if (!data.candles || data.candles.length < 2) return { symbol, price: '—', change: 0 };
+        const curr = data.candles[data.candles.length - 1];
+        const prev = data.candles[data.candles.length - 2];
+        const currClose = curr.c;
+        const prevClose = prev.c;
+        const changePct = prevClose > 0 ? ((currClose - prevClose) / prevClose * 100) : 0;
+        return {
+          symbol,
+          price: currClose >= 100 ? currClose.toFixed(2) : currClose >= 1 ? currClose.toFixed(4) : currClose.toFixed(5),
+          change: parseFloat(changePct.toFixed(2)),
+        };
+      })
+    );
+    return results;
+  } catch {
+    return SYMBOLS.map(s => ({ symbol: s, price: '—', change: 0 }));
+  }
+}
+
 export default function DashHeader() {
   const { status, isRunning } = useAppShell();
-  const [tickers, setTickers] = useState<{symbol: string, price: string, change: number}[]>([
-    { symbol: 'EURUSD', price: '1.0842', change: 0.03 },
-    { symbol: 'XAUUSD', price: '2341.20', change: -0.12 },
-    { symbol: 'BTCUSD', price: '67240', change: 1.2 },
+  const [tickers, setTickers] = useState<Ticker[]>([
+    { symbol: 'EURUSD', price: '—', change: 0 },
+    { symbol: 'XAUUSD', price: '—', change: 0 },
+    { symbol: 'BTCUSD', price: '—', change: 0 },
   ]);
 
-  // Simulate ticker updates
   useEffect(() => {
-    const interval = setInterval(() => {
-      setTickers(prev => prev.map(t => ({
-        ...t,
-        change: t.change + (Math.random() * 0.1 - 0.05),
-      })));
-    }, 10000);
+    fetchLiveTickers().then(setTickers);
+    const interval = setInterval(async () => {
+      setTickers(prev => {
+        fetchLiveTickers().then(setTickers);
+        return prev;
+      });
+    }, 8000);
     return () => clearInterval(interval);
   }, []);
 

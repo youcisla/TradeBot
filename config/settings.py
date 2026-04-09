@@ -140,6 +140,11 @@ COUNCIL_MAX_REVIEWS_PER_LOOP: int = int(os.getenv("COUNCIL_MAX_REVIEWS_PER_LOOP"
 COUNCIL_ADVISORY_REJECTION_CONF_PENALTY: float = float(
     os.getenv("COUNCIL_ADVISORY_REJECTION_CONF_PENALTY", "0.08")
 )
+# Advisory mode viability floor — any signal with council vote below this
+# is fully blocked rather than penalized and continued.
+COUNCIL_ADVISORY_MIN_VIABILITY: float = float(
+    os.getenv("COUNCIL_ADVISORY_MIN_VIABILITY", "0.45")
+)
 # Expert vote weights — must sum to 1.0.
 COUNCIL_ICT_WEIGHT: float    = float(os.getenv("COUNCIL_ICT_WEIGHT",    "0.50"))
 COUNCIL_DANIAL_WEIGHT: float = float(os.getenv("COUNCIL_DANIAL_WEIGHT", "0.17"))
@@ -306,6 +311,28 @@ FAST_LANE_CLOSE_ON_FULL_REJECT: bool = (
 INSTANT_ENTRY_ENABLED: bool = os.getenv("INSTANT_ENTRY_ENABLED", "true").lower() == "true"
 INSTANT_ENTRY_MIN_CONFIDENCE: float = float(os.getenv("INSTANT_ENTRY_MIN_CONFIDENCE", "0.78"))
 
+# ── Sniper Entry (Fibonacci pullback gate) ───────────────────────────────
+# Replaces the Council/DeepSeek gate with a deterministic Fibonacci-based
+# confidence split:
+#   conf >= SNIPER_CONF_THRESHOLD  → instant execution (no waiting)
+#   conf <  SNIPER_CONF_THRESHOLD  → wait for pullback into Fibonacci zone
+#     → if price pulls back to a valid retracement (38.2%–78.6%) → execute
+#     → if timeout reached or price moves past zone → skip
+SNIPER_ENTRY_ENABLED: bool = os.getenv("SNIPER_ENTRY_ENABLED", "true").lower() == "true"
+# Minimum ICT confidence to qualify for instant (no-wait) execution.
+SNIPER_CONF_THRESHOLD: float = float(os.getenv("SNIPER_CONF_THRESHOLD", "0.55"))
+# Maximum time to wait on watchlist for a pullback before skipping.
+SNIPER_TIMEOUT_MINUTES: float = float(os.getenv("SNIPER_TIMEOUT_MINUTES", "30.0"))
+# Maximum distance price can move past entry zone before signal is skipped.
+# Expressed as a multiple of ATR.  BUY: price above entry + this × ATR = stale.
+# SELL: price below entry - this × ATR = stale.
+SNIPER_MAX_ENTRY_ATR_DISTANCE: float = float(os.getenv("SNIPER_MAX_ENTRY_ATR_DISTANCE", "0.55"))
+# Fibonacci retracement depths accepted for sniper entry.
+# "golden_zone" (0.618–0.705) is optimal; "acceptable" (0.382–0.618) also valid.
+# Deeper pullbacks ("deep" = 0.705–0.786) are riskier but still allowed.
+SNIPER_FIB_MIN_DEPTH: str = os.getenv("SNIPER_FIB_MIN_DEPTH", "acceptable")
+SNIPER_FIB_MAX_DEPTH: str = os.getenv("SNIPER_FIB_MAX_DEPTH", "deep")
+
 # Confidence-to-size mapping (borderline setups are sized down, not discarded).
 SIZE_SCALE_VERY_LOW_THRESHOLD: float = float(
     os.getenv("SIZE_SCALE_VERY_LOW_THRESHOLD", "0.45")
@@ -322,10 +349,10 @@ SIZE_SCALE_MEDIUM: float = float(os.getenv("SIZE_SCALE_MEDIUM", "0.75"))
 SIZE_SCALE_FULL: float = float(os.getenv("SIZE_SCALE_FULL", "1.00"))
 
 # Dynamic confidence floors by regime and asset class.
-MIN_CONF_TRENDING: float = float(os.getenv("MIN_CONF_TRENDING", "0.48"))
-MIN_CONF_RANGING: float = float(os.getenv("MIN_CONF_RANGING", "0.58"))
-MIN_CONF_VOLATILE: float = float(os.getenv("MIN_CONF_VOLATILE", "0.62"))
-MIN_CONF_UNKNOWN: float = float(os.getenv("MIN_CONF_UNKNOWN", "0.55"))
+MIN_CONF_TRENDING: float = float(os.getenv("MIN_CONF_TRENDING", "0.40"))
+MIN_CONF_RANGING: float = float(os.getenv("MIN_CONF_RANGING", "0.40"))
+MIN_CONF_VOLATILE: float = float(os.getenv("MIN_CONF_VOLATILE", "0.40"))
+MIN_CONF_UNKNOWN: float = float(os.getenv("MIN_CONF_UNKNOWN", "0.40"))
 MIN_CONF_CRYPTO_BONUS: float = float(os.getenv("MIN_CONF_CRYPTO_BONUS", "0.03"))
 MIN_CONF_EXOTIC_BONUS: float = float(os.getenv("MIN_CONF_EXOTIC_BONUS", "0.04"))
 
@@ -508,7 +535,7 @@ ORCHESTRATION_ADAPTIVE_WORKERS_ENABLED: bool = (
 )
 # Performance goals (ms) used for feedback control and bottleneck alerts.
 ORCHESTRATION_TARGET_SCAN_MS: float = float(
-    os.getenv("ORCHESTRATION_TARGET_SCAN_MS", "1500")
+    os.getenv("ORCHESTRATION_TARGET_SCAN_MS", "15000")
 )
 ORCHESTRATION_TARGET_RANK_MS: float = float(
     os.getenv("ORCHESTRATION_TARGET_RANK_MS", "200")
@@ -517,7 +544,7 @@ ORCHESTRATION_TARGET_EXEC_MS: float = float(
     os.getenv("ORCHESTRATION_TARGET_EXEC_MS", "800")
 )
 ORCHESTRATION_TARGET_TOTAL_MS: float = float(
-    os.getenv("ORCHESTRATION_TARGET_TOTAL_MS", "3500")
+    os.getenv("ORCHESTRATION_TARGET_TOTAL_MS", "60000")
 )
 # Hard cap on ranked signals processed per loop to prevent runaway loops.
 ORCHESTRATION_MAX_SIGNALS_PER_ITERATION: int = int(
@@ -541,16 +568,16 @@ ORCHESTRATION_HARD_BUDGET_ENABLED: bool = (
     os.getenv("ORCHESTRATION_HARD_BUDGET_ENABLED", "true").lower() == "true"
 )
 ORCHESTRATION_MAX_SCAN_MS: float = float(
-    os.getenv("ORCHESTRATION_MAX_SCAN_MS", "25000")
+    os.getenv("ORCHESTRATION_MAX_SCAN_MS", "90000")
 )
 ORCHESTRATION_MAX_RANK_MS: float = float(
-    os.getenv("ORCHESTRATION_MAX_RANK_MS", "300")
+    os.getenv("ORCHESTRATION_MAX_RANK_MS", "1000")
 )
 ORCHESTRATION_MAX_EXEC_MS: float = float(
-    os.getenv("ORCHESTRATION_MAX_EXEC_MS", "1300")
+    os.getenv("ORCHESTRATION_MAX_EXEC_MS", "3000")
 )
 ORCHESTRATION_MAX_ITERATION_MS: float = float(
-    os.getenv("ORCHESTRATION_MAX_ITERATION_MS", "30000")
+    os.getenv("ORCHESTRATION_MAX_ITERATION_MS", "120000")
 )
 # Safety margin: when remaining execution budget is below this threshold,
 # skip council reviews to preserve order-placement latency.

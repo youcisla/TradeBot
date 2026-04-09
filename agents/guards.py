@@ -82,7 +82,13 @@ class SymbolWhitelistGuard(Guard):
         "EURUSD", "GBPUSD", "USDJPY", "AUDUSD", "USDCAD",
         "NZDUSD", "USDCHF", "XAUUSD", "GBPJPY", "EURJPY",
         "AUDJPY", "EURAUD", "GBPAUD", "EURGBP", "USOIL",
-        "US500", "US30", "USTEC", "GER40", "BTCUSD",
+        "US500", "US30", "USTEC", "GER40",
+        # Crypto
+        "BTCUSD", "ETHUSD", "BNBUSD", "SOLUSD", "XRPUSD",
+        "ADAUSD", "DOTUSD", "LTCUSD", "EOSUSD", "XLMUSD",
+        "TRXUSD",
+        # Exotic USD pairs
+        "USDHKD", "USDSGD", "USDCNH",
     }
 
     def __init__(self, allowed: set[str] | None = None) -> None:
@@ -340,9 +346,8 @@ class VolumeFilterGuard(Guard):
         # Most recent candle = current bar
         current_vol = candles[-1].tick_volume if hasattr(candles[-1], "tick_volume") else 0.0
         if current_vol <= 0:
-            return False, (
-                f"VolumeFilterGuard: current volume is 0 for {signal.symbol}"
-            )
+            # Volume data unavailable (OTC forex / demo broker) — skip guard silently
+            return True, ""
 
         # Rolling average of all but the current bar (to avoid look-ahead bias)
         hist_vols = [c.tick_volume if hasattr(c, "tick_volume") else 0.0 for c in candles[:-1]]

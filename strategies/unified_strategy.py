@@ -40,9 +40,12 @@ class UnifiedStrategy(BaseStrategy):
                 logger.exception("UnifiedStrategy component %s failed", component.name)
                 continue
             if signal is None:
+                logger.debug("UnifiedStrategy: %s returned None", component.name)
                 continue
             if signal.direction not in {"BUY", "SELL"}:
+                logger.debug("UnifiedStrategy: %s returned direction=%r (skipping)", component.name, signal.direction)
                 continue
+            logger.info("UnifiedStrategy: %s returned BUY/SELL signal conf=%.3f", component.name, signal.confidence)
             candidates.append(signal)
 
         if not candidates:

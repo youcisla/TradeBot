@@ -73,7 +73,13 @@ class ICTStrategy(BaseStrategy):
 
     def detect(self, context: MarketContext) -> Optional[Signal]:
         try:
-            return self._detect_inner(context)
+            result = self._detect_inner(context)
+            if result is not None:
+                logger.info("ICTStrategy.detect: %s %s %s conf=%.3f — SIGNAL BUILT",
+                            result.symbol, result.direction, result.strategy, result.confidence)
+            else:
+                logger.debug("ICTStrategy.detect: %s returned None", context.symbol)
+            return result
         except Exception:
             logger.exception("ICTStrategy.detect failed on %s", context.symbol)
             return None

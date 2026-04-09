@@ -14,7 +14,6 @@ import logging
 import os
 import signal
 import sys
-import threading
 import time
 
 # Enable ANSI colour codes on Windows CMD / PowerShell
@@ -35,7 +34,6 @@ from filters.data_validator import DataValidationError
 from state.persistence import StatePersistence
 from models.market_data import MarketContext
 from models.signal import Signal
-from strategies.sma_crossover import SmaCrossoverStrategy
 from strategies.ict_strategy import ICTStrategy
 from strategies.unified_strategy import UnifiedStrategy
 from strategies.plugin_loader import load_strategy_plugins
@@ -49,9 +47,9 @@ from agents.trade_manager import TradeManagerAgent
 from agents.learning_agent import LearningAgent
 from agents.logging_agent import LoggingAgent
 from agents.reflector import Reflector
-from agents.council_agent import CouncilAgent
+from agents.council_agent import CouncilAgent  # noqa: F401 — kept for reference, disabled
 from agents.crucix_agent import CrucixAgent
-from agents.deepseek_strategy import DeepSeekStrategy
+from agents.sniper_entry_guard import SniperEntryGuard, SniperVerdict
 
 from utils import telegram_bot
 from utils import candle_server
@@ -171,21 +169,21 @@ def main() -> None:
     reflector = Reflector()
     learning.set_reflector(reflector)
 
-    # ── 4. Unified strategy — one connected decision pipeline
-    deepseek_strategy = DeepSeekStrategy()
+    # ── 4. ICT-only unified strategy (ICT/SMC is the sole signal source)
+    # deepseek_strategy = DeepSeekStrategy()  # DISABLED — ICT-only mode
+    # sma_strategy = SmaCrossoverStrategy()   # DISABLED — ICT-only mode
     ict_strategy = ICTStrategy(broker=broker, db=db, min_confidence=35.0)
-    sma_strategy = SmaCrossoverStrategy()
     plugin_strategies = load_strategy_plugins(db=db, broker=broker)
-    base_strategies = [deepseek_strategy, ict_strategy, sma_strategy]
+    base_strategies = [ict_strategy]
     unified_strategy = UnifiedStrategy(base_strategies + plugin_strategies)
     strategies = [unified_strategy]
     if plugin_strategies:
         logger.info(
-            "Unified strategy mode: deepseek + ict + sma + %d plugin(s) in one connected engine",
+            "Unified strategy mode: ICT-only + %d plugin(s)",
             len(plugin_strategies),
         )
     else:
-        logger.info("Unified strategy mode: deepseek + ict + sma in one connected engine")
+        logger.info("Unified strategy mode: ICT-only")
 
     # ── Weekend crypto strategies — multi-TF ICT for BTCUSD ─────────────
     # During the forex weekend, only crypto trades.  Three ICT instances
@@ -202,7 +200,7 @@ def main() -> None:
         entry_timeframe="H4", entry_candle_count=150,
     )
     weekend_unified_strategy = UnifiedStrategy([
-        deepseek_strategy,
+        # deepseek_strategy,  # DISABLED — ICT-only mode
         ict_btc_h4w1,
         ict_strategy,
         ict_btc_h1d1,
@@ -307,22 +305,40 @@ def main() -> None:
     )
     opportunity_lifecycle = OpportunityLifecycleManager()
 
-    # ── Trading Council (algorithmic quality gate) ────────────────────────
-    council: CouncilAgent | None = None
-    if settings.COUNCIL_ENABLED:
-        council = CouncilAgent()
-    # Always log the Council state regardless of the flag
-    council_state = "ENABLED" if settings.COUNCIL_ENABLED else "DISABLED"
-    logger.info(
-        "Trading Council %s (min confidence: %.0f%%)",
-        council_state,
-        settings.COUNCIL_MIN_CONFIDENCE * 100,
-    )
-    log_agent.record(
-        "STARTUP",
-        f"Trading Council {council_state} — 3-expert algorithmic gate "
-        f"(min conf {settings.COUNCIL_MIN_CONFIDENCE:.0%})",
-    )
+    # ── Sniper Entry Guard (Fibonacci pullback gate — replaces Council) ───
+    # ICT-only mode: confidence >= SNIPER_CONF_THRESHOLD → instant execute
+    #                 confidence <  SNIPER_CONF_THRESHOLD → wait for Fibonacci pullback
+    sniper_guard: SniperEntryGuard | None = None
+    if settings.SNIPER_ENTRY_ENABLED:
+        sniper_guard = SniperEntryGuard(
+            broker=broker,
+            threshold=settings.SNIPER_CONF_THRESHOLD,
+            timeout_minutes=settings.SNIPER_TIMEOUT_MINUTES,
+            max_entry_atr_distance=settings.SNIPER_MAX_ENTRY_ATR_DISTANCE,
+            fib_min_depth=settings.SNIPER_FIB_MIN_DEPTH,
+            fib_max_depth=settings.SNIPER_FIB_MAX_DEPTH,
+        )
+        logger.info(
+            "SniperEntryGuard ENABLED (threshold=%.0f%%, timeout=%.0fmin, "
+            "fib_depth=[%s–%s])",
+            settings.SNIPER_CONF_THRESHOLD * 100,
+            settings.SNIPER_TIMEOUT_MINUTES,
+            settings.SNIPER_FIB_MIN_DEPTH,
+            settings.SNIPER_FIB_MAX_DEPTH,
+        )
+        log_agent.record(
+            "STARTUP",
+            f"SniperEntryGuard ENABLED — threshold={settings.SNIPER_CONF_THRESHOLD:.0%} "
+            f"timeout={settings.SNIPER_TIMEOUT_MINUTES:.0f}min "
+            f"fib=[{settings.SNIPER_FIB_MIN_DEPTH},{settings.SNIPER_FIB_MAX_DEPTH}]",
+        )
+    else:
+        logger.info("SniperEntryGuard DISABLED")
+        log_agent.record("STARTUP", "SniperEntryGuard DISABLED")
+
+    # ── Trading Council (DISABLED — ICT-only mode uses SniperEntryGuard) ──
+    # council: CouncilAgent | None = None  # DISABLED
+    council: CouncilAgent | None = None  # kept for reference; never instantiated
 
     # ── 7. Startup reconciliation ───────────────────────────────────────
     trade_manager.load_open_trades()
@@ -491,6 +507,7 @@ def main() -> None:
                 learning=learning,
                 log_agent=log_agent,
                 council=council,
+                sniper_guard=sniper_guard,
                 symbol_event_tracker=symbol_event_tracker,
                 last_scan_ts=_last_scan_ts,
                 scan_cooldown=_active_scan_cooldown,
@@ -506,8 +523,15 @@ def main() -> None:
                 scan_workers=scan_workers,
                 risk_reject_reason_counts=_risk_reject_reason_counts,
             )
+        except (KeyboardInterrupt, SystemExit):
+            raise
         except Exception:
-            logger.exception("Unhandled error in main loop iteration %d", loop_count)
+            _metrics["iter_consecutive_failures"] = _metrics.get("iter_consecutive_failures", 0) + 1
+            _fail_count = _metrics["iter_consecutive_failures"]
+            logger.exception("Unhandled error in main loop iteration %d (consecutive=%d)", loop_count, _fail_count)
+            if _fail_count >= 3:
+                logger.error("CRITICAL: %d consecutive main-loop failures — consider pausing the bot", _fail_count)
+                log_agent.record("CRITICAL", f"{_fail_count} consecutive loop failures")
 
         loop_elapsed_ms = (time.monotonic() - loop_start) * 1000.0
         profiler.record(
@@ -949,6 +973,25 @@ def _update_heartbeat(
     daily_pnl = report.get("total_pnl", 0.0)
     state = "paused" if telegram_bot.is_paused() else "running"
 
+    # Check for untracked MT5 positions (equity/balance gap with 0 open trades)
+    if open_count == 0 and abs(equity - balance) > 0.01:
+        try:
+            mt5_positions = broker.get_open_positions()
+            if mt5_positions:
+                for pos in mt5_positions:
+                    logger.warning(
+                        "UNTRACKED MT5 POSITION: ticket=%s symbol=%s volume=%s profit=%s",
+                        pos.ticket, pos.symbol, pos.lot_size, pos.profit,
+                    )
+            else:
+                logger.warning(
+                    "EQUITY/BALANCE MISMATCH: equity=%.2f balance=%.2f gap=%.2f — "
+                    "no MT5 positions found; possible stale MT5 data",
+                    equity, balance, equity - balance,
+                )
+        except Exception as exc:
+            logger.warning("Equity check failed: %s", exc)
+
     # Broker connection metadata
     broker_account = ""
     broker_server = ""
@@ -994,7 +1037,8 @@ def _run_iteration(
     trade_manager: TradeManagerAgent,
     learning: LearningAgent,
     log_agent: LoggingAgent,
-    council: CouncilAgent | None,
+    council: CouncilAgent | None,  # noqa: F841 — kept for call signature compatibility
+    sniper_guard: SniperEntryGuard | None,
     symbol_event_tracker: SymbolEventTracker,
     last_scan_ts: dict[str, float],
     scan_cooldown: float,
@@ -1099,7 +1143,7 @@ def _run_iteration(
         )
 
     metrics["loops"] = metrics.get("loops", 0) + 1
-    metrics["council_reviews_this_loop"] = 0
+    # council_reviews_this_loop = 0  # DISABLED — ICT-only mode
 
     # ── Skip new signals if paused ───────────────────────────────────────
     if telegram_bot.is_paused():
@@ -1111,7 +1155,7 @@ def _run_iteration(
     # PHASE 1: Scan ALL symbols — collect every signal
     # ══════════════════════════════════════════════════════════════════════
     all_signals: list[Signal] = []
-    # Map signal → its MarketContext so the council has candles + indicators
+    # Map signal → its MarketContext for the sniper guard
     signal_contexts: dict[int, MarketContext] = {}  # id(signal) → MarketContext
 
     # Symbols with open positions — skip strategy scan (saves compute,
@@ -1387,6 +1431,45 @@ def _run_iteration(
     # ══════════════════════════════════════════════════════════════════════
     # PHASE 2: Rank by confidence (highest first) and deduplicate
     # ══════════════════════════════════════════════════════════════════════
+    # ── Advance sniper watchlist ─────────────────────────────────────────
+    # on_iteration() returns list of (verdict, candidate) for non-HOLD entries.
+    # Candidates are still on the watchlist until we process them here.
+    if sniper_guard is not None and sniper_guard.get_watchlist_size() > 0:
+        _sym_ctx: dict[str, MarketContext] = {}
+        for _ctx in signal_contexts.values():
+            if _ctx is not None:
+                _sym_ctx[_ctx.symbol] = _ctx
+        _sniper_changes = sniper_guard.on_iteration(_sym_ctx)
+        for _verdict, _candidate in _sniper_changes:
+            logger.info(
+                "SniperGuard watchlist: %s — %s %s (fib_depth=%s age=%.0fs)",
+                _verdict.value, _candidate.symbol, _candidate.direction,
+                _candidate.fib_depth,
+                time.time() - _candidate.added_at,
+            )
+            if _verdict == SniperVerdict.SNIPER_CONFIRMED:
+                # Add signal back to all_signals so it enters the ranked phase
+                all_signals.append(_candidate.signal)
+                _ctx = _sym_ctx.get(_candidate.symbol)
+                if _ctx is not None:
+                    signal_contexts[id(_candidate.signal)] = _ctx
+                logger.info(
+                    "SniperGuard SNIPER_CONFIRMED: %s %s re-added to signals "
+                    "(fib_depth=%s) — will be ranked this iteration",
+                    _candidate.symbol, _candidate.direction, _candidate.fib_depth,
+                )
+            # Remove processed (confirmed/expired/skipped) candidates from watchlist
+            sniper_guard.remove(_candidate.symbol, _candidate.direction)
+        # Prune expired from watchlist
+        for _expired in sniper_guard.prune_expired():
+            logger.info(
+                "SniperGuard EXPIRED: %s %s",
+                _expired.symbol, _expired.direction,
+            )
+        _wl_size = sniper_guard.get_watchlist_size()
+        if _wl_size > 0:
+            logger.debug("SniperGuard: %d candidates still on watchlist", _wl_size)
+
     rank_phase_start = time.monotonic()
     all_signals.sort(key=lambda s: s.confidence, reverse=True)
 
@@ -1463,12 +1546,13 @@ def _run_iteration(
     # ══════════════════════════════════════════════════════════════════════
     # PHASE 3: Execute best signals that pass risk validation
     #
-    # Instant-entry mode (INSTANT_ENTRY_ENABLED=true, default):
-    #   Top signal → hard risk only → execute immediately → council advisory
-    #   post-entry (non-blocking) → full risk post-entry.
+    # Sniper Entry Guard logic:
+    #   conf >= SNIPER_CONF_THRESHOLD  → instant execute (no waiting)
+    #   conf <  SNIPER_CONF_THRESHOLD  → wait on watchlist for Fibonacci pullback
+    #     → price enters valid retracement zone → SNIPER_CONFIRMED → execute
+    #     → timeout or price moved past zone → skip
     #
-    # Classic mode (INSTANT_ENTRY_ENABLED=false):
-    #   All signals → council gate (blocking) → risk → execute.
+    # Fast lane always runs hard risk checks only (pre-entry speed path).
     # ══════════════════════════════════════════════════════════════════════
     for i, signal_obj in enumerate(ranked):
         exec_elapsed_ms = (time.monotonic() - execution_phase_start) * 1000.0
@@ -1497,83 +1581,44 @@ def _run_iteration(
         )
         is_fast_lane = settings.FAST_LANE_ENABLED and i < settings.FAST_LANE_MAX_SIGNALS
 
-        council_mode = settings.COUNCIL_MODE
-        council_max_reviews = max(0, settings.COUNCIL_MAX_REVIEWS_PER_LOOP)
-        council_reviews = metrics.get("council_reviews_this_loop", 0)
-        remaining_exec_budget = max_exec_ms - exec_elapsed_ms
-        budget_allows_council = (
-            (not hard_budget_enabled)
-            or remaining_exec_budget >= settings.ORCHESTRATION_EXEC_BUDGET_COUNCIL_MARGIN_MS
-        )
-        allow_council_review = council_reviews < council_max_reviews and budget_allows_council
-
-        # ── Trading Council gate ─────────────────────────────────────────
-        # In instant-entry mode the top signal skips this gate entirely.
-        # Council still runs for i>0 signals as a blocking quality filter.
-        if council is not None and not is_instant and allow_council_review:
+        # ── Sniper Entry Guard (Fibonacci pullback gate) ─────────────────
+        # Replaces Council/DeepSeek with confidence-split Fibonacci logic:
+        #   conf >= SNIPER_CONF_THRESHOLD  → instant execute (APPROVED)
+        #   conf <  SNIPER_CONF_THRESHOLD  → hold on watchlist, wait for pullback
+        #     SNIPER_CONFIRMED → price pulled into Fib zone → execute immediately
+        #     EXPIRED / SKIPPED → price moved past zone or timeout → skip
+        #     HOLD → signal is on watchlist; skip execution this iteration
+        if sniper_guard is not None and not is_instant:
             ctx = signal_contexts.get(id(signal_obj))
             if ctx is not None:
-                if _tui:
-                    _tui.set_agent_status(
-                        "council",
-                        f"debating {signal_obj.symbol} {signal_obj.direction}",
-                    )
-                verdict = council.review(signal_obj, ctx)
-                metrics["council_reviews_this_loop"] = council_reviews + 1
-                if not verdict.approved:
-                    msg = (
-                        f"Council REJECTED {signal_obj.symbol} {signal_obj.direction} "
-                        f"({verdict.confidence:.0%} < {settings.COUNCIL_MIN_CONFIDENCE:.0%}) — "
-                        f"{verdict.reasoning}"
-                    )
-                    logger.info("%s [mode=%s]", msg, council_mode)
-                    if council_mode == "blocking":
-                        log_agent.log_risk_rejection(
-                            signal_obj.symbol, signal_obj.direction,
-                            signal_obj.strategy, f"Council: {verdict.reasoning}",
-                        )
-                        if _tui:
-                            _tui.add_event(
-                                "council", "warn",
-                                f"REJECT {signal_obj.symbol} {verdict.confidence:.0%}",
-                            )
-                        from utils import telegram_bot as _tg
-                        _tg.send_message(
-                            f"🏛️ Council REJECTED {signal_obj.direction} {signal_obj.symbol} "
-                            f"— {verdict.confidence:.0%} confidence\n{verdict.reasoning}",
-                            dedupe_key=f"council-reject:{signal_obj.symbol}:{signal_obj.direction}",
-                        )
-                        metrics["council_rejections"] = metrics.get("council_rejections", 0) + 1
-                        continue
-                    # Advisory mode: keep speed and opportunity capture, but
-                    # apply a small confidence haircut to reflect disagreement.
-                    signal_obj.confidence = max(
-                        0.0,
-                        signal_obj.confidence - settings.COUNCIL_ADVISORY_REJECTION_CONF_PENALTY,
-                    )
-                    if _tui:
-                        _tui.add_event(
-                            "council", "warn",
-                            f"ADVISORY {signal_obj.symbol} {verdict.confidence:.0%}",
-                        )
-                else:
+                verdict = sniper_guard.review(signal_obj, ctx)
+                if verdict.name in ("HOLD", "EXPIRED", "SKIPPED"):
+                    # Signal is held on watchlist (HOLD) or rejected (EXPIRED/SKIPPED).
+                    # Either way: skip this iteration entirely — do NOT fall through to
+                    # risk validation or execution. The watchlist is advanced separately
+                    # via on_iteration() in Phase 2 of the next loop.
                     logger.info(
-                        "Council APPROVED %s %s (%.0f%%)",
-                        signal_obj.symbol, signal_obj.direction,
-                        verdict.confidence * 100,
+                        "SniperGuard %s %s %s — skipping execution",
+                        verdict.value.upper(), signal_obj.symbol, signal_obj.direction,
                     )
                     if _tui:
                         _tui.add_event(
-                            "council", "info",
-                            f"APPROVED {signal_obj.symbol} {verdict.confidence:.0%}",
+                            "sniper", "warn" if verdict.name != "HOLD" else "info",
+                            f"{verdict.value.upper()} {signal_obj.symbol} {signal_obj.direction}",
                         )
-        elif council is not None and not is_instant and not allow_council_review:
-            metrics["budget_council_skips"] = metrics.get("budget_council_skips", 0) + 1
-            logger.debug(
-                "Council skipped for %s %s (review cap reached or tight execution budget)",
-                signal_obj.symbol,
-                signal_obj.direction,
-            )
+                    continue
+                else:
+                    # APPROVED or SNIPER_CONFIRMED — log and continue to risk check
+                    logger.info(
+                        "SniperGuard %s %s %s conf=%.2f",
+                        verdict.value.upper(), signal_obj.symbol, signal_obj.direction,
+                        signal_obj.confidence,
+                    )
+                    if _tui:
+                        _tui.add_event(
+                            "sniper", "info",
+                            f"{verdict.value.upper()} {signal_obj.symbol} {signal_obj.direction}",
+                        )
 
         # ── Risk check (drawdown, spread, lot-size, etc.) ────────────────
         if _tui:
@@ -1648,49 +1693,9 @@ def _run_iteration(
             if first_fill_signal_to_order_ms < 0.0:
                 first_fill_signal_to_order_ms = (time.monotonic() - signal_ready_ts) * 1000.0
 
-            # ── Post-entry council (advisory, instant-entry mode) ────────
-            # Runs in a daemon thread — verdict never blocks or closes the trade.
-            if is_instant and council is not None:
-                ctx = signal_contexts.get(id(signal_obj))
-                if ctx is not None:
-                    def _run_advisory(
-                        _council=council, _sig=signal_obj, _ctx=ctx, _tui=_tui
-                    ) -> None:
-                        try:
-                            verdict = _council.review(_sig, _ctx)
-                            conf_str = f"{verdict.confidence:.0%}"
-                            if verdict.approved:
-                                logger.info(
-                                    "Council ADVISORY (post-entry) APPROVED %s %s (%s)",
-                                    _sig.symbol, _sig.direction, conf_str,
-                                )
-                                if _tui:
-                                    _tui.add_event(
-                                        "council", "info",
-                                        f"ADVISORY approved {_sig.symbol} {conf_str}",
-                                    )
-                            else:
-                                logger.warning(
-                                    "Council ADVISORY (post-entry) flagged %s %s (%s) — %s",
-                                    _sig.symbol, _sig.direction,
-                                    conf_str, verdict.reasoning,
-                                )
-                                if _tui:
-                                    _tui.add_event(
-                                        "council", "warn",
-                                        f"ADVISORY flag {_sig.symbol} {conf_str}",
-                                    )
-                                from utils import telegram_bot as _tg
-                                _tg.send_message(
-                                    f"⚠️ Council advisory (post-entry): {_sig.direction} "
-                                    f"{_sig.symbol} — {conf_str} confidence\n"
-                                    f"{verdict.reasoning}",
-                                    dedupe_key=f"council-advisory:{_sig.symbol}:{_sig.direction}",
-                                )
-                        except Exception:
-                            logger.exception("Advisory council thread failed")
-
-                    threading.Thread(target=_run_advisory, daemon=True).start()
+            # ── Post-entry council (DISABLED — ICT-only mode) ───────────────
+            # if is_instant and council is not None:
+            #     ... (formerly council advisory thread)
 
             # ── Post-entry full risk check ───────────────────────────────
             if is_instant or is_fast_lane:

@@ -639,7 +639,7 @@ class Database:
                         ) VALUES (
                             %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,
                             %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,
-                            %s,%s,%s
+                            %s,%s,%s,%s,%s
                         )
                         ON CONFLICT (id) DO UPDATE SET
                             stop_loss=EXCLUDED.stop_loss,

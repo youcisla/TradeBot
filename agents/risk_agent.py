@@ -170,6 +170,11 @@ class RiskAgent:
         """
         try:
             if not self._check_signal_geometry(signal):
+                self._emit(
+                    "warn",
+                    f"GEOMETRY — {signal.symbol} failed signal geometry check",
+                    {"symbol": signal.symbol, "check": "signal_geometry"},
+                )
                 return False
             if mode == "hard":
                 with mesh_span("risk"):
@@ -178,6 +183,11 @@ class RiskAgent:
                 return self._validate_inner(signal, skip_duplicate=post_entry)
         except Exception:
             logger.exception("RiskAgent.validate crashed — rejecting signal")
+            self._emit(
+                "warn",
+                "RiskAgent.validate crashed",
+                {"symbol": signal.symbol, "check": "exception"},
+            )
             return False
 
     def calculate_position_size(self, signal: Signal) -> float:

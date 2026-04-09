@@ -113,8 +113,11 @@ def _log_checks(repo_root: Path, recommendations: list[str]) -> list[CheckResult
 
     # Keep the most recent two rotated files to keep analysis fast.
     lines: list[str] = []
-    for f in bot_logs[:2]:
-        lines.extend(f.read_text(encoding="utf-8", errors="ignore").splitlines())
+    for f in bot_logs[:1]:
+        # Only check the last 100 lines of the most recent log to avoid
+        # flagging stale historical errors (e.g. yesterday's 10017 from an old session).
+        all_lines = f.read_text(encoding="utf-8", errors="ignore").splitlines()
+        lines.extend(all_lines[-100:])
 
     text = "\n".join(lines)
     if not text.strip():

@@ -112,10 +112,10 @@ class MT5Connector(BrokerConnector):
                      ".pro", ".raw", ".std", ".", "#", "-ECN"]
         # Some brokers use completely different names for commodities
         _ALIASES: dict[str, list[str]] = {
-            "XAUUSD": ["Gold", "GOLD", "GoldUSD", "XAUUSD.r", "XAUUSD+"],
-            "XAGUSD": ["Silver", "SILVER", "SilverUSD", "XAGUSD.r"],
-            "USOUSD": ["USOIL", "WTI", "CrudeOIL", "USOil", "USOUSD.r", "WTI.r", "USOIL.r"],
-            "UKOUSD": ["UKOIL", "Brent", "BrentOil", "UKOUSD.r", "UKOIL.r"],
+            "XAUUSD": ["XAUUSD.s", "Gold", "GOLD", "GoldUSD", "XAUUSD.r", "XAUUSD+"],
+            "XAGUSD": ["XAGUSD.s", "Silver", "SILVER", "SilverUSD", "XAGUSD.r"],
+            "USOUSD": ["USOUSD.s", "USOIL", "WTI", "CrudeOIL", "USOil", "USOUSD.r", "WTI.r", "USOIL.r"],
+            "UKOUSD": ["UKOUSD.s", "UKOIL", "Brent", "BrentOil", "UKOUSD.r", "UKOIL.r"],
         }
 
         for sym in candidates:

@@ -1,8 +1,0 @@
-[submodule "crucix"]
-	path = crucix
-	url = https://github.com/youcisla/crucix.git
-	# Pinned 2026-03-28: 8c1ea379c46484d4be1860d7bcc3daffd5a0ddef
-[submodule "antigravity-awesome-skills"]
-	path = antigravity-awesome-skills
-	url = https://github.com/youcisla/antigravity-awesome-skills.git
-	# Pinned 2026-03-28: fa237d97aec62e564a3b50fa9f4d81dbfefc75c3 (v8.3.0-130-gfa237d97)
