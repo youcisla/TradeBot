@@ -2775,62 +2775,39 @@ def asset_class(symbol: str) -> str:
     """Return asset class tag for symbol."""
     return SYMBOL_CLASS.get(symbol, "unknown")
 
-# ── Commission per standard lot (per side), from settings defaults ──
-_commission_per_lot_defaults: dict[str, float] = {
-    "forex_major": 5.0,
-    "forex_cross": 5.0,
-    "commodity": 7.0,
-    "index": 7.0,
-    "etf": 7.0,
-    "crypto": 7.0,
-    "bond": 5.0,
-    "stock_cfd": 7.0,
-}
-
-def commission_per_lot(symbol: str) -> float:
-    """Return commission per standard lot (per side) in account currency."""
-    cls = asset_class(symbol)
-    return _commission_per_lot_defaults.get(cls, 7.0)
-
 # ── Priority subset (fast scan ~60 symbols) ────────────────────
-# Curated high-liquidity instruments — no need to scan all 844.
-# Activate full universe with: ACTIVE_SYMBOLS=ALL or ACTIVE_SYMBOLS=<comma,sep,symbols>
+# Curated high-liquidity instruments — preserved across re-generations.
+# Activate full universe: ACTIVE_SYMBOLS=ALL or USE_FULL_UNIVERSE=1
 PRIORITY_SYMBOLS: list[str] = [
-    # Forex majors (.s spot — primary tradeable variants)
-    "EURUSD.s", "GBPUSD.s", "USDJPY.s", "AUDUSD.s", "USDCAD.s", "USDCHF.s",
-    # Forex key crosses
-    "EURGBP.s", "EURJPY.s", "GBPJPY.s", "EURCHF.s", "EURAUD.s", "GBPCHF.s",
-    "NZDUSD.s", "EURSGD.s", "USDHKD.s", "USDSGD.s",
-    # Commodities
-    "XAUUSD.s", "XAGUSD.s", "GAUUSD.s",
-    "USOUSD.s", "UKOUSD.s",
-    "COPPER-Cs", "NG-Cs",
-    # Indices
-    "NAS100.s", "SP500.s", "DJ30.s", "GER40.s", "FRA40.s", "UK100.s",
-    # ETFs (equities)
-    "SPY", "QQQ", "IWM", "EEM", "VGT", "XLF", "XLK", "XOP",
-    "GDX", "GLD", "IBIT", "GBTC", "ARKK", "ARKW",
-    "TAN", "DRN", "YINN",
-    # ETFs (bonds)
-    "AGG", "BND", "BNDX",
-    # Crypto
-    "BTCUSD", "ETHUSD", "SOLUSD", "XRPUSD", "DOGUSD",
-    # Stock CFDs (mega-cap tech/liquid)
-    "AAPL", "MSFT", "NVDA", "GOOGL", "AMZN", "META", "TSLA", "AVGO",
-    "NFLX", "ADBE", "CRM", "ORCL", "AMD", "INTC", "QCOM", "TXN",
-    "AMAT", "MU", "LRCX", "MELI", "COIN", "PYPL", "SQ", "SHOP",
-    "UBER", "ABNB", "COST", "PEP", "KO", "WMT", "DIS", "VZ",
+    "AAPL", "ABNB", "ADBE", "AGG", "AMAT",
+    "AMD", "AMZN", "ARKK", "ARKW", "AUDUSD.s",
+    "AVGO", "BND", "BNDX", "BTCUSD", "COIN",
+    "COPPER-Cs", "COST", "CRM", "DIS", "DJ30.s",
+    "DOGUSD", "DRN", "EEM", "ETHUSD", "EURAUD.s",
+    "EURCHF.s", "EURGBP.s", "EURJPY.s", "EURSGD.s", "EURUSD.s",
+    "FRA40.s", "GAUUSD.s", "GBPCHF.s", "GBPJPY.s", "GBPUSD.s",
+    "GBTC", "GDX", "GER40.s", "GLD", "GOOGL",
+    "IBIT", "INTC", "IWM", "KO", "LRCX",
+    "MELI", "META", "MSFT", "MU", "NAS100.s",
+    "NFLX", "NG-Cs", "NVDA", "NZDUSD.s", "ORCL",
+    "PEP", "PYPL", "QCOM", "QQQ", "SHOP",
+    "SOLUSD", "SP500.s", "SPY", "SQ", "TAN",
+    "TSLA", "TXN", "UBER", "UK100.s", "UKOUSD.s",
+    "USDCAD.s", "USDCHF.s", "USDHKD.s", "USDJPY.s", "USDSGD.s",
+    "USOUSD.s", "VGT", "VZ", "WMT", "XAGUSD.s",
+    "XAUUSD.s", "XLF", "XLK", "XOP", "XRPUSD",
+    "YINN"
 ]
-PRIORITY_SYMBOLS_SET: set[str] = set(PRIORITY_SYMBOLS)
 
 # ── Active symbols ─────────────────────────────────────────────
 import os
 _env_active = os.getenv("ACTIVE_SYMBOLS", None)
-if _env_active:
-    _active_list = [s.strip() for s in _env_active.split(",") if s.strip()]
-    SYMBOLS: list[str] = _active_list
-elif os.getenv("USE_FULL_UNIVERSE", "0") == "1":
-    SYMBOLS: list[str] = ALL_SYMBOLS
-else:
-    SYMBOLS: list[str] = PRIORITY_SYMBOLS
+_use_full = os.getenv("USE_FULL_UNIVERSE", "0") == "1"
+SYMBOLS: list[str] = (
+    [s.strip() for s in _env_active.split(",") if s.strip()]
+    if _env_active
+    else ALL_SYMBOLS
+    if _use_full
+    else PRIORITY_SYMBOLS
+)
 ACTIVE_SYMBOLS = SYMBOLS

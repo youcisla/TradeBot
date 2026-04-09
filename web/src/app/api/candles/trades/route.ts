@@ -4,7 +4,7 @@ import { getAllTrades } from "@/lib/db";
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
+  const { searchParams } = await new URL(request.url);
   const rawSymbol = searchParams.get("symbol");
   // Normalise: BTC/USD → BTCUSD, remove spaces/dashes
   const symbol = rawSymbol
@@ -77,7 +77,7 @@ export async function GET(request: Request) {
             title: "SL",
           });
         }
-        if (Number(t.take_profit_1)) {
+        if (Number(t.take_profit_1) && Number(t.tp1_lots) > 0) {
           lines.push({
             price: Number(t.take_profit_1),
             color: "#00ff88",
@@ -86,7 +86,7 @@ export async function GET(request: Request) {
             title: "TP1",
           });
         }
-        if (Number(t.take_profit_2)) {
+        if (Number(t.take_profit_2) && Number(t.tp2_lots) > 0) {
           lines.push({
             price: Number(t.take_profit_2),
             color: "#00cc33",
@@ -95,13 +95,22 @@ export async function GET(request: Request) {
             title: "TP2",
           });
         }
-        if (Number(t.take_profit_3)) {
+        if (Number(t.take_profit_3) && Number(t.tp3_lots) > 0) {
           lines.push({
             price: Number(t.take_profit_3),
             color: "#009922",
             lineWidth: 1,
             lineStyle: 2,
             title: "TP3",
+          });
+        }
+        if (Number(t.take_profit_4) && Number(t.tp4_lots) > 0) {
+          lines.push({
+            price: Number(t.take_profit_4),
+            color: "#006611",
+            lineWidth: 1,
+            lineStyle: 2,
+            title: "TP4",
           });
         }
         if (Number(t.entry_price)) {

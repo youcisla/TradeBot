@@ -1,5 +1,5 @@
-import MissionControl from "@/components/MissionControl";
+import NewDashboard from "@/components/NewDashboard";
 
 export default function CommandCenterPage() {
-  return <MissionControl />;
+  return <NewDashboard />;
 }

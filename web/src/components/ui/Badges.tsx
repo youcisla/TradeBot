@@ -3,47 +3,63 @@ import React from 'react';
 // Example: <AgentBadge agent="council" />
 // <AgentBadge agent="risk" active />
 
-export const AgentBadge = ({ agent, active = false }: { agent: string, active?: boolean }) => {
-  const agentColors: Record<string, string> = {
-    crucix: "bg-[var(--agent-crucix)]",
-    market: "bg-[var(--agent-market)]",
-    analysis: "bg-[var(--agent-analysis)]",
-    strategy: "bg-[var(--agent-strategy)]",
-    neural: "bg-[var(--agent-neural)]",
-    council: "bg-[var(--agent-council)]",
-    risk: "bg-[var(--agent-risk)]",
-    execution: "bg-[var(--agent-execution)]",
-    manager: "bg-[var(--agent-trade-mgr)]",
-    learning: "bg-[var(--agent-learning)]",
-    logging: "bg-[var(--agent-logging)]",
-    debate: "bg-[var(--agent-debate)]",
-    exposure: "bg-[var(--agent-exposure)]",
-    memory: "bg-[var(--agent-memory)]",
-  };
-  
-  const bgColors: Record<string, string> = {
-    crucix: "bg-[rgba(100,210,255,0.15)] text-[var(--agent-crucix)]",
-    market: "bg-[rgba(50,173,230,0.15)] text-[var(--agent-market)]",
-    analysis: "bg-[rgba(244,244,245,0.15)] text-[var(--agent-analysis)]",
-    strategy: "bg-[rgba(48,209,88,0.15)] text-[var(--agent-strategy)]",
-    neural: "bg-[rgba(191,90,242,0.15)] text-[var(--agent-neural)]",
-    council: "bg-[rgba(255,159,10,0.15)] text-[var(--agent-council)]",
-    risk: "bg-[rgba(255,69,58,0.15)] text-[var(--agent-risk)]",
-    execution: "bg-[rgba(240,180,41,0.15)] text-[var(--agent-execution)]",
-    manager: "bg-[rgba(100,210,255,0.15)] text-[var(--agent-trade-mgr)]",
-    learning: "bg-[rgba(48,209,88,0.15)] text-[var(--agent-learning)]",
-    logging: "bg-[rgba(244,244,245,0.10)] text-text-3",
-    debate: "bg-[rgba(191,90,242,0.15)] text-[var(--agent-debate)]",
-    exposure: "bg-[rgba(255,159,10,0.15)] text-[var(--agent-exposure)]",
-    memory: "bg-[rgba(100,210,255,0.15)] text-[var(--agent-memory)]",
-  };
+const AGENT_COLORS: Record<string, { bg: string; text: string; border: string }> = {
+  crucix:    { bg: 'rgba(100,210,255,0.15)', text: '#64d2ff', border: 'rgba(100,210,255,0.30)' },
+  market:    { bg: 'rgba(50,173,230,0.15)', text: '#32ade6', border: 'rgba(50,173,230,0.30)' },
+  analysis:  { bg: 'rgba(244,244,245,0.10)', text: '#b8b8bc', border: 'rgba(244,244,245,0.20)' },
+  strategy:  { bg: 'rgba(48,209,88,0.15)',  text: '#30d158', border: 'rgba(48,209,88,0.30)' },
+  neural:    { bg: 'rgba(191,90,242,0.15)', text: '#bf5af2', border: 'rgba(191,90,242,0.30)' },
+  council:   { bg: 'rgba(255,159,10,0.15)', text: '#ff9f0a', border: 'rgba(255,159,10,0.30)' },
+  risk:      { bg: 'rgba(255,69,58,0.15)',  text: '#ff453a', border: 'rgba(255,69,58,0.30)' },
+  execution: { bg: 'rgba(240,180,41,0.15)', text: '#f0b429', border: 'rgba(240,180,41,0.30)' },
+  manager:   { bg: 'rgba(100,210,255,0.15)', text: '#64d2ff', border: 'rgba(100,210,255,0.30)' },
+  learning:  { bg: 'rgba(48,209,88,0.15)',  text: '#30d158', border: 'rgba(48,209,88,0.30)' },
+  logging:   { bg: 'rgba(244,244,245,0.08)', text: '#adaaaa', border: 'rgba(244,244,245,0.15)' },
+  debate:    { bg: 'rgba(191,90,242,0.15)', text: '#bf5af2', border: 'rgba(191,90,242,0.30)' },
+  exposure:  { bg: 'rgba(255,159,10,0.15)', text: '#ff9f0a', border: 'rgba(255,159,10,0.30)' },
+  memory:    { bg: 'rgba(100,210,255,0.15)', text: '#64d2ff', border: 'rgba(100,210,255,0.30)' },
+};
 
-  const aKey = agent.toLowerCase().replace('-', '');
-  const foundKey = Object.keys(bgColors).find(k => aKey.includes(k)) || 'logging';
-  
+const LEVEL_COLORS: Record<string, { bg: string; text: string }> = {
+  info:  { bg: 'rgba(0,229,255,0.12)',  text: '#00e5ff' },
+  warn:  { bg: 'rgba(255,159,10,0.12)', text: '#ff9f0a' },
+  error: { bg: 'rgba(255,69,58,0.12)',  text: '#ff453a' },
+};
+
+export const AgentBadge = ({ agent, active = false }: { agent: string; active?: boolean }) => {
+  const key = agent.toLowerCase().replace('-', '');
+  const found = Object.keys(AGENT_COLORS).find(k => key.includes(k)) || 'logging';
+  const c = AGENT_COLORS[found];
+
   return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded-pill uppercase tracking-wider text-[10px] font-mono font-bold border border-border/20 ${bgColors[foundKey]}`}>
-      {active && <span className={`w-1.5 h-1.5 rounded-full mr-1.5 animate-pulse ${agentColors[foundKey]}`} />}
+    <span
+      style={{
+        display:        'inline-flex',
+        alignItems:     'center',
+        padding:        '2px 8px',
+        borderRadius:   9999,
+        fontSize:       10,
+        fontFamily:     'var(--font-mono)',
+        fontWeight:     700,
+        textTransform:  'uppercase',
+        letterSpacing:  '0.08em',
+        backgroundColor: c.bg,
+        color:          c.text,
+        border:         `1px solid ${c.border}`,
+      }}
+    >
+      {active && (
+        <span
+          style={{
+            width:        6,
+            height:       6,
+            borderRadius: '50%',
+            marginRight:  6,
+            backgroundColor: c.text,
+            animation:    'pulse 1.5s ease-in-out infinite',
+          }}
+        />
+      )}
       {agent}
     </span>
   );
@@ -51,13 +67,23 @@ export const AgentBadge = ({ agent, active = false }: { agent: string, active?: 
 
 export const LevelBadge = ({ level }: { level: string }) => {
   const l = level.toLowerCase();
-  let colors = "bg-bg-3 text-text-2";
-  if (l === 'info') colors = "bg-cyan/10 text-cyan";
-  if (l === 'warn') colors = "bg-orange/10 text-orange";
-  if (l === 'error') colors = "bg-red/10 text-red";
+  const c = LEVEL_COLORS[l] || { bg: 'rgba(244,244,245,0.10)', text: '#adaaaa' };
 
   return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded-sm uppercase text-[10px] font-mono font-bold ${colors}`}>
+    <span
+      style={{
+        display:        'inline-flex',
+        alignItems:     'center',
+        padding:        '2px 8px',
+        borderRadius:   4,
+        fontSize:       10,
+        fontFamily:     'var(--font-mono)',
+        fontWeight:     700,
+        textTransform:  'uppercase',
+        backgroundColor: c.bg,
+        color:          c.text,
+      }}
+    >
       {level}
     </span>
   );
@@ -66,8 +92,22 @@ export const LevelBadge = ({ level }: { level: string }) => {
 export const DirectionBadge = ({ direction }: { direction: string }) => {
   const d = direction.toUpperCase();
   const isLong = d === 'LONG' || d === 'BUY';
+
   return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded-sm uppercase text-[10px] font-mono font-bold ${isLong ? 'bg-gold text-bg-2' : 'bg-red text-bg-2'}`}>
+    <span
+      style={{
+        display:        'inline-flex',
+        alignItems:     'center',
+        padding:        '2px 8px',
+        borderRadius:   4,
+        fontSize:       10,
+        fontFamily:     'var(--font-mono)',
+        fontWeight:     700,
+        textTransform:  'uppercase',
+        backgroundColor: isLong ? '#f0b429' : '#ff453a',
+        color:          '#0e0e0e',
+      }}
+    >
       {direction}
     </span>
   );
@@ -75,14 +115,30 @@ export const DirectionBadge = ({ direction }: { direction: string }) => {
 
 export const StrategyBadge = ({ strategy }: { strategy: string }) => {
   const s = strategy.toLowerCase();
-  let colors = "bg-bg-3 text-text-2";
-  if (s.includes('ict')) colors = "bg-cyan text-bg-2";
-  else if (s.includes('deepseek')) colors = "bg-purple text-bg-2";
-  else if (s.includes('ensemble')) colors = "bg-orange text-bg-2";
-  else if (s.includes('sma')) colors = "bg-text-3 text-bg-2";
+  let bg = 'rgba(244,244,245,0.10)';
+  let text = '#adaaaa';
+
+  if (s.includes('ict'))      { bg = 'rgba(0,229,255,0.20)';  text = '#00e5ff'; }
+  else if (s.includes('deepseek')) { bg = 'rgba(191,90,242,0.20)'; text = '#bf5af2'; }
+  else if (s.includes('ensemble')) { bg = 'rgba(255,159,10,0.20)'; text = '#ff9f0a'; }
+  else if (s.includes('sma'))     { bg = 'rgba(173,170,170,0.20)'; text = '#adaaaa'; }
 
   return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded-pill uppercase tracking-wider text-[10px] font-mono font-bold ${colors}`}>
+    <span
+      style={{
+        display:        'inline-flex',
+        alignItems:     'center',
+        padding:        '2px 8px',
+        borderRadius:   9999,
+        fontSize:       10,
+        fontFamily:     'var(--font-mono)',
+        fontWeight:     700,
+        textTransform:  'uppercase',
+        letterSpacing:  '0.08em',
+        backgroundColor: bg,
+        color:          text,
+      }}
+    >
       {strategy}
     </span>
   );

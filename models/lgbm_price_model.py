@@ -301,8 +301,8 @@ class LGBMPriceModel:
         self._models: dict[str, object] = {}   # safe_key → fitted LGBMClassifier
         self._shap_importance: dict[str, dict[str, float]] = {}  # safe_key → importance
         self._enabled: bool = self._check_enabled()
-        if self._enabled:
-            self._load_available_models()
+        # Lazy-load: models are loaded on first use, not at startup.
+        # This avoids a 2+ second delay from loading 20+ models sequentially.
 
     # ── Helpers ──────────────────────────────────────────────────────────────
 
@@ -340,9 +340,30 @@ class LGBMPriceModel:
 
     # ── Public API ────────────────────────────────────────────────────────────
 
+    def _lazy_load(self, symbol: str) -> bool:
+        """Load a single symbol's model on demand. Returns True if loaded."""
+        key = self._sym_key(symbol)
+        if key in self._models:
+            return True  # already loaded
+        path = self._model_path(symbol)
+        if not path.exists():
+            return False
+        try:
+            with open(path, "rb") as fh:
+                self._models[key] = pickle.load(fh)  # noqa: S301
+            logger.debug("Price-LGBM lazy-loaded: %s", key)
+            return True
+        except Exception as exc:
+            logger.debug("Could not lazy-load price-LGBM %s: %s", path, exc)
+            return False
+
     def is_trained(self, symbol: str) -> bool:
         """Return True if a model has been loaded for *symbol*."""
-        return self._sym_key(symbol) in self._models
+        key = self._sym_key(symbol)
+        if key in self._models:
+            return True
+        # Try to lazy-load on first check
+        return self._lazy_load(symbol)
 
     def symbols_trained(self) -> list[str]:
         """List all symbol keys with a loaded model."""
@@ -433,10 +454,11 @@ class LGBMPriceModel:
             return self._default_prediction()
 
         key = self._sym_key(ctx.symbol)
+        # Lazy-load the first time this symbol is requested
+        self._lazy_load(ctx.symbol)
+
         with self._lock:
             model = self._models.get(key)
-
-        if model is None:
             return self._default_prediction()
 
         try:

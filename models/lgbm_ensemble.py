@@ -258,6 +258,19 @@ class LGBMEnsemble:
                 self._model = pickle.load(fh)  # noqa: S301
             self._trained = True
             logger.info("LGBMEnsemble loaded from %s", _MODEL_PATH)
+
+            # Validate: if SHAP importance is all zeros the model is degenerate
+            # (trained on too few samples — all features silent). Treat as
+            # untrained so the strategy agent passes signals through unchanged.
+            importance = _compute_shap_importance(self._model, [[0.0] * 11])
+            total_shap = sum(importance.values()) if importance else 0.0
+            if total_shap < 1e-9:
+                logger.warning(
+                    "LGBMEnsemble: model has zero SHAP importance — trained on too few "
+                    "samples, all features silent. Treating as untrained. "
+                    "Retrain with: python scripts/train_lgbm.py once you have >=100 trades.",
+                )
+                self._trained = False
         except Exception as exc:  # noqa: BLE001
             logger.warning("LGBMEnsemble: failed to load model: %s", exc)
 

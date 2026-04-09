@@ -499,7 +499,7 @@ DEFERRED_ENTRY_MIN_CONF: float = float(os.getenv("DEFERRED_ENTRY_MIN_CONF", "0.6
 DEFERRED_ENTRY_TTL_SECONDS: int = int(os.getenv("DEFERRED_ENTRY_TTL_SECONDS", "900"))
 # Symbol auto-disable: after this many consecutive IPC failures the symbol is
 # suspended for SYMBOL_DISABLE_SECONDS to avoid wasting loop time.
-SYMBOL_MAX_FAIL_COUNT: int = int(os.getenv("SYMBOL_MAX_FAIL_COUNT", "3"))
+SYMBOL_MAX_FAIL_COUNT: int = int(os.getenv("SYMBOL_MAX_FAIL_COUNT", "12"))
 SYMBOL_DISABLE_SECONDS: int = int(os.getenv("SYMBOL_DISABLE_SECONDS", "3600"))
 
 # ── Logging ──────────────────────────────────────────────────────────────

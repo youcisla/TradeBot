@@ -34,7 +34,11 @@ def load_existing_priority_symbols() -> list[str]:
         if not match:
             return []
         inner = match.group(1)
-        return [s.strip().strip('"').strip("'") for s in inner.split(",") if s.strip()]
+        # Remove comment lines (# ...) and blank lines, then extract symbol names
+        clean = re.sub(r'#[^\n]*\n', '\n', inner)  # remove line comments
+        clean = re.sub(r'\n[^"]*', '', clean)      # remove non-symbol line prefixes
+        symbols = [s.strip().strip('"').strip("'") for s in clean.split(",") if s.strip()]
+        return [s for s in symbols if s and s not in ('"', "'")]
     except Exception:
         return []
 

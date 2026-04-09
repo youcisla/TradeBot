@@ -51,6 +51,11 @@ class MT5Connector(BrokerConnector):
         self._server = server or settings.BROKER_SERVER
         # Populated after connect()
         self.account_info_cache: dict | None = None
+        # Per-symbol backoff after IPC errors — avoids tight retry loops on
+        # "Terminal: Call failed" where MT5 is temporarily swamped.
+        # After the first failure, skip this symbol for ~30s; doubles on repeat.
+        self._ipc_backoff_until: dict[str, float] = {}
+        self._ipc_backoff_secs: float = 30.0
 
     # ── account ──────────────────────────────────────────────────────────
 
@@ -255,14 +260,38 @@ class MT5Connector(BrokerConnector):
         return getattr(self, 'symbol_map', {}).get(symbol, symbol)
 
     def get_tick(self, symbol: str) -> dict[str, float]:
+        import time as _time
+
         broker_sym = self.resolve(symbol)
+
+        # Check IPC backoff — skip symbols that recently returned IPC errors
+        backoff_until = self._ipc_backoff_until.get(broker_sym, 0.0)
+        now = _time.monotonic()
+        if now < backoff_until:
+            raise RuntimeError(f"IPC backoff for {symbol} until {_time.monotonic():.0f}")
 
         tick = mt5.symbol_info_tick(broker_sym)
         if tick is None:
             mt5.symbol_select(broker_sym, True)
             tick = mt5.symbol_info_tick(broker_sym)
         if tick is None:
-            raise RuntimeError(f"No tick data for {symbol}: {mt5.last_error()}")
+            err = mt5.last_error()
+            err_str = str(err)
+            # "Terminal: Call failed" means MT5 IPC is swamped — apply backoff
+            # so we don't hammer it with retries every tick.
+            if "Terminal: Call failed" in err_str or "IPC" in err_str:
+                prev = self._ipc_backoff_until.get(broker_sym, 0.0)
+                # If already in backoff, double its duration (up to 5 min max)
+                if prev > now:
+                    self._ipc_backoff_secs = min(self._ipc_backoff_secs * 2, 300.0)
+                else:
+                    self._ipc_backoff_secs = 30.0  # reset on fresh failure
+                self._ipc_backoff_until[broker_sym] = now + self._ipc_backoff_secs
+                logger.debug(
+                    "MT5 IPC backoff for %s: %.0fs (err=%s)",
+                    broker_sym, self._ipc_backoff_secs, err_str,
+                )
+            raise RuntimeError(f"No tick data for {symbol}: {err}")
 
         spread = tick.ask - tick.bid
         return {
@@ -525,6 +554,19 @@ class MT5Connector(BrokerConnector):
         except Exception:
             logger.debug("history_deals_get failed for ticket %d", ticket)
         return None
+
+    def get_daily_pnl(self) -> float:
+        """Return today's realised P&L from MT5 deal history (midnight UTC → now)."""
+        try:
+            from datetime import UTC, datetime
+            now   = datetime.now(UTC)
+            start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+            deals = mt5.history_deals_get(start, now)
+            if deals:
+                return float(sum(d.profit for d in deals))
+        except Exception as exc:
+            logger.debug("get_daily_pnl failed: %s", exc)
+        return 0.0
 
     def reconcile(self) -> list[PositionInfo]:
         return self.get_open_positions()

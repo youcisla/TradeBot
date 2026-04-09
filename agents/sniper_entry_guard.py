@@ -18,10 +18,12 @@ No external API calls — fully autonomous.
 
 from __future__ import annotations
 
+import json
 import logging
 import math
 import time
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
+from datetime import UTC, datetime
 from enum import Enum
 from typing import TYPE_CHECKING, Optional
 
@@ -64,6 +66,7 @@ class SniperEntryGuard:
     def __init__(
         self,
         broker=None,
+        db=None,
         threshold: float = 0.65,
         timeout_minutes: float = 30.0,
         max_entry_atr_distance: float = 0.55,
@@ -71,6 +74,7 @@ class SniperEntryGuard:
         fib_max_depth: str = "deep",        # maximum retracement before skipping
     ) -> None:
         self._broker = broker
+        self._db = db
         self._threshold = threshold
         self._timeout_seconds = timeout_minutes * 60.0
         self._max_entry_atr = max_entry_atr_distance
@@ -84,6 +88,85 @@ class SniperEntryGuard:
             "too_shallow", "too_deep", "outside",
         )
         self._engine: Optional[ICTEngine] = None  # lazily created
+        self._load_watchlist()
+
+    # ── Watchlist persistence (bot_memory table) ─────────────────────
+
+    _WATCHLIST_BLOCK = "sniper_watchlist"
+
+    def _candidate_to_dict(self, c: SniperCandidate) -> dict:
+        """Serialize a SniperCandidate to a JSON-safe dict."""
+        return {
+            "added_at": c.added_at,
+            "entry_price": c.entry_price,
+            "atr": c.atr,
+            "direction": c.direction,
+            "symbol": c.symbol,
+            "fib_depth": c.fib_depth,
+            # Store only the essential signal fields needed for re-evaluation
+            "signal_strategy": c.signal.strategy,
+            "signal_direction": c.signal.direction,
+            "signal_entry_price": c.signal.entry_price,
+            "signal_stop_loss": c.signal.stop_loss,
+            "signal_tp1": c.signal.take_profit_1,
+            "signal_confidence": c.signal.confidence,
+            "signal_reason": c.signal.reason,
+            "signal_timestamp": c.signal.timestamp.isoformat() if c.signal.timestamp else "",
+        }
+
+    def _dict_to_candidate(self, d: dict) -> SniperCandidate:
+        """Reconstruct a SniperCandidate from a serialized dict."""
+        # Reconstruct a minimal Signal
+        sig = Signal(
+            strategy=d["signal_strategy"],
+            direction=d["signal_direction"],
+            entry_price=d["signal_entry_price"],
+            stop_loss=d["signal_stop_loss"],
+            take_profit_1=d["signal_tp1"],
+            confidence=d["signal_confidence"],
+            reason=d["signal_reason"],
+            timestamp=datetime.fromisoformat(d["signal_timestamp"]) if d.get("signal_timestamp") else datetime.now(UTC),
+        )
+        return SniperCandidate(
+            signal=sig,
+            added_at=d["added_at"],
+            entry_price=d["entry_price"],
+            atr=d["atr"],
+            direction=d["direction"],
+            symbol=d["symbol"],
+            fib_depth=d.get("fib_depth", ""),
+        )
+
+    def _save_watchlist(self) -> None:
+        """Persist current watchlist to bot_memory so it survives bot restarts."""
+        if not self._db:
+            return
+        try:
+            data = [self._candidate_to_dict(c) for c in self._watchlist]
+            self._db.write_memory_block(self._WATCHLIST_BLOCK, json.dumps(data))
+            logger.debug("SniperEntryGuard: saved %d candidates to DB", len(data))
+        except Exception as exc:
+            logger.debug("SniperEntryGuard: could not save watchlist: %s", exc)
+
+    def _load_watchlist(self) -> None:
+        """Restore watchlist from bot_memory on startup."""
+        if not self._db:
+            return
+        try:
+            raw = self._db.read_memory_block(self._WATCHLIST_BLOCK)
+            if not raw:
+                return
+            items = json.loads(raw)
+            if not items:
+                return
+            self._watchlist = [self._dict_to_candidate(d) for d in items]
+            logger.info(
+                "SniperEntryGuard: restored %d candidates from persistent watchlist "
+                "(timeout=%.0fmin)",
+                len(self._watchlist), self._timeout_seconds / 60,
+            )
+        except Exception as exc:
+            logger.debug("SniperEntryGuard: could not load watchlist: %s", exc)
 
     # ── Public API ─────────────────────────────────────────────────────
 
@@ -120,6 +203,7 @@ class SniperEntryGuard:
             symbol=signal.symbol,
         )
         self._watchlist.append(candidate)
+        self._save_watchlist()
         logger.info(
             "SniperGuard UNCERTAN %s %s conf=%.2f < %.2f → HOLD (watchlist, timeout=%.0fm)",
             signal.symbol, signal.direction, signal.confidence, self._threshold,
@@ -145,6 +229,12 @@ class SniperEntryGuard:
             else:
                 changed.append((verdict, candidate))
 
+        # Remove confirmed/skipped/expired candidates and persist
+        if changed:
+            executed_symbols = {c.symbol for _, c in changed}
+            self._watchlist = [c for c in self._watchlist if c.symbol not in executed_symbols]
+            self._save_watchlist()
+
         return changed
 
     def prune_expired(self) -> list[SniperCandidate]:
@@ -154,6 +244,7 @@ class SniperEntryGuard:
         self._watchlist = [c for c in self._watchlist if now - c.added_at < self._timeout_seconds]
         if expired:
             logger.info("SniperGuard: pruned %d expired watchlist entries", len(expired))
+            self._save_watchlist()
         return expired
 
     def get_watchlist_size(self) -> int:
@@ -176,6 +267,7 @@ class SniperEntryGuard:
             c for c in self._watchlist
             if not (c.symbol == symbol and c.direction == direction)
         ]
+        self._save_watchlist()
 
     def _check_watchlist(
         self, candidate: SniperCandidate, ctx: MarketContext

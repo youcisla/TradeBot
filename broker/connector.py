@@ -145,6 +145,14 @@ class BrokerConnector(ABC):
         """
         return None
 
+    def get_daily_pnl(self) -> float:
+        """Return today's realised P&L from the broker's own history.
+
+        Sums the profit of all closed deals since midnight UTC.
+        Falls back to 0.0 if the broker doesn't support history queries.
+        """
+        return 0.0
+
     # ── reconciliation ───────────────────────────────────────────────────
 
     @abstractmethod

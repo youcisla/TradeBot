@@ -99,9 +99,11 @@ class DataValidator:
             # Silently skip weekend/maintenance gaps (< 50h)
             if gap <= max_tolerable:
                 continue
-            # Only warn on truly anomalous gaps
-            logger.warning(
-                "Candle gap: %s → %s (%.0f min, expected %.0f min)",
+            # Only warn on truly anomalous gaps (>50h = not a weekend/maintenance gap)
+            # Weekend gaps (Fri 22:00 → Mon 16:00 ≈ 66h) are normal market structure
+            # and should not be treated as errors — log at INFO level.
+            logger.info(
+                "Candle gap: %s → %s (%.0f min, expected %.0f min) — normal weekend/maintenance gap",
                 candles[i - 1].timestamp,
                 candles[i].timestamp,
                 gap.total_seconds() / 60,

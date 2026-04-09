@@ -133,6 +133,9 @@ class CrucixClient:
         self._cached_context: MacroContext | None = None
         self._cache_time: float = 0.0
         self._consecutive_failures: int = 0
+        # Exponential backoff: after 3 consecutive failures, wait 2^failures * 30s
+        # before retrying. Prevents hammering a down server.
+        self._backoff_until: float = 0.0   # time.monotonic() when next retry is allowed
 
     # ── Public API ────────────────────────────────────────────────────────
 
@@ -141,29 +144,42 @@ class CrucixClient:
 
         Never raises — returns a safe default MacroContext if Crucix
         is unavailable.
+
+        After 3 consecutive failures, uses exponential backoff before retrying
+        (max 5 minutes between attempts) to avoid hammering a down server.
         """
-        # Return cached value if still fresh
         _t0 = time.monotonic()
+
+        # Return cached value if still fresh
         if self._cached_context and (time.monotonic() - self._cache_time) < self._cache_ttl:
             record_call("crucix_client", (time.monotonic() - _t0) * 1000.0, True)
             return self._cached_context
+
+        # Skip fetch while in backoff — return stale cache/defaults immediately
+        now = time.monotonic()
+        if now < self._backoff_until:
+            record_call("crucix_client", (time.monotonic() - _t0) * 1000.0, False)
+            return self._cached_context or MacroContext()
 
         try:
             raw = self._fetch_data()
             ctx = self._parse(raw)
             self._cached_context = ctx
-            self._cache_time = time.monotonic()
+            self._cache_time = now
             self._consecutive_failures = 0
+            self._backoff_until = 0.0   # clear backoff on success
             record_call("crucix_client", (time.monotonic() - _t0) * 1000.0, True)
             return ctx
         except Exception as exc:
             self._consecutive_failures += 1
+            backoff_secs = min(2 ** self._consecutive_failures * 30, 300)
+            self._backoff_until = now + backoff_secs
             # Only log once every 5 failures to avoid log spam
             if self._consecutive_failures <= 1 or self._consecutive_failures % 5 == 0:
                 logger.warning(
                     "CrucixClient: server unavailable (%s) — using safe defaults "
-                    "(failure #%d)",
-                    exc, self._consecutive_failures,
+                    "(failure #%d, backoff %.0fs)",
+                    exc, self._consecutive_failures, backoff_secs,
                 )
             # Return stale cache if available, else safe defaults
             record_call("crucix_client", (time.monotonic() - _t0) * 1000.0, False)

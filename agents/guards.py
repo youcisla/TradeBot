@@ -89,6 +89,8 @@ class SymbolWhitelistGuard(Guard):
         "TRXUSD",
         # Exotic USD pairs
         "USDHKD", "USDSGD", "USDCNH",
+        # Additional approved symbols (also in PRIORITY_SYMBOLS scan list)
+        "GAUUSD", "XAGUSD",
     }
 
     def __init__(self, allowed: set[str] | None = None) -> None:

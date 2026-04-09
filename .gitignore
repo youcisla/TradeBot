@@ -43,3 +43,12 @@ crucix/.env
 crucix/node_modules/
 
 *.pkl
+
+# Playwright
+.playwright-results/
+*.playwright/*.yml
+*.playwright-snapshots/
+.playwright-mcp/
+
+# Next.js
+web/coverage/

@@ -312,6 +312,7 @@ def main() -> None:
     if settings.SNIPER_ENTRY_ENABLED:
         sniper_guard = SniperEntryGuard(
             broker=broker,
+            db=db,
             threshold=settings.SNIPER_CONF_THRESHOLD,
             timeout_minutes=settings.SNIPER_TIMEOUT_MINUTES,
             max_entry_atr_distance=settings.SNIPER_MAX_ENTRY_ATR_DISTANCE,
@@ -477,7 +478,7 @@ def main() -> None:
                 _market_closed_logged = True
             # Still process commands and heartbeat
             try:
-                _update_heartbeat(db, broker, trade_manager, learning)
+                _update_heartbeat(db, broker, trade_manager)
             except Exception:
                 logger.warning("Heartbeat update failed — continuing")
             _process_commands(db, trade_manager, tool_system)
@@ -566,7 +567,7 @@ def main() -> None:
 
         # ── Bot status heartbeat ─────────────────────────────────────────
         try:
-            _update_heartbeat(db, broker, trade_manager, learning)
+            _update_heartbeat(db, broker, trade_manager)
         except Exception:
             logger.warning("Heartbeat update failed — continuing")
 
@@ -938,21 +939,10 @@ _hb_equity: float = 0.0
 _hb_balance: float = 0.0
 
 
-def _broker_call_safe(fn, *args, timeout: float = 5.0, default: float = 0.0) -> float:
-    """Call *fn* in a thread; return *default* if it hangs or raises."""
-    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
-        fut = ex.submit(fn, *args)
-        try:
-            return fut.result(timeout=timeout)
-        except Exception:
-            return default
-
-
 def _update_heartbeat(
     db: Database,
     broker: BrokerConnector,
     trade_manager: TradeManagerAgent,
-    learning: LearningAgent,
 ) -> None:
     """Write current bot metrics to bot_status row."""
     global _hb_equity, _hb_balance
@@ -968,9 +958,18 @@ def _update_heartbeat(
         _hb_balance = balance
     except Exception:
         balance = _hb_balance
-    open_count = len(trade_manager.get_open_trades())
-    report = learning.get_report()
-    daily_pnl = report.get("total_pnl", 0.0)
+    # Get open positions directly from MT5 — authoritative source, not in-memory list
+    try:
+        mt5_positions = broker.get_open_positions()
+        open_count = len(mt5_positions)
+    except Exception:
+        open_count = len(trade_manager.get_open_trades())
+
+    # Daily realised P&L directly from MT5 deal history (source of truth)
+    try:
+        daily_pnl = broker.get_daily_pnl()
+    except Exception:
+        daily_pnl = 0.0
     state = "paused" if telegram_bot.is_paused() else "running"
 
     # Check for untracked MT5 positions (equity/balance gap with 0 open trades)
@@ -1214,7 +1213,8 @@ def _run_iteration(
             data = market_agent.get_data(symbol)
         except DataValidationError as e:
             err_str = str(e)
-            is_ipc = "IPC" in err_str or "No tick data" in err_str or "-10004" in err_str
+            is_ipc = ("IPC" in err_str or "No tick data" in err_str
+                      or "-10004" in err_str or "Terminal: Call failed" in err_str)
             return (symbol, "error", is_re_enabled, None, None, err_str, is_ipc)
 
         if _tui:

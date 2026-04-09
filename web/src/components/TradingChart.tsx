@@ -76,6 +76,8 @@ export default function TradingChart({ symbol, timeframe, count = 500 }: Props) 
   const [status, setStatus] = useState<"loading" | "ok" | "error">("loading");
   const statusRef = useRef<"loading" | "ok" | "error">("loading");
   const errorReasonRef = useRef<"server_down" | "no_data">("server_down");
+  // Stop polling once server is confirmed down — prevents console spam from repeated 503s
+  const serverDownRef = useRef(false);
   const setStatusSync = (s: "loading" | "ok" | "error") => {
     statusRef.current = s;
     setStatus(s);
@@ -86,9 +88,13 @@ export default function TradingChart({ symbol, timeframe, count = 500 }: Props) 
       const res = await fetch(
         `/api/candles?symbol=${encodeURIComponent(symbol)}&timeframe=${encodeURIComponent(timeframe)}&count=${count}`
       );
-      if (!res.ok) return null;
+      if (!res.ok) {
+        if (res.status === 503) serverDownRef.current = true;
+        return null;
+      }
       return (await res.json()) as CandleRaw[];
     } catch {
+      serverDownRef.current = true;
       return null;
     }
   }, [symbol, timeframe, count]);
@@ -252,6 +258,7 @@ export default function TradingChart({ symbol, timeframe, count = 500 }: Props) 
       const candles = await fetchCandles();
       if (!active) return;
       if (!candles) {
+        serverDownRef.current = true;
         errorReasonRef.current = "server_down";
         setStatusSync("error");
         return;
@@ -333,7 +340,7 @@ export default function TradingChart({ symbol, timeframe, count = 500 }: Props) 
     loadInitial();
 
     intervalRef.current = setInterval(async () => {
-      if (!active) return;
+      if (!active || serverDownRef.current) return;
       const candles = await fetchCandles();
       if (!candles || candles.length === 0) return;
 
