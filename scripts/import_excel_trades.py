@@ -2,13 +2,17 @@
 import_excel_trades.py
 Backfills the trades table from ReportHistory-700074018.xlsx (MT5 statement export).
 
-Data sources used:
-  - Positions section (rows 7-63) → primary trade data (entry/exit prices,
-    S/L, volume, direction, profit).  One row = one closed trade.
-  - Deals section (rows 179-326)   → links position ticket → deal ticket for
-    broker_ticket field; also provides strategy name.
+NOTE: This script is for BACKFILLING historical trades ONLY. For live trading,
+the bot saves all trade data (P&L, swap, TP, close reason) directly from MT5
+at close time via get_closed_pnl() and get_closed_swap(). The DB is the
+single source of truth for trade history.
 
-57 trades from 2026.03.14 → 2026.04.09.  Net P&L confirmed: $784.83.
+Data sources used:
+  - Positions section → primary trade data (entry/exit prices, S/L, T/P,
+    volume, direction, profit, swap).  One row = one closed trade.
+    Scanning is DYNAMIC — no row limit, scans until "Orders" section.
+  - Deals section      → links position ticket → deal ticket for broker_ticket;
+    also provides strategy name.
 """
 
 from __future__ import annotations
@@ -68,29 +72,50 @@ def insert_trade(cur, row: dict) -> None:
     INSERT INTO trades (
         id, symbol, strategy, direction,
         entry_price, lot_size, stop_loss,
-        take_profit_1, take_profit_2, take_profit_3,
-        tp1_lots, tp2_lots, tp3_lots,
-        tp1_hit, tp2_hit, tp3_hit,
+        take_profit_1, take_profit_2, take_profit_3, take_profit_4,
+        tp1_lots, tp2_lots, tp3_lots, tp4_lots,
+        tp1_hit, tp2_hit, tp3_hit, tp4_hit,
         status, open_time, close_time,
-        pnl, commission, close_reason,
+        pnl, commission, swap, close_reason,
         broker_ticket, spread_at_entry
     ) VALUES (
         %(id)s, %(symbol)s, %(strategy)s, %(direction)s,
         %(entry_price)s, %(lot_size)s, %(stop_loss)s,
-        %(take_profit_1)s, %(take_profit_2)s, %(take_profit_3)s,
-        %(tp1_lots)s, %(tp2_lots)s, %(tp3_lots)s,
-        %(tp1_hit)s, %(tp2_hit)s, %(tp3_hit)s,
+        %(take_profit_1)s, %(take_profit_2)s, %(take_profit_3)s, %(take_profit_4)s,
+        %(tp1_lots)s, %(tp2_lots)s, %(tp3_lots)s, %(tp4_lots)s,
+        %(tp1_hit)s, %(tp2_hit)s, %(tp3_hit)s, %(tp4_hit)s,
         %(status)s, %(open_time)s, %(close_time)s,
-        %(pnl)s, %(commission)s, %(close_reason)s,
+        %(pnl)s, %(commission)s, %(swap)s, %(close_reason)s,
         %(broker_ticket)s, %(spread_at_entry)s
     )
     ON CONFLICT (id) DO UPDATE SET
-        symbol       = EXCLUDED.symbol,
-        close_time   = EXCLUDED.close_time,
-        pnl          = EXCLUDED.pnl,
-        status       = EXCLUDED.status,
-        strategy     = EXCLUDED.strategy,
-        close_reason = EXCLUDED.close_reason;
+        symbol         = EXCLUDED.symbol,
+        strategy       = EXCLUDED.strategy,
+        direction      = EXCLUDED.direction,
+        entry_price    = EXCLUDED.entry_price,
+        lot_size       = EXCLUDED.lot_size,
+        stop_loss      = EXCLUDED.stop_loss,
+        take_profit_1  = EXCLUDED.take_profit_1,
+        take_profit_2  = EXCLUDED.take_profit_2,
+        take_profit_3  = EXCLUDED.take_profit_3,
+        take_profit_4  = EXCLUDED.take_profit_4,
+        tp1_lots       = EXCLUDED.tp1_lots,
+        tp2_lots       = EXCLUDED.tp2_lots,
+        tp3_lots       = EXCLUDED.tp3_lots,
+        tp4_lots       = EXCLUDED.tp4_lots,
+        tp1_hit        = EXCLUDED.tp1_hit,
+        tp2_hit        = EXCLUDED.tp2_hit,
+        tp3_hit        = EXCLUDED.tp3_hit,
+        tp4_hit        = EXCLUDED.tp4_hit,
+        status         = EXCLUDED.status,
+        open_time      = EXCLUDED.open_time,
+        close_time     = EXCLUDED.close_time,
+        pnl            = EXCLUDED.pnl,
+        commission     = EXCLUDED.commission,
+        swap           = EXCLUDED.swap,
+        close_reason   = EXCLUDED.close_reason,
+        broker_ticket  = EXCLUDED.broker_ticket,
+        spread_at_entry = EXCLUDED.spread_at_entry;
     """
     cur.execute(sql, row)
 
@@ -190,11 +215,27 @@ def main() -> None:
     pos_header = [c.value for c in ws[POS_HEADER_ROW]]
     logger.info("Positions header: %s", pos_header)
 
-    for i, row in enumerate(ws.iter_rows(min_row=POS_HEADER_ROW + 1, max_row=63, values_only=True), start=POS_HEADER_ROW + 1):
+    def safe_float(v):
+        """Return float or None (None means skip this row)."""
+        if v is None:
+            return None
+        try:
+            return float(v)
+        except (ValueError, TypeError):
+            return None
+
+    # Scan dynamically — stop at the first row that doesn't have a valid position entry.
+    # The "Orders" section has row[0] = "Open Time" which fails date parsing.
+    for i, row in enumerate(ws.iter_rows(min_row=POS_HEADER_ROW + 1, values_only=True), start=POS_HEADER_ROW + 1):
         if not row or row[0] is None:
             continue
-        if not isinstance(row[0], str) or "20" not in row[0]:
-            continue
+        # Stop when we hit the Orders section (row[0] no longer a date string)
+        if isinstance(row[0], str) and "20" not in row[0]:
+            break
+
+        entry_price = safe_float(row[5])
+        if entry_price is None:
+            continue  # Skip malformed or non-position rows
 
         # Handle partial closes where volume is "0.01 / 0.01" — use first part
         vol_raw = row[4]
@@ -211,14 +252,14 @@ def main() -> None:
             "symbol":      str(row[2]).strip() if row[2] else "",
             "type":        str(row[3]).strip().lower() if row[3] else "",
             "volume":      volume,
-            "entry_price": float(row[5]) if row[5] else 0.0,
-            "sl":          float(row[6]) if row[6] else 0.0,
+            "entry_price": entry_price,
+            "sl":          safe_float(row[6]) or 0.0,
             "tp":          row[7],                         # T/P value or None
             "close_time":  parse_time(row[8]),
-            "close_price": float(row[9]) if row[9] else 0.0,
-            "commission":  float(row[10]) if row[10] else 0.0,
-            "swap":        float(row[11]) if row[11] else 0.0,
-            "profit":      float(row[12]) if row[12] else 0.0,  # P&L in account currency
+            "close_price": safe_float(row[9]) or 0.0,
+            "commission":  safe_float(row[10]) or 0.0,
+            "swap":        safe_float(row[11]) or 0.0,
+            "profit":      safe_float(row[12]) or 0.0,     # P&L in account currency
         }
 
         if rec["pos_ticket"]:
@@ -258,17 +299,21 @@ def main() -> None:
                 "take_profit_1":   float(pos["tp"]) if pos["tp"] else 0.0,
                 "take_profit_2":   0.0,
                 "take_profit_3":   0.0,
+                "take_profit_4":   0.0,
                 "tp1_lots":        0.0,
                 "tp2_lots":        0.0,
                 "tp3_lots":        0.0,
+                "tp4_lots":        0.0,
                 "tp1_hit":         False,
                 "tp2_hit":         False,
                 "tp3_hit":         False,
+                "tp4_hit":         False,
                 "status":          "CLOSED",
                 "open_time":       pos["entry_time"],
                 "close_time":      pos["close_time"],
                 "pnl":             round(pos["profit"], 2),
                 "commission":     pos["commission"],
+                "swap":           pos["swap"],
                 "close_reason":    "",
                 "broker_ticket":  pos_ticket,
                 "spread_at_entry": 0.0,

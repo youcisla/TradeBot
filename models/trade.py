@@ -37,6 +37,7 @@ class Trade:
     pnl: float = 0.0
     current_price: float = 0.0   # latest broker price — updated every monitor cycle
     commission: float = 0.0   # round-trip commission charged by broker (deducted from pnl)
+    swap: float = 0.0         # overnight financing charged by broker (stored at close)
     expected_edge_pct: float = 0.0
     expected_pnl: float = 0.0
     close_reason: str = ""  # TP1, TP2, TP3, SL, MANUAL, EMERGENCY

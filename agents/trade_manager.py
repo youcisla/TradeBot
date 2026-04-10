@@ -429,7 +429,16 @@ class TradeManagerAgent:
             trade.status = "CLOSED"
             trade.close_time = datetime.now(UTC)
             trade.close_reason = "TP3"
-        true_pnl = round(trade.pnl - trade.commission, 2)
+            # Overwrite floating pnl with actual net from MT5 deal history before persisting.
+            realized = self._broker.get_closed_pnl(trade.broker_ticket)
+            if realized is not None:
+                trade.pnl = realized
+            realized_swap = self._broker.get_closed_swap(trade.broker_ticket)
+            if realized_swap is not None:
+                trade.swap = realized_swap
+        # trade.pnl is now the authoritative MT5 net P&L (commission already deducted at deal level).
+        # expected_pnl was set at open and does NOT include commission, so use trade.pnl directly.
+        true_pnl = trade.pnl
         expected_gap = round(true_pnl - float(trade.expected_pnl or 0.0), 2)
         self._state.save_trade(trade)
         if not has_runner:
@@ -439,19 +448,18 @@ class TradeManagerAgent:
                    f"TP3 hit on {trade.symbol}! "
                    + (f"Closed {trade.tp3_lots:.2f} lots — runner active to TP4={trade.take_profit_4:.5f}"
                       if has_runner else
-                      f"Trade fully closed (gross {trade.pnl:.2f} − commission {trade.commission:.2f} = {true_pnl:.2f}; "
-                      f"expected {trade.expected_pnl:.2f}, Δ {expected_gap:+.2f}) — perfect exit."),
+                      f"Trade fully closed net {true_pnl:.2f} "
+                      f"(expected {trade.expected_pnl:.2f}, Δ {expected_gap:+.2f}) — perfect exit."),
                    {"trade_id": trade.id, "tp": 3, "pnl": trade.pnl, "true_pnl": true_pnl,
                     "expected_pnl": trade.expected_pnl, "expected_gap": expected_gap,
                     "runner": has_runner})
-        logger.info("TP3 hit: trade %s — %s (true PnL so far %.2f)",
+        logger.info("TP3 hit: trade %s — %s (net PnL %.2f)",
                     trade.id, "runner continues" if has_runner else "fully closed", true_pnl)
         telegram_bot.send_message(
             f"🎯 TP3 hit: {trade.symbol} — "
             + (f"closed {trade.tp3_lots} lots, runner to TP4={trade.take_profit_4:.5f}"
                if has_runner else
-               f"fully closed gross {trade.pnl:.2f} − commission {trade.commission:.2f} = {true_pnl:.2f} | "
-               f"expected {trade.expected_pnl:.2f} | Δ {expected_gap:+.2f}")
+               f"fully closed net {true_pnl:.2f} | expected {trade.expected_pnl:.2f} | Δ {expected_gap:+.2f}")
         )
 
     def _handle_tp4(self, trade: Trade, pos_map: dict) -> None:
@@ -464,22 +472,26 @@ class TradeManagerAgent:
         trade.status = "CLOSED"
         trade.close_time = datetime.now(UTC)
         trade.close_reason = "TP4"
-        true_pnl = round(trade.pnl - trade.commission, 2)
+        realized = self._broker.get_closed_pnl(trade.broker_ticket)
+        if realized is not None:
+            trade.pnl = realized
+        realized_swap = self._broker.get_closed_swap(trade.broker_ticket)
+        if realized_swap is not None:
+            trade.swap = realized_swap
+        true_pnl = trade.pnl
         expected_gap = round(true_pnl - float(trade.expected_pnl or 0.0), 2)
         self._state.save_trade(trade)
         self._record_scalp_close(trade, true_pnl)
         self._close_thesis(trade, "CLOSED_WIN")
         self._emit("info",
                    f"TP4 (runner) hit on {trade.symbol}! Trade fully closed at HTF liquidity "
-                   f"(gross {trade.pnl:.2f} − commission {trade.commission:.2f} = {true_pnl:.2f}; "
-                   f"expected {trade.expected_pnl:.2f}, Δ {expected_gap:+.2f})",
+                   f"(net {true_pnl:.2f}; expected {trade.expected_pnl:.2f}, Δ {expected_gap:+.2f})",
                    {"trade_id": trade.id, "tp": 4, "pnl": trade.pnl, "true_pnl": true_pnl,
                     "expected_pnl": trade.expected_pnl, "expected_gap": expected_gap})
-        logger.info("TP4 runner hit: trade %s — fully closed (true PnL %.2f)", trade.id, true_pnl)
+        logger.info("TP4 runner hit: trade %s — fully closed (net PnL %.2f)", trade.id, true_pnl)
         telegram_bot.send_message(
             f"🚀 TP4 runner hit: {trade.symbol} — fully closed at HTF liquidity "
-            f"gross {trade.pnl:.2f} − commission {trade.commission:.2f} = {true_pnl:.2f} | "
-            f"expected {trade.expected_pnl:.2f} | Δ {expected_gap:+.2f}"
+            f"net {true_pnl:.2f} | expected {trade.expected_pnl:.2f} | Δ {expected_gap:+.2f}"
         )
 
     def _handle_sl(self, trade: Trade, pos_map: dict) -> None:
@@ -490,24 +502,28 @@ class TradeManagerAgent:
         trade.status = "CLOSED"
         trade.close_time = datetime.now(UTC)
         trade.close_reason = "SL"
-        true_pnl = round(trade.pnl - trade.commission, 2)
+        realized = self._broker.get_closed_pnl(trade.broker_ticket)
+        if realized is not None:
+            trade.pnl = realized
+        realized_swap = self._broker.get_closed_swap(trade.broker_ticket)
+        if realized_swap is not None:
+            trade.swap = realized_swap
+        true_pnl = trade.pnl
         expected_gap = round(true_pnl - float(trade.expected_pnl or 0.0), 2)
         self._state.save_trade(trade)
         self._record_scalp_close(trade, true_pnl)
         self._close_thesis(trade, "CLOSED_LOSS")
         self._emit("warn",
                    f"SL hit on {trade.symbol} — closed at loss "
-                   f"(gross {trade.pnl:.2f} − commission {trade.commission:.2f} = {true_pnl:.2f}; "
-                   f"expected {trade.expected_pnl:.2f}, Δ {expected_gap:+.2f}).",
+                   f"(net {true_pnl:.2f}; expected {trade.expected_pnl:.2f}, Δ {expected_gap:+.2f}).",
                    {"trade_id": trade.id, "pnl": trade.pnl, "commission": trade.commission,
                     "true_pnl": true_pnl, "expected_pnl": trade.expected_pnl,
                     "expected_gap": expected_gap})
-        logger.info("SL hit: trade %s — closed (gross PnL %.2f, commission %.2f, true %.2f)",
-                    trade.id, trade.pnl, trade.commission, true_pnl)
+        logger.info("SL hit: trade %s — closed (net PnL %.2f, expected %.2f, Δ %.2f)",
+                    trade.id, true_pnl, trade.expected_pnl, expected_gap)
         telegram_bot.send_message(
             f"🛑 SL hit: {trade.symbol} — "
-            f"gross {trade.pnl:.2f} − commission {trade.commission:.2f} = {true_pnl:.2f} | "
-            f"expected {trade.expected_pnl:.2f} | Δ {expected_gap:+.2f}"
+            f"net {true_pnl:.2f} | expected {trade.expected_pnl:.2f} | Δ {expected_gap:+.2f}"
         )
 
     def _handle_time_limit(self, trade: Trade, pos_map: dict, hours_open: float) -> None:
@@ -519,7 +535,13 @@ class TradeManagerAgent:
         trade.status = "CLOSED"
         trade.close_time = datetime.now(UTC)
         trade.close_reason = "TIME_LIMIT"
-        true_pnl = round(trade.pnl - trade.commission, 2)
+        realized = self._broker.get_closed_pnl(trade.broker_ticket)
+        if realized is not None:
+            trade.pnl = realized
+        realized_swap = self._broker.get_closed_swap(trade.broker_ticket)
+        if realized_swap is not None:
+            trade.swap = realized_swap
+        true_pnl = trade.pnl
         expected_gap = round(true_pnl - float(trade.expected_pnl or 0.0), 2)
         self._state.save_trade(trade)
         self._record_scalp_close(trade, true_pnl)
@@ -532,17 +554,15 @@ class TradeManagerAgent:
         self._emit("warn",
                    f"Time limit: {trade.symbol} closed after {hours_open:.1f}h "
                    f"(max={settings.MAX_HOURS_IN_TRADE}h) "
-                   f"(gross {trade.pnl:.2f} − commission {trade.commission:.2f} = {true_pnl:.2f}; "
-                   f"expected {trade.expected_pnl:.2f}, Δ {expected_gap:+.2f})",
+                   f"(net {true_pnl:.2f}; expected {trade.expected_pnl:.2f}, Δ {expected_gap:+.2f})",
                    {"trade_id": trade.id, "hours_open": round(hours_open, 1),
                     "pnl": trade.pnl, "true_pnl": true_pnl,
                     "expected_pnl": trade.expected_pnl, "expected_gap": expected_gap})
-        logger.warning("TIME_LIMIT: trade %s force-closed after %.1fh (true PnL %.2f)",
+        logger.warning("TIME_LIMIT: trade %s force-closed after %.1fh (net PnL %.2f)",
                        trade.id, hours_open, true_pnl)
         telegram_bot.send_message(
             f"⏰ Time limit: {trade.symbol} closed after {hours_open:.1f}h — "
-            f"gross {trade.pnl:.2f} − commission {trade.commission:.2f} = {true_pnl:.2f} | "
-            f"expected {trade.expected_pnl:.2f} | Δ {expected_gap:+.2f}"
+            f"net {true_pnl:.2f} | expected {trade.expected_pnl:.2f} | Δ {expected_gap:+.2f}"
         )
 
     # ── emergency close ──────────────────────────────────────────────────
@@ -557,7 +577,13 @@ class TradeManagerAgent:
             trade.status = "CLOSED"
             trade.close_time = datetime.now(UTC)
             trade.close_reason = reason
-            true_pnl = round(trade.pnl - trade.commission, 2)
+            realized = self._broker.get_closed_pnl(trade.broker_ticket)
+            if realized is not None:
+                trade.pnl = realized
+            realized_swap = self._broker.get_closed_swap(trade.broker_ticket)
+            if realized_swap is not None:
+                trade.swap = realized_swap
+            true_pnl = trade.pnl
             self._state.save_trade(trade)
             self._record_scalp_close(trade, true_pnl)
             self._close_thesis(trade, "CLOSED_SCRATCH")
@@ -571,7 +597,13 @@ class TradeManagerAgent:
                 trade.status = "CLOSED"
                 trade.close_time = datetime.now(UTC)
                 trade.close_reason = reason
-                true_pnl = round(trade.pnl - trade.commission, 2)
+                realized = self._broker.get_closed_pnl(trade.broker_ticket)
+                if realized is not None:
+                    trade.pnl = realized
+                realized_swap = self._broker.get_closed_swap(trade.broker_ticket)
+                if realized_swap is not None:
+                    trade.swap = realized_swap
+                true_pnl = trade.pnl
                 self._state.save_trade(trade)
                 self._record_scalp_close(trade, true_pnl)
                 self._close_thesis(trade, "CLOSED_SCRATCH")
@@ -588,7 +620,9 @@ class TradeManagerAgent:
         if not self._db:
             return
         try:
-            true_pnl = round(trade.pnl - trade.commission, 2)
+            # trade.pnl is now the authoritative MT5 net P&L (commission already deducted
+            # at the deal level). _close_thesis notes are for human reference only.
+            true_pnl = trade.pnl
             self._db.update_trade_outcome(
                 trade.id,
                 actual_outcome=outcome,

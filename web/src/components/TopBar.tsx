@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 
 export default function TopBar() {
   const [data, setData] = useState<Record<string, unknown> | null>(null);
+  const [tick, setTick] = useState<string>("—");
 
   const fetch_ = useCallback(async () => {
     try {
@@ -17,6 +18,19 @@ export default function TopBar() {
     const id = setInterval(fetch_, 8_000);
     return () => clearInterval(id);
   }, [fetch_]);
+
+  // Tick: use browser's local clock, always accurate
+  useEffect(() => {
+    const update = () => setTick(
+      new Date().toLocaleTimeString("en-US", {
+        hour: "2-digit", minute: "2-digit", second: "2-digit",
+        hour12: false, timeZone: "Europe/Paris",
+      })
+    );
+    update();
+    const tid = setInterval(update, 1_000);
+    return () => clearInterval(tid);
+  }, []);
 
   if (!data) {
     return (
@@ -64,17 +78,7 @@ export default function TopBar() {
         {/* Session + time */}
         <div style={styles.right}>
           <span style={styles.session}>overlap</span>
-          <span style={styles.tick}>
-            {data.last_tick
-              ? new Date(String(data.last_tick)).toLocaleTimeString("en-US", {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                  second: "2-digit",
-                  hour12: false,
-                  timeZone: "Europe/Paris",
-                })
-              : "—"}
-          </span>
+          <span style={styles.tick}>{tick}</span>
         </div>
       </div>
     </header>

@@ -145,6 +145,14 @@ class BrokerConnector(ABC):
         """
         return None
 
+    def get_closed_swap(self, ticket: int) -> float | None:
+        """Return the realised swap for a closed position by broker ticket.
+
+        Returns None if the broker doesn't support history queries (e.g. mock).
+        MT5Connector overrides this with history_deals_get().
+        """
+        return None
+
     def get_daily_pnl(self) -> float:
         """Return today's realised P&L from the broker's own history.
 

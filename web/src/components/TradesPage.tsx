@@ -32,6 +32,7 @@ interface Trade {
   open_time?: string;
   close_time?: string;
   pnl?: number;
+  swap?: number;
   close_reason?: string;
   commission?: number;
   current_price?: number;
@@ -43,6 +44,12 @@ function fmtUsd(v: number | undefined): string {
   const n = Number(v ?? 0);
   const f = Math.abs(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   return (n < 0 ? "-$" : "$") + f;
+}
+
+function fmtSwap(v: number | undefined): string {
+  const n = Number(v ?? 0);
+  if (!n) return "—";
+  return (n < 0 ? "-$" : "+$") + Math.abs(n).toFixed(2);
 }
 
 function fmtPrice(v: number | undefined): string {
@@ -157,6 +164,12 @@ function TradeDrawer({ trade, onClose }: { trade: Trade; onClose: () => void }) 
                 <div className="text-[10px] text-text-3 uppercase tracking-widest">Close Reason</div>
                 <div className="text-xs font-mono text-text-2">{trade.close_reason || "—"}</div>
               </div>
+              <div className="space-y-1">
+                <div className="text-[10px] text-text-3 uppercase tracking-widest">Swap</div>
+                <div className={`text-xs font-mono ${(trade.swap ?? 0) !== 0 ? (trade.swap! < 0 ? "text-red" : "text-text-2") : "text-text-3"}`}>
+                  {fmtSwap(trade.swap)}
+                </div>
+              </div>
             </div>
           </div>
 
@@ -241,6 +254,11 @@ export default function TradesPage() {
        const pnl = Number(row.pnl ?? 0);
        const color = pnl > 0 ? "text-gold" : pnl < 0 ? "text-red" : "text-text-3";
        return <span className={`font-bold ${color}`}>{pnl > 0 ? "+" : ""}{fmtUsd(pnl)}</span>
+    }},
+    { header: "SWAP", align: "right", cell: row => {
+       const swap = row.swap ?? 0;
+       if (!swap) return <span className="text-text-3">—</span>;
+       return <span className={swap < 0 ? "text-red" : "text-text-3"}>{fmtSwap(swap)}</span>
     }},
     { header: "DURATION", align: "right", cell: row => relAge(row.open_time, row.close_time) },
     { header: "STRATEGY", align: "center", cell: row => row.strategy ? <StrategyBadge strategy={row.strategy} /> : <span className="text-text-3">—</span> },

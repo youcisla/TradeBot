@@ -61,8 +61,8 @@ if ($Profile -ne "custom") {
 $doctorScript = Join-Path $Root "scripts\ops_doctor.py"
 if (-not $SkipDoctor -and (Test-Path $doctorScript)) {
     Write-Host "[*] Running ops doctor preflight..." -ForegroundColor Yellow
-    & $venvPython $doctorScript --root $Root --strict
-    if ($LASTEXITCODE -ne 0) {
+    $proc = Start-Process -FilePath $venvPython -ArgumentList ("`"$doctorScript`" --root `"$Root`" --strict") -PassThru -Wait -NoNewWindow
+    if ($proc.ExitCode -ne 0) {
         Write-Host "[ERROR] Ops doctor reported critical failures." -ForegroundColor Red
         Write-Host "        Fix issues above or rerun with -SkipDoctor to bypass." -ForegroundColor Yellow
         exit 1
@@ -115,6 +115,27 @@ if ($existingBot -or $existingWeb) {
         Write-Host "  Running web PID(s): $($existingWeb.ProcessId -join ', ')" -ForegroundColor Yellow
     }
     exit 1
+}
+
+# Also clear any orphaned next dev servers holding ports 3000/3001 before we start.
+foreach ($port in @(3000, 3001)) {
+    $stalePids = @()
+    foreach ($line in (netstat -ano)) {
+        if ($line -match 'LISTENING') {
+            $fields = $line.Trim() -split '\s+'
+            if ($fields.Count -ge 5 -and ($fields[1] -like ("*:" + $port))) {
+                $stalePids += $fields[4]
+            }
+        }
+    }
+    foreach ($procId in $stalePids) {
+        $p = Get-Process -Id $procId -ErrorAction SilentlyContinue
+        if ($p -and $p.MainWindowTitle -eq '') {
+            Write-Host ("[WARN] Port " + $port + " occupied by stale process " + $procId + " - clearing it") -ForegroundColor Yellow
+            Stop-Process -Id $procId -Force -ErrorAction SilentlyContinue
+            Start-Sleep -Milliseconds 500
+        }
+    }
 }
 
 # 2. Check Crucix intelligence (hosted on Vercel)

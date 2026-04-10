@@ -555,6 +555,16 @@ class MT5Connector(BrokerConnector):
             logger.debug("history_deals_get failed for ticket %d", ticket)
         return None
 
+    def get_closed_swap(self, ticket: int) -> float | None:
+        """Sum swap of all deals belonging to this position ticket."""
+        try:
+            deals = mt5.history_deals_get(position=ticket)
+            if deals:
+                return float(sum(d.swap for d in deals))
+        except Exception:
+            logger.debug("history_deals_get failed for ticket %d", ticket)
+        return None
+
     def get_daily_pnl(self) -> float:
         """Return today's realised P&L from MT5 deal history (midnight UTC → now)."""
         try:

@@ -5,7 +5,7 @@ import { getAgentReputation, getLeaderboard } from "@/lib/db";
 // GET /api/agents/leaderboard      — top agents by points
 export async function GET(request: Request) {
   try {
-    const { searchParams } = await request.nextUrl;
+    const { searchParams } = new URL(request.url);
     const name = searchParams.get("name");
 
     if (name) {

@@ -87,6 +87,11 @@ export interface Trade {
   take_profit_1: number;
   take_profit_2: number;
   take_profit_3: number;
+  take_profit_4: number;
+  tp1_lots: number;
+  tp2_lots: number;
+  tp3_lots: number;
+  tp4_lots: number;
   tp1_hit: boolean;
   tp2_hit: boolean;
   tp3_hit: boolean;
@@ -810,11 +815,15 @@ export async function followLeader(
 }
 
 export async function unfollowLeader(followerId: string, leaderId: string): Promise<boolean> {
-  const result = await query(
+  const rows = await query(
     `DELETE FROM subscriptions WHERE follower_id = $1 AND leader_id = $2`,
     [followerId, leaderId]
   );
-  return (result as { rowCount?: number }).rowCount !== undefined && (result as { rowCount: number }).rowCount > 0;
+  // pg DELETE returns rowCount in the result object, but our query() returns rows[]
+  // The array length tells us how many rows were matched and deleted
+  return (rows as unknown as { rowCount?: number }).rowCount !== undefined
+    ? (rows as unknown as { rowCount: number }).rowCount > 0
+    : (rows as unknown[]).length > 0;
 }
 
 export async function getFollowers(leaderId: string): Promise<Subscription[]> {

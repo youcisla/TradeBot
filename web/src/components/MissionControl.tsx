@@ -188,7 +188,7 @@ export default function MissionControl() {
   const { status: shellStatus, isRunning } = useAppShell();
 
   const { data: events    } = useAgentEvents(80);
-  const { data: positions } = useTrades();
+  const { data: positions } = useTrades(true);
 
   const [cmdFeedback, setCmdFeedback] = useState<{ msg: string; ok: boolean } | null>(null);
 
@@ -311,7 +311,7 @@ export default function MissionControl() {
               LAST TICK
             </span>
             <span style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "#adaaaa" }}>
-              {relTime(shellStatus?.last_tick)}
+              {relTime(shellStatus?.last_tick ?? undefined)}
             </span>
           </div>
         </div>

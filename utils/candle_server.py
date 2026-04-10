@@ -214,7 +214,8 @@ class _CandleHandler(BaseHTTPRequestHandler):
 
             if deals:
                 for deal in deals:
-                    ticket = int(getattr(deal, "position", 0) or 0)
+                    # ticket is the position_id — groups all deals for the same trade
+                    ticket = int(getattr(deal, "position_id", 0) or 0)
                     if not ticket:
                         continue
                     if ticket not in closed_trades:

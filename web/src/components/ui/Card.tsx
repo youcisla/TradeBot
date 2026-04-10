@@ -37,8 +37,8 @@ export const CardHeader = ({ children, className = '', style }: { children: Reac
   </div>
 );
 
-export const CardBody = ({ children, className = '' }: { children: React.ReactNode, className?: string }) => (
-  <div className={`p-4 ${className}`}>
+export const CardBody = ({ children, className = '', style }: { children: React.ReactNode; className?: string; style?: React.CSSProperties }) => (
+  <div className={`p-4 ${className}`} style={style}>
     {children}
   </div>
 );
