@@ -184,6 +184,8 @@ class NeuralSettings(BaseModel):
     train_epochs: int = Field(default=100, ge=1)
     retrain_every: int = Field(default=20, ge=1)
     min_confidence: float = Field(default=0.55, ge=0.0, le=1.0)
+    lgbm_ensemble_enabled: bool = True
+    kalman_enabled: bool = Field(default=False)
 
 
 class GarchSettings(BaseModel):
@@ -679,6 +681,8 @@ def _build_settings() -> _Settings:
         train_epochs=_int("NEURAL_TRAIN_EPOCHS", "100"),
         retrain_every=_int("NEURAL_RETRAIN_EVERY", "20"),
         min_confidence=_float("NEURAL_MIN_CONFIDENCE", "0.55"),
+        lgbm_ensemble_enabled=_bool("LGBM_ENSEMBLE_ENABLED", "true"),
+        kalman_enabled=_bool("KALMAN_ENABLED", "false"),
     )
 
     # GARCH
@@ -1108,6 +1112,8 @@ NEURAL_NUM_LAYERS: int = settings.neural.num_layers
 NEURAL_TRAIN_EPOCHS: int = settings.neural.train_epochs
 NEURAL_RETRAIN_EVERY: int = settings.neural.retrain_every
 NEURAL_MIN_CONFIDENCE: float = settings.neural.min_confidence
+LGBM_ENSEMBLE_ENABLED: bool = settings.neural.lgbm_ensemble_enabled
+KALMAN_ENABLED: bool = settings.neural.kalman_enabled
 
 # GARCH
 GARCH_ENABLED: bool = settings.garch.enabled
