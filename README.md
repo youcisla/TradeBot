@@ -19,6 +19,7 @@ An autonomous algorithmic trading system for MetaTrader 5 with a layered ML mode
 - **Crucix Macro Layer** — 27 global data sources (VIX, yield curve, geopolitics, OSINT); flash blackout and adaptive lot scaling
 - **Scan-Rank-Execute Pipeline** — evaluates all 30 symbols, ranks signals by final confidence, executes the highest-quality opportunity
 - **Real-Time Dashboard** — Next.js 14 UI on Vercel; agent feed, open trades, equity curve, command panel
+- **Intelligent Command Center** — Adaptive dashboard that surfaces what matters: live session chip, spread condition badge, market regime, VIX, equity drawdown gauges, severity-sorted agent feed, and AI-generated market insight
 - **Strategy Plugin System** — inject custom strategies at runtime without modifying orchestration code
 
 ---
@@ -263,7 +264,7 @@ TradeBot/
 |   +-- telegram_bot.py             # Telegram alerts + remote commands
 +-- web/                            # Next.js 14 dashboard (Vercel)
 |   +-- src/app/                    # Routes: dashboard, trades, analytics, ict, learning, strategy
-|   +-- src/components/             # BotStatusBar, AgentFeed, OpenTradesTable, etc.
+|   +-- src/components/             # TopBar, IntelligencePanel, SmartAlertFeed, NewDashboard, WorldStrip, etc.
 |   +-- src/lib/                    # auth.ts, db.ts, time.ts
 |   +-- vercel.json                 # Vercel deployment config
 +-- logs/                           # Runtime logs (auto-created)
@@ -449,7 +450,7 @@ Every signal passes a mandatory 6-step validation gate before a trade is opened:
 | `strategy_confidence` | Per-strategy confidence values over time |
 | `agent_events` | Timestamped entries from all 12 agents (powers the dashboard feed) |
 | `bot_commands` | Command queue from dashboard UI to the bot |
-| `bot_status` | Single-row heartbeat: state, equity, open trades, daily PnL |
+| `bot_status` | Single-row heartbeat: state, equity, open trades, daily PnL, spread condition, session, regime, VIX, drawdown % |
 | `ict_setups` | ICT/SMC setup analysis log with confluences and scoring breakdown |
 
 ### File Logs
@@ -475,13 +476,15 @@ Live at `https://trade-bot-ki33.vercel.app`:
 
 | Page | Content |
 |---|---|
-| **Dashboard** | Bot status bar, real-time agent feed, open trades table, command panel, equity curve |
+| **Dashboard** | Intelligent command center — live session chip, equity/KPI bar, TradingView chart, smart alert feed, trade table |
 | **Trades** | Full trade history with TP hits, PnL, duration, and strategy attribution |
 | **Analytics** | Performance charts, symbol breakdown, session analysis with timezone support |
-| **ICT** | ICT/SMC setup distribution, confluence frequency, session stats, scoring breakdown |
-| **Strategy** | Strategy explanations, methodology, and pipeline overview |
+| **Brain** | Neural/stategy insights and mesh visualization |
 | **Learning** | Per-strategy confidence bars and score history |
-| **Commands** | Pause, resume, kill, close individual trades |
+| **Risk** | Real-time risk gauges — daily loss %, equity drawdown, spread condition, VIX |
+| **Markets** | Market intel, session timing, spread monitoring |
+| **Signals** | Active signal pipeline, confidence scores, council decisions |
+| **Health** | Bot health diagnostics, agent mesh status, uptime |
 
 ---
 
