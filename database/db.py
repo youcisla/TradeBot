@@ -19,6 +19,10 @@ All new code should use the repository sub-objects directly:
     db.trades.save(trade)
     db.events.log_agent_event("agent", "info", "message")
     db.status.update_bot_status("running", equity=1000, ...)
+    db.users.get_user_by_username("alice")
+    db.signals.save_signal(...)
+    db.social.get_leaderboard()
+    db.macro.save_macro_snapshot(...)
 
 All existing callers (agents, strategies, web API) continue using the
 facade methods with zero changes required:
@@ -47,6 +51,10 @@ from .event_repo import EventRepo
 from .status_repo import StatusRepo
 from .learning_repo import LearningRepo
 from .broker_repo import BrokerRepo
+from .user_repo import UserRepo
+from .signal_repo import SignalRepo
+from .social_repo import SocialRepo
+from .macro_repo import MacroRepo
 
 logger = logging.getLogger(__name__)
 
@@ -67,6 +75,10 @@ class Database:
         self.status = StatusRepo(self._pool)
         self.learning = LearningRepo(self._pool)
         self.broker = BrokerRepo(self._pool)
+        self.users = UserRepo(self._pool)
+        self.signals = SignalRepo(self._pool)
+        self.social = SocialRepo(self._pool)
+        self.macro = MacroRepo(self._pool)
 
         self._create_tables()
 
@@ -329,12 +341,12 @@ class Database:
     def mark_broker_connected(self, account_id: int) -> None:
         return self.broker.mark_broker_connected(account_id)
 
-    # ── ICT setups (facade → broker repo) ───────────────────────────────
+    # ── ICT setups (facade → signals repo) ───────────────────────────────
 
     def save_ict_setup(self, setup: dict) -> None:
-        return self.broker.save_ict_setup(setup)
+        return self.signals.save_ict_setup(setup)
 
-    # ── trade theses (facade → broker repo) ─────────────────────────────
+    # ── trade theses (facade → signals repo) ─────────────────────────────
 
     def save_trade_thesis(self, *, symbol: str, direction: str = "",
                           stage: str = "IDEA", trade_id: str | None = None,
@@ -344,7 +356,7 @@ class Database:
                           rr_ratio: float | None = None,
                           bull_case: str = "", bear_case: str = "",
                           entry_reason: str = "", notes: str = "") -> int:
-        return self.broker.save_trade_thesis(
+        return self.signals.save_trade_thesis(
             symbol=symbol, direction=direction, stage=stage,
             trade_id=trade_id, entry_price=entry_price,
             sl_price=sl_price, tp_price=tp_price, rr_ratio=rr_ratio,
@@ -352,38 +364,38 @@ class Database:
             entry_reason=entry_reason, notes=notes)
 
     def get_trade_thesis(self, trade_id: str) -> dict | None:
-        return self.broker.get_trade_thesis(trade_id)
+        return self.signals.get_trade_thesis(trade_id)
 
     def update_trade_outcome(self, trade_id: str, *,
                              actual_outcome: str,
                              mae_pips: float | None = None,
                              mfe_pips: float | None = None,
                              notes: str = "") -> None:
-        return self.broker.update_trade_outcome(
+        return self.signals.update_trade_outcome(
             trade_id, actual_outcome=actual_outcome,
             mae_pips=mae_pips, mfe_pips=mfe_pips, notes=notes)
 
-    # ── dashboard users (facade → broker repo) ──────────────────────────
+    # ── dashboard users (facade → users repo) ──────────────────────────
 
     def get_user_by_username(self, username: str) -> dict | None:
-        return self.broker.get_user_by_username(username)
+        return self.users.get_user_by_username(username)
 
     def get_user_by_id(self, user_id: int) -> dict | None:
-        return self.broker.get_user_by_id(user_id)
+        return self.users.get_user_by_id(user_id)
 
     def create_user(self, username: str, password_hash: str) -> int:
-        return self.broker.create_user(username, password_hash)
+        return self.users.create_user(username, password_hash)
 
     def update_user_password(self, user_id: int, password_hash: str) -> None:
-        return self.broker.update_user_password(user_id, password_hash)
+        return self.users.update_user_password(user_id, password_hash)
 
     def get_all_users(self) -> list[dict]:
-        return self.broker.get_all_users()
+        return self.users.get_all_users()
 
     def user_count(self) -> int:
-        return self.broker.user_count()
+        return self.users.user_count()
 
-    # ── signals (facade → broker repo) ─────────────────────────────────
+    # ── signals (facade → signals repo) ─────────────────────────────────
 
     def save_signal(self, *, signal_intent: str, signal_type: str,
                     strategy: str, symbol: str = "", direction: str = "",
@@ -391,7 +403,7 @@ class Database:
                     take_profit_1: float = 0.0, confidence: float = 0.5,
                     reason: str = "", bull_case: str = "", bear_case: str = "",
                     author: str = "bot", tags: list[str] | None = None) -> int:
-        return self.broker.save_signal(
+        return self.signals.save_signal(
             signal_intent=signal_intent, signal_type=signal_type,
             strategy=strategy, symbol=symbol, direction=direction,
             entry_price=entry_price, stop_loss=stop_loss,
@@ -404,60 +416,60 @@ class Database:
                     strategy: str | None = None,
                     author: str | None = None,
                     limit: int = 50) -> list[dict]:
-        return self.broker.get_signals(
+        return self.signals.get_signals(
             signal_intent=signal_intent, signal_type=signal_type,
             strategy=strategy, author=author, limit=limit)
 
     def mark_signal_points_awarded(self, signal_id: int) -> None:
-        return self.broker.mark_signal_points_awarded(signal_id)
+        return self.signals.mark_signal_points_awarded(signal_id)
 
-    # ── agent reputation (facade → broker repo) ─────────────────────────
+    # ── agent reputation (facade → social repo) ─────────────────────────
 
     def get_agent_reputation(self, agent: str) -> dict:
-        return self.broker.get_agent_reputation(agent)
+        return self.social.get_agent_reputation(agent)
 
     def bump_agent_reputation(self, agent: str, *, adopted: bool = False,
                               points_delta: int = 0,
                               score_delta: int = 0) -> None:
-        return self.broker.bump_agent_reputation(
+        return self.social.bump_agent_reputation(
             agent, adopted=adopted, points_delta=points_delta, score_delta=score_delta)
 
     def get_leaderboard(self, limit: int = 10) -> list[dict]:
-        return self.broker.get_leaderboard(limit)
+        return self.social.get_leaderboard(limit)
 
-    # ── subscriptions (facade → broker repo) ────────────────────────────
+    # ── subscriptions (facade → social repo) ────────────────────────────
 
     def save_subscription(self, follower_id: str, leader_id: str,
                           leader_strategy: str = "all") -> int:
-        return self.broker.save_subscription(follower_id, leader_id, leader_strategy)
+        return self.social.save_subscription(follower_id, leader_id, leader_strategy)
 
     def get_subscriptions(self, follower_id: str | None = None,
                           leader_id: str | None = None) -> list[dict]:
-        return self.broker.get_subscriptions(follower_id, leader_id)
+        return self.social.get_subscriptions(follower_id, leader_id)
 
     def delete_subscription(self, follower_id: str, leader_id: str) -> bool:
-        return self.broker.delete_subscription(follower_id, leader_id)
+        return self.social.delete_subscription(follower_id, leader_id)
 
     def get_followers(self, leader_id: str) -> list[dict]:
-        return self.broker.get_followers(leader_id)
+        return self.social.get_followers(leader_id)
 
-    # ── macro snapshots (facade → broker repo) ─────────────────────────
+    # ── macro snapshots (facade → macro repo) ─────────────────────────
 
     def save_macro_snapshot(self, snapshot_data: dict) -> None:
-        return self.broker.save_macro_snapshot(snapshot_data)
+        return self.macro.save_macro_snapshot(snapshot_data)
 
     def get_macro_snapshots(self, lookback_hours: int = 24,
                             risk_tier: str | None = None,
                             limit: int = 100) -> list[dict]:
-        return self.broker.get_macro_snapshots(lookback_hours, risk_tier, limit)
+        return self.macro.get_macro_snapshots(lookback_hours, risk_tier, limit)
 
     def prune_macro_snapshots(self, keep_hours: int = 168) -> int:
-        return self.broker.prune_macro_snapshots(keep_hours)
+        return self.macro.prune_macro_snapshots(keep_hours)
 
-    # ── persistent agent memory (facade → broker repo) ─────────────────
+    # ── persistent agent memory (facade → macro repo) ─────────────────
 
     def write_memory_block(self, block_name: str, content: str) -> None:
-        return self.broker.write_memory_block(block_name, content)
+        return self.macro.write_memory_block(block_name, content)
 
     def read_memory_block(self, block_name: str) -> str | None:
-        return self.broker.read_memory_block(block_name)
+        return self.macro.read_memory_block(block_name)

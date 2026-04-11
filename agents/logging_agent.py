@@ -92,19 +92,8 @@ class LoggingAgent:
         self._trade_csv = self._log_dir / "trade_journal.csv"
         self._risk_reject_throttle_seconds = 300.0
         self._risk_reject_cache: dict[tuple[str, str, str, str], tuple[float, int]] = {}
-        self._memory_instance: object | None = None   # MemoryAgent — lazy
         self._configure_logging()
         self._ensure_csv_header()
-
-    # ── lazy singletons ──────────────────────────────────────────────────
-
-    @property
-    def _memory(self) -> object:
-        """Return a MemoryAgent instance, constructing it on first access."""
-        if self._memory_instance is None:
-            from agents.memory_agent import MemoryAgent
-            self._memory_instance = MemoryAgent(db=self._db)
-        return self._memory_instance  # type: ignore[return-value]
 
     # ── public API ───────────────────────────────────────────────────────
 
@@ -138,11 +127,6 @@ class LoggingAgent:
             )
         telegram_bot.send_message(msg)
         self.record("DAILY_SUMMARY", msg)
-        # Persist daily stats to persistent memory (fail-open).
-        try:
-            self._memory.update_performance_journal(report)  # type: ignore[union-attr]
-        except Exception:
-            pass
 
     def log_trade_to_csv(self, trade: Trade) -> None:
         """Append a trade row to the CSV journal for offline analysis."""
@@ -161,11 +145,6 @@ class LoggingAgent:
                 trade.snap_near_news_event, trade.snap_market_condition,
                 trade.snap_session, trade.snap_day_of_week,
             ])
-        # Persist trade outcome to persistent memory (fail-open).
-        try:
-            self._memory.update_trade_history([trade])  # type: ignore[union-attr]
-        except Exception:
-            pass
 
     def log_risk_rejection(self, symbol: str, direction: str,
                            strategy: str, reason: str) -> None:

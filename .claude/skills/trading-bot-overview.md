@@ -45,10 +45,7 @@ SUPPORT:   learning · model_manager · logging · debate · exposure · memory
 
 **Support utilities in `agents/`:**
 - `guards.py` — GuardPipeline + 7 guards (runs inside ExecutionAgent)
-- `exposure_coach.py` — concentration/correlation advisor (runs inside ExecutionAgent)
-- `deepseek_strategy.py` — DeepSeek LLM strategy (invoked by StrategyAgent)
 - `reflector.py` — post-trade reflection
-- `signal_postmortem.py` — trade postmortem
 
 ---
 
@@ -58,14 +55,11 @@ SUPPORT:   learning · model_manager · logging · debate · exposure · memory
 |---|---|---|
 | ICT/SMC | `strategies/ict_strategy.py` + `strategies/ict/` | **Active** — primary |
 | Neural LSTM | `agents/neural_strategy.py` | **Active** — secondary (via ModelManager) |
-| DeepSeek LLM | `agents/deepseek_strategy.py` (via StrategyAgent) | **Active** — LLM-based |
 | Unified | `strategies/unified_strategy.py` | Aggregator across all strategies |
-| SMA Crossover | `strategies/sma_crossover.py` | Legacy / reference only |
 
 ### DeepSeek Multi-Agent Mode
 - `DEEPSEEK_AGENT_SWARM_ENABLED=true` enables parallel specialist LLM roles (trend/structure/risk)
 - Responses aggregated into one consensus signal (`deepseek_swarm`) with averaged SL/TP and confidence
-- Adaptive neural mesh (`DEEPSEEK_MESH_*`) learns per-agent trust/coherence; mesh state modeled in `models/agent_mesh.py`
 - Off by default; guarded behind env flags in `config/settings.py`
 
 ### ICT Engine (10 modules in `strategies/ict/`)

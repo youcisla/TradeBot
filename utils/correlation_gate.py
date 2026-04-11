@@ -18,59 +18,80 @@ logger = logging.getLogger(__name__)
 class CorrelationGate:
     """
     Tracks correlation between open positions and gates new trades.
-    
+
     Usage:
-        gate = CorrelationGate(correlation_threshold=0.80, lookback_days=30)
-        
+        gate = CorrelationGate(correlation_threshold=0.80, lookback_bars=100)
+
         can_trade, multiplier = gate.check_correlation(
             symbol='GBPUSD',
-            open_positions=['EURUSD'],  # Current long/short pairs
+            open_positions=[{'symbol': 'EURUSD', 'direction': 'long'}],
             price_history={
-                'EURUSD': [...],  # Last 30 days of closes
+                'EURUSD': [...],  # Last N closes
                 'GBPUSD': [...],
             }
         )
-        
+
         if can_trade:
-            lot_size = normal_lot * multiplier  # E.g., multiplier=0.5 if corr > 0.80
+            lot_size = normal_lot * multiplier  # E.g., multiplier=0.5 if corr > threshold
+
+    To check readiness before calling check_correlation::
+
+        if gate.has_data('EURUSD'):
+            # dynamic correlation is available
     """
-    
+
     def __init__(
         self,
-        correlation_threshold: float = 0.80,
-        lookback_days: int = 30,
+        threshold: float = 0.80,
+        lookback_bars: int = 100,
         size_multiplier: float = 0.5,  # Reduce to 50% if correlated
+        lookback_days: int = 30,
     ):
         """
         Args:
-            correlation_threshold: If |corr| > this, considered correlated (0–1)
-            lookback_days: Historical window for correlation calc
-            size_multiplier: Position multiplier when correlated (0–1)
+            threshold: If |corr| > this, considered correlated (0–1).
+            lookback_bars: Number of H1 bars to fetch for correlation calc.
+            size_multiplier: Position multiplier when correlated (0–1).
+            lookback_days: Historical window for correlation calc.
         """
-        self.correlation_threshold = correlation_threshold
-        self.lookback_days = lookback_days
+        self.correlation_threshold = threshold
+        self.lookback_bars = lookback_bars
         self.size_multiplier = size_multiplier
+        self.lookback_days = lookback_days
+        # Price history cache populated by _check_correlation before calling check_correlation.
+        self._price_cache: dict[str, list[float]] = {}
+
+    def has_data(self, symbol: str) -> bool:
+        """Return True if we have cached price history for *symbol* with enough bars."""
+        bars = self._price_cache.get(symbol, [])
+        return len(bars) >= self.lookback_bars
     
     def check_correlation(
         self,
         symbol: str,
         open_positions: List[Dict],  # [{symbol, direction, lot_size, entry_price}, ...]
-        price_history: Dict[str, List[float]],  # {symbol: [closes...], ...}
+        price_history: Dict[str, List[float]] | None = None,
     ) -> Tuple[bool, float]:
         """
         Check if new trade is correlated with existing open positions.
-        
+
         Returns:
             (can_trade, size_multiplier)
             can_trade = True (always, but multiplier reflects correlation penalty)
             size_multiplier = 1.0 (normal) or self.size_multiplier (0.5 if corr > threshold)
+
+        If *price_history* is not provided, reads from the internal _price_cache.
         """
         if not open_positions:
             return True, 1.0  # No open positions, no correlation issue
-        
+
+        # Use supplied price_history or fall back to cached data
+        if price_history is None:
+            price_history = self._price_cache
+
         if symbol not in price_history:
             return True, 1.0  # No price history for symbol, can't check
-        
+
         new_prices = price_history[symbol]
         
         max_abs_corr = 0.0

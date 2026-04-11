@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from database.pool import ConnectionPool
+from database.retry import with_retry
 
 
 class StatusRepo:
@@ -20,6 +21,7 @@ class StatusRepo:
     def _put(self, conn):
         self._pool.put_conn(conn)
 
+    @with_retry()
     def update_bot_status(
         self,
         state: str,

@@ -37,15 +37,6 @@ class CrucixAgent:
     def __init__(self, db: "Database | None" = None) -> None:
         self._db = db
         self._client: CrucixClient = get_client()
-        self._memory_instance: object | None = None   # MemoryAgent — lazy
-
-    @property
-    def _memory(self) -> object:
-        """Return a MemoryAgent instance, constructing it on first access."""
-        if self._memory_instance is None:
-            from agents.memory_agent import MemoryAgent
-            self._memory_instance = MemoryAgent(db=self._db)
-        return self._memory_instance
 
     # ── public API ───────────────────────────────────────────────────────
 
@@ -99,21 +90,6 @@ class CrucixAgent:
         except Exception:
             logger.exception("CrucixAgent.run failed")
             record_call("crucix", (time.monotonic() - _t0) * 1000.0, False)
-            # Cross-session fallback: use last persisted regime.
-            try:
-                stored = self._memory.read_market_regime()  # type: ignore[union-attr]
-                if stored:
-                    import json as _json
-                    _payload = _json.loads(stored)
-                    _ctx = MacroContext(
-                        risk_tier=_payload.get("risk_tier", "CLEAR"),
-                        vix=float(_payload.get("vix", 0.0)),
-                        osint_sentiment=_payload.get("osint_sentiment", "neutral"),
-                    )
-                    logger.info("CrucixAgent: using persisted regime (cross-session fallback)")
-                    return _ctx
-            except Exception:
-                pass
             return MacroContext()
 
     def is_blackout(self, symbol: str) -> bool:

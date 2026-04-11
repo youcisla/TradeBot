@@ -52,3 +52,5 @@ crucix/node_modules/
 
 # Next.js
 web/coverage/
+
+*cache*

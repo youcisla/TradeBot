@@ -73,3 +73,6 @@ class Signal:
     # Signal intent: DISCUSSION / STRATEGY / EXECUTION (see SignalIntent).
     # Controls whether ExecutionAgent may act on this signal without further review.
     signal_intent: str = SignalIntent.EXECUTION
+    # Arbitrary metadata dict — used by guards to pass hints to risk_agent
+    # (e.g. EquityDrawdownGuard sets lot_multiplier here).
+    metadata: dict = field(default_factory=dict)

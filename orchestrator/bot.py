@@ -482,6 +482,22 @@ class TradingBot:
             logger.warning("Could not load symbol fault state from DB — starting fresh")
 
         while not self._shutdown:
+            # ── KILL file sentinel — emergency stop ───────────────────────────
+            _kill_file = Path(__file__).resolve().parent.parent / "KILL"
+            if _kill_file.exists():
+                logger.critical("KILL file detected — emergency shutdown")
+                try:
+                    _kill_file.unlink()
+                except Exception:
+                    pass
+                self.trade_manager.close_all("KILL_FILE")
+                try:
+                    telegram_bot.send_message("KILL file — all positions closed, shutting down.")
+                except Exception:
+                    pass
+                self._request_shutdown()
+                continue
+
             loop_start = time.monotonic()
             loop_count += 1
             scanned_before = _metrics.get("scanned_symbols", 0)
@@ -549,6 +565,7 @@ class TradingBot:
                     scan_workers=scan_workers,
                     risk_reject_reason_counts=_risk_reject_reason_counts,
                 )
+                _metrics["iter_consecutive_failures"] = 0
             except (KeyboardInterrupt, SystemExit):
                 raise
             except Exception:
@@ -585,26 +602,22 @@ class TradingBot:
                     )
                     scan_workers = suggested
 
-            # ── Orphan MT5 position scan (every loop) ───────────────────────
-            # Fast, read-only check — flags any broker positions not tracked in DB.
-            # The scheduled reconcile() handles adoption and alerting.
-            try:
-                orphan_tickets = self.state.scan_orphans()
-                if orphan_tickets:
-                    logger.warning(
-                        "Mid-run orphan scan: %d unknown position(s) — tickets: %s",
-                        len(orphan_tickets),
-                        orphan_tickets,
-                    )
-                    self.log_agent.record(
-                        "ORPHAN_SCAN",
-                        f"Detected {len(orphan_tickets)} orphan(s) — tickets: {orphan_tickets}",
-                    )
-            except Exception:
-                logger.warning("Orphan scan failed — continuing")
-
             # ── Periodic reconciliation ──────────────────────────────────
             if loop_count % settings.RECONCILE_EVERY_N_LOOPS == 0:
+                try:
+                    orphan_tickets = self.state.scan_orphans()
+                    if orphan_tickets:
+                        logger.warning(
+                            "Orphan scan: %d unknown position(s) — tickets: %s",
+                            len(orphan_tickets),
+                            orphan_tickets,
+                        )
+                        self.log_agent.record(
+                            "ORPHAN_SCAN",
+                            f"Detected {len(orphan_tickets)} orphan(s) — tickets: {orphan_tickets}",
+                        )
+                except Exception:
+                    logger.warning("Orphan scan failed")
                 self.trade_manager.reconcile()
                 self.log_agent.record("RECONCILE", f"Periodic reconciliation (loop {loop_count})")
 

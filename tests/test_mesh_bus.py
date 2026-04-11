@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import pytest
 
-from models.agent_mesh import AgentMeshState
+from utils.mesh_bus import AgentMeshState
 from utils.mesh_bus import get_mesh, record_call, record_coherence, mesh_span
 
 

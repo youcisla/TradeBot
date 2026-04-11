@@ -28,6 +28,7 @@ from models.trade import Trade
 from utils import telegram_bot
 from utils.helpers import current_session, day_of_week, is_weekend
 from utils.mesh_bus import mesh_span
+from utils.correlation_gate import CorrelationGate
 
 if TYPE_CHECKING:
     from agents.crucix_agent import CrucixAgent
@@ -142,6 +143,9 @@ class RiskAgent:
         self._monthly_loss_blocked: bool = False
         # Exposure Coach singleton — lazily constructed on first _exposure access.
         self._exposure_instance: "ExposureCoach | None" = None
+
+        # Correlation gate — dynamic correlation check with static fallback.
+        self._corr_gate = CorrelationGate(lookback_bars=100, threshold=0.75)
 
     # ── lazy singletons ──────────────────────────────────────────────────
 
@@ -299,12 +303,6 @@ class RiskAgent:
                     )
             except Exception:
                 pass  # Crucix unavailable — use unscaled lot
-
-        # Scalp-specific lot cap — scalp uses tighter SL so same $ risk
-        # produces larger nominal lots; cap at SCALP_MAX_LOT_SIZE to prevent
-        # a single scalp trade consuming disproportionate capital.
-        if signal.strategy == "scalp_m5":
-            lot_size = min(lot_size, settings.SCALP_MAX_LOT_SIZE)
 
         return max(settings.MIN_LOT_SIZE, min(settings.MAX_LOT_SIZE, lot_size))
 
@@ -1220,21 +1218,51 @@ class RiskAgent:
 
     # ── correlation guard ────────────────────────────────────────────────
 
-    @staticmethod
-    def _check_correlation(signal: Signal, open_trades: list[Trade]) -> bool:
+    def _check_correlation(self, signal: Signal, open_trades: list[Trade]) -> bool:
         """Block if already holding the same symbol+direction from any strategy,
         OR if holding a highly-correlated pair in the same direction."""
+        # Dynamic gate — attempt first if price history is available
+        try:
+            if self._corr_gate.has_data(signal.symbol):
+                all_symbols = list(
+                    {t.symbol for t in open_trades if t.is_open()} | {signal.symbol}
+                )
+                price_history: dict[str, list[float]] = {}
+                for sym in all_symbols:
+                    try:
+                        candles = self._broker.get_candles(
+                            sym, "H1", self._corr_gate.lookback_bars
+                        )
+                        price_history[sym] = [c.close for c in candles]
+                    except Exception:
+                        pass
+                open_pos_dicts = [
+                    {"symbol": t.symbol, "direction": t.direction}
+                    for t in open_trades
+                    if t.is_open()
+                ]
+                _, multiplier = self._corr_gate.check_correlation(
+                    signal.symbol, open_pos_dicts, price_history
+                )
+                if multiplier < 1.0:
+                    logger.debug(
+                        "Correlation block (dynamic): %s %s multiplier=%.2f",
+                        signal.direction, signal.symbol, multiplier,
+                    )
+                    return True
+        except Exception:
+            pass
+
+        # Static fallback — use the hard-coded correlated-pairs table
         correlated = _CORRELATED_PAIRS.get(signal.symbol, frozenset())
         for t in open_trades:
             if not t.is_open():
                 continue
-            # Same symbol, any strategy (catches cross-strategy duplicates)
             if t.symbol == signal.symbol and t.direction == signal.direction:
                 return True
-            # Correlated pair, same direction → overlapping exposure
             if t.symbol in correlated and t.direction == signal.direction:
                 logger.debug(
-                    "Correlation block: %s %s blocked by open %s %s",
+                    "Correlation block (static): %s %s blocked by open %s %s",
                     signal.direction, signal.symbol, t.direction, t.symbol,
                 )
                 return True

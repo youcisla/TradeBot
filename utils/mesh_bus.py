@@ -24,7 +24,31 @@ import time
 from contextlib import contextmanager
 from typing import Generator
 
-from models.agent_mesh import AgentEdge, AgentMeshState, AgentNode
+# Inlined from models.agent_mesh (deleted in Phase 2C)
+from dataclasses import dataclass, field
+
+
+@dataclass
+class AgentNode:
+    trust: float = 0.5
+    latency_ms: float = 250.0
+    name: str = ""
+    role: str = "component"
+    call_count: int = 0
+    error_count: int = 0
+    last_seen: float = 0.0
+
+
+@dataclass
+class AgentEdge:
+    coherence: float = 1.0
+    interaction_count: int = 0
+
+
+@dataclass
+class AgentMeshState:
+    nodes: dict[str, AgentNode] = field(default_factory=dict)
+    edges: dict[tuple[str, str], AgentEdge] = field(default_factory=dict)
 
 # ---------------------------------------------------------------------------
 # Known component registry (role hints for dashboard / inspection)
@@ -50,8 +74,6 @@ _KNOWN_COMPONENTS: dict[str, str] = {
     "world_expert": "expert",
     # strategies (auto-registered on first use; pre-seeded here for dashboard)
     "ict_strategy": "strategy",
-    "sma_crossover": "strategy",
-    "deepseek_strategy": "strategy",
     # swarm profiles (registered by DeepSeek strategy)
     "trend_follower": "swarm",
     "structure_analyst": "swarm",

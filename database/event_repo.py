@@ -11,6 +11,7 @@ import psycopg2.extras
 
 if TYPE_CHECKING:
     from database.pool import ConnectionPool
+from database.retry import with_retry
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +30,7 @@ class EventRepo:
 
     # ── agent events ─────────────────────────────────────────────────────
 
+    @with_retry()
     def log_agent_event(self, agent: str, level: str, message: str,
                         data: dict | None = None) -> None:
         conn = self._conn()

@@ -458,138 +458,6 @@ class VolumeFilterGuard(Guard):
         return True, ""
 
 
-# ── Scalp-specific guard ────────────────────────────────────────────────────────
-
-class ScalpExposureGuard(Guard):
-    """Block scalp signals that exceed scalp-specific exposure limits.
-
-    Tracks:
-    - Concurrent scalp positions (max SCALP_MAX_CONCURRENT)
-    - Scalp trades per rolling hour (max SCALP_MAX_TRADES_PER_HOUR)
-    - Scalp daily realised P&L (max SCALP_DAILY_LOSS_LIMIT — blocks if loss exceeded)
-
-    Persists scalp daily P&L to a JSON file so it survives bot restarts within the same day.
-    """
-
-    def __init__(
-        self,
-        max_lots: float | None = None,
-        max_concurrent: int | None = None,
-        max_per_hour: int | None = None,
-        daily_loss_limit: float | None = None,
-    ) -> None:
-        self._max_lot = (
-            max_lots
-            if max_lots is not None
-            else getattr(settings, "SCALP_MAX_LOT_SIZE", 0.50)
-        )
-        self._max_concurrent = (
-            max_concurrent
-            if max_concurrent is not None
-            else getattr(settings, "SCALP_MAX_CONCURRENT", 2)
-        )
-        self._max_per_hour = (
-            max_per_hour
-            if max_per_hour is not None
-            else getattr(settings, "SCALP_MAX_TRADES_PER_HOUR", 4)
-        )
-        self._daily_loss_limit = (
-            daily_loss_limit
-            if daily_loss_limit is not None
-            else getattr(settings, "SCALP_DAILY_LOSS_LIMIT", 0.02)
-        )
-        # In-memory rolling window of scalp trade timestamps (UTC)
-        self._scalp_timestamps: list[datetime] = []
-        # Persistent daily loss state (written to disk)
-        self._state_file = str(_ROOT / "data" / "scalp_guard_state.json")
-
-    # ── Persistence ───────────────────────────────────────────────────────────
-
-    def _load_state(self) -> dict:
-        import json, pathlib, os
-        path = pathlib.Path(self._state_file)
-        if not path.exists():
-            return {"date": "", "realised_pnl": 0.0}
-        try:
-            with open(path) as f:
-                return json.load(f)
-        except Exception:
-            return {"date": "", "realised_pnl": 0.0}
-
-    def _save_state(self, date_str: str, realised_pnl: float) -> None:
-        import json, pathlib
-        path = pathlib.Path(self._state_file)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        try:
-            with open(path, "w") as f:
-                json.dump({"date": date_str, "realised_pnl": realised_pnl}, f)
-        except Exception:
-            pass
-
-    def _realised_scalp_pnl(self) -> float:
-        state = self._load_state()
-        today = datetime.now(UTC).strftime("%Y-%m-%d")
-        if state.get("date") != today:
-            self._save_state(today, 0.0)
-            return 0.0
-        return state.get("realised_pnl", 0.0)
-
-    def _record_scalp_close(self, pnl: float) -> None:
-        today = datetime.now(UTC).strftime("%Y-%m-%d")
-        current = self._realised_scalp_pnl()
-        self._save_state(today, current + pnl)
-
-    # ── Guard.check ────────────────────────────────────────────────────────────
-
-    def check(self, signal, open_trades, broker) -> tuple[bool, str]:
-        is_scalp = getattr(signal, "strategy", "") == "scalp_m5"
-        if not is_scalp:
-            return True, ""
-
-        # 1. Concurrent scalp positions
-        scalp_open = sum(
-            1
-            for t in (open_trades or [])
-            if getattr(t, "strategy", "") == "scalp_m5"
-        )
-        if scalp_open >= self._max_concurrent:
-            return False, (
-                f"ScalpExposureGuard: {scalp_open} scalp positions open "
-                f"(max {self._max_concurrent})"
-            )
-
-        # 2. Rolling hourly rate
-        now = datetime.now(UTC)
-        cutoff = datetime.timestamp(
-            datetime.fromtimestamp(now.timestamp() - 3600, tz=UTC)
-        )
-        # Prune old timestamps
-        self._scalp_timestamps = [
-            ts for ts in self._scalp_timestamps if datetime.timestamp(ts) > cutoff
-        ]
-        if len(self._scalp_timestamps) >= self._max_per_hour:
-            return False, (
-                f"ScalpExposureGuard: {len(self._scalp_timestamps)} scalp trades "
-                f"in the last hour (max {self._max_per_hour})"
-            )
-
-        # 3. Daily scalp realised loss cap
-        scalp_pnl = self._realised_scalp_pnl()
-        if scalp_pnl <= -self._daily_loss_limit:
-            return False, (
-                f"ScalpExposureGuard: scalp daily loss {scalp_pnl:.4f} "
-                f"exceeds limit {self._daily_loss_limit:.4f}"
-            )
-
-        return True, ""
-
-    def record_scalp_trade_closed(self, pnl: float) -> None:
-        """Call this from trade_manager when a scalp trade closes."""
-        self._record_scalp_close(pnl)
-        # Also remove from rolling window (approximate)
-        if self._scalp_timestamps:
-            self._scalp_timestamps = self._scalp_timestamps[:-1]
-
 
 # ── Pipeline ──────────────────────────────────────────────────────────────────
 
@@ -606,7 +474,6 @@ class GuardPipeline:
         VolatilityGuard(max_vix=40.0),
         FeedFreshnessGuard(max_staleness_seconds=120),
         VolumeFilterGuard(),
-        ScalpExposureGuard(),
     ]
 
     def __init__(
@@ -618,11 +485,6 @@ class GuardPipeline:
         self._broker = broker
         self._db = db
         self._guards: list[Guard] = guards if guards is not None else list(self.GUARDS)
-        # ScalpExposureGuard reference for close-event recording
-        self._scalp_guard: ScalpExposureGuard | None = next(
-            (g for g in self._guards if isinstance(g, ScalpExposureGuard)),
-            None,
-        )
 
     def check(
         self,
@@ -664,13 +526,8 @@ class GuardPipeline:
             except Exception:
                 pass
 
-    def record_scalp_close(self, pnl: float) -> None:
-        """Called by trade_manager when a scalp_m5 trade closes."""
-        if self._scalp_guard is not None:
-            self._scalp_guard.record_scalp_trade_closed(pnl)
-
     def record_closed_trade_pnl(self, pnl: float) -> None:
-        """Called by trade_manager when any non-scalp trade closes.
+        """Called by trade_manager when any trade closes.
 
         Updates DailyDrawdownGuard's realised-P&L tracker.
         """

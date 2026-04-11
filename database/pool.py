@@ -15,7 +15,7 @@ class ConnectionPool:
 
     def __init__(self, dsn: str) -> None:
         self._dsn = dsn
-        self._pool: psycopg2.pool.SimpleConnectionPool | None = None
+        self._pool: psycopg2.pool.ThreadedConnectionPool | None = None
         self._connect()
 
     def _connect(self) -> None:
@@ -68,9 +68,9 @@ class ConnectionPool:
                 self._pool.closeall()
         except Exception:
             pass
-        self._pool = psycopg2.pool.SimpleConnectionPool(
+        self._pool = psycopg2.pool.ThreadedConnectionPool(
             minconn=1,
-            maxconn=5,
+            maxconn=20,
             dsn=self._dsn,
             options="-c statement_timeout=15000",
         )

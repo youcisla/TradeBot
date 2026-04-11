@@ -76,9 +76,7 @@ agents/
   memory_agent.py                ← Cross-session memory blocks (bot_memory table)
   guards.py                      ← GuardPipeline + 7 guards
   exposure_coach.py              ← Concentration/correlation advisor
-  deepseek_strategy.py           ← DeepSeek LLM strategy (via StrategyAgent)
   reflector.py                   ← Post-trade reflection utility
-  signal_postmortem.py           ← Trade postmortem analysis
 
 filters/
   crucix_client.py               ← CrucixClient + MacroContext
@@ -88,14 +86,12 @@ filters/
 models/
   signal.py                      ← Signal dataclass (tp1–tp4, structural_be, bull/bear_case)
   trade.py                       ← Trade dataclass (tp1–tp4 lots/hits, structural_be)
-  agent_mesh.py                  ← AgentNode, AgentEdge, AgentMeshState (DeepSeek mesh)
   lgbm_ensemble.py               ← LightGBM 3-class classifier (BUY/SELL/HOLD)
   lgbm_price_model.py            ← LightGBM price prediction model
   lgbm_model.pkl                 ← Saved LGBM weights
   garch_regime.py                ← GARCH(1,1) + EWMA regime detector
   market_data.py                 ← Market data helpers
   ict_models.py                  ← ICT dataclasses (OB, FVG, etc.)
-  memories/                      ← Model memory storage
 
 features/
   macro_features.py              ← MacroSnapshot → 15-float z-scored vector

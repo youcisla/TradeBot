@@ -11,6 +11,7 @@ import psycopg2.extras
 
 if TYPE_CHECKING:
     from database.pool import ConnectionPool
+from database.retry import with_retry
 
 logger = logging.getLogger(__name__)
 
@@ -87,6 +88,7 @@ class TradeRepo:
     def _put(self, conn):
         self._pool.put_conn(conn)
 
+    @with_retry()
     def upsert_trade(self, t: "Trade") -> None:
         conn = self._conn()
         try:
@@ -156,6 +158,7 @@ class TradeRepo:
         finally:
             self._put(conn)
 
+    @with_retry()
     def get_open_trades(self) -> list["Trade"]:
         conn = self._conn()
         try:

@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import Annotated
 
 from dotenv import load_dotenv
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # ── Load .env ────────────────────────────────────────────────────────────
@@ -111,6 +111,24 @@ class ExecutionSettings(BaseModel):
     limit_entry_max_distance_atr: float = Field(default=0.5, ge=0.0)
     limit_entry_max_distance_atr_crypto: float = Field(default=2.0, ge=0.0)
 
+    @model_validator(mode="after")
+    def _tp_sum_check(self) -> "ExecutionSettings":
+        total = (
+            self.tp1_close_percent
+            + self.tp2_close_percent
+            + self.tp3_close_percent
+            + self.tp4_close_percent
+        )
+        if not (0.99 <= total <= 1.01):
+            raise ValueError(
+                f"TP close percents must sum to 1.0, got {total:.2f} "
+                f"(tp1={self.tp1_close_percent} "
+                f"tp2={self.tp2_close_percent} "
+                f"tp3={self.tp3_close_percent} "
+                f"tp4={self.tp4_close_percent})"
+            )
+        return self
+
 
 # ── Sniper / deferred entry settings ─────────────────────────────────────
 
@@ -147,35 +165,6 @@ class FastLaneSettings(BaseModel):
 class InstantEntrySettings(BaseModel):
     enabled: bool = True
     min_confidence: float = Field(default=0.78, ge=0.0, le=1.0)
-
-
-# ── Council / debate settings (disabled code — kept for reference) ──────────
-
-class CouncilSettings(BaseModel):
-    enabled: bool = True
-    min_confidence: float = Field(default=0.60, ge=0.0, le=1.0)
-    mode: str = "advisory"
-    max_reviews_per_loop: int = Field(default=3, ge=0)
-    advisory_rejection_conf_penalty: float = Field(default=0.08, ge=0.0, le=1.0)
-    advisory_min_viability: float = Field(default=0.45, ge=0.0, le=1.0)
-    ict_weight: float = Field(default=0.50, ge=0.0, le=1.0)
-    danial_weight: float = Field(default=0.17, ge=0.0, le=1.0)
-    trad_weight: float = Field(default=0.17, ge=0.0, le=1.0)
-    world_weight: float = Field(default=0.16, ge=0.0, le=1.0)
-    min_candles: int = Field(default=20, ge=0)
-
-    @field_validator("mode", mode="before")
-    @classmethod
-    def _lowercase_str(cls, v: str) -> str:
-        return str(v).lower()
-
-
-class DebateSettings(BaseModel):
-    enabled: bool = False
-    llm_model: str = ""
-    timeout_seconds: int = Field(default=8, ge=0)
-    bear_veto_threshold: float = Field(default=0.75, ge=0.0, le=1.0)
-    bear_caution_threshold: float = Field(default=0.60, ge=0.0, le=1.0)
 
 
 class ExposureSettings(BaseModel):
@@ -453,15 +442,6 @@ class DataValidationSettings(BaseModel):
     spike_percent_threshold: float = Field(default=2.0, ge=0.0)
 
 
-# ── Scalp settings (disabled legacy strategy) ──────────────────────────────
-
-class ScalpSettings(BaseModel):
-    max_lot_size: float = Field(default=0.50, ge=0.0)
-    max_concurrent: int = Field(default=2, ge=0)
-    max_trades_per_hour: int = Field(default=4, ge=0)
-    daily_loss_limit: float = Field(default=0.02, ge=0.0, le=1.0)
-
-
 # ── DeepSeek settings (disabled code — kept for reference) ─────────────────
 
 class DeepSeekSettings(BaseModel):
@@ -511,8 +491,6 @@ class _Settings(BaseSettings):
     deferred: DeferredSettings = Field(default_factory=DeferredSettings)
     fast_lane: FastLaneSettings = Field(default_factory=FastLaneSettings)
     instant_entry: InstantEntrySettings = Field(default_factory=InstantEntrySettings)
-    council: CouncilSettings = Field(default_factory=CouncilSettings)
-    debate: DebateSettings = Field(default_factory=DebateSettings)
     exposure: ExposureSettings = Field(default_factory=ExposureSettings)
     neural: NeuralSettings = Field(default_factory=NeuralSettings)
     garch: GarchSettings = Field(default_factory=GarchSettings)
@@ -533,8 +511,6 @@ class _Settings(BaseSettings):
     tool_system: ToolSystemSettings = Field(default_factory=ToolSystemSettings)
     execution_failure: ExecutionFailureSettings = Field(default_factory=ExecutionFailureSettings)
     data_validation: DataValidationSettings = Field(default_factory=DataValidationSettings)
-    scalp: ScalpSettings = Field(default_factory=ScalpSettings)
-    deepseek: DeepSeekSettings = Field(default_factory=DeepSeekSettings)
 
 
 def _get_env(name: str, default: str) -> str:
@@ -684,30 +660,6 @@ def _build_settings() -> _Settings:
     instant_entry = InstantEntrySettings(
         enabled=_bool("INSTANT_ENTRY_ENABLED", "true"),
         min_confidence=_float("INSTANT_ENTRY_MIN_CONFIDENCE", "0.78"),
-    )
-
-    # Council
-    council = CouncilSettings(
-        enabled=_bool("COUNCIL_ENABLED", "true"),
-        min_confidence=_float("COUNCIL_MIN_CONFIDENCE", "0.60"),
-        mode=_str("COUNCIL_MODE", "advisory").lower(),
-        max_reviews_per_loop=_int("COUNCIL_MAX_REVIEWS_PER_LOOP", "3"),
-        advisory_rejection_conf_penalty=_float("COUNCIL_ADVISORY_REJECTION_CONF_PENALTY", "0.08"),
-        advisory_min_viability=_float("COUNCIL_ADVISORY_MIN_VIABILITY", "0.45"),
-        ict_weight=_float("COUNCIL_ICT_WEIGHT", "0.50"),
-        danial_weight=_float("COUNCIL_DANIAL_WEIGHT", "0.17"),
-        trad_weight=_float("COUNCIL_TRAD_WEIGHT", "0.17"),
-        world_weight=_float("COUNCIL_WORLD_WEIGHT", "0.16"),
-        min_candles=_int("COUNCIL_MIN_CANDLES", "20"),
-    )
-
-    # Debate
-    debate = DebateSettings(
-        enabled=_bool("DEBATE_ENABLED", "false"),
-        llm_model=_str("DEBATE_LLM_MODEL", ""),
-        timeout_seconds=_int("DEBATE_TIMEOUT_SECONDS", "8"),
-        bear_veto_threshold=_float("DEBATE_BEAR_VETO_THRESHOLD", "0.75"),
-        bear_caution_threshold=_float("DEBATE_BEAR_CAUTION_THRESHOLD", "0.60"),
     )
 
     # Exposure
@@ -964,40 +916,6 @@ def _build_settings() -> _Settings:
         spike_percent_threshold=_float("SPIKE_PERCENT_THRESHOLD", "2.0"),
     )
 
-    # Scalp
-    scalp = ScalpSettings(
-        max_lot_size=_float("SCALP_MAX_LOT_SIZE", "0.50"),
-        max_concurrent=_int("SCALP_MAX_CONCURRENT", "2"),
-        max_trades_per_hour=_int("SCALP_MAX_TRADES_PER_HOUR", "4"),
-        daily_loss_limit=_float("SCALP_DAILY_LOSS_LIMIT", "0.02"),
-    )
-
-    # DeepSeek
-    deepseek = DeepSeekSettings(
-        api_key=_str("DEEPSEEK_API_KEY", ""),
-        model=_str("DEEPSEEK_MODEL", "deepseek-chat"),
-        quick_model=_str("DEEPSEEK_QUICK_MODEL", "deepseek-chat"),
-        deep_model=_str("DEEPSEEK_DEEP_MODEL", "deepseek-reasoner"),
-        min_confidence=_float("DEEPSEEK_MIN_CONFIDENCE", "0.65"),
-        schema_version=_str("DEEPSEEK_SCHEMA_VERSION", "v1"),
-        cache_minutes=_int("DEEPSEEK_CACHE_MINUTES", "30"),
-        r_mult_tolerance=_float("DEEPSEEK_R_MULT_TOLERANCE", "0.25"),
-        quick_timeout_seconds=_float("DEEPSEEK_QUICK_TIMEOUT_SECONDS", "10"),
-        deep_timeout_seconds=_float("DEEPSEEK_DEEP_TIMEOUT_SECONDS", "8"),
-        enable_deep_verify=_bool("DEEPSEEK_ENABLE_DEEP_VERIFY", "true"),
-        deep_verify_min_confidence=_float("DEEPSEEK_DEEP_VERIFY_MIN_CONFIDENCE", "0.78"),
-        agent_swarm_enabled=_bool("DEEPSEEK_AGENT_SWARM_ENABLED", "false"),
-        agent_swarm_max_agents=_int("DEEPSEEK_AGENT_SWARM_MAX_AGENTS", "3"),
-        agent_swarm_profiles=_str("DEEPSEEK_AGENT_SWARM_PROFILES", ""),
-        mesh_enabled=_bool("DEEPSEEK_MESH_ENABLED", "true"),
-        mesh_min_active_agents=_int("DEEPSEEK_MESH_MIN_ACTIVE_AGENTS", "2"),
-        mesh_latency_penalty=_float("DEEPSEEK_MESH_LATENCY_PENDELTY", "0.25"),
-        mesh_trust_alpha=_float("DEEPSEEK_MESH_TRUST_ALPHA", "0.18"),
-        mesh_min_trust=_float("DEEPSEEK_MESH_MIN_TRUST", "0.15"),
-        mesh_max_trust=_float("DEEPSEEK_MESH_MAX_TRUST", "0.95"),
-        metrics_log_every=_int("DEEPSEEK_METRICS_LOG_EVERY", "25"),
-    )
-
     return _Settings(
         demo_mode=demo_mode,
         bot_profile=bot_profile,
@@ -1009,8 +927,6 @@ def _build_settings() -> _Settings:
         deferred=deferred,
         fast_lane=fast_lane,
         instant_entry=instant_entry,
-        council=council,
-        debate=debate,
         exposure=exposure,
         neural=neural,
         garch=garch,
@@ -1031,8 +947,6 @@ def _build_settings() -> _Settings:
         tool_system=tool_system,
         execution_failure=execution_failure,
         data_validation=data_validation,
-        scalp=scalp,
-        deepseek=deepseek,
     )
 
 
@@ -1043,8 +957,6 @@ def _apply_profile_overrides(s: _Settings) -> _Settings:
     overrides: dict[str, dict[str, object]] = {
         "dev": {
             "demo_mode": True,
-            ("council", "enabled"): False,
-            ("council", "mode"): "advisory",
             ("fast_lane", "enabled"): True,
             ("instant_entry", "enabled"): True,
             ("risk", "max_risk_per_trade"): 0.005,
@@ -1053,8 +965,6 @@ def _apply_profile_overrides(s: _Settings) -> _Settings:
         },
         "paper": {
             "demo_mode": True,
-            ("council", "enabled"): True,
-            ("council", "mode"): "blocking",
             ("fast_lane", "enabled"): False,
             ("instant_entry", "enabled"): False,
             ("risk", "max_risk_per_trade"): 0.003,
@@ -1063,8 +973,6 @@ def _apply_profile_overrides(s: _Settings) -> _Settings:
         },
         "live-safe": {
             "demo_mode": False,
-            ("council", "enabled"): True,
-            ("council", "mode"): "blocking",
             ("fast_lane", "enabled"): False,
             ("instant_entry", "enabled"): False,
             ("risk", "max_risk_per_trade"): 0.005,
@@ -1074,8 +982,6 @@ def _apply_profile_overrides(s: _Settings) -> _Settings:
         },
         "live-full": {
             "demo_mode": False,
-            ("council", "enabled"): True,
-            ("council", "mode"): "advisory",
             ("fast_lane", "enabled"): True,
             ("instant_entry", "enabled"): True,
             ("risk", "max_risk_per_trade"): 0.01,
@@ -1187,26 +1093,6 @@ FAST_LANE_CLOSE_ON_FULL_REJECT: bool = settings.fast_lane.close_on_full_reject
 # Instant entry
 INSTANT_ENTRY_ENABLED: bool = settings.instant_entry.enabled
 INSTANT_ENTRY_MIN_CONFIDENCE: float = settings.instant_entry.min_confidence
-
-# Council
-COUNCIL_ENABLED: bool = settings.council.enabled
-COUNCIL_MIN_CONFIDENCE: float = settings.council.min_confidence
-COUNCIL_MODE: str = settings.council.mode
-COUNCIL_MAX_REVIEWS_PER_LOOP: int = settings.council.max_reviews_per_loop
-COUNCIL_ADVISORY_REJECTION_CONF_PENALTY: float = settings.council.advisory_rejection_conf_penalty
-COUNCIL_ADVISORY_MIN_VIABILITY: float = settings.council.advisory_min_viability
-COUNCIL_ICT_WEIGHT: float = settings.council.ict_weight
-COUNCIL_DANIAL_WEIGHT: float = settings.council.danial_weight
-COUNCIL_TRAD_WEIGHT: float = settings.council.trad_weight
-COUNCIL_WORLD_WEIGHT: float = settings.council.world_weight
-COUNCIL_MIN_CANDLES: int = settings.council.min_candles
-
-# Debate
-DEBATE_ENABLED: bool = settings.debate.enabled
-DEBATE_LLM_MODEL: str = settings.debate.llm_model
-DEBATE_TIMEOUT_SECONDS: int = settings.debate.timeout_seconds
-DEBATE_BEAR_VETO_THRESHOLD: float = settings.debate.bear_veto_threshold
-DEBATE_BEAR_CAUTION_THRESHOLD: float = settings.debate.bear_caution_threshold
 
 # Exposure
 EXPOSURE_ENABLED: bool = settings.exposure.enabled
@@ -1421,42 +1307,6 @@ SPREAD_REJECT_COOLDOWN_SECONDS: int = settings.execution_failure.spread_reject_c
 STUCK_QUOTE_THRESHOLD: int = settings.data_validation.stuck_quote_threshold
 STUCK_QUOTE_THRESHOLD_CRYPTO: int = settings.data_validation.stuck_quote_threshold_crypto
 SPIKE_PERCENT_THRESHOLD: float = settings.data_validation.spike_percent_threshold
-
-# Scalp
-SCALP_MAX_LOT_SIZE: float = settings.scalp.max_lot_size
-SCALP_MAX_CONCURRENT: int = settings.scalp.max_concurrent
-SCALP_MAX_TRADES_PER_HOUR: int = settings.scalp.max_trades_per_hour
-SCALP_DAILY_LOSS_LIMIT: float = settings.scalp.daily_loss_limit
-
-# DeepSeek (disabled code)
-DEEPSEEK_API_KEY: str = settings.deepseek.api_key
-DEEPSEEK_MODEL: str = settings.deepseek.model
-DEEPSEEK_QUICK_MODEL: str = settings.deepseek.quick_model
-DEEPSEEK_DEEP_MODEL: str = settings.deepseek.deep_model
-DEEPSEEK_MIN_CONFIDENCE: float = settings.deepseek.min_confidence
-DEEPSEEK_SCHEMA_VERSION: str = settings.deepseek.schema_version
-DEEPSEEK_CACHE_MINUTES: int = settings.deepseek.cache_minutes
-DEEPSEEK_R_MULT_TOLERANCE: float = settings.deepseek.r_mult_tolerance
-DEEPSEEK_QUICK_TIMEOUT_SECONDS: float = settings.deepseek.quick_timeout_seconds
-DEEPSEEK_DEEP_TIMEOUT_SECONDS: float = settings.deepseek.deep_timeout_seconds
-DEEPSEEK_ENABLE_DEEP_VERIFY: bool = settings.deepseek.enable_deep_verify
-DEEPSEEK_DEEP_VERIFY_MIN_CONFIDENCE: float = settings.deepseek.deep_verify_min_confidence
-DEEPSEEK_AGENT_SWARM_ENABLED: bool = settings.deepseek.agent_swarm_enabled
-DEEPSEEK_AGENT_SWARM_MAX_AGENTS: int = settings.deepseek.agent_swarm_max_agents
-DEEPSEEK_AGENT_SWARM_PROFILES: str = settings.deepseek.agent_swarm_profiles
-DEEPSEEK_MESH_ENABLED: bool = settings.deepseek.mesh_enabled
-DEEPSEEK_MESH_MIN_ACTIVE_AGENTS: int = settings.deepseek.mesh_min_active_agents
-DEEPSEEK_MESH_LATENCY_PENALTY: float = settings.deepseek.mesh_latency_penalty
-DEEPSEEK_MESH_TRUST_ALPHA: float = settings.deepseek.mesh_trust_alpha
-DEEPSEEK_MESH_MIN_TRUST: float = settings.deepseek.mesh_min_trust
-DEEPSEEK_MESH_MAX_TRUST: float = settings.deepseek.mesh_max_trust
-DEEPSEEK_METRICS_LOG_EVERY: int = settings.deepseek.metrics_log_every
-
-# DeepSeek council weights (disabled code)
-COUNCIL_DEEPSEEK_ICT_WEIGHT: float = float(_get_env("COUNCIL_DEEPSEEK_ICT_WEIGHT", "0.15"))
-COUNCIL_DEEPSEEK_DANIAL_WEIGHT: float = float(_get_env("COUNCIL_DEEPSEEK_DANIAL_WEIGHT", "0.15"))
-COUNCIL_DEEPSEEK_TRAD_WEIGHT: float = float(_get_env("COUNCIL_DEEPSEEK_TRAD_WEIGHT", "0.35"))
-COUNCIL_DEEPSEEK_WORLD_WEIGHT: float = float(_get_env("COUNCIL_DEEPSEEK_WORLD_WEIGHT", "0.35"))
 
 # Neural models dir (special — computed path)
 NEURAL_MODELS_DIR: str = str(
