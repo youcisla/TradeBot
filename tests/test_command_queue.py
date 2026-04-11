@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from main import _process_commands
+from orchestrator.commands import process_commands
 
 
 class _FakeDB:
@@ -61,7 +61,7 @@ def test_close_all_command_executes(monkeypatch) -> None:
     monkeypatch.setattr("main.telegram_bot.is_kill_requested", lambda: False)
     monkeypatch.setattr("main.telegram_bot.send_message", lambda _: None)
 
-    _process_commands(db, trade_manager, tool_system=None)
+    process_commands(db, trade_manager, lambda: None, tool_system=None)
 
     assert trade_manager.close_all_reasons == ["UI_CLOSE_ALL"]
     assert any(status == "running" for _, status, _, _ in db.updates)
@@ -86,7 +86,7 @@ def test_close_trade_accepts_trade_id_or_tradeId(monkeypatch) -> None:
     monkeypatch.setattr("main.telegram_bot.is_kill_requested", lambda: False)
     monkeypatch.setattr("main.telegram_bot.send_message", lambda _: None)
 
-    _process_commands(db, trade_manager, tool_system=None)
+    process_commands(db, trade_manager, lambda: None, tool_system=None)
 
     assert trade_manager.closed_trade_ids == [("trade-123", "UI_CLOSE")]
     done_updates = [u for u in db.updates if u[1] == "done"]

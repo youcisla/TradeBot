@@ -141,6 +141,35 @@ class StatePersistence:
         record_call("state_reconcile", (time.monotonic() - _t0) * 1000.0, True)
         return self._db.get_open_trades()
 
+    def scan_orphans(self) -> list[int]:
+        """Lightweight orphan scan — detects broker positions not tracked in DB.
+
+        Does NOT write to DB or send alerts.  Call this every loop iteration
+        for early orphan detection; let the scheduled reconcile() handle
+        adoption and alerting.
+
+        Returns list of orphan broker ticket numbers.
+        """
+        broker_positions = self._broker.get_open_positions()
+        if not broker_positions:
+            return []
+
+        db_trades = self._db.get_open_trades()
+        db_tickets = {t.broker_ticket for t in db_trades if t.broker_ticket}
+
+        orphan_tickets = [
+            pos.ticket for pos in broker_positions
+            if pos.ticket and pos.ticket not in db_tickets
+        ]
+        if orphan_tickets:
+            logger.warning(
+                "ORPHAN SCAN: %d broker position(s) not in DB — tickets: %s "
+                "(full reconcile will adopt)",
+                len(orphan_tickets),
+                orphan_tickets,
+            )
+        return orphan_tickets
+
     # ── periodic MT5 → DB sync ─────────────────────────────────────────
 
     def sync_mt5_to_db(self) -> None:

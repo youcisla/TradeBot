@@ -1,855 +1,1464 @@
 """All configurable parameters for the trading bot.
 
-Values are loaded from `.env` where appropriate.
+Validated at startup via Pydantic.  All values are also re-exported as
+flat module-level variables so existing code (`from config.settings import
+BROKER_ACCOUNT`) continues to work without any changes.
+
+New code should prefer the structured ``settings`` object::
+
+    from config.settings import settings
+    if settings.risk.max_risk_per_trade > 0.05:
+        ...
+
+Environment variables are loaded from ``.env`` in the project root.
 """
 
 from __future__ import annotations
 
 import os
 from pathlib import Path
+from typing import Annotated
 
 from dotenv import load_dotenv
+from pydantic import BaseModel, Field, field_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # ── Load .env ────────────────────────────────────────────────────────────
 _env_path = Path(__file__).resolve().parent.parent / ".env"
 load_dotenv(_env_path)
 
-# ── Mode ─────────────────────────────────────────────────────────────────
-DEMO_MODE: bool = os.getenv("DEMO_MODE", "false").lower() == "true"
-# Runtime profile selector. Keep "custom" to respect raw .env values.
-# Supported: custom, dev, paper, live-safe, live-full
-BOT_PROFILE: str = os.getenv("BOT_PROFILE", "custom").strip().lower()
 
-# ── Broker ───────────────────────────────────────────────────────────────
-BROKER_ACCOUNT: str = os.getenv("BROKER_ACCOUNT", "")
-BROKER_PASSWORD: str = os.getenv("BROKER_PASSWORD", "")
-BROKER_SERVER: str = os.getenv("BROKER_SERVER", "")
+# ── Helper validators ────────────────────────────────────────────────────
 
-# ── Market Data ──────────────────────────────────────────────────────────
-ALPHA_VANTAGE_KEY: str = os.getenv("ALPHA_VANTAGE_KEY", "")
-TWELVE_DATA_KEY: str = os.getenv("TWELVE_DATA_KEY", "")
-
-# ── Intelligence Sweep / FRED / yfinance ─────────────────────────────────
-FRED_API_KEY: str = os.getenv("FRED_API_KEY", "")
-YFINANCE_ENABLED: bool = os.getenv("YFINANCE_ENABLED", "true").lower() == "true"
-INTELLIGENCE_SWEEP_INTERVAL_MINUTES: int = int(
-    os.getenv("INTELLIGENCE_SWEEP_INTERVAL_MINUTES", "15")
-)
-# Periodic MT5 → DB sync keeps the dashboard aligned with live broker state.
-# Set to 0 to disable periodic sync (reconcile still runs on startup).
-MT5_DB_SYNC_INTERVAL_SECONDS: int = int(
-    os.getenv("MT5_DB_SYNC_INTERVAL_SECONDS", "300")
-)
-
-# ── OpenRouter LLM Gateway ───────────────────────────────────────────────
-OPENROUTER_API_KEY: str = os.getenv("OPENROUTER_API_KEY", "")
-OPENROUTER_BASE_URL: str = os.getenv(
-    "OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"
-)
-OPENROUTER_MODEL: str = os.getenv("OPENROUTER_MODEL", "anthropic/claude-3-haiku")
-OPENROUTER_FALLBACK_ENABLED: bool = (
-    os.getenv("OPENROUTER_FALLBACK_ENABLED", "false").lower() == "true"
-)
-
-# ── Guard Pipeline ───────────────────────────────────────────────────────
-GUARD_PIPELINE_ENABLED: bool = (
-    os.getenv("GUARD_PIPELINE_ENABLED", "true").lower() == "true"
-)
-GUARD_COOLDOWN_SECONDS: int = int(os.getenv("GUARD_COOLDOWN_SECONDS", "300"))
-GUARD_MAX_DAILY_LOSS_PCT: float = float(os.getenv("GUARD_MAX_DAILY_LOSS_PCT", "0.05"))
-GUARD_MAX_VIX: float = float(os.getenv("GUARD_MAX_VIX", "40.0"))
-GUARD_FEED_STALENESS_SECONDS: float = float(
-    os.getenv("GUARD_FEED_STALENESS_SECONDS", "120")
-)
-
-# ── Backtesting ──────────────────────────────────────────────────────────
-BACKTEST_COMMISSION_PER_LOT_PER_SIDE: float = float(
-    os.getenv("BACKTEST_COMMISSION_PER_LOT_PER_SIDE", "0.0001")
-)
-BACKTEST_WALK_FORWARD_ENABLED: bool = (
-    os.getenv("BACKTEST_WALK_FORWARD_ENABLED", "false").lower() == "true"
-)
-BACKTEST_WALK_FORWARD_WINDOW_DAYS: int = int(
-    os.getenv("BACKTEST_WALK_FORWARD_WINDOW_DAYS", "90")
-)
-
-# ── ML Enhancements ──────────────────────────────────────────────────────
-KALMAN_ENABLED: bool = os.getenv("KALMAN_ENABLED", "true").lower() == "true"
-GARCH_ENABLED: bool = os.getenv("GARCH_ENABLED", "true").lower() == "true"
-GARCH_HIGH_VOL_THRESHOLD: float = float(os.getenv("GARCH_HIGH_VOL_THRESHOLD", "2.0"))
-LGBM_ENSEMBLE_ENABLED: bool = (
-    os.getenv("LGBM_ENSEMBLE_ENABLED", "true").lower() == "true"
-)
-HEDGE_STRIP_ENABLED: bool = (
-    os.getenv("HEDGE_STRIP_ENABLED", "true").lower() == "true"
-)
-
-# ── MCP Server ───────────────────────────────────────────────────────────
-MCP_SERVER_PORT: int = int(os.getenv("MCP_SERVER_PORT", "8080"))
-MCP_SERVER_ENABLED: bool = (
-    os.getenv("MCP_SERVER_ENABLED", "false").lower() == "true"
-)
-
-# ── Economic Calendar / News Filter ─────────────────────────────────────
-NEWS_CALENDAR_SOURCE: str = os.getenv("NEWS_CALENDAR_SOURCE", "static")
-FINNHUB_API_KEY: str = os.getenv("FINNHUB_API_KEY", "")
-NEWS_BLACKOUT_MINUTES: int = int(os.getenv("NEWS_BLACKOUT_MINUTES", "15"))
-
-# ── Telegram ─────────────────────────────────────────────────────────────
-TELEGRAM_BOT_TOKEN: str = os.getenv("TELEGRAM_BOT_TOKEN", "")
-TELEGRAM_CHAT_ID: str = os.getenv("TELEGRAM_CHAT_ID", "")
-TELEGRAM_NOISE_FILTER_ENABLED: bool = (
-    os.getenv("TELEGRAM_NOISE_FILTER_ENABLED", "true").lower() == "true"
-)
-TELEGRAM_DEDUPE_WINDOW_SECONDS: int = int(
-    os.getenv("TELEGRAM_DEDUPE_WINDOW_SECONDS", "180")
-)
-TELEGRAM_RATE_LIMIT_PER_MINUTE: int = int(
-    os.getenv("TELEGRAM_RATE_LIMIT_PER_MINUTE", "20")
-)
-TELEGRAM_SUPPRESSION_REPORT_EVERY: int = int(
-    os.getenv("TELEGRAM_SUPPRESSION_REPORT_EVERY", "10")
-)
-TELEGRAM_CHART_DAYS: int = int(os.getenv("TELEGRAM_CHART_DAYS", "30"))
-TELEGRAM_ALLOWED_USERNAMES: tuple[str, ...] = tuple(
-    u.strip().lstrip("@").lower()
-    for u in os.getenv("TELEGRAM_ALLOWED_USERNAMES", "").replace(";", ",").split(",")
-    if u.strip()
-)
-TELEGRAM_ALLOWED_USER_IDS: tuple[int, ...] = tuple(
-    int(v.strip())
-    for v in os.getenv("TELEGRAM_ALLOWED_USER_IDS", "").replace(";", ",").split(",")
-    if v.strip().isdigit()
-)
-
-# ── Security ─────────────────────────────────────────────────────────────
-ENCRYPTION_KEY: str = os.getenv("ENCRYPTION_KEY", "")
-
-# ── Trading Council (algorithmic quality gate) ───────────────────────────
-# Set COUNCIL_ENABLED=true to activate the three-expert algorithmic debate.
-# Signals must score >= COUNCIL_MIN_CONFIDENCE to proceed.
-# ICT signals get strategy-aware weighting (ICT expert carries 50% weight)
-# so the effective bar is already higher for non-ICT strategies.
-# Default 60% — do NOT raise above 70% or near-zero trades will result.
-# On unexpected errors the council fails open — trading is never blocked.
-COUNCIL_ENABLED: bool = os.getenv("COUNCIL_ENABLED", "true").lower() == "true"
-COUNCIL_MIN_CONFIDENCE: float = float(os.getenv("COUNCIL_MIN_CONFIDENCE", "0.60"))
-# Council decision mode:
-# - blocking: veto trade when council rejects (classic behavior)
-# - advisory: council still scores/reasons but does not block execution
-COUNCIL_MODE: str = os.getenv("COUNCIL_MODE", "advisory").lower()
-# Hard cap to avoid council latency exploding in signal-heavy loops.
-# Set to 0 to skip in-loop council reviews entirely.
-COUNCIL_MAX_REVIEWS_PER_LOOP: int = int(os.getenv("COUNCIL_MAX_REVIEWS_PER_LOOP", "3"))
-# In advisory mode, optionally haircut confidence when council disagrees.
-COUNCIL_ADVISORY_REJECTION_CONF_PENALTY: float = float(
-    os.getenv("COUNCIL_ADVISORY_REJECTION_CONF_PENALTY", "0.08")
-)
-# Advisory mode viability floor — any signal with council vote below this
-# is fully blocked rather than penalized and continued.
-COUNCIL_ADVISORY_MIN_VIABILITY: float = float(
-    os.getenv("COUNCIL_ADVISORY_MIN_VIABILITY", "0.45")
-)
-# Expert vote weights — must sum to 1.0.
-COUNCIL_ICT_WEIGHT: float    = float(os.getenv("COUNCIL_ICT_WEIGHT",    "0.50"))
-COUNCIL_DANIAL_WEIGHT: float = float(os.getenv("COUNCIL_DANIAL_WEIGHT", "0.17"))
-COUNCIL_TRAD_WEIGHT: float   = float(os.getenv("COUNCIL_TRAD_WEIGHT",   "0.17"))
-COUNCIL_WORLD_WEIGHT: float  = float(os.getenv("COUNCIL_WORLD_WEIGHT",  "0.16"))
-# DeepSeek-specific council weighting (must sum to 1.0).
-# Rationale: preserve ICT/SnR signal checks while giving more weight to
-# traditional + world-context agreement for LLM-originated signals.
-COUNCIL_DEEPSEEK_ICT_WEIGHT: float = float(
-    os.getenv("COUNCIL_DEEPSEEK_ICT_WEIGHT", "0.15")
-)
-COUNCIL_DEEPSEEK_DANIAL_WEIGHT: float = float(
-    os.getenv("COUNCIL_DEEPSEEK_DANIAL_WEIGHT", "0.15")
-)
-COUNCIL_DEEPSEEK_TRAD_WEIGHT: float = float(
-    os.getenv("COUNCIL_DEEPSEEK_TRAD_WEIGHT", "0.35")
-)
-COUNCIL_DEEPSEEK_WORLD_WEIGHT: float = float(
-    os.getenv("COUNCIL_DEEPSEEK_WORLD_WEIGHT", "0.35")
-)
-# Minimum candle count required before the council will vote.
-COUNCIL_MIN_CANDLES: int = int(os.getenv("COUNCIL_MIN_CANDLES", "20"))
-# Minimum ICT confluence score (0-70) for a valid ICT/SMC signal.
-# ICT score < 40 AND no SMC confirmation always returns NONE.
-ICT_MIN_CONFIDENCE: int = int(os.getenv("ICT_MIN_CONFIDENCE", "30"))
-
-# ── Bull/Bear Debate Agent ───────────────────────────────────────────────
-# Set DEBATE_ENABLED=true to run a pre-trade LLM bull/bear debate.
-# The debate adjusts signal confidence but never blocks trading on LLM failure.
-# Requires OPENROUTER_API_KEY.  Each call costs 1 LLM request per signal.
-DEBATE_ENABLED: bool = os.getenv("DEBATE_ENABLED", "false").lower() == "true"
-# Override the LLM used for debates (empty = inherit OPENROUTER_MODEL).
-DEBATE_LLM_MODEL: str = os.getenv("DEBATE_LLM_MODEL", "")
-# Hard timeout per debate call.  Keep well below signal loop latency.
-DEBATE_TIMEOUT_SECONDS: int = int(os.getenv("DEBATE_TIMEOUT_SECONDS", "8"))
-# bear_score threshold to issue a SKIP verdict (confidence −25 %).
-DEBATE_BEAR_VETO_THRESHOLD: float = float(os.getenv("DEBATE_BEAR_VETO_THRESHOLD", "0.75"))
-# bear_score threshold to issue a CAUTIOUS verdict (confidence −10 %).
-DEBATE_BEAR_CAUTION_THRESHOLD: float = float(os.getenv("DEBATE_BEAR_CAUTION_THRESHOLD", "0.60"))
-
-# ── Exposure Coach ───────────────────────────────────────────────────────
-# Synthesises 8 market-environment signals (P&L, open-count, GARCH vol,
-# macro regime, correlation, session, win-rate, LGBM confidence) into a
-# single exposure directive.  Enable with EXPOSURE_ENABLED=true.
-# Signals blocked by REDUCE_ONLY or CASH_PRIORITY are logged; a coach
-# failure always falls back to NEW_ENTRY_ALLOWED (fail-open).
-EXPOSURE_ENABLED: bool = os.getenv("EXPOSURE_ENABLED", "false").lower() == "true"
-# Composite score below this threshold → REDUCE_ONLY (no new entries).
-EXPOSURE_REDUCE_THRESHOLD: float = float(os.getenv("EXPOSURE_REDUCE_THRESHOLD", "0.40"))
-# Composite score below this threshold → CASH_PRIORITY (protect capital).
-EXPOSURE_CASH_THRESHOLD: float = float(os.getenv("EXPOSURE_CASH_THRESHOLD", "0.20"))
-# Number of recent closed trades used for the win-rate look-back window.
-EXPOSURE_WIN_RATE_LOOKBACK: int = int(os.getenv("EXPOSURE_WIN_RATE_LOOKBACK", "10"))
-
-# Minimum candle count required before the neural strategy will infer.
-NEURAL_MIN_CANDLES: int = int(os.getenv("NEURAL_MIN_CANDLES", "65"))
-# LSTM architecture & training
-NEURAL_SEQ_LEN: int        = int(os.getenv("NEURAL_SEQ_LEN",        "50"))
-NEURAL_HIDDEN_SIZE: int    = int(os.getenv("NEURAL_HIDDEN_SIZE",    "128"))
-NEURAL_NUM_LAYERS: int     = int(os.getenv("NEURAL_NUM_LAYERS",     "2"))
-NEURAL_TRAIN_EPOCHS: int   = int(os.getenv("NEURAL_TRAIN_EPOCHS",   "100"))
-NEURAL_RETRAIN_EVERY: int  = int(os.getenv("NEURAL_RETRAIN_EVERY",  "20"))
-NEURAL_MIN_CONFIDENCE: float = float(os.getenv("NEURAL_MIN_CONFIDENCE", "0.55"))
-NEURAL_MODELS_DIR: str     = os.getenv(
-    "NEURAL_MODELS_DIR",
-    str(Path(__file__).resolve().parent.parent / "models" / "neural"),
-)
-# Multi-timeframe candle counts fetched by MarketAgent
-# Analysis TFs: M30 (bridge), H1 (main), H4 (structure), D1 (bias)
-# Entry TFs:    M15 (trigger), M5/M1 (precision — future)
-H4_CANDLE_COUNT: int  = int(os.getenv("H4_CANDLE_COUNT",  "200"))  # raised from 50: ICT needs 200 for HTF bias/OB detection
-D1_CANDLE_COUNT: int  = int(os.getenv("D1_CANDLE_COUNT",  "20"))
-M30_CANDLE_COUNT: int = int(os.getenv("M30_CANDLE_COUNT", "100"))
-M15_CANDLE_COUNT: int = int(os.getenv("M15_CANDLE_COUNT", "250"))  # raised from 100: ICT needs 250 for FVG/OB patterns
-M5_CANDLE_COUNT: int = int(os.getenv("M5_CANDLE_COUNT", "100"))
-# MTF alignment: confidence boost when all TFs agree, D1 veto when it contradicts
-MTF_ALIGNMENT_BOOST: float = float(os.getenv("MTF_ALIGNMENT_BOOST", "0.05"))
-MTF_D1_VETO: bool = os.getenv("MTF_D1_VETO", "true").lower() == "true"
-# Regime-based confidence adjustment (ranging market penalised)
-REGIME_ADX_TRENDING: float  = float(os.getenv("REGIME_ADX_TRENDING",  "25.0"))
-REGIME_ADX_RANGING: float   = float(os.getenv("REGIME_ADX_RANGING",   "20.0"))
-REGIME_CONFIDENCE_PENALTY: float = float(os.getenv("REGIME_CONFIDENCE_PENALTY", "0.10"))
-# Dynamic TP multipliers per regime
-TP_TRENDING_TP3_MULT: float = float(os.getenv("TP_TRENDING_TP3_MULT", "4.0"))
-TP_TRENDING_TP4_MULT: float = float(os.getenv("TP_TRENDING_TP4_MULT", "6.0"))
-TP_RANGING_TP1_MULT: float  = float(os.getenv("TP_RANGING_TP1_MULT",  "0.8"))
-TP_RANGING_TP2_MULT: float  = float(os.getenv("TP_RANGING_TP2_MULT",  "1.5"))
-# Time-in-trade limit: close stale trades after this many hours with no TP hit
-MAX_HOURS_IN_TRADE: int = int(os.getenv("MAX_HOURS_IN_TRADE", "48"))
-# Minimum ICT engine score for crypto (lower than forex — crypto lacks killzones
-# so the session component caps at 5.0 instead of 7.0, reducing potential max score).
-MIN_ICT_SCORE_CRYPTO: float = float(os.getenv("MIN_ICT_SCORE_CRYPTO", "35.0"))
-
-# ── Risk ─────────────────────────────────────────────────────────────────
-MAX_RISK_PER_TRADE: float = float(os.getenv("MAX_RISK_PER_TRADE", "0.02"))
-MAX_OPEN_TRADES: int = int(os.getenv("MAX_OPEN_TRADES", "12"))
-MAX_DAILY_LOSS: float = float(os.getenv("MAX_DAILY_LOSS", "0.05"))
-MAX_MONTHLY_LOSS: float = float(os.getenv("MAX_MONTHLY_LOSS", "0.10"))  # MT5_Trade_Connector RiskManagement_v1 pattern
-MAX_SPREAD_PIPS: float = float(os.getenv("MAX_SPREAD_PIPS", "8.0"))
-DRAWDOWN_COOLDOWN_HOURS: int = int(os.getenv("DRAWDOWN_COOLDOWN_HOURS", "24"))
-MIN_LOT_SIZE: float = float(os.getenv("MIN_LOT_SIZE", "0.01"))
-MAX_LOT_SIZE: float = float(os.getenv("MAX_LOT_SIZE", "50.0"))
-# Fixed lot size — when set > 0, ALL trades are forced to this exact size,
-# bypassing the risk calculator's dynamic lot sizing entirely.
-# Set via env: FIXED_LOT_SIZE=0.01
-FIXED_LOT_SIZE: float = float(os.getenv("FIXED_LOT_SIZE", "0.0"))
-
-# ── Scalp-specific risk limits ───────────────────────────────────────────────
-# Scalp trades (scalp_m5 strategy) use tighter SL → larger lots for same $ risk.
-# These caps prevent scalp from consuming disproportionate balance.
-SCALP_MAX_LOT_SIZE: float = float(os.getenv("SCALP_MAX_LOT_SIZE", "0.50"))
-SCALP_MAX_CONCURRENT: int = int(os.getenv("SCALP_MAX_CONCURRENT", "2"))
-SCALP_MAX_TRADES_PER_HOUR: int = int(os.getenv("SCALP_MAX_TRADES_PER_HOUR", "4"))
-SCALP_DAILY_LOSS_LIMIT: float = float(os.getenv("SCALP_DAILY_LOSS_LIMIT", "0.02"))  # 2% of balance
-# Position sizing mode (MT5-style modes):
-# - equity_pct        : risk percent of equity (default)
-# - balance_pct       : risk percent of balance
-# - fixed_lot         : always use POSITION_SIZE_FIXED_LOT
-# - fixed_risk_amount : fixed account-currency amount risked per trade
-POSITION_SIZE_MODE: str = os.getenv("POSITION_SIZE_MODE", "equity_pct").lower()
-POSITION_SIZE_FIXED_LOT: float = float(os.getenv("POSITION_SIZE_FIXED_LOT", "0.10"))
-POSITION_SIZE_FIXED_RISK_AMOUNT: float = float(
-    os.getenv("POSITION_SIZE_FIXED_RISK_AMOUNT", "100.0")
-)
-# Kelly Criterion position sizing (POSITION_SIZE_MODE=kelly).
-# Half-Kelly is applied by default (KELLY_HALF=true) to prevent over-betting.
-# Falls back to equity_pct when fewer than KELLY_MIN_TRADES are available.
-KELLY_MIN_TRADES: int = int(os.getenv("KELLY_MIN_TRADES", "20"))
-KELLY_LOOKBACK_DAYS: int = int(os.getenv("KELLY_LOOKBACK_DAYS", "90"))
-KELLY_HALF: bool = os.getenv("KELLY_HALF", "true").lower() == "true"
-# Per-asset-class spread limits.
-# Forex/exotic/commodity use pip-based limits.
-# Crypto uses a percentage-of-price limit (0.1 = 0.1%) because dollar
-# spreads vary wildly across instruments ($17 on BTC vs $0.002 on XRP).
-MAX_SPREAD_PCT_CRYPTO: float = float(os.getenv("MAX_SPREAD_PCT_CRYPTO", "2.5"))
-MAX_SPREAD_PIPS_COMMODITY: float = float(os.getenv("MAX_SPREAD_PIPS_COMMODITY", "10.0"))
-MAX_SPREAD_PIPS_EXOTIC: float = float(os.getenv("MAX_SPREAD_PIPS_EXOTIC", "15.0"))
-# Indices are quoted in points — allow up to 5 points spread (covers typical CFD spread)
-MAX_SPREAD_POINTS_INDEX: float = float(os.getenv("MAX_SPREAD_POINTS_INDEX", "5.0"))
-
-# Risk behavior profile:
-# - strict: all gates enforced
-# - balanced: default production posture
-# - agile: looser entry gating for high-confidence opportunities
-RISK_VALIDATION_PROFILE: str = os.getenv("RISK_VALIDATION_PROFILE", "agile").lower()
-# Confidence level considered "high-quality" when agile profile is active.
-RISK_AGILE_HIGH_CONF_THRESHOLD: float = float(
-    os.getenv("RISK_AGILE_HIGH_CONF_THRESHOLD", "0.74")
-)
-# Spread multiplier in agile mode for high-confidence setups.
-RISK_AGILE_SPREAD_MULTIPLIER: float = float(
-    os.getenv("RISK_AGILE_SPREAD_MULTIPLIER", "1.35")
-)
-
-# ── Execution lanes (speed vs certainty) ─────────────────────────────────
-# Fast lane runs hard safety checks first to minimize signal-to-order latency.
-# Full lane then re-checks with all filters and can force-close if needed.
-FAST_LANE_ENABLED: bool = os.getenv("FAST_LANE_ENABLED", "true").lower() == "true"
-FAST_LANE_MAX_SIGNALS: int = int(os.getenv("FAST_LANE_MAX_SIGNALS", "1"))
-FAST_LANE_CLOSE_ON_FULL_REJECT: bool = (
-    os.getenv("FAST_LANE_CLOSE_ON_FULL_REJECT", "true").lower() == "true"
-)
-
-# Instant entry: enter on signal detection, skip council gate entirely.
-# Council runs post-entry as advisory only (non-blocking).
-# Only applies when signal confidence >= INSTANT_ENTRY_MIN_CONFIDENCE.
-# Signals below that threshold always go through the council gate first.
-INSTANT_ENTRY_ENABLED: bool = os.getenv("INSTANT_ENTRY_ENABLED", "true").lower() == "true"
-INSTANT_ENTRY_MIN_CONFIDENCE: float = float(os.getenv("INSTANT_ENTRY_MIN_CONFIDENCE", "0.78"))
-
-# ── Sniper Entry (Fibonacci pullback gate) ───────────────────────────────
-# Replaces the Council/DeepSeek gate with a deterministic Fibonacci-based
-# confidence split:
-#   conf >= SNIPER_CONF_THRESHOLD  → instant execution (no waiting)
-#   conf <  SNIPER_CONF_THRESHOLD  → wait for pullback into Fibonacci zone
-#     → if price pulls back to a valid retracement (38.2%–78.6%) → execute
-#     → if timeout reached or price moves past zone → skip
-SNIPER_ENTRY_ENABLED: bool = os.getenv("SNIPER_ENTRY_ENABLED", "true").lower() == "true"
-# Minimum ICT confidence to qualify for instant (no-wait) execution.
-SNIPER_CONF_THRESHOLD: float = float(os.getenv("SNIPER_CONF_THRESHOLD", "0.55"))
-# Maximum time to wait on watchlist for a pullback before skipping.
-SNIPER_TIMEOUT_MINUTES: float = float(os.getenv("SNIPER_TIMEOUT_MINUTES", "30.0"))
-# Maximum distance price can move past entry zone before signal is skipped.
-# Expressed as a multiple of ATR.  BUY: price above entry + this × ATR = stale.
-# SELL: price below entry - this × ATR = stale.
-SNIPER_MAX_ENTRY_ATR_DISTANCE: float = float(os.getenv("SNIPER_MAX_ENTRY_ATR_DISTANCE", "0.55"))
-# Fibonacci retracement depths accepted for sniper entry.
-# "golden_zone" (0.618–0.705) is optimal; "acceptable" (0.382–0.618) also valid.
-# Deeper pullbacks ("deep" = 0.705–0.786) are riskier but still allowed.
-SNIPER_FIB_MIN_DEPTH: str = os.getenv("SNIPER_FIB_MIN_DEPTH", "acceptable")
-SNIPER_FIB_MAX_DEPTH: str = os.getenv("SNIPER_FIB_MAX_DEPTH", "deep")
-
-# Confidence-to-size mapping (borderline setups are sized down, not discarded).
-SIZE_SCALE_VERY_LOW_THRESHOLD: float = float(
-    os.getenv("SIZE_SCALE_VERY_LOW_THRESHOLD", "0.45")
-)
-SIZE_SCALE_LOW_THRESHOLD: float = float(
-    os.getenv("SIZE_SCALE_LOW_THRESHOLD", "0.60")
-)
-SIZE_SCALE_MEDIUM_THRESHOLD: float = float(
-    os.getenv("SIZE_SCALE_MEDIUM_THRESHOLD", "0.75")
-)
-SIZE_SCALE_VERY_LOW: float = float(os.getenv("SIZE_SCALE_VERY_LOW", "0.35"))
-SIZE_SCALE_LOW: float = float(os.getenv("SIZE_SCALE_LOW", "0.55"))
-SIZE_SCALE_MEDIUM: float = float(os.getenv("SIZE_SCALE_MEDIUM", "0.75"))
-SIZE_SCALE_FULL: float = float(os.getenv("SIZE_SCALE_FULL", "1.00"))
-
-# Dynamic confidence floors by regime and asset class.
-MIN_CONF_TRENDING: float = float(os.getenv("MIN_CONF_TRENDING", "0.40"))
-MIN_CONF_RANGING: float = float(os.getenv("MIN_CONF_RANGING", "0.40"))
-MIN_CONF_VOLATILE: float = float(os.getenv("MIN_CONF_VOLATILE", "0.40"))
-MIN_CONF_UNKNOWN: float = float(os.getenv("MIN_CONF_UNKNOWN", "0.40"))
-MIN_CONF_CRYPTO_BONUS: float = float(os.getenv("MIN_CONF_CRYPTO_BONUS", "0.03"))
-MIN_CONF_EXOTIC_BONUS: float = float(os.getenv("MIN_CONF_EXOTIC_BONUS", "0.04"))
-
-# Time-phase confidence gate (optional).
-# Useful for strategies built around fixed-time candles (e.g. 15m):
-# early phase can require stricter confidence than late phase.
-TIME_PHASE_CONFIDENCE_ENABLED: bool = (
-    os.getenv("TIME_PHASE_CONFIDENCE_ENABLED", "false").lower() == "true"
-)
-TIME_PHASE_BUCKET_MINUTES: int = int(os.getenv("TIME_PHASE_BUCKET_MINUTES", "15"))
-TIME_PHASE_EARLY_MAX_MINUTE: int = int(os.getenv("TIME_PHASE_EARLY_MAX_MINUTE", "3"))
-TIME_PHASE_MID_MAX_MINUTE: int = int(os.getenv("TIME_PHASE_MID_MAX_MINUTE", "11"))
-TIME_PHASE_MIN_CONF_EARLY: float = float(os.getenv("TIME_PHASE_MIN_CONF_EARLY", "0.55"))
-TIME_PHASE_MIN_CONF_MID: float = float(os.getenv("TIME_PHASE_MIN_CONF_MID", "0.50"))
-TIME_PHASE_MIN_CONF_LATE: float = float(os.getenv("TIME_PHASE_MIN_CONF_LATE", "0.48"))
-
-# Protection layer (Freqtrade-style guards for overtrading / loss streaks).
-PROTECTIONS_ENABLED: bool = os.getenv("PROTECTIONS_ENABLED", "true").lower() == "true"
-# Per-symbol cooldown after a close before allowing re-entry.
-PROTECTION_COOLDOWN_MINUTES: int = int(os.getenv("PROTECTION_COOLDOWN_MINUTES", "10"))
-# Per-symbol stoploss guard: lock symbol when too many SL closes in lookback.
-PROTECTION_STOPLOSS_GUARD_LOOKBACK_MINUTES: int = int(
-    os.getenv("PROTECTION_STOPLOSS_GUARD_LOOKBACK_MINUTES", "180")
-)
-PROTECTION_STOPLOSS_GUARD_TRADE_LIMIT: int = int(
-    os.getenv("PROTECTION_STOPLOSS_GUARD_TRADE_LIMIT", "3")
-)
-PROTECTION_STOPLOSS_GUARD_LOCK_MINUTES: int = int(
-    os.getenv("PROTECTION_STOPLOSS_GUARD_LOCK_MINUTES", "60")
-)
-# Global recent-loss guard: lock all entries on clustered losses.
-PROTECTION_GLOBAL_LOSS_GUARD_LOOKBACK_MINUTES: int = int(
-    os.getenv("PROTECTION_GLOBAL_LOSS_GUARD_LOOKBACK_MINUTES", "120")
-)
-PROTECTION_GLOBAL_LOSS_GUARD_MAX_LOSSES: int = int(
-    os.getenv("PROTECTION_GLOBAL_LOSS_GUARD_MAX_LOSSES", "4")
-)
-PROTECTION_GLOBAL_LOSS_GUARD_LOCK_MINUTES: int = int(
-    os.getenv("PROTECTION_GLOBAL_LOSS_GUARD_LOCK_MINUTES", "45")
-)
-# ── Trade Execution ──────────────────────────────────────────────────────
-TP1_CLOSE_PERCENT: float = float(os.getenv("TP1_CLOSE_PERCENT", "0.40"))
-TP2_CLOSE_PERCENT: float = float(os.getenv("TP2_CLOSE_PERCENT", "0.30"))
-TP3_CLOSE_PERCENT: float = float(os.getenv("TP3_CLOSE_PERCENT", "0.20"))
-# TP4 is the runner slice held for the HTF liquidity target.
-# Carved out of what was previously the full TP3 allocation:
-#   TP1=40%, TP2=30%, TP3=20%, TP4=10% → sums to 100%.
-TP4_CLOSE_PERCENT: float = float(os.getenv("TP4_CLOSE_PERCENT", "0.10"))
-TRAILING_STOP_DISTANCE_PIPS: float = float(os.getenv("TRAILING_STOP_DISTANCE_PIPS", "20"))
-# Per-asset-class round-trip commission in account currency per standard lot.
-# Defaults to 7.0 for all classes; override via .env once PuPrime rates are confirmed.
-COMMISSION_PER_LOT: float = float(os.getenv("COMMISSION_PER_LOT", "7.0"))
-COMMISSION_PER_LOT_CRYPTO: float = float(os.getenv("COMMISSION_PER_LOT_CRYPTO", "7.0"))
-COMMISSION_PER_LOT_COMMODITY: float = float(os.getenv("COMMISSION_PER_LOT_COMMODITY", "7.0"))
-COMMISSION_PER_LOT_EXOTIC: float = float(os.getenv("COMMISSION_PER_LOT_EXOTIC", "7.0"))
-BREAKEVEN_SPREAD_OFFSET: bool = os.getenv("BREAKEVEN_SPREAD_OFFSET", "true").lower() == "true"
-# Pillar 3 — entry precision gate.
-# When ICT snaps entry to an FVG CE or OB midpoint, skip the signal if current
-# price is already more than this many ATRs beyond the ideal entry level.
-# Forex default: 0.5 ATR.  Crypto gets a larger multiplier because BTCUSD
-# moves $100+ per candle; 0.5 ATR would reject almost every setup.
-LIMIT_ENTRY_MAX_DISTANCE_ATR: float = float(os.getenv("LIMIT_ENTRY_MAX_DISTANCE_ATR", "0.5"))
-LIMIT_ENTRY_MAX_DISTANCE_ATR_CRYPTO: float = float(os.getenv("LIMIT_ENTRY_MAX_DISTANCE_ATR_CRYPTO", "2.0"))
-
-# ── Bot Loop ─────────────────────────────────────────────────────────────
-LOOP_INTERVAL_SECONDS: int = int(os.getenv("LOOP_INTERVAL_SECONDS", "5"))
-RECONCILE_EVERY_N_LOOPS: int = int(os.getenv("RECONCILE_EVERY_N_LOOPS", "60"))
-CANDLE_SERVER_PORT: int = int(os.getenv("CANDLE_SERVER_PORT", "5555"))
-# Minimum wall-clock seconds between re-scanning the same symbol.
-SCAN_COOLDOWN_SECONDS: int = int(os.getenv("SCAN_COOLDOWN_SECONDS", "300"))
-# Session-profiled cooldown (London/NY scans faster, Asia scans slower).
-SCAN_COOLDOWN_SECONDS_LONDON_NY: int = int(
-    os.getenv("SCAN_COOLDOWN_SECONDS_LONDON_NY", "60")
-)
-SCAN_COOLDOWN_SECONDS_ASIA: int = int(
-    os.getenv("SCAN_COOLDOWN_SECONDS_ASIA", "120")
-)
-# BTC priority scheduler: scan this symbol first and more frequently while
-# still scanning the full symbol universe.
-BTC_PRIORITY_SYMBOL: str = os.getenv("BTC_PRIORITY_SYMBOL", "BTCUSD")
-BTC_PRIORITY_SCAN_COOLDOWN_SECONDS: int = int(
-    os.getenv("BTC_PRIORITY_SCAN_COOLDOWN_SECONDS", "8")
-)
-EVENT_DRIVEN_RESCAN_ON_NEW_CANDLE: bool = (
-    os.getenv("EVENT_DRIVEN_RESCAN_ON_NEW_CANDLE", "true").lower() == "true"
-)
-
-# Opportunity lifecycle orchestration (inspired by short-horizon two-leg flows).
-OPPORTUNITY_PHASE_ENABLED: bool = (
-    os.getenv("OPPORTUNITY_PHASE_ENABLED", "true").lower() == "true"
-)
-OPPORTUNITY_ROLLOVER_SECONDS: int = int(
-    os.getenv("OPPORTUNITY_ROLLOVER_SECONDS", "900")
-)
-OPPORTUNITY_WATCH_WINDOW_SECONDS: int = int(
-    os.getenv("OPPORTUNITY_WATCH_WINDOW_SECONDS", "180")
-)
-OPPORTUNITY_HEDGE_TIMEOUT_SECONDS: int = int(
-    os.getenv("OPPORTUNITY_HEDGE_TIMEOUT_SECONDS", "300")
-)
-OPPORTUNITY_MIN_RECOVERY_CONFIDENCE: float = float(
-    os.getenv("OPPORTUNITY_MIN_RECOVERY_CONFIDENCE", "0.62")
-)
-OPPORTUNITY_FALLBACK_MAX_SPREAD_PCT: float = float(
-    os.getenv("OPPORTUNITY_FALLBACK_MAX_SPREAD_PCT", "0.003")
-)
-OPPORTUNITY_SHOCK_LOOKBACK_SECONDS: int = int(
-    os.getenv("OPPORTUNITY_SHOCK_LOOKBACK_SECONDS", "5")
-)
-OPPORTUNITY_SHOCK_DROP_THRESHOLD: float = float(
-    os.getenv("OPPORTUNITY_SHOCK_DROP_THRESHOLD", "0.0015")
-)
-OPPORTUNITY_REQUIRE_SHOCK_FOR_FAST_LANE: bool = (
-    os.getenv("OPPORTUNITY_REQUIRE_SHOCK_FOR_FAST_LANE", "true").lower() == "true"
-)
-# Simulation-first guard for newly introduced lifecycle logic.
-# In live mode, the opportunity lifecycle is disabled unless explicitly enabled.
-OPPORTUNITY_LIVE_ENABLED: bool = (
-    os.getenv("OPPORTUNITY_LIVE_ENABLED", "false").lower() == "true"
-)
-
-# MarketAgent higher-timeframe cache tuning by session profile.
-HTF_CACHE_TTL_M15_SECONDS: float = float(os.getenv("HTF_CACHE_TTL_M15_SECONDS", "20"))
-HTF_CACHE_TTL_M5_SECONDS: float = float(os.getenv("HTF_CACHE_TTL_M5_SECONDS", "15"))
-HTF_CACHE_TTL_M30_SECONDS: float = float(os.getenv("HTF_CACHE_TTL_M30_SECONDS", "30"))
-HTF_CACHE_TTL_H4_SECONDS: float = float(os.getenv("HTF_CACHE_TTL_H4_SECONDS", "120"))
-HTF_CACHE_TTL_D1_SECONDS: float = float(os.getenv("HTF_CACHE_TTL_D1_SECONDS", "300"))
-HTF_CACHE_TTL_MULTIPLIER_LONDON_NY: float = float(
-    os.getenv("HTF_CACHE_TTL_MULTIPLIER_LONDON_NY", "0.75")
-)
-HTF_CACHE_TTL_MULTIPLIER_ASIA: float = float(
-    os.getenv("HTF_CACHE_TTL_MULTIPLIER_ASIA", "1.35")
-)
-
-# Deferred-entry queue: keep quality setups warm until price revisits entry.
-DEFERRED_ENTRY_ENABLED: bool = os.getenv("DEFERRED_ENTRY_ENABLED", "true").lower() == "true"
-DEFERRED_ENTRY_MAX_AGE_SECONDS: int = int(
-    os.getenv("DEFERRED_ENTRY_MAX_AGE_SECONDS", "900")
-)
-DEFERRED_ENTRY_MAX_ATR_DISTANCE: float = float(
-    os.getenv("DEFERRED_ENTRY_MAX_ATR_DISTANCE", "0.35")
-)
-DEFERRED_ENTRY_MIN_CONF: float = float(os.getenv("DEFERRED_ENTRY_MIN_CONF", "0.60"))
-DEFERRED_ENTRY_TTL_SECONDS: int = int(os.getenv("DEFERRED_ENTRY_TTL_SECONDS", "900"))
-# Symbol auto-disable: after this many consecutive IPC failures the symbol is
-# suspended for SYMBOL_DISABLE_SECONDS to avoid wasting loop time.
-SYMBOL_MAX_FAIL_COUNT: int = int(os.getenv("SYMBOL_MAX_FAIL_COUNT", "12"))
-SYMBOL_DISABLE_SECONDS: int = int(os.getenv("SYMBOL_DISABLE_SECONDS", "3600"))
-
-# ── Logging ──────────────────────────────────────────────────────────────
-LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
-DAILY_SUMMARY_HOUR: int = int(os.getenv("DAILY_SUMMARY_HOUR", "17"))
-
-# ── Learning System ──────────────────────────────────────────────────────
-DEFAULT_CONFIDENCE: float = 0.5
-INITIAL_CONFIDENCE: float = 0.5
-CONFIDENCE_ALLOW: float = 0.3
-CONFIDENCE_REDUCED: float = 0.5
-CONFIDENCE_FULL: float = 0.7
-CONFIDENCE_DISABLE_THRESHOLD: float = 0.2
-
-# KPI cadence for opportunity-capture telemetry in logs/agent feed.
-METRICS_LOG_EVERY_N_LOOPS: int = int(os.getenv("METRICS_LOG_EVERY_N_LOOPS", "5"))
-
-# ── Multi-agent orchestration optimization ──────────────────────────────
-# Non-MT5 brokers can safely parallelize symbol scans. Keep MT5 sequential
-# because the MT5 bridge is thread-sensitive.
-ORCHESTRATION_SCAN_WORKERS_MIN: int = int(
-    os.getenv("ORCHESTRATION_SCAN_WORKERS_MIN", "2")
-)
-ORCHESTRATION_SCAN_WORKERS_MAX: int = int(
-    os.getenv("ORCHESTRATION_SCAN_WORKERS_MAX", "10")
-)
-ORCHESTRATION_SCAN_WORKERS_DEFAULT: int = int(
-    os.getenv("ORCHESTRATION_SCAN_WORKERS_DEFAULT", "6")
-)
-# Adaptive tuning is reversible and bounded by min/max workers.
-ORCHESTRATION_ADAPTIVE_WORKERS_ENABLED: bool = (
-    os.getenv("ORCHESTRATION_ADAPTIVE_WORKERS_ENABLED", "true").lower() == "true"
-)
-# Performance goals (ms) used for feedback control and bottleneck alerts.
-ORCHESTRATION_TARGET_SCAN_MS: float = float(
-    os.getenv("ORCHESTRATION_TARGET_SCAN_MS", "15000")
-)
-ORCHESTRATION_TARGET_RANK_MS: float = float(
-    os.getenv("ORCHESTRATION_TARGET_RANK_MS", "200")
-)
-ORCHESTRATION_TARGET_EXEC_MS: float = float(
-    os.getenv("ORCHESTRATION_TARGET_EXEC_MS", "800")
-)
-ORCHESTRATION_TARGET_TOTAL_MS: float = float(
-    os.getenv("ORCHESTRATION_TARGET_TOTAL_MS", "60000")
-)
-# Hard cap on ranked signals processed per loop to prevent runaway loops.
-ORCHESTRATION_MAX_SIGNALS_PER_ITERATION: int = int(
-    os.getenv("ORCHESTRATION_MAX_SIGNALS_PER_ITERATION", "20")
-)
-# Emit traceable iteration lifecycle events to DB logs.
-ORCHESTRATION_ENABLE_ITERATION_TRACE: bool = (
-    os.getenv("ORCHESTRATION_ENABLE_ITERATION_TRACE", "true").lower() == "true"
-)
-# Graceful degradation: if scan failures exceed this ratio in one loop,
-# skip ranking/execution for that loop and retry next cycle.
-ORCHESTRATION_SCAN_ERROR_RATE_ABORT: float = float(
-    os.getenv("ORCHESTRATION_SCAN_ERROR_RATE_ABORT", "0.70")
-)
-ORCHESTRATION_SCAN_ERROR_MIN_SAMPLES: int = int(
-    os.getenv("ORCHESTRATION_SCAN_ERROR_MIN_SAMPLES", "5")
-)
-# Hard stage budgets (ms). When exceeded, orchestration degrades gracefully
-# by skipping optional gates and/or stopping further ranked processing.
-ORCHESTRATION_HARD_BUDGET_ENABLED: bool = (
-    os.getenv("ORCHESTRATION_HARD_BUDGET_ENABLED", "true").lower() == "true"
-)
-ORCHESTRATION_MAX_SCAN_MS: float = float(
-    os.getenv("ORCHESTRATION_MAX_SCAN_MS", "90000")
-)
-ORCHESTRATION_MAX_RANK_MS: float = float(
-    os.getenv("ORCHESTRATION_MAX_RANK_MS", "1000")
-)
-ORCHESTRATION_MAX_EXEC_MS: float = float(
-    os.getenv("ORCHESTRATION_MAX_EXEC_MS", "3000")
-)
-ORCHESTRATION_MAX_ITERATION_MS: float = float(
-    os.getenv("ORCHESTRATION_MAX_ITERATION_MS", "120000")
-)
-# Safety margin: when remaining execution budget is below this threshold,
-# skip council reviews to preserve order-placement latency.
-ORCHESTRATION_EXEC_BUDGET_COUNCIL_MARGIN_MS: float = float(
-    os.getenv("ORCHESTRATION_EXEC_BUDGET_COUNCIL_MARGIN_MS", "350")
-)
-
-# ── Data Validation ──────────────────────────────────────────────────────
-STUCK_QUOTE_THRESHOLD: int = int(os.getenv("STUCK_QUOTE_THRESHOLD", "10"))
-STUCK_QUOTE_THRESHOLD_CRYPTO: int = int(
-    os.getenv("STUCK_QUOTE_THRESHOLD_CRYPTO", "14")
-)
-SPIKE_PERCENT_THRESHOLD: float = float(os.getenv("SPIKE_PERCENT_THRESHOLD", "2.0"))
-
-# ── Execution hard-failure backoff ───────────────────────────────────────
-# MT5 10017/10027 indicates terminal-level autotrading disabled.
-# Backing off avoids hammering the terminal with repeated failed sends.
-EXEC_AUTOTRADING_ERROR_COOLDOWN_SECONDS: int = int(
-    os.getenv("EXEC_AUTOTRADING_ERROR_COOLDOWN_SECONDS", "300")
-)
-# Pending-order confirmation watchdog:
-# after order_send succeeds, wait up to this timeout for the ticket to appear
-# in broker open positions; if it never appears, execution escalates and
-# attempts an emergency close to avoid phantom/open-state divergence.
-EXEC_PENDING_CONFIRM_TIMEOUT_SECONDS: float = float(
-    os.getenv("EXEC_PENDING_CONFIRM_TIMEOUT_SECONDS", "4.0")
-)
-EXEC_PENDING_CONFIRM_POLL_INTERVAL_SECONDS: float = float(
-    os.getenv("EXEC_PENDING_CONFIRM_POLL_INTERVAL_SECONDS", "0.25")
-)
-
-# ── Spread rejection cooldown ────────────────────────────────────────────
-# If a symbol repeatedly fails spread checks, temporarily cool it down
-# to avoid wasting loops on the same reject condition.
-SPREAD_REJECT_COOLDOWN_HITS: int = int(
-    os.getenv("SPREAD_REJECT_COOLDOWN_HITS", "3")
-)
-SPREAD_REJECT_COOLDOWN_SECONDS: int = int(
-    os.getenv("SPREAD_REJECT_COOLDOWN_SECONDS", "300")
-)
-
-# ── Autonomous tool system ──────────────────────────────────────────────
-# Enables a built-in tool registry that can run diagnostics and
-# corrective actions on a schedule from inside the main trading loop.
-TOOL_SYSTEM_ENABLED: bool = os.getenv("TOOL_SYSTEM_ENABLED", "true").lower() == "true"
-TOOL_SYSTEM_AUTORUN_EVERY_N_LOOPS: int = int(
-    os.getenv("TOOL_SYSTEM_AUTORUN_EVERY_N_LOOPS", "5")
-)
-TOOL_SYSTEM_STRICT_CRITICAL: bool = (
-    os.getenv("TOOL_SYSTEM_STRICT_CRITICAL", "true").lower() == "true"
-)
-TOOL_SYSTEM_MAX_ACTIONS_PER_CYCLE: int = int(
-    os.getenv("TOOL_SYSTEM_MAX_ACTIONS_PER_CYCLE", "8")
-)
-TOOL_SYSTEM_WARNING_SPIKE_THRESHOLD: int = int(
-    os.getenv("TOOL_SYSTEM_WARNING_SPIKE_THRESHOLD", "2")
-)
-TOOL_SYSTEM_EMERGENCY_RECOVERY_CYCLES: int = int(
-    os.getenv("TOOL_SYSTEM_EMERGENCY_RECOVERY_CYCLES", "2")
-)
-TOOL_SYSTEM_EMERGENCY_SYMBOLS: str = os.getenv(
-    "TOOL_SYSTEM_EMERGENCY_SYMBOLS",
-    "BTCUSD,ETHUSD,XAUUSD,EURUSD",
-)
-TOOL_SYSTEM_EMERGENCY_MAX_RISK_PER_TRADE: float = float(
-    os.getenv("TOOL_SYSTEM_EMERGENCY_MAX_RISK_PER_TRADE", "0.005")
-)
-TOOL_SYSTEM_EMERGENCY_MAX_OPEN_TRADES: int = int(
-    os.getenv("TOOL_SYSTEM_EMERGENCY_MAX_OPEN_TRADES", "1")
-)
-TOOL_SYSTEM_REWEIGHT_LOOKBACK_HOURS: int = int(
-    os.getenv("TOOL_SYSTEM_REWEIGHT_LOOKBACK_HOURS", "48")
-)
-TOOL_SYSTEM_REWEIGHT_MIN_TRADES: int = int(
-    os.getenv("TOOL_SYSTEM_REWEIGHT_MIN_TRADES", "4")
-)
-
-# ── Symbols (default for V1) ────────────────────────────────────────────
-DEFAULT_SYMBOL: str = os.getenv("DEFAULT_SYMBOL", "BTCUSD")
-DEFAULT_TIMEFRAME: str = os.getenv("DEFAULT_TIMEFRAME", "H1")
-
-# ── DeepSeek LLM Strategy ────────────────────────────────────────────────
-DEEPSEEK_API_KEY:        str   = os.getenv("DEEPSEEK_API_KEY", "")
-DEEPSEEK_MODEL:          str   = os.getenv("DEEPSEEK_MODEL", "deepseek-chat")
-DEEPSEEK_QUICK_MODEL:    str   = os.getenv("DEEPSEEK_QUICK_MODEL", DEEPSEEK_MODEL)
-DEEPSEEK_DEEP_MODEL:     str   = os.getenv("DEEPSEEK_DEEP_MODEL", "deepseek-reasoner")
-DEEPSEEK_MIN_CONFIDENCE: float = float(os.getenv("DEEPSEEK_MIN_CONFIDENCE", "0.65"))
-DEEPSEEK_SCHEMA_VERSION: str = os.getenv("DEEPSEEK_SCHEMA_VERSION", "v1")
-# How long (minutes) to reuse a cached signal before re-querying the API.
-# One H1 bar = 60 min; default 30 min re-queries twice per bar if the loop
-# runs every 5 min but the symbol cooldown is also 5 min.
-DEEPSEEK_CACHE_MINUTES:  int   = int(os.getenv("DEEPSEEK_CACHE_MINUTES", "30"))
-# Allowed relative deviation for 1R/2R/3R TP checks from model output.
-# Example: 0.25 means +/-25% tolerance around expected R multiples.
-DEEPSEEK_R_MULT_TOLERANCE: float = float(
-    os.getenv("DEEPSEEK_R_MULT_TOLERANCE", "0.25")
-)
-DEEPSEEK_QUICK_TIMEOUT_SECONDS: float = float(
-    os.getenv("DEEPSEEK_QUICK_TIMEOUT_SECONDS", "10")
-)
-DEEPSEEK_DEEP_TIMEOUT_SECONDS: float = float(
-    os.getenv("DEEPSEEK_DEEP_TIMEOUT_SECONDS", "8")
-)
-DEEPSEEK_ENABLE_DEEP_VERIFY: bool = (
-    os.getenv("DEEPSEEK_ENABLE_DEEP_VERIFY", "true").lower() == "true"
-)
-DEEPSEEK_DEEP_VERIFY_MIN_CONFIDENCE: float = float(
-    os.getenv("DEEPSEEK_DEEP_VERIFY_MIN_CONFIDENCE", "0.78")
-)
-# Optional multi-agent mode: run multiple specialized LLM roles in parallel
-# and aggregate to a single consensus signal.
-DEEPSEEK_AGENT_SWARM_ENABLED: bool = (
-    os.getenv("DEEPSEEK_AGENT_SWARM_ENABLED", "false").lower() == "true"
-)
-DEEPSEEK_AGENT_SWARM_MAX_AGENTS: int = int(
-    os.getenv("DEEPSEEK_AGENT_SWARM_MAX_AGENTS", "3")
-)
-# Format: "name:instruction;name:instruction"
-DEEPSEEK_AGENT_SWARM_PROFILES: str = os.getenv(
-    "DEEPSEEK_AGENT_SWARM_PROFILES",
-    "",
-)
-DEEPSEEK_MESH_ENABLED: bool = (
-    os.getenv("DEEPSEEK_MESH_ENABLED", "true").lower() == "true"
-)
-DEEPSEEK_MESH_MIN_ACTIVE_AGENTS: int = int(
-    os.getenv("DEEPSEEK_MESH_MIN_ACTIVE_AGENTS", "2")
-)
-DEEPSEEK_MESH_LATENCY_PENALTY: float = float(
-    os.getenv("DEEPSEEK_MESH_LATENCY_PENALTY", "0.25")
-)
-DEEPSEEK_MESH_TRUST_ALPHA: float = float(
-    os.getenv("DEEPSEEK_MESH_TRUST_ALPHA", "0.18")
-)
-DEEPSEEK_MESH_MIN_TRUST: float = float(
-    os.getenv("DEEPSEEK_MESH_MIN_TRUST", "0.15")
-)
-DEEPSEEK_MESH_MAX_TRUST: float = float(
-    os.getenv("DEEPSEEK_MESH_MAX_TRUST", "0.95")
-)
-# Quality telemetry cadence (in DeepSeek detect calls).
-DEEPSEEK_METRICS_LOG_EVERY: int = int(os.getenv("DEEPSEEK_METRICS_LOG_EVERY", "25"))
-
-# ── Analysis Agent indicator periods ────────────────────────────────────
-SMA_FAST_PERIOD: int = int(os.getenv("SMA_FAST_PERIOD", "10"))
-SMA_SLOW_PERIOD: int = int(os.getenv("SMA_SLOW_PERIOD", "50"))
-
-# ── Database ─────────────────────────────────────────────────────────────
-DATABASE_URL: str = os.getenv("DATABASE_URL", "")
-DB_PATH: str = os.getenv("DB_PATH", str(Path(__file__).resolve().parent.parent / "data" / "trading_bot.db"))
-
-# ── Timezone (display only — all internal trading logic stays UTC) ───────
-# Used for log timestamps, day-of-week labels, and daily summary scheduling.
-# Must be a valid IANA timezone name.  Defaults to Europe/Paris (CET/CEST).
-TIMEZONE: str = os.getenv("TIMEZONE", "Europe/Paris")
-
-# ── Session / Day quality gates ─────────────────────────────────────────
-# Comma-separated sessions to ALLOW entries in.  Empty string = no gate.
-# All four active sessions are enabled by default so the ICT killzone engine
-# (London 07-10 UTC, NY 12-16 UTC) can work as designed.  The prior "0% win
-# rate for London/NY" reflected a tiny early sample — those sessions carry
-# the highest volume, tightest spreads, and the strongest ICT setups.
-# Override via .env ENTRY_ALLOWED_SESSIONS=asian,overlap to revert if needed.
-# IMPORTANT: use "newyork" (no underscore) — that is what current_session() returns.
-# Valid values: asian, london, overlap, newyork, off_hours
-ENTRY_ALLOWED_SESSIONS: list = [
-    s.strip() for s in os.getenv("ENTRY_ALLOWED_SESSIONS", "asian,london,overlap").split(",")
-    if s.strip()
-]
-# Days to BLOCK entries.  Saturday and Sunday show 0–11% win rates.
-ENTRY_BLOCKED_DAYS: list = [
-    d.strip() for d in os.getenv("ENTRY_BLOCKED_DAYS", "Saturday,Sunday").split(",")
-    if d.strip()
-]
-# Minimum MTF alignment fraction (0.0–1.0) required for entry.
-# 0.75 = at least 3 of 4 analysis timeframes must agree with signal direction.
-# Set 0.0 to disable.
-MTF_MIN_ALIGNMENT: float = float(os.getenv("MTF_MIN_ALIGNMENT", "0.0"))
-
-# ── Weekend / Crypto-only mode ───────────────────────────────────────────
-# Symbols scanned during the forex weekend (Friday 22:00 – Sunday 22:00 UTC).
-# Crypto markets run 24/7 so the bot stays active but narrows focus.
-# Comma-separated, e.g. "BTCUSD" or "BTCUSD,ETHUSD".
-WEEKEND_SYMBOLS: str = os.getenv(
-    "WEEKEND_SYMBOLS",
-    "BTCUSD,ETHUSD,BNBUSD,SOLUSD,XRPUSD,ADAUSD,DOTUSD,LTCUSD,EOSUSD,XLMUSD,TRXUSD",
-)
-
-# ── Crucix World Intelligence (optional) ─────────────────────────────
-CRUCIX_URL: str = os.getenv("CRUCIX_URL", "https://crucix-pi.vercel.app")
-
-# ── Strategy plugin loader ───────────────────────────────────────────────
-# Comma-separated dotted paths to strategy classes, e.g.
-# STRATEGY_PLUGINS=my_pkg.alpha.AlphaStrategy,my_pkg.beta.BetaStrategy
-STRATEGY_PLUGINS: tuple[str, ...] = tuple(
-    s.strip()
-    for s in os.getenv("STRATEGY_PLUGINS", "").split(",")
-    if s.strip()
-)
-STRATEGY_PLUGIN_FAIL_FAST: bool = (
-    os.getenv("STRATEGY_PLUGIN_FAIL_FAST", "false").lower() == "true"
-)
+def _parse_tuple_str(value: str) -> tuple[str, ...]:
+    """Parse a comma-separated env var into a tuple of stripped strings."""
+    return tuple(s.strip() for s in value.split(",") if s.strip())
 
 
-def _apply_profile_overrides() -> None:
-    """Apply opinionated runtime profiles after env parsing.
+def _parse_tuple_int(value: str) -> tuple[int, ...]:
+    """Parse a comma-separated env var into a tuple of ints."""
+    result: list[int] = []
+    for v in value.replace(";", ",").split(","):
+        v = v.strip()
+        if v.isdigit():
+            result.append(int(v))
+    return tuple(result)
 
-    Profiles intentionally only override a small, high-impact subset.
+
+# ── Broker settings ───────────────────────────────────────────────────────
+
+class BrokerSettings(BaseModel):
+    account: str = ""
+    password: str = ""
+    server: str = ""
+
+
+# ── Risk settings ─────────────────────────────────────────────────────────
+
+class RiskSettings(BaseModel):
+    max_risk_per_trade: float = Field(default=0.02, ge=0.0001, le=0.50)
+    max_open_trades: int = Field(default=5, ge=1, le=50)
+    max_daily_loss: float = Field(default=0.05, ge=0.001, le=0.50)
+    max_monthly_loss: float = Field(default=0.10, ge=0.001, le=0.99)
+    max_spread_pips: float = Field(default=8.0, ge=0.0)
+    max_spread_pips_commodity: float = Field(default=10.0, ge=0.0)
+    max_spread_pips_exotic: float = Field(default=15.0, ge=0.0)
+    max_spread_pct_crypto: float = Field(default=2.5, ge=0.0)
+    max_spread_points_index: float = Field(default=5.0, ge=0.0)
+    drawdown_cooldown_hours: int = Field(default=24, ge=0)
+    min_lot_size: float = Field(default=0.01, ge=0.0)
+    max_lot_size: float = Field(default=50.0, ge=0.0)
+    fixed_lot_size: float = Field(default=0.0, ge=0.0)
+    position_size_mode: str = "equity_pct"
+    position_size_fixed_lot: float = Field(default=0.10, ge=0.0)
+    position_size_fixed_risk_amount: float = Field(default=100.0, ge=0.0)
+    kelly_min_trades: int = Field(default=20, ge=2)
+    kelly_lookback_days: int = Field(default=90, ge=7)
+    kelly_half: bool = True
+    risk_validation_profile: str = "agile"
+    risk_agile_high_conf_threshold: float = Field(default=0.74, ge=0.0, le=1.0)
+    risk_agile_spread_multiplier: float = Field(default=1.35, ge=0.0)
+
+    @field_validator("position_size_mode", mode="before")
+    @classmethod
+    def _lowercase_str(cls, v: str) -> str:
+        return str(v).lower()
+
+
+# ── Guard pipeline settings ───────────────────────────────────────────────
+
+class GuardSettings(BaseModel):
+    enabled: bool = True
+    cooldown_seconds: int = Field(default=300, ge=0)
+    max_daily_loss_pct: float = Field(default=0.05, ge=0.0, le=1.0)
+    max_vix: float = Field(default=40.0, ge=0.0)
+    feed_staleness_seconds: float = Field(default=120.0, ge=0.0)
+
+
+# ── Execution / TP settings ───────────────────────────────────────────────
+
+class ExecutionSettings(BaseModel):
+    tp1_close_percent: float = Field(default=0.40, ge=0.0, le=1.0)
+    tp2_close_percent: float = Field(default=0.30, ge=0.0, le=1.0)
+    tp3_close_percent: float = Field(default=0.20, ge=0.0, le=1.0)
+    tp4_close_percent: float = Field(default=0.10, ge=0.0, le=1.0)
+    trailing_stop_distance_pips: float = Field(default=20.0, ge=0.0)
+    commission_per_lot: float = Field(default=7.0, ge=0.0)
+    commission_per_lot_crypto: float = Field(default=7.0, ge=0.0)
+    commission_per_lot_commodity: float = Field(default=7.0, ge=0.0)
+    commission_per_lot_exotic: float = Field(default=7.0, ge=0.0)
+    breakeven_spread_offset: bool = True
+    limit_entry_max_distance_atr: float = Field(default=0.5, ge=0.0)
+    limit_entry_max_distance_atr_crypto: float = Field(default=2.0, ge=0.0)
+
+
+# ── Sniper / deferred entry settings ─────────────────────────────────────
+
+class SniperSettings(BaseModel):
+    enabled: bool = True
+    conf_threshold: float = Field(default=0.55, ge=0.0, le=1.0)
+    timeout_minutes: float = Field(default=30.0, ge=0.0)
+    max_entry_atr_distance: float = Field(default=0.55, ge=0.0)
+    fib_min_depth: str = "acceptable"
+    fib_max_depth: str = "deep"
+
+    @field_validator("fib_min_depth", "fib_max_depth", mode="before")
+    @classmethod
+    def _lowercase_str(cls, v: str) -> str:
+        return str(v).lower()
+
+
+class DeferredSettings(BaseModel):
+    enabled: bool = True
+    max_age_seconds: int = Field(default=900, ge=0)
+    max_atr_distance: float = Field(default=0.35, ge=0.0)
+    min_conf: float = Field(default=0.60, ge=0.0, le=1.0)
+    ttl_seconds: int = Field(default=900, ge=0)
+
+
+# ── Fast lane / instant entry settings ─────────────────────────────────────
+
+class FastLaneSettings(BaseModel):
+    enabled: bool = True
+    max_signals: int = Field(default=1, ge=0)
+    close_on_full_reject: bool = True
+
+
+class InstantEntrySettings(BaseModel):
+    enabled: bool = True
+    min_confidence: float = Field(default=0.78, ge=0.0, le=1.0)
+
+
+# ── Council / debate settings (disabled code — kept for reference) ──────────
+
+class CouncilSettings(BaseModel):
+    enabled: bool = True
+    min_confidence: float = Field(default=0.60, ge=0.0, le=1.0)
+    mode: str = "advisory"
+    max_reviews_per_loop: int = Field(default=3, ge=0)
+    advisory_rejection_conf_penalty: float = Field(default=0.08, ge=0.0, le=1.0)
+    advisory_min_viability: float = Field(default=0.45, ge=0.0, le=1.0)
+    ict_weight: float = Field(default=0.50, ge=0.0, le=1.0)
+    danial_weight: float = Field(default=0.17, ge=0.0, le=1.0)
+    trad_weight: float = Field(default=0.17, ge=0.0, le=1.0)
+    world_weight: float = Field(default=0.16, ge=0.0, le=1.0)
+    min_candles: int = Field(default=20, ge=0)
+
+    @field_validator("mode", mode="before")
+    @classmethod
+    def _lowercase_str(cls, v: str) -> str:
+        return str(v).lower()
+
+
+class DebateSettings(BaseModel):
+    enabled: bool = False
+    llm_model: str = ""
+    timeout_seconds: int = Field(default=8, ge=0)
+    bear_veto_threshold: float = Field(default=0.75, ge=0.0, le=1.0)
+    bear_caution_threshold: float = Field(default=0.60, ge=0.0, le=1.0)
+
+
+class ExposureSettings(BaseModel):
+    enabled: bool = False
+    reduce_threshold: float = Field(default=0.40, ge=0.0, le=1.0)
+    cash_threshold: float = Field(default=0.20, ge=0.0, le=1.0)
+    win_rate_lookback: int = Field(default=10, ge=1)
+
+
+# ── ML / neural settings ─────────────────────────────────────────────────
+
+class NeuralSettings(BaseModel):
+    min_candles: int = Field(default=65, ge=1)
+    seq_len: int = Field(default=50, ge=1)
+    hidden_size: int = Field(default=128, ge=1)
+    num_layers: int = Field(default=2, ge=1)
+    train_epochs: int = Field(default=100, ge=1)
+    retrain_every: int = Field(default=20, ge=1)
+    min_confidence: float = Field(default=0.55, ge=0.0, le=1.0)
+
+
+class GarchSettings(BaseModel):
+    enabled: bool = True
+    high_vol_threshold: float = Field(default=2.0, ge=0.0)
+
+
+# ── ICT strategy settings ─────────────────────────────────────────────────
+
+class ICTSettings(BaseModel):
+    min_confidence: int = Field(default=30, ge=0, le=100)
+    h4_candle_count: int = Field(default=200, ge=1)
+    d1_candle_count: int = Field(default=20, ge=1)
+    m30_candle_count: int = Field(default=100, ge=1)
+    m15_candle_count: int = Field(default=250, ge=1)
+    m5_candle_count: int = Field(default=100, ge=1)
+    mtf_alignment_boost: float = Field(default=0.05, ge=0.0, le=1.0)
+    mtf_d1_veto: bool = True
+    regime_adx_trending: float = Field(default=25.0, ge=0.0)
+    regime_adx_ranging: float = Field(default=20.0, ge=0.0)
+    regime_confidence_penalty: float = Field(default=0.10, ge=0.0, le=1.0)
+    tp_trending_tp3_mult: float = Field(default=4.0, ge=0.0)
+    tp_trending_tp4_mult: float = Field(default=6.0, ge=0.0)
+    tp_ranging_tp1_mult: float = Field(default=0.8, ge=0.0)
+    tp_ranging_tp2_mult: float = Field(default=1.5, ge=0.0)
+    max_hours_in_trade: int = Field(default=48, ge=0)
+    min_ict_score_crypto: float = Field(default=35.0, ge=0.0)
+    # confidence floors by regime
+    min_conf_trending: float = Field(default=0.40, ge=0.0, le=1.0)
+    min_conf_ranging: float = Field(default=0.40, ge=0.0, le=1.0)
+    min_conf_volatile: float = Field(default=0.40, ge=0.0, le=1.0)
+    min_conf_unknown: float = Field(default=0.40, ge=0.0, le=1.0)
+    min_conf_crypto_bonus: float = Field(default=0.03, ge=0.0, le=1.0)
+    min_conf_exotic_bonus: float = Field(default=0.04, ge=0.0, le=1.0)
+    # size-scale thresholds
+    size_scale_very_low_threshold: float = Field(default=0.45, ge=0.0, le=1.0)
+    size_scale_low_threshold: float = Field(default=0.60, ge=0.0, le=1.0)
+    size_scale_medium_threshold: float = Field(default=0.75, ge=0.0, le=1.0)
+    size_scale_very_low: float = Field(default=0.35, ge=0.0, le=1.0)
+    size_scale_low: float = Field(default=0.55, ge=0.0, le=1.0)
+    size_scale_medium: float = Field(default=0.75, ge=0.0, le=1.0)
+    size_scale_full: float = Field(default=1.00, ge=0.0, le=1.0)
+
+
+# ── Orchestration / loop settings ───────────────────────────────────────────
+
+class OrchestrationSettings(BaseModel):
+    loop_interval_seconds: int = Field(default=5, ge=1, le=600)
+    reconcile_every_n_loops: int = Field(default=60, ge=1)
+    candle_server_port: int = Field(default=5555, ge=1, le=65535)
+    scan_cooldown_seconds: int = Field(default=300, ge=0)
+    scan_cooldown_seconds_london_ny: int = Field(default=60, ge=0)
+    scan_cooldown_seconds_asia: int = Field(default=120, ge=0)
+    btc_priority_symbol: str = "BTCUSD"
+    btc_priority_scan_cooldown_seconds: int = Field(default=8, ge=0)
+    event_driven_rescan_on_new_candle: bool = True
+    # orchestration perf
+    scan_workers_min: int = Field(default=2, ge=1)
+    scan_workers_max: int = Field(default=10, ge=1)
+    scan_workers_default: int = Field(default=6, ge=1)
+    adaptive_workers_enabled: bool = True
+    target_scan_ms: float = Field(default=15000, ge=0)
+    target_rank_ms: float = Field(default=200, ge=0)
+    target_exec_ms: float = Field(default=800, ge=0)
+    target_total_ms: float = Field(default=60000, ge=0)
+    max_signals_per_iteration: int = Field(default=20, ge=1)
+    enable_iteration_trace: bool = True
+    scan_error_rate_abort: float = Field(default=0.70, ge=0.0, le=1.0)
+    scan_error_min_samples: int = Field(default=5, ge=1)
+    hard_budget_enabled: bool = True
+    max_scan_ms: float = Field(default=90000, ge=0)
+    max_rank_ms: float = Field(default=1000, ge=0)
+    max_exec_ms: float = Field(default=3000, ge=0)
+    max_iteration_ms: float = Field(default=120000, ge=0)
+    exec_budget_council_margin_ms: float = Field(default=350, ge=0)
+    # symbol fault
+    symbol_max_fail_count: int = Field(default=12, ge=1)
+    symbol_disable_seconds: int = Field(default=3600, ge=0)
+    # HTF cache TTLs
+    htf_cache_ttl_m15_seconds: float = Field(default=20, ge=0)
+    htf_cache_ttl_m5_seconds: float = Field(default=15, ge=0)
+    htf_cache_ttl_m30_seconds: float = Field(default=30, ge=0)
+    htf_cache_ttl_h4_seconds: float = Field(default=120, ge=0)
+    htf_cache_ttl_d1_seconds: float = Field(default=300, ge=0)
+    htf_cache_ttl_multiplier_london_ny: float = Field(default=0.75, ge=0.0)
+    htf_cache_ttl_multiplier_asia: float = Field(default=1.35, ge=0.0)
+
+
+# ── Opportunity lifecycle settings ─────────────────────────────────────────
+
+class OpportunitySettings(BaseModel):
+    enabled: bool = True
+    rollover_seconds: int = Field(default=900, ge=0)
+    watch_window_seconds: int = Field(default=180, ge=0)
+    hedge_timeout_seconds: int = Field(default=300, ge=0)
+    min_recovery_confidence: float = Field(default=0.62, ge=0.0, le=1.0)
+    fallback_max_spread_pct: float = Field(default=0.003, ge=0.0)
+    shock_lookback_seconds: int = Field(default=5, ge=0)
+    shock_drop_threshold: float = Field(default=0.0015, ge=0.0)
+    require_shock_for_fast_lane: bool = True
+    live_enabled: bool = False
+
+
+# ── Protection layer settings ──────────────────────────────────────────────
+
+class ProtectionSettings(BaseModel):
+    enabled: bool = True
+    cooldown_minutes: int = Field(default=10, ge=0)
+    stoploss_guard_lookback_minutes: int = Field(default=180, ge=0)
+    stoploss_guard_trade_limit: int = Field(default=3, ge=0)
+    stoploss_guard_lock_minutes: int = Field(default=60, ge=0)
+    global_loss_guard_lookback_minutes: int = Field(default=120, ge=0)
+    global_loss_guard_max_losses: int = Field(default=4, ge=0)
+    global_loss_guard_lock_minutes: int = Field(default=45, ge=0)
+
+
+# ── Time-phase confidence gate settings ───────────────────────────────────
+
+class TimePhaseSettings(BaseModel):
+    enabled: bool = False
+    bucket_minutes: int = Field(default=15, ge=1)
+    early_max_minute: int = Field(default=3, ge=0)
+    mid_max_minute: int = Field(default=11, ge=0)
+    min_conf_early: float = Field(default=0.55, ge=0.0, le=1.0)
+    min_conf_mid: float = Field(default=0.50, ge=0.0, le=1.0)
+    min_conf_late: float = Field(default=0.48, ge=0.0, le=1.0)
+
+
+# ── Telegram settings ──────────────────────────────────────────────────────
+
+class TelegramSettings(BaseModel):
+    bot_token: str = ""
+    chat_id: str = ""
+    noise_filter_enabled: bool = True
+    dedupe_window_seconds: int = Field(default=180, ge=0)
+    rate_limit_per_minute: int = Field(default=20, ge=0)
+    suppression_report_every: int = Field(default=10, ge=0)
+    chart_days: int = Field(default=30, ge=1)
+    allowed_usernames: tuple[str, ...] = Field(default_factory=tuple)
+    allowed_user_ids: tuple[int, ...] = Field(default_factory=tuple)
+
+
+# ── Intelligence / data feed settings ─────────────────────────────────────
+
+class IntelligenceSettings(BaseModel):
+    alpha_vantage_key: str = ""
+    twelve_data_key: str = ""
+    fred_api_key: str = ""
+    yfinance_enabled: bool = True
+    sweep_interval_minutes: int = Field(default=15, ge=1)
+    mt5_db_sync_interval_seconds: int = Field(default=300, ge=0)
+    news_calendar_source: str = "static"
+    finnhub_api_key: str = ""
+    news_blackout_minutes: int = Field(default=15, ge=0)
+    crucix_url: str = "https://crucix-pi.vercel.app"
+
+
+# ── ML / learning system settings ─────────────────────────────────────────
+
+class LearningSettings(BaseModel):
+    default_confidence: float = 0.5
+    initial_confidence: float = 0.5
+    confidence_allow: float = 0.3
+    confidence_reduced: float = 0.5
+    confidence_full: float = 0.7
+    confidence_disable_threshold: float = 0.2
+    metrics_log_every_n_loops: int = Field(default=5, ge=1)
+
+
+# ── Backtest settings ──────────────────────────────────────────────────────
+
+class BacktestSettings(BaseModel):
+    commission_per_lot_per_side: float = Field(default=0.0001, ge=0.0)
+    walk_forward_enabled: bool = False
+    walk_forward_window_days: int = Field(default=90, ge=1)
+
+
+# ── Logging / misc settings ────────────────────────────────────────────────
+
+class MiscSettings(BaseModel):
+    log_level: str = "INFO"
+    daily_summary_hour: int = Field(default=17, ge=0, le=23)
+    timezone: str = "Europe/Paris"
+    default_symbol: str = "BTCUSD"
+    default_timeframe: str = "H1"
+    database_url: str = ""
+    db_path: str = ""
+    encryption_key: str = ""
+    sma_fast_period: int = Field(default=10, ge=1)
+    sma_slow_period: int = Field(default=50, ge=1)
+
+
+# ── Market session settings ────────────────────────────────────────────────
+
+class SessionSettings(BaseModel):
+    allowed_sessions: list[str] = ["asian", "london", "overlap"]
+    blocked_days: list[str] = ["Saturday", "Sunday"]
+    mtf_min_alignment: float = Field(default=0.0, ge=0.0, le=1.0)
+    weekend_symbols: str = "BTCUSD,ETHUSD,BNBUSD,SOLUSD,XRPUSD,ADAUSD,DOTUSD,LTCUSD,EOSUSD,XLMUSD,TRXUSD"
+
+
+# ── Strategy plugin settings ─────────────────────────────────────────────────
+
+class StrategyPluginSettings(BaseModel):
+    plugins: tuple[str, ...] = Field(default_factory=tuple)
+    fail_fast: bool = False
+
+
+# ── OpenRouter / LLM settings (disabled code) ─────────────────────────────
+
+class OpenRouterSettings(BaseModel):
+    api_key: str = ""
+    base_url: str = "https://openrouter.ai/api/v1"
+    model: str = "anthropic/claude-3-haiku"
+    fallback_enabled: bool = False
+
+
+# ── MCP server settings ─────────────────────────────────────────────────────
+
+class MCPSettings(BaseModel):
+    enabled: bool = False
+    port: int = Field(default=8080, ge=1, le=65535)
+
+
+# ── Tool system settings ───────────────────────────────────────────────────
+
+class ToolSystemSettings(BaseModel):
+    enabled: bool = True
+    autorun_every_n_loops: int = Field(default=5, ge=1)
+    strict_critical: bool = True
+    max_actions_per_cycle: int = Field(default=8, ge=0)
+    warning_spike_threshold: int = Field(default=2, ge=0)
+    emergency_recovery_cycles: int = Field(default=2, ge=0)
+    emergency_symbols: str = "BTCUSD,ETHUSD,XAUUSD,EURUSD"
+    emergency_max_risk_per_trade: float = Field(default=0.005, ge=0.0, le=1.0)
+    emergency_max_open_trades: int = Field(default=1, ge=0)
+    reweight_lookback_hours: int = Field(default=48, ge=0)
+    reweight_min_trades: int = Field(default=4, ge=0)
+
+
+# ── Execution failure backoff settings ──────────────────────────────────────
+
+class ExecutionFailureSettings(BaseModel):
+    autotrading_error_cooldown_seconds: int = Field(default=300, ge=0)
+    pending_confirm_timeout_seconds: float = Field(default=4.0, ge=0.0)
+    pending_confirm_poll_interval_seconds: float = Field(default=0.25, ge=0.0)
+    spread_reject_cooldown_hits: int = Field(default=3, ge=0)
+    spread_reject_cooldown_seconds: int = Field(default=300, ge=0)
+
+
+# ── Data validation settings ────────────────────────────────────────────────
+
+class DataValidationSettings(BaseModel):
+    stuck_quote_threshold: int = Field(default=10, ge=0)
+    stuck_quote_threshold_crypto: int = Field(default=14, ge=0)
+    spike_percent_threshold: float = Field(default=2.0, ge=0.0)
+
+
+# ── Scalp settings (disabled legacy strategy) ──────────────────────────────
+
+class ScalpSettings(BaseModel):
+    max_lot_size: float = Field(default=0.50, ge=0.0)
+    max_concurrent: int = Field(default=2, ge=0)
+    max_trades_per_hour: int = Field(default=4, ge=0)
+    daily_loss_limit: float = Field(default=0.02, ge=0.0, le=1.0)
+
+
+# ── DeepSeek settings (disabled code — kept for reference) ─────────────────
+
+class DeepSeekSettings(BaseModel):
+    api_key: str = ""
+    model: str = "deepseek-chat"
+    quick_model: str = "deepseek-chat"
+    deep_model: str = "deepseek-reasoner"
+    min_confidence: float = Field(default=0.65, ge=0.0, le=1.0)
+    schema_version: str = "v1"
+    cache_minutes: int = Field(default=30, ge=0)
+    r_mult_tolerance: float = Field(default=0.25, ge=0.0)
+    quick_timeout_seconds: float = Field(default=10, ge=0.0)
+    deep_timeout_seconds: float = Field(default=8, ge=0.0)
+    enable_deep_verify: bool = True
+    deep_verify_min_confidence: float = Field(default=0.78, ge=0.0, le=1.0)
+    agent_swarm_enabled: bool = False
+    agent_swarm_max_agents: int = Field(default=3, ge=1)
+    agent_swarm_profiles: str = ""
+    mesh_enabled: bool = True
+    mesh_min_active_agents: int = Field(default=2, ge=0)
+    mesh_latency_penalty: float = Field(default=0.25, ge=0.0, le=1.0)
+    mesh_trust_alpha: float = Field(default=0.18, ge=0.0, le=1.0)
+    mesh_min_trust: float = Field(default=0.15, ge=0.0, le=1.0)
+    mesh_max_trust: float = Field(default=0.95, ge=0.0, le=1.0)
+    metrics_log_every: int = Field(default=25, ge=1)
+
+
+# ── Root settings model ─────────────────────────────────────────────────────
+
+class _Settings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_file=str(_env_path),
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+
+    # Mode
+    demo_mode: bool = False
+    bot_profile: str = "custom"
+
+    # Sub-models
+    broker: BrokerSettings = Field(default_factory=BrokerSettings)
+    risk: RiskSettings = Field(default_factory=RiskSettings)
+    guard: GuardSettings = Field(default_factory=GuardSettings)
+    execution: ExecutionSettings = Field(default_factory=ExecutionSettings)
+    sniper: SniperSettings = Field(default_factory=SniperSettings)
+    deferred: DeferredSettings = Field(default_factory=DeferredSettings)
+    fast_lane: FastLaneSettings = Field(default_factory=FastLaneSettings)
+    instant_entry: InstantEntrySettings = Field(default_factory=InstantEntrySettings)
+    council: CouncilSettings = Field(default_factory=CouncilSettings)
+    debate: DebateSettings = Field(default_factory=DebateSettings)
+    exposure: ExposureSettings = Field(default_factory=ExposureSettings)
+    neural: NeuralSettings = Field(default_factory=NeuralSettings)
+    garch: GarchSettings = Field(default_factory=GarchSettings)
+    ict: ICTSettings = Field(default_factory=ICTSettings)
+    orchestration: OrchestrationSettings = Field(default_factory=OrchestrationSettings)
+    opportunity: OpportunitySettings = Field(default_factory=OpportunitySettings)
+    protection: ProtectionSettings = Field(default_factory=ProtectionSettings)
+    time_phase: TimePhaseSettings = Field(default_factory=TimePhaseSettings)
+    telegram: TelegramSettings = Field(default_factory=TelegramSettings)
+    intelligence: IntelligenceSettings = Field(default_factory=IntelligenceSettings)
+    learning: LearningSettings = Field(default_factory=LearningSettings)
+    backtest: BacktestSettings = Field(default_factory=BacktestSettings)
+    misc: MiscSettings = Field(default_factory=MiscSettings)
+    session: SessionSettings = Field(default_factory=SessionSettings)
+    strategy_plugin: StrategyPluginSettings = Field(default_factory=StrategyPluginSettings)
+    openrouter: OpenRouterSettings = Field(default_factory=OpenRouterSettings)
+    mcp: MCPSettings = Field(default_factory=MCPSettings)
+    tool_system: ToolSystemSettings = Field(default_factory=ToolSystemSettings)
+    execution_failure: ExecutionFailureSettings = Field(default_factory=ExecutionFailureSettings)
+    data_validation: DataValidationSettings = Field(default_factory=DataValidationSettings)
+    scalp: ScalpSettings = Field(default_factory=ScalpSettings)
+    deepseek: DeepSeekSettings = Field(default_factory=DeepSeekSettings)
+
+
+def _get_env(name: str, default: str) -> str:
+    return os.getenv(name, default)
+
+
+def _build_settings() -> _Settings:
+    """Build the settings object manually from env vars.
+
+    We parse env vars ourselves and construct sub-models so that:
+    1. Pydantic validation runs on all values
+    2. Existing code that reads env vars directly (os.getenv in this module)
+       keeps working
     """
+    # Parse tuple fields that need custom handling
+    telegram_usernames_raw = _get_env("TELEGRAM_ALLOWED_USERNAMES", "")
+    telegram_usernames = tuple(
+        u.strip().lstrip("@").lower()
+        for u in telegram_usernames_raw.replace(";", ",").split(",")
+        if u.strip()
+    )
+    telegram_user_ids = tuple(
+        int(v.strip())
+        for v in _get_env("TELEGRAM_ALLOWED_USER_IDS", "").replace(";", ",").split(",")
+        if v.strip().isdigit()
+    )
+    entry_allowed_sessions = [
+        s.strip() for s in _get_env("ENTRY_ALLOWED_SESSIONS", "asian,london,overlap").split(",")
+        if s.strip()
+    ]
+    entry_blocked_days = [
+        d.strip() for d in _get_env("ENTRY_BLOCKED_DAYS", "Saturday,Sunday").split(",")
+        if d.strip()
+    ]
+    strategy_plugins = tuple(
+        s.strip() for s in _get_env("STRATEGY_PLUGINS", "").split(",") if s.strip()
+    )
+    weekend_symbols = _get_env(
+        "WEEKEND_SYMBOLS",
+        "BTCUSD,ETHUSD,BNBUSD,SOLUSD,XRPUSD,ADAUSD,DOTUSD,LTCUSD,EOSUSD,XLMUSD,TRXUSD",
+    )
+    misc_db_path = _get_env(
+        "DB_PATH",
+        str(Path(__file__).resolve().parent.parent / "data" / "trading_bot.db"),
+    )
 
-    profile_overrides: dict[str, dict[str, object]] = {
+    def _bool(name: str, default: str) -> bool:
+        return _get_env(name, default).lower() == "true"
+
+    def _int(name: str, default: str) -> int:
+        return int(_get_env(name, default))
+
+    def _float(name: str, default: str) -> float:
+        return float(_get_env(name, default))
+
+    def _str(name: str, default: str) -> str:
+        return _get_env(name, default)
+
+    demo_mode = _bool("DEMO_MODE", "false")
+    bot_profile = _str("BOT_PROFILE", "custom").strip().lower()
+
+    # Broker
+    broker = BrokerSettings(
+        account=_str("BROKER_ACCOUNT", ""),
+        password=_str("BROKER_PASSWORD", ""),
+        server=_str("BROKER_SERVER", ""),
+    )
+
+    # Risk
+    risk = RiskSettings(
+        max_risk_per_trade=_float("MAX_RISK_PER_TRADE", "0.02"),
+        max_open_trades=_int("MAX_OPEN_TRADES", "12"),
+        max_daily_loss=_float("MAX_DAILY_LOSS", "0.05"),
+        max_monthly_loss=_float("MAX_MONTHLY_LOSS", "0.10"),
+        max_spread_pips=_float("MAX_SPREAD_PIPS", "8.0"),
+        max_spread_pips_commodity=_float("MAX_SPREAD_PIPS_COMMODITY", "10.0"),
+        max_spread_pips_exotic=_float("MAX_SPREAD_PIPS_EXOTIC", "15.0"),
+        max_spread_pct_crypto=_float("MAX_SPREAD_PCT_CRYPTO", "2.5"),
+        max_spread_points_index=_float("MAX_SPREAD_POINTS_INDEX", "5.0"),
+        drawdown_cooldown_hours=_int("DRAWDOWN_COOLDOWN_HOURS", "24"),
+        min_lot_size=_float("MIN_LOT_SIZE", "0.01"),
+        max_lot_size=_float("MAX_LOT_SIZE", "50.0"),
+        fixed_lot_size=_float("FIXED_LOT_SIZE", "0.0"),
+        position_size_mode=_str("POSITION_SIZE_MODE", "equity_pct").lower(),
+        position_size_fixed_lot=_float("POSITION_SIZE_FIXED_LOT", "0.10"),
+        position_size_fixed_risk_amount=_float("POSITION_SIZE_FIXED_RISK_AMOUNT", "100.0"),
+        kelly_min_trades=_int("KELLY_MIN_TRADES", "20"),
+        kelly_lookback_days=_int("KELLY_LOOKBACK_DAYS", "90"),
+        kelly_half=_bool("KELLY_HALF", "true"),
+        risk_validation_profile=_str("RISK_VALIDATION_PROFILE", "agile").lower(),
+        risk_agile_high_conf_threshold=_float("RISK_AGILE_HIGH_CONF_THRESHOLD", "0.74"),
+        risk_agile_spread_multiplier=_float("RISK_AGILE_SPREAD_MULTIPLIER", "1.35"),
+    )
+
+    # Guard
+    guard = GuardSettings(
+        enabled=_bool("GUARD_PIPELINE_ENABLED", "true"),
+        cooldown_seconds=_int("GUARD_COOLDOWN_SECONDS", "300"),
+        max_daily_loss_pct=_float("GUARD_MAX_DAILY_LOSS_PCT", "0.05"),
+        max_vix=_float("GUARD_MAX_VIX", "40.0"),
+        feed_staleness_seconds=_float("GUARD_FEED_STALENESS_SECONDS", "120"),
+    )
+
+    # Execution
+    execution = ExecutionSettings(
+        tp1_close_percent=_float("TP1_CLOSE_PERCENT", "0.40"),
+        tp2_close_percent=_float("TP2_CLOSE_PERCENT", "0.30"),
+        tp3_close_percent=_float("TP3_CLOSE_PERCENT", "0.20"),
+        tp4_close_percent=_float("TP4_CLOSE_PERCENT", "0.10"),
+        trailing_stop_distance_pips=_float("TRAILING_STOP_DISTANCE_PIPS", "20"),
+        commission_per_lot=_float("COMMISSION_PER_LOT", "7.0"),
+        commission_per_lot_crypto=_float("COMMISSION_PER_LOT_CRYPTO", "7.0"),
+        commission_per_lot_commodity=_float("COMMISSION_PER_LOT_COMMODITY", "7.0"),
+        commission_per_lot_exotic=_float("COMMISSION_PER_LOT_EXOTIC", "7.0"),
+        breakeven_spread_offset=_bool("BREAKEVEN_SPREAD_OFFSET", "true"),
+        limit_entry_max_distance_atr=_float("LIMIT_ENTRY_MAX_DISTANCE_ATR", "0.5"),
+        limit_entry_max_distance_atr_crypto=_float("LIMIT_ENTRY_MAX_DISTANCE_ATR_CRYPTO", "2.0"),
+    )
+
+    # Sniper
+    sniper = SniperSettings(
+        enabled=_bool("SNIPER_ENTRY_ENABLED", "true"),
+        conf_threshold=_float("SNIPER_CONF_THRESHOLD", "0.55"),
+        timeout_minutes=_float("SNIPER_TIMEOUT_MINUTES", "30.0"),
+        max_entry_atr_distance=_float("SNIPER_MAX_ENTRY_ATR_DISTANCE", "0.55"),
+        fib_min_depth=_str("SNIPER_FIB_MIN_DEPTH", "acceptable").lower(),
+        fib_max_depth=_str("SNIPER_FIB_MAX_DEPTH", "deep").lower(),
+    )
+
+    # Deferred
+    deferred = DeferredSettings(
+        enabled=_bool("DEFERRED_ENTRY_ENABLED", "true"),
+        max_age_seconds=_int("DEFERRED_ENTRY_MAX_AGE_SECONDS", "900"),
+        max_atr_distance=_float("DEFERRED_ENTRY_MAX_ATR_DISTANCE", "0.35"),
+        min_conf=_float("DEFERRED_ENTRY_MIN_CONF", "0.60"),
+        ttl_seconds=_int("DEFERRED_ENTRY_TTL_SECONDS", "900"),
+    )
+
+    # Fast lane
+    fast_lane = FastLaneSettings(
+        enabled=_bool("FAST_LANE_ENABLED", "true"),
+        max_signals=_int("FAST_LANE_MAX_SIGNALS", "1"),
+        close_on_full_reject=_bool("FAST_LANE_CLOSE_ON_FULL_REJECT", "true"),
+    )
+
+    # Instant entry
+    instant_entry = InstantEntrySettings(
+        enabled=_bool("INSTANT_ENTRY_ENABLED", "true"),
+        min_confidence=_float("INSTANT_ENTRY_MIN_CONFIDENCE", "0.78"),
+    )
+
+    # Council
+    council = CouncilSettings(
+        enabled=_bool("COUNCIL_ENABLED", "true"),
+        min_confidence=_float("COUNCIL_MIN_CONFIDENCE", "0.60"),
+        mode=_str("COUNCIL_MODE", "advisory").lower(),
+        max_reviews_per_loop=_int("COUNCIL_MAX_REVIEWS_PER_LOOP", "3"),
+        advisory_rejection_conf_penalty=_float("COUNCIL_ADVISORY_REJECTION_CONF_PENALTY", "0.08"),
+        advisory_min_viability=_float("COUNCIL_ADVISORY_MIN_VIABILITY", "0.45"),
+        ict_weight=_float("COUNCIL_ICT_WEIGHT", "0.50"),
+        danial_weight=_float("COUNCIL_DANIAL_WEIGHT", "0.17"),
+        trad_weight=_float("COUNCIL_TRAD_WEIGHT", "0.17"),
+        world_weight=_float("COUNCIL_WORLD_WEIGHT", "0.16"),
+        min_candles=_int("COUNCIL_MIN_CANDLES", "20"),
+    )
+
+    # Debate
+    debate = DebateSettings(
+        enabled=_bool("DEBATE_ENABLED", "false"),
+        llm_model=_str("DEBATE_LLM_MODEL", ""),
+        timeout_seconds=_int("DEBATE_TIMEOUT_SECONDS", "8"),
+        bear_veto_threshold=_float("DEBATE_BEAR_VETO_THRESHOLD", "0.75"),
+        bear_caution_threshold=_float("DEBATE_BEAR_CAUTION_THRESHOLD", "0.60"),
+    )
+
+    # Exposure
+    exposure = ExposureSettings(
+        enabled=_bool("EXPOSURE_ENABLED", "false"),
+        reduce_threshold=_float("EXPOSURE_REDUCE_THRESHOLD", "0.40"),
+        cash_threshold=_float("EXPOSURE_CASH_THRESHOLD", "0.20"),
+        win_rate_lookback=_int("EXPOSURE_WIN_RATE_LOOKBACK", "10"),
+    )
+
+    # Neural
+    neural = NeuralSettings(
+        min_candles=_int("NEURAL_MIN_CANDLES", "65"),
+        seq_len=_int("NEURAL_SEQ_LEN", "50"),
+        hidden_size=_int("NEURAL_HIDDEN_SIZE", "128"),
+        num_layers=_int("NEURAL_NUM_LAYERS", "2"),
+        train_epochs=_int("NEURAL_TRAIN_EPOCHS", "100"),
+        retrain_every=_int("NEURAL_RETRAIN_EVERY", "20"),
+        min_confidence=_float("NEURAL_MIN_CONFIDENCE", "0.55"),
+    )
+
+    # GARCH
+    garch = GarchSettings(
+        enabled=_bool("GARCH_ENABLED", "true"),
+        high_vol_threshold=_float("GARCH_HIGH_VOL_THRESHOLD", "2.0"),
+    )
+
+    # ICT
+    ict = ICTSettings(
+        min_confidence=_int("ICT_MIN_CONFIDENCE", "30"),
+        h4_candle_count=_int("H4_CANDLE_COUNT", "200"),
+        d1_candle_count=_int("D1_CANDLE_COUNT", "20"),
+        m30_candle_count=_int("M30_CANDLE_COUNT", "100"),
+        m15_candle_count=_int("M15_CANDLE_COUNT", "250"),
+        m5_candle_count=_int("M5_CANDLE_COUNT", "100"),
+        mtf_alignment_boost=_float("MTF_ALIGNMENT_BOOST", "0.05"),
+        mtf_d1_veto=_bool("MTF_D1_VETO", "true"),
+        regime_adx_trending=_float("REGIME_ADX_TRENDING", "25.0"),
+        regime_adx_ranging=_float("REGIME_ADX_RANGING", "20.0"),
+        regime_confidence_penalty=_float("REGIME_CONFIDENCE_PENALTY", "0.10"),
+        tp_trending_tp3_mult=_float("TP_TRENDING_TP3_MULT", "4.0"),
+        tp_trending_tp4_mult=_float("TP_TRENDING_TP4_MULT", "6.0"),
+        tp_ranging_tp1_mult=_float("TP_RANGING_TP1_MULT", "0.8"),
+        tp_ranging_tp2_mult=_float("TP_RANGING_TP2_MULT", "1.5"),
+        max_hours_in_trade=_int("MAX_HOURS_IN_TRADE", "48"),
+        min_ict_score_crypto=_float("MIN_ICT_SCORE_CRYPTO", "35.0"),
+        min_conf_trending=_float("MIN_CONF_TRENDING", "0.40"),
+        min_conf_ranging=_float("MIN_CONF_RANGING", "0.40"),
+        min_conf_volatile=_float("MIN_CONF_VOLATILE", "0.40"),
+        min_conf_unknown=_float("MIN_CONF_UNKNOWN", "0.40"),
+        min_conf_crypto_bonus=_float("MIN_CONF_CRYPTO_BONUS", "0.03"),
+        min_conf_exotic_bonus=_float("MIN_CONF_EXOTIC_BONUS", "0.04"),
+        size_scale_very_low_threshold=_float("SIZE_SCALE_VERY_LOW_THRESHOLD", "0.45"),
+        size_scale_low_threshold=_float("SIZE_SCALE_LOW_THRESHOLD", "0.60"),
+        size_scale_medium_threshold=_float("SIZE_SCALE_MEDIUM_THRESHOLD", "0.75"),
+        size_scale_very_low=_float("SIZE_SCALE_VERY_LOW", "0.35"),
+        size_scale_low=_float("SIZE_SCALE_LOW", "0.55"),
+        size_scale_medium=_float("SIZE_SCALE_MEDIUM", "0.75"),
+        size_scale_full=_float("SIZE_SCALE_FULL", "1.00"),
+    )
+
+    # Orchestration
+    orchestration = OrchestrationSettings(
+        loop_interval_seconds=_int("LOOP_INTERVAL_SECONDS", "5"),
+        reconcile_every_n_loops=_int("RECONCILE_EVERY_N_LOOPS", "60"),
+        candle_server_port=_int("CANDLE_SERVER_PORT", "5555"),
+        scan_cooldown_seconds=_int("SCAN_COOLDOWN_SECONDS", "300"),
+        scan_cooldown_seconds_london_ny=_int("SCAN_COOLDOWN_SECONDS_LONDON_NY", "60"),
+        scan_cooldown_seconds_asia=_int("SCAN_COOLDOWN_SECONDS_ASIA", "120"),
+        btc_priority_symbol=_str("BTC_PRIORITY_SYMBOL", "BTCUSD"),
+        btc_priority_scan_cooldown_seconds=_int("BTC_PRIORITY_SCAN_COOLDOWN_SECONDS", "8"),
+        event_driven_rescan_on_new_candle=_bool("EVENT_DRIVEN_RESCAN_ON_NEW_CANDLE", "true"),
+        scan_workers_min=_int("ORCHESTRATION_SCAN_WORKERS_MIN", "2"),
+        scan_workers_max=_int("ORCHESTRATION_SCAN_WORKERS_MAX", "10"),
+        scan_workers_default=_int("ORCHESTRATION_SCAN_WORKERS_DEFAULT", "6"),
+        adaptive_workers_enabled=_bool("ORCHESTRATION_ADAPTIVE_WORKERS_ENABLED", "true"),
+        target_scan_ms=_float("ORCHESTRATION_TARGET_SCAN_MS", "15000"),
+        target_rank_ms=_float("ORCHESTRATION_TARGET_RANK_MS", "200"),
+        target_exec_ms=_float("ORCHESTRATION_TARGET_EXEC_MS", "800"),
+        target_total_ms=_float("ORCHESTRATION_TARGET_TOTAL_MS", "60000"),
+        max_signals_per_iteration=_int("ORCHESTRATION_MAX_SIGNALS_PER_ITERATION", "20"),
+        enable_iteration_trace=_bool("ORCHESTRATION_ENABLE_ITERATION_TRACE", "true"),
+        scan_error_rate_abort=_float("ORCHESTRATION_SCAN_ERROR_RATE_ABORT", "0.70"),
+        scan_error_min_samples=_int("ORCHESTRATION_SCAN_ERROR_MIN_SAMPLES", "5"),
+        hard_budget_enabled=_bool("ORCHESTRATION_HARD_BUDGET_ENABLED", "true"),
+        max_scan_ms=_float("ORCHESTRATION_MAX_SCAN_MS", "90000"),
+        max_rank_ms=_float("ORCHESTRATION_MAX_RANK_MS", "1000"),
+        max_exec_ms=_float("ORCHESTRATION_MAX_EXEC_MS", "3000"),
+        max_iteration_ms=_float("ORCHESTRATION_MAX_ITERATION_MS", "120000"),
+        exec_budget_council_margin_ms=_float("ORCHESTRATION_EXEC_BUDGET_COUNCIL_MARGIN_MS", "350"),
+        symbol_max_fail_count=_int("SYMBOL_MAX_FAIL_COUNT", "12"),
+        symbol_disable_seconds=_int("SYMBOL_DISABLE_SECONDS", "3600"),
+        htf_cache_ttl_m15_seconds=_float("HTF_CACHE_TTL_M15_SECONDS", "20"),
+        htf_cache_ttl_m5_seconds=_float("HTF_CACHE_TTL_M5_SECONDS", "15"),
+        htf_cache_ttl_m30_seconds=_float("HTF_CACHE_TTL_M30_SECONDS", "30"),
+        htf_cache_ttl_h4_seconds=_float("HTF_CACHE_TTL_H4_SECONDS", "120"),
+        htf_cache_ttl_d1_seconds=_float("HTF_CACHE_TTL_D1_SECONDS", "300"),
+        htf_cache_ttl_multiplier_london_ny=_float("HTF_CACHE_TTL_MULTIPLIER_LONDON_NY", "0.75"),
+        htf_cache_ttl_multiplier_asia=_float("HTF_CACHE_TTL_MULTIPLIER_ASIA", "1.35"),
+    )
+
+    # Opportunity
+    opportunity = OpportunitySettings(
+        enabled=_bool("OPPORTUNITY_PHASE_ENABLED", "true"),
+        rollover_seconds=_int("OPPORTUNITY_ROLLOVER_SECONDS", "900"),
+        watch_window_seconds=_int("OPPORTUNITY_WATCH_WINDOW_SECONDS", "180"),
+        hedge_timeout_seconds=_int("OPPORTUNITY_HEDGE_TIMEOUT_SECONDS", "300"),
+        min_recovery_confidence=_float("OPPORTUNITY_MIN_RECOVERY_CONFIDENCE", "0.62"),
+        fallback_max_spread_pct=_float("OPPORTUNITY_FALLBACK_MAX_SPREAD_PCT", "0.003"),
+        shock_lookback_seconds=_int("OPPORTUNITY_SHOCK_LOOKBACK_SECONDS", "5"),
+        shock_drop_threshold=_float("OPPORTUNITY_SHOCK_DROP_THRESHOLD", "0.0015"),
+        require_shock_for_fast_lane=_bool("OPPORTUNITY_REQUIRE_SHOCK_FOR_FAST_LANE", "true"),
+        live_enabled=_bool("OPPORTUNITY_LIVE_ENABLED", "false"),
+    )
+
+    # Protection
+    protection = ProtectionSettings(
+        enabled=_bool("PROTECTIONS_ENABLED", "true"),
+        cooldown_minutes=_int("PROTECTION_COOLDOWN_MINUTES", "10"),
+        stoploss_guard_lookback_minutes=_int("PROTECTION_STOPLOSS_GUARD_LOOKBACK_MINUTES", "180"),
+        stoploss_guard_trade_limit=_int("PROTECTION_STOPLOSS_GUARD_TRADE_LIMIT", "3"),
+        stoploss_guard_lock_minutes=_int("PROTECTION_STOPLOSS_GUARD_LOCK_MINUTES", "60"),
+        global_loss_guard_lookback_minutes=_int("PROTECTION_GLOBAL_LOSS_GUARD_LOOKBACK_MINUTES", "120"),
+        global_loss_guard_max_losses=_int("PROTECTION_GLOBAL_LOSS_GUARD_MAX_LOSSES", "4"),
+        global_loss_guard_lock_minutes=_int("PROTECTION_GLOBAL_LOSS_GUARD_LOCK_MINUTES", "45"),
+    )
+
+    # Time phase
+    time_phase = TimePhaseSettings(
+        enabled=_bool("TIME_PHASE_CONFIDENCE_ENABLED", "false"),
+        bucket_minutes=_int("TIME_PHASE_BUCKET_MINUTES", "15"),
+        early_max_minute=_int("TIME_PHASE_EARLY_MAX_MINUTE", "3"),
+        mid_max_minute=_int("TIME_PHASE_MID_MAX_MINUTE", "11"),
+        min_conf_early=_float("TIME_PHASE_MIN_CONF_EARLY", "0.55"),
+        min_conf_mid=_float("TIME_PHASE_MIN_CONF_MID", "0.50"),
+        min_conf_late=_float("TIME_PHASE_MIN_CONF_LATE", "0.48"),
+    )
+
+    # Telegram
+    telegram = TelegramSettings(
+        bot_token=_str("TELEGRAM_BOT_TOKEN", ""),
+        chat_id=_str("TELEGRAM_CHAT_ID", ""),
+        noise_filter_enabled=_bool("TELEGRAM_NOISE_FILTER_ENABLED", "true"),
+        dedupe_window_seconds=_int("TELEGRAM_DEDUPE_WINDOW_SECONDS", "180"),
+        rate_limit_per_minute=_int("TELEGRAM_RATE_LIMIT_PER_MINUTE", "20"),
+        suppression_report_every=_int("TELEGRAM_SUPPRESSION_REPORT_EVERY", "10"),
+        chart_days=_int("TELEGRAM_CHART_DAYS", "30"),
+        allowed_usernames=telegram_usernames,
+        allowed_user_ids=telegram_user_ids,
+    )
+
+    # Intelligence
+    intelligence = IntelligenceSettings(
+        alpha_vantage_key=_str("ALPHA_VANTAGE_KEY", ""),
+        twelve_data_key=_str("TWELVE_DATA_KEY", ""),
+        fred_api_key=_str("FRED_API_KEY", ""),
+        yfinance_enabled=_bool("YFINANCE_ENABLED", "true"),
+        sweep_interval_minutes=_int("INTELLIGENCE_SWEEP_INTERVAL_MINUTES", "15"),
+        mt5_db_sync_interval_seconds=_int("MT5_DB_SYNC_INTERVAL_SECONDS", "300"),
+        news_calendar_source=_str("NEWS_CALENDAR_SOURCE", "static"),
+        finnhub_api_key=_str("FINNHUB_API_KEY", ""),
+        news_blackout_minutes=_int("NEWS_BLACKOUT_MINUTES", "15"),
+        crucix_url=_str("CRUCIX_URL", "https://crucix-pi.vercel.app"),
+    )
+
+    # Learning
+    learning = LearningSettings(
+        default_confidence=0.5,
+        initial_confidence=0.5,
+        confidence_allow=0.3,
+        confidence_reduced=0.5,
+        confidence_full=0.7,
+        confidence_disable_threshold=0.2,
+        metrics_log_every_n_loops=_int("METRICS_LOG_EVERY_N_LOOPS", "5"),
+    )
+
+    # Backtest
+    backtest = BacktestSettings(
+        commission_per_lot_per_side=_float("BACKTEST_COMMISSION_PER_LOT_PER_SIDE", "0.0001"),
+        walk_forward_enabled=_bool("BACKTEST_WALK_FORWARD_ENABLED", "false"),
+        walk_forward_window_days=_int("BACKTEST_WALK_FORWARD_WINDOW_DAYS", "90"),
+    )
+
+    # Misc
+    misc = MiscSettings(
+        log_level=_str("LOG_LEVEL", "INFO"),
+        daily_summary_hour=_int("DAILY_SUMMARY_HOUR", "17"),
+        timezone=_str("TIMEZONE", "Europe/Paris"),
+        default_symbol=_str("DEFAULT_SYMBOL", "BTCUSD"),
+        default_timeframe=_str("DEFAULT_TIMEFRAME", "H1"),
+        database_url=_str("DATABASE_URL", ""),
+        db_path=misc_db_path,
+        encryption_key=_str("ENCRYPTION_KEY", ""),
+        sma_fast_period=_int("SMA_FAST_PERIOD", "10"),
+        sma_slow_period=_int("SMA_SLOW_PERIOD", "50"),
+    )
+
+    # Session
+    session = SessionSettings(
+        allowed_sessions=entry_allowed_sessions,
+        blocked_days=entry_blocked_days,
+        mtf_min_alignment=_float("MTF_MIN_ALIGNMENT", "0.0"),
+        weekend_symbols=weekend_symbols,
+    )
+
+    # Strategy plugins
+    strategy_plugin = StrategyPluginSettings(
+        plugins=strategy_plugins,
+        fail_fast=_bool("STRATEGY_PLUGIN_FAIL_FAST", "false"),
+    )
+
+    # OpenRouter
+    openrouter = OpenRouterSettings(
+        api_key=_str("OPENROUTER_API_KEY", ""),
+        base_url=_str("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"),
+        model=_str("OPENROUTER_MODEL", "anthropic/claude-3-haiku"),
+        fallback_enabled=_bool("OPENROUTER_FALLBACK_ENABLED", "false"),
+    )
+
+    # MCP
+    mcp = MCPSettings(
+        enabled=_bool("MCP_SERVER_ENABLED", "false"),
+        port=_int("MCP_SERVER_PORT", "8080"),
+    )
+
+    # Tool system
+    tool_system = ToolSystemSettings(
+        enabled=_bool("TOOL_SYSTEM_ENABLED", "true"),
+        autorun_every_n_loops=_int("TOOL_SYSTEM_AUTORUN_EVERY_N_LOOPS", "5"),
+        strict_critical=_bool("TOOL_SYSTEM_STRICT_CRITICAL", "true"),
+        max_actions_per_cycle=_int("TOOL_SYSTEM_MAX_ACTIONS_PER_CYCLE", "8"),
+        warning_spike_threshold=_int("TOOL_SYSTEM_WARNING_SPIKE_THRESHOLD", "2"),
+        emergency_recovery_cycles=_int("TOOL_SYSTEM_EMERGENCY_RECOVERY_CYCLES", "2"),
+        emergency_symbols=_str("TOOL_SYSTEM_EMERGENCY_SYMBOLS", "BTCUSD,ETHUSD,XAUUSD,EURUSD"),
+        emergency_max_risk_per_trade=_float("TOOL_SYSTEM_EMERGENCY_MAX_RISK_PER_TRADE", "0.005"),
+        emergency_max_open_trades=_int("TOOL_SYSTEM_EMERGENCY_MAX_OPEN_TRADES", "1"),
+        reweight_lookback_hours=_int("TOOL_SYSTEM_REWEIGHT_LOOKBACK_HOURS", "48"),
+        reweight_min_trades=_int("TOOL_SYSTEM_REWEIGHT_MIN_TRADES", "4"),
+    )
+
+    # Execution failure
+    execution_failure = ExecutionFailureSettings(
+        autotrading_error_cooldown_seconds=_int("EXEC_AUTOTRADING_ERROR_COOLDOWN_SECONDS", "300"),
+        pending_confirm_timeout_seconds=_float("EXEC_PENDING_CONFIRM_TIMEOUT_SECONDS", "4.0"),
+        pending_confirm_poll_interval_seconds=_float("EXEC_PENDING_CONFIRM_POLL_INTERVAL_SECONDS", "0.25"),
+        spread_reject_cooldown_hits=_int("SPREAD_REJECT_COOLDOWN_HITS", "3"),
+        spread_reject_cooldown_seconds=_int("SPREAD_REJECT_COOLDOWN_SECONDS", "300"),
+    )
+
+    # Data validation
+    data_validation = DataValidationSettings(
+        stuck_quote_threshold=_int("STUCK_QUOTE_THRESHOLD", "10"),
+        stuck_quote_threshold_crypto=_int("STUCK_QUOTE_THRESHOLD_CRYPTO", "14"),
+        spike_percent_threshold=_float("SPIKE_PERCENT_THRESHOLD", "2.0"),
+    )
+
+    # Scalp
+    scalp = ScalpSettings(
+        max_lot_size=_float("SCALP_MAX_LOT_SIZE", "0.50"),
+        max_concurrent=_int("SCALP_MAX_CONCURRENT", "2"),
+        max_trades_per_hour=_int("SCALP_MAX_TRADES_PER_HOUR", "4"),
+        daily_loss_limit=_float("SCALP_DAILY_LOSS_LIMIT", "0.02"),
+    )
+
+    # DeepSeek
+    deepseek = DeepSeekSettings(
+        api_key=_str("DEEPSEEK_API_KEY", ""),
+        model=_str("DEEPSEEK_MODEL", "deepseek-chat"),
+        quick_model=_str("DEEPSEEK_QUICK_MODEL", "deepseek-chat"),
+        deep_model=_str("DEEPSEEK_DEEP_MODEL", "deepseek-reasoner"),
+        min_confidence=_float("DEEPSEEK_MIN_CONFIDENCE", "0.65"),
+        schema_version=_str("DEEPSEEK_SCHEMA_VERSION", "v1"),
+        cache_minutes=_int("DEEPSEEK_CACHE_MINUTES", "30"),
+        r_mult_tolerance=_float("DEEPSEEK_R_MULT_TOLERANCE", "0.25"),
+        quick_timeout_seconds=_float("DEEPSEEK_QUICK_TIMEOUT_SECONDS", "10"),
+        deep_timeout_seconds=_float("DEEPSEEK_DEEP_TIMEOUT_SECONDS", "8"),
+        enable_deep_verify=_bool("DEEPSEEK_ENABLE_DEEP_VERIFY", "true"),
+        deep_verify_min_confidence=_float("DEEPSEEK_DEEP_VERIFY_MIN_CONFIDENCE", "0.78"),
+        agent_swarm_enabled=_bool("DEEPSEEK_AGENT_SWARM_ENABLED", "false"),
+        agent_swarm_max_agents=_int("DEEPSEEK_AGENT_SWARM_MAX_AGENTS", "3"),
+        agent_swarm_profiles=_str("DEEPSEEK_AGENT_SWARM_PROFILES", ""),
+        mesh_enabled=_bool("DEEPSEEK_MESH_ENABLED", "true"),
+        mesh_min_active_agents=_int("DEEPSEEK_MESH_MIN_ACTIVE_AGENTS", "2"),
+        mesh_latency_penalty=_float("DEEPSEEK_MESH_LATENCY_PENDELTY", "0.25"),
+        mesh_trust_alpha=_float("DEEPSEEK_MESH_TRUST_ALPHA", "0.18"),
+        mesh_min_trust=_float("DEEPSEEK_MESH_MIN_TRUST", "0.15"),
+        mesh_max_trust=_float("DEEPSEEK_MESH_MAX_TRUST", "0.95"),
+        metrics_log_every=_int("DEEPSEEK_METRICS_LOG_EVERY", "25"),
+    )
+
+    return _Settings(
+        demo_mode=demo_mode,
+        bot_profile=bot_profile,
+        broker=broker,
+        risk=risk,
+        guard=guard,
+        execution=execution,
+        sniper=sniper,
+        deferred=deferred,
+        fast_lane=fast_lane,
+        instant_entry=instant_entry,
+        council=council,
+        debate=debate,
+        exposure=exposure,
+        neural=neural,
+        garch=garch,
+        ict=ict,
+        orchestration=orchestration,
+        opportunity=opportunity,
+        protection=protection,
+        time_phase=time_phase,
+        telegram=telegram,
+        intelligence=intelligence,
+        learning=learning,
+        backtest=backtest,
+        misc=misc,
+        session=session,
+        strategy_plugin=strategy_plugin,
+        openrouter=openrouter,
+        mcp=mcp,
+        tool_system=tool_system,
+        execution_failure=execution_failure,
+        data_validation=data_validation,
+        scalp=scalp,
+        deepseek=deepseek,
+    )
+
+
+# ── Apply profile overrides ────────────────────────────────────────────────
+
+def _apply_profile_overrides(s: _Settings) -> _Settings:
+    """Apply opinionated runtime profiles after env parsing."""
+    overrides: dict[str, dict[str, object]] = {
         "dev": {
-            "DEMO_MODE": True,
-            "COUNCIL_ENABLED": False,
-            "COUNCIL_MODE": "advisory",
-            "FAST_LANE_ENABLED": True,
-            "INSTANT_ENTRY_ENABLED": True,
-            "MAX_RISK_PER_TRADE": 0.005,
-            "MAX_OPEN_TRADES": 2,
-            "MAX_DAILY_LOSS": 0.02,
+            "demo_mode": True,
+            ("council", "enabled"): False,
+            ("council", "mode"): "advisory",
+            ("fast_lane", "enabled"): True,
+            ("instant_entry", "enabled"): True,
+            ("risk", "max_risk_per_trade"): 0.005,
+            ("risk", "max_open_trades"): 2,
+            ("risk", "max_daily_loss"): 0.02,
         },
         "paper": {
-            "DEMO_MODE": True,
-            "COUNCIL_ENABLED": True,
-            "COUNCIL_MODE": "blocking",
-            "FAST_LANE_ENABLED": False,
-            "INSTANT_ENTRY_ENABLED": False,
-            "MAX_RISK_PER_TRADE": 0.003,
-            "MAX_OPEN_TRADES": 2,
-            "MAX_DAILY_LOSS": 0.015,
+            "demo_mode": True,
+            ("council", "enabled"): True,
+            ("council", "mode"): "blocking",
+            ("fast_lane", "enabled"): False,
+            ("instant_entry", "enabled"): False,
+            ("risk", "max_risk_per_trade"): 0.003,
+            ("risk", "max_open_trades"): 2,
+            ("risk", "max_daily_loss"): 0.015,
         },
         "live-safe": {
-            "DEMO_MODE": False,
-            "COUNCIL_ENABLED": True,
-            "COUNCIL_MODE": "blocking",
-            "FAST_LANE_ENABLED": False,
-            "INSTANT_ENTRY_ENABLED": False,
-            "MAX_RISK_PER_TRADE": 0.005,
-            "MAX_OPEN_TRADES": 2,
-            "MAX_DAILY_LOSS": 0.02,
-            "RISK_VALIDATION_PROFILE": "strict",
+            "demo_mode": False,
+            ("council", "enabled"): True,
+            ("council", "mode"): "blocking",
+            ("fast_lane", "enabled"): False,
+            ("instant_entry", "enabled"): False,
+            ("risk", "max_risk_per_trade"): 0.005,
+            ("risk", "max_open_trades"): 2,
+            ("risk", "max_daily_loss"): 0.02,
+            ("risk", "risk_validation_profile"): "strict",
         },
         "live-full": {
-            "DEMO_MODE": False,
-            "COUNCIL_ENABLED": True,
-            "COUNCIL_MODE": "advisory",
-            "FAST_LANE_ENABLED": True,
-            "INSTANT_ENTRY_ENABLED": True,
-            "MAX_RISK_PER_TRADE": 0.01,
-            "MAX_OPEN_TRADES": 4,
-            "MAX_DAILY_LOSS": 0.03,
-            "RISK_VALIDATION_PROFILE": "agile",
+            "demo_mode": False,
+            ("council", "enabled"): True,
+            ("council", "mode"): "advisory",
+            ("fast_lane", "enabled"): True,
+            ("instant_entry", "enabled"): True,
+            ("risk", "max_risk_per_trade"): 0.01,
+            ("risk", "max_open_trades"): 4,
+            ("risk", "max_daily_loss"): 0.03,
+            ("risk", "risk_validation_profile"): "agile",
         },
     }
 
-    selected = profile_overrides.get(BOT_PROFILE)
-    if not selected:
-        return
+    profile = overrides.get(s.bot_profile)
+    if not profile:
+        return s
 
-    g = globals()
-    for key, value in selected.items():
-        if key in g:
-            g[key] = value
+    for key, value in profile.items():
+        if isinstance(key, tuple):
+            sub_model, field_name = key
+            sub = getattr(s, sub_model)
+            setattr(sub, field_name, value)
+        else:
+            setattr(s, key, value)
+
+    return s
 
 
-_apply_profile_overrides()
+# ── Build and validate settings ──────────────────────────────────────────
+
+settings = _apply_profile_overrides(_build_settings())
+
+
+# ── Backward-compatible flat exports ──────────────────────────────────────
+# All existing code uses `from config.settings import BROKER_ACCOUNT` etc.
+# These re-export every setting as a module-level variable so no existing
+# imports break.  New code should prefer the structured `settings` object.
+
+# Mode
+DEMO_MODE: bool = settings.demo_mode
+BOT_PROFILE: str = settings.bot_profile
+
+# Broker
+BROKER_ACCOUNT: str = settings.broker.account
+BROKER_PASSWORD: str = settings.broker.password
+BROKER_SERVER: str = settings.broker.server
+
+# Risk
+MAX_RISK_PER_TRADE: float = settings.risk.max_risk_per_trade
+MAX_OPEN_TRADES: int = settings.risk.max_open_trades
+MAX_DAILY_LOSS: float = settings.risk.max_daily_loss
+MAX_MONTHLY_LOSS: float = settings.risk.max_monthly_loss
+MAX_SPREAD_PIPS: float = settings.risk.max_spread_pips
+MAX_SPREAD_PIPS_COMMODITY: float = settings.risk.max_spread_pips_commodity
+MAX_SPREAD_PIPS_EXOTIC: float = settings.risk.max_spread_pips_exotic
+MAX_SPREAD_PCT_CRYPTO: float = settings.risk.max_spread_pct_crypto
+MAX_SPREAD_POINTS_INDEX: float = settings.risk.max_spread_points_index
+DRAWDOWN_COOLDOWN_HOURS: int = settings.risk.drawdown_cooldown_hours
+MIN_LOT_SIZE: float = settings.risk.min_lot_size
+MAX_LOT_SIZE: float = settings.risk.max_lot_size
+FIXED_LOT_SIZE: float = settings.risk.fixed_lot_size
+POSITION_SIZE_MODE: str = settings.risk.position_size_mode
+POSITION_SIZE_FIXED_LOT: float = settings.risk.position_size_fixed_lot
+POSITION_SIZE_FIXED_RISK_AMOUNT: float = settings.risk.position_size_fixed_risk_amount
+KELLY_MIN_TRADES: int = settings.risk.kelly_min_trades
+KELLY_LOOKBACK_DAYS: int = settings.risk.kelly_lookback_days
+KELLY_HALF: bool = settings.risk.kelly_half
+RISK_VALIDATION_PROFILE: str = settings.risk.risk_validation_profile
+RISK_AGILE_HIGH_CONF_THRESHOLD: float = settings.risk.risk_agile_high_conf_threshold
+RISK_AGILE_SPREAD_MULTIPLIER: float = settings.risk.risk_agile_spread_multiplier
+
+# Guard
+GUARD_PIPELINE_ENABLED: bool = settings.guard.enabled
+GUARD_COOLDOWN_SECONDS: int = settings.guard.cooldown_seconds
+GUARD_MAX_DAILY_LOSS_PCT: float = settings.guard.max_daily_loss_pct
+GUARD_MAX_VIX: float = settings.guard.max_vix
+GUARD_FEED_STALENESS_SECONDS: float = settings.guard.feed_staleness_seconds
+
+# Execution / TP
+TP1_CLOSE_PERCENT: float = settings.execution.tp1_close_percent
+TP2_CLOSE_PERCENT: float = settings.execution.tp2_close_percent
+TP3_CLOSE_PERCENT: float = settings.execution.tp3_close_percent
+TP4_CLOSE_PERCENT: float = settings.execution.tp4_close_percent
+TRAILING_STOP_DISTANCE_PIPS: float = settings.execution.trailing_stop_distance_pips
+COMMISSION_PER_LOT: float = settings.execution.commission_per_lot
+COMMISSION_PER_LOT_CRYPTO: float = settings.execution.commission_per_lot_crypto
+COMMISSION_PER_LOT_COMMODITY: float = settings.execution.commission_per_lot_commodity
+COMMISSION_PER_LOT_EXOTIC: float = settings.execution.commission_per_lot_exotic
+BREAKEVEN_SPREAD_OFFSET: bool = settings.execution.breakeven_spread_offset
+LIMIT_ENTRY_MAX_DISTANCE_ATR: float = settings.execution.limit_entry_max_distance_atr
+LIMIT_ENTRY_MAX_DISTANCE_ATR_CRYPTO: float = settings.execution.limit_entry_max_distance_atr_crypto
+
+# Sniper
+SNIPER_ENTRY_ENABLED: bool = settings.sniper.enabled
+SNIPER_CONF_THRESHOLD: float = settings.sniper.conf_threshold
+SNIPER_TIMEOUT_MINUTES: float = settings.sniper.timeout_minutes
+SNIPER_MAX_ENTRY_ATR_DISTANCE: float = settings.sniper.max_entry_atr_distance
+SNIPER_FIB_MIN_DEPTH: str = settings.sniper.fib_min_depth
+SNIPER_FIB_MAX_DEPTH: str = settings.sniper.fib_max_depth
+
+# Deferred
+DEFERRED_ENTRY_ENABLED: bool = settings.deferred.enabled
+DEFERRED_ENTRY_MAX_AGE_SECONDS: int = settings.deferred.max_age_seconds
+DEFERRED_ENTRY_MAX_ATR_DISTANCE: float = settings.deferred.max_atr_distance
+DEFERRED_ENTRY_MIN_CONF: float = settings.deferred.min_conf
+DEFERRED_ENTRY_TTL_SECONDS: int = settings.deferred.ttl_seconds
+
+# Fast lane
+FAST_LANE_ENABLED: bool = settings.fast_lane.enabled
+FAST_LANE_MAX_SIGNALS: int = settings.fast_lane.max_signals
+FAST_LANE_CLOSE_ON_FULL_REJECT: bool = settings.fast_lane.close_on_full_reject
+
+# Instant entry
+INSTANT_ENTRY_ENABLED: bool = settings.instant_entry.enabled
+INSTANT_ENTRY_MIN_CONFIDENCE: float = settings.instant_entry.min_confidence
+
+# Council
+COUNCIL_ENABLED: bool = settings.council.enabled
+COUNCIL_MIN_CONFIDENCE: float = settings.council.min_confidence
+COUNCIL_MODE: str = settings.council.mode
+COUNCIL_MAX_REVIEWS_PER_LOOP: int = settings.council.max_reviews_per_loop
+COUNCIL_ADVISORY_REJECTION_CONF_PENALTY: float = settings.council.advisory_rejection_conf_penalty
+COUNCIL_ADVISORY_MIN_VIABILITY: float = settings.council.advisory_min_viability
+COUNCIL_ICT_WEIGHT: float = settings.council.ict_weight
+COUNCIL_DANIAL_WEIGHT: float = settings.council.danial_weight
+COUNCIL_TRAD_WEIGHT: float = settings.council.trad_weight
+COUNCIL_WORLD_WEIGHT: float = settings.council.world_weight
+COUNCIL_MIN_CANDLES: int = settings.council.min_candles
+
+# Debate
+DEBATE_ENABLED: bool = settings.debate.enabled
+DEBATE_LLM_MODEL: str = settings.debate.llm_model
+DEBATE_TIMEOUT_SECONDS: int = settings.debate.timeout_seconds
+DEBATE_BEAR_VETO_THRESHOLD: float = settings.debate.bear_veto_threshold
+DEBATE_BEAR_CAUTION_THRESHOLD: float = settings.debate.bear_caution_threshold
+
+# Exposure
+EXPOSURE_ENABLED: bool = settings.exposure.enabled
+EXPOSURE_REDUCE_THRESHOLD: float = settings.exposure.reduce_threshold
+EXPOSURE_CASH_THRESHOLD: float = settings.exposure.cash_threshold
+EXPOSURE_WIN_RATE_LOOKBACK: int = settings.exposure.win_rate_lookback
+
+# Neural
+NEURAL_MIN_CANDLES: int = settings.neural.min_candles
+NEURAL_SEQ_LEN: int = settings.neural.seq_len
+NEURAL_HIDDEN_SIZE: int = settings.neural.hidden_size
+NEURAL_NUM_LAYERS: int = settings.neural.num_layers
+NEURAL_TRAIN_EPOCHS: int = settings.neural.train_epochs
+NEURAL_RETRAIN_EVERY: int = settings.neural.retrain_every
+NEURAL_MIN_CONFIDENCE: float = settings.neural.min_confidence
+
+# GARCH
+GARCH_ENABLED: bool = settings.garch.enabled
+GARCH_HIGH_VOL_THRESHOLD: float = settings.garch.high_vol_threshold
+
+# ICT
+ICT_MIN_CONFIDENCE: int = settings.ict.min_confidence
+H4_CANDLE_COUNT: int = settings.ict.h4_candle_count
+D1_CANDLE_COUNT: int = settings.ict.d1_candle_count
+M30_CANDLE_COUNT: int = settings.ict.m30_candle_count
+M15_CANDLE_COUNT: int = settings.ict.m15_candle_count
+M5_CANDLE_COUNT: int = settings.ict.m5_candle_count
+MTF_ALIGNMENT_BOOST: float = settings.ict.mtf_alignment_boost
+MTF_D1_VETO: bool = settings.ict.mtf_d1_veto
+REGIME_ADX_TRENDING: float = settings.ict.regime_adx_trending
+REGIME_ADX_RANGING: float = settings.ict.regime_adx_ranging
+REGIME_CONFIDENCE_PENALTY: float = settings.ict.regime_confidence_penalty
+TP_TRENDING_TP3_MULT: float = settings.ict.tp_trending_tp3_mult
+TP_TRENDING_TP4_MULT: float = settings.ict.tp_trending_tp4_mult
+TP_RANGING_TP1_MULT: float = settings.ict.tp_ranging_tp1_mult
+TP_RANGING_TP2_MULT: float = settings.ict.tp_ranging_tp2_mult
+MAX_HOURS_IN_TRADE: int = settings.ict.max_hours_in_trade
+MIN_ICT_SCORE_CRYPTO: float = settings.ict.min_ict_score_crypto
+MIN_CONF_TRENDING: float = settings.ict.min_conf_trending
+MIN_CONF_RANGING: float = settings.ict.min_conf_ranging
+MIN_CONF_VOLATILE: float = settings.ict.min_conf_volatile
+MIN_CONF_UNKNOWN: float = settings.ict.min_conf_unknown
+MIN_CONF_CRYPTO_BONUS: float = settings.ict.min_conf_crypto_bonus
+MIN_CONF_EXOTIC_BONUS: float = settings.ict.min_conf_exotic_bonus
+SIZE_SCALE_VERY_LOW_THRESHOLD: float = settings.ict.size_scale_very_low_threshold
+SIZE_SCALE_LOW_THRESHOLD: float = settings.ict.size_scale_low_threshold
+SIZE_SCALE_MEDIUM_THRESHOLD: float = settings.ict.size_scale_medium_threshold
+SIZE_SCALE_VERY_LOW: float = settings.ict.size_scale_very_low
+SIZE_SCALE_LOW: float = settings.ict.size_scale_low
+SIZE_SCALE_MEDIUM: float = settings.ict.size_scale_medium
+SIZE_SCALE_FULL: float = settings.ict.size_scale_full
+
+# Orchestration
+LOOP_INTERVAL_SECONDS: int = settings.orchestration.loop_interval_seconds
+RECONCILE_EVERY_N_LOOPS: int = settings.orchestration.reconcile_every_n_loops
+CANDLE_SERVER_PORT: int = settings.orchestration.candle_server_port
+SCAN_COOLDOWN_SECONDS: int = settings.orchestration.scan_cooldown_seconds
+SCAN_COOLDOWN_SECONDS_LONDON_NY: int = settings.orchestration.scan_cooldown_seconds_london_ny
+SCAN_COOLDOWN_SECONDS_ASIA: int = settings.orchestration.scan_cooldown_seconds_asia
+BTC_PRIORITY_SYMBOL: str = settings.orchestration.btc_priority_symbol
+BTC_PRIORITY_SCAN_COOLDOWN_SECONDS: int = settings.orchestration.btc_priority_scan_cooldown_seconds
+EVENT_DRIVEN_RESCAN_ON_NEW_CANDLE: bool = settings.orchestration.event_driven_rescan_on_new_candle
+ORCHESTRATION_SCAN_WORKERS_MIN: int = settings.orchestration.scan_workers_min
+ORCHESTRATION_SCAN_WORKERS_MAX: int = settings.orchestration.scan_workers_max
+ORCHESTRATION_SCAN_WORKERS_DEFAULT: int = settings.orchestration.scan_workers_default
+ORCHESTRATION_ADAPTIVE_WORKERS_ENABLED: bool = settings.orchestration.adaptive_workers_enabled
+ORCHESTRATION_TARGET_SCAN_MS: float = settings.orchestration.target_scan_ms
+ORCHESTRATION_TARGET_RANK_MS: float = settings.orchestration.target_rank_ms
+ORCHESTRATION_TARGET_EXEC_MS: float = settings.orchestration.target_exec_ms
+ORCHESTRATION_TARGET_TOTAL_MS: float = settings.orchestration.target_total_ms
+ORCHESTRATION_MAX_SIGNALS_PER_ITERATION: int = settings.orchestration.max_signals_per_iteration
+ORCHESTRATION_ENABLE_ITERATION_TRACE: bool = settings.orchestration.enable_iteration_trace
+ORCHESTRATION_SCAN_ERROR_RATE_ABORT: float = settings.orchestration.scan_error_rate_abort
+ORCHESTRATION_SCAN_ERROR_MIN_SAMPLES: int = settings.orchestration.scan_error_min_samples
+ORCHESTRATION_HARD_BUDGET_ENABLED: bool = settings.orchestration.hard_budget_enabled
+ORCHESTRATION_MAX_SCAN_MS: float = settings.orchestration.max_scan_ms
+ORCHESTRATION_MAX_RANK_MS: float = settings.orchestration.max_rank_ms
+ORCHESTRATION_MAX_EXEC_MS: float = settings.orchestration.max_exec_ms
+ORCHESTRATION_MAX_ITERATION_MS: float = settings.orchestration.max_iteration_ms
+ORCHESTRATION_EXEC_BUDGET_COUNCIL_MARGIN_MS: float = settings.orchestration.exec_budget_council_margin_ms
+SYMBOL_MAX_FAIL_COUNT: int = settings.orchestration.symbol_max_fail_count
+SYMBOL_DISABLE_SECONDS: int = settings.orchestration.symbol_disable_seconds
+HTF_CACHE_TTL_M15_SECONDS: float = settings.orchestration.htf_cache_ttl_m15_seconds
+HTF_CACHE_TTL_M5_SECONDS: float = settings.orchestration.htf_cache_ttl_m5_seconds
+HTF_CACHE_TTL_M30_SECONDS: float = settings.orchestration.htf_cache_ttl_m30_seconds
+HTF_CACHE_TTL_H4_SECONDS: float = settings.orchestration.htf_cache_ttl_h4_seconds
+HTF_CACHE_TTL_D1_SECONDS: float = settings.orchestration.htf_cache_ttl_d1_seconds
+HTF_CACHE_TTL_MULTIPLIER_LONDON_NY: float = settings.orchestration.htf_cache_ttl_multiplier_london_ny
+HTF_CACHE_TTL_MULTIPLIER_ASIA: float = settings.orchestration.htf_cache_ttl_multiplier_asia
+
+# Opportunity
+OPPORTUNITY_PHASE_ENABLED: bool = settings.opportunity.enabled
+OPPORTUNITY_ROLLOVER_SECONDS: int = settings.opportunity.rollover_seconds
+OPPORTUNITY_WATCH_WINDOW_SECONDS: int = settings.opportunity.watch_window_seconds
+OPPORTUNITY_HEDGE_TIMEOUT_SECONDS: int = settings.opportunity.hedge_timeout_seconds
+OPPORTUNITY_MIN_RECOVERY_CONFIDENCE: float = settings.opportunity.min_recovery_confidence
+OPPORTUNITY_FALLBACK_MAX_SPREAD_PCT: float = settings.opportunity.fallback_max_spread_pct
+OPPORTUNITY_SHOCK_LOOKBACK_SECONDS: int = settings.opportunity.shock_lookback_seconds
+OPPORTUNITY_SHOCK_DROP_THRESHOLD: float = settings.opportunity.shock_drop_threshold
+OPPORTUNITY_REQUIRE_SHOCK_FOR_FAST_LANE: bool = settings.opportunity.require_shock_for_fast_lane
+OPPORTUNITY_LIVE_ENABLED: bool = settings.opportunity.live_enabled
+
+# Protection
+PROTECTIONS_ENABLED: bool = settings.protection.enabled
+PROTECTION_COOLDOWN_MINUTES: int = settings.protection.cooldown_minutes
+PROTECTION_STOPLOSS_GUARD_LOOKBACK_MINUTES: int = settings.protection.stoploss_guard_lookback_minutes
+PROTECTION_STOPLOSS_GUARD_TRADE_LIMIT: int = settings.protection.stoploss_guard_trade_limit
+PROTECTION_STOPLOSS_GUARD_LOCK_MINUTES: int = settings.protection.stoploss_guard_lock_minutes
+PROTECTION_GLOBAL_LOSS_GUARD_LOOKBACK_MINUTES: int = settings.protection.global_loss_guard_lookback_minutes
+PROTECTION_GLOBAL_LOSS_GUARD_MAX_LOSSES: int = settings.protection.global_loss_guard_max_losses
+PROTECTION_GLOBAL_LOSS_GUARD_LOCK_MINUTES: int = settings.protection.global_loss_guard_lock_minutes
+
+# Time phase
+TIME_PHASE_CONFIDENCE_ENABLED: bool = settings.time_phase.enabled
+TIME_PHASE_BUCKET_MINUTES: int = settings.time_phase.bucket_minutes
+TIME_PHASE_EARLY_MAX_MINUTE: int = settings.time_phase.early_max_minute
+TIME_PHASE_MID_MAX_MINUTE: int = settings.time_phase.mid_max_minute
+TIME_PHASE_MIN_CONF_EARLY: float = settings.time_phase.min_conf_early
+TIME_PHASE_MIN_CONF_MID: float = settings.time_phase.min_conf_mid
+TIME_PHASE_MIN_CONF_LATE: float = settings.time_phase.min_conf_late
+
+# Telegram
+TELEGRAM_BOT_TOKEN: str = settings.telegram.bot_token
+TELEGRAM_CHAT_ID: str = settings.telegram.chat_id
+TELEGRAM_NOISE_FILTER_ENABLED: bool = settings.telegram.noise_filter_enabled
+TELEGRAM_DEDUPE_WINDOW_SECONDS: int = settings.telegram.dedupe_window_seconds
+TELEGRAM_RATE_LIMIT_PER_MINUTE: int = settings.telegram.rate_limit_per_minute
+TELEGRAM_SUPPRESSION_REPORT_EVERY: int = settings.telegram.suppression_report_every
+TELEGRAM_CHART_DAYS: int = settings.telegram.chart_days
+TELEGRAM_ALLOWED_USERNAMES: tuple[str, ...] = settings.telegram.allowed_usernames
+TELEGRAM_ALLOWED_USER_IDS: tuple[int, ...] = settings.telegram.allowed_user_ids
+
+# Intelligence
+ALPHA_VANTAGE_KEY: str = settings.intelligence.alpha_vantage_key
+TWELVE_DATA_KEY: str = settings.intelligence.twelve_data_key
+FRED_API_KEY: str = settings.intelligence.fred_api_key
+YFINANCE_ENABLED: bool = settings.intelligence.yfinance_enabled
+INTELLIGENCE_SWEEP_INTERVAL_MINUTES: int = settings.intelligence.sweep_interval_minutes
+MT5_DB_SYNC_INTERVAL_SECONDS: int = settings.intelligence.mt5_db_sync_interval_seconds
+NEWS_CALENDAR_SOURCE: str = settings.intelligence.news_calendar_source
+FINNHUB_API_KEY: str = settings.intelligence.finnhub_api_key
+NEWS_BLACKOUT_MINUTES: int = settings.intelligence.news_blackout_minutes
+CRUCIX_URL: str = settings.intelligence.crucix_url
+
+# Learning
+DEFAULT_CONFIDENCE: float = settings.learning.default_confidence
+INITIAL_CONFIDENCE: float = settings.learning.initial_confidence
+CONFIDENCE_ALLOW: float = settings.learning.confidence_allow
+CONFIDENCE_REDUCED: float = settings.learning.confidence_reduced
+CONFIDENCE_FULL: float = settings.learning.confidence_full
+CONFIDENCE_DISABLE_THRESHOLD: float = settings.learning.confidence_disable_threshold
+METRICS_LOG_EVERY_N_LOOPS: int = settings.learning.metrics_log_every_n_loops
+
+# Backtest
+BACKTEST_COMMISSION_PER_LOT_PER_SIDE: float = settings.backtest.commission_per_lot_per_side
+BACKTEST_WALK_FORWARD_ENABLED: bool = settings.backtest.walk_forward_enabled
+BACKTEST_WALK_FORWARD_WINDOW_DAYS: int = settings.backtest.walk_forward_window_days
+
+# Misc
+LOG_LEVEL: str = settings.misc.log_level
+DAILY_SUMMARY_HOUR: int = settings.misc.daily_summary_hour
+TIMEZONE: str = settings.misc.timezone
+DEFAULT_SYMBOL: str = settings.misc.default_symbol
+DEFAULT_TIMEFRAME: str = settings.misc.default_timeframe
+DATABASE_URL: str = settings.misc.database_url
+DB_PATH: str = settings.misc.db_path
+ENCRYPTION_KEY: str = settings.misc.encryption_key
+SMA_FAST_PERIOD: int = settings.misc.sma_fast_period
+SMA_SLOW_PERIOD: int = settings.misc.sma_slow_period
+
+# Session
+ENTRY_ALLOWED_SESSIONS: list = settings.session.allowed_sessions
+ENTRY_BLOCKED_DAYS: list = settings.session.blocked_days
+MTF_MIN_ALIGNMENT: float = settings.session.mtf_min_alignment
+WEEKEND_SYMBOLS: str = settings.session.weekend_symbols
+
+# Strategy plugins
+STRATEGY_PLUGINS: tuple[str, ...] = settings.strategy_plugin.plugins
+STRATEGY_PLUGIN_FAIL_FAST: bool = settings.strategy_plugin.fail_fast
+
+# OpenRouter
+OPENROUTER_API_KEY: str = settings.openrouter.api_key
+OPENROUTER_BASE_URL: str = settings.openrouter.base_url
+OPENROUTER_MODEL: str = settings.openrouter.model
+OPENROUTER_FALLBACK_ENABLED: bool = settings.openrouter.fallback_enabled
+
+# MCP
+MCP_SERVER_PORT: int = settings.mcp.port
+MCP_SERVER_ENABLED: bool = settings.mcp.enabled
+
+# Tool system
+TOOL_SYSTEM_ENABLED: bool = settings.tool_system.enabled
+TOOL_SYSTEM_AUTORUN_EVERY_N_LOOPS: int = settings.tool_system.autorun_every_n_loops
+TOOL_SYSTEM_STRICT_CRITICAL: bool = settings.tool_system.strict_critical
+TOOL_SYSTEM_MAX_ACTIONS_PER_CYCLE: int = settings.tool_system.max_actions_per_cycle
+TOOL_SYSTEM_WARNING_SPIKE_THRESHOLD: int = settings.tool_system.warning_spike_threshold
+TOOL_SYSTEM_EMERGENCY_RECOVERY_CYCLES: int = settings.tool_system.emergency_recovery_cycles
+TOOL_SYSTEM_EMERGENCY_SYMBOLS: str = settings.tool_system.emergency_symbols
+TOOL_SYSTEM_EMERGENCY_MAX_RISK_PER_TRADE: float = settings.tool_system.emergency_max_risk_per_trade
+TOOL_SYSTEM_EMERGENCY_MAX_OPEN_TRADES: int = settings.tool_system.emergency_max_open_trades
+TOOL_SYSTEM_REWEIGHT_LOOKBACK_HOURS: int = settings.tool_system.reweight_lookback_hours
+TOOL_SYSTEM_REWEIGHT_MIN_TRADES: int = settings.tool_system.reweight_min_trades
+
+# Execution failure
+EXEC_AUTOTRADING_ERROR_COOLDOWN_SECONDS: int = settings.execution_failure.autotrading_error_cooldown_seconds
+EXEC_PENDING_CONFIRM_TIMEOUT_SECONDS: float = settings.execution_failure.pending_confirm_timeout_seconds
+EXEC_PENDING_CONFIRM_POLL_INTERVAL_SECONDS: float = settings.execution_failure.pending_confirm_poll_interval_seconds
+SPREAD_REJECT_COOLDOWN_HITS: int = settings.execution_failure.spread_reject_cooldown_hits
+SPREAD_REJECT_COOLDOWN_SECONDS: int = settings.execution_failure.spread_reject_cooldown_seconds
+
+# Data validation
+STUCK_QUOTE_THRESHOLD: int = settings.data_validation.stuck_quote_threshold
+STUCK_QUOTE_THRESHOLD_CRYPTO: int = settings.data_validation.stuck_quote_threshold_crypto
+SPIKE_PERCENT_THRESHOLD: float = settings.data_validation.spike_percent_threshold
+
+# Scalp
+SCALP_MAX_LOT_SIZE: float = settings.scalp.max_lot_size
+SCALP_MAX_CONCURRENT: int = settings.scalp.max_concurrent
+SCALP_MAX_TRADES_PER_HOUR: int = settings.scalp.max_trades_per_hour
+SCALP_DAILY_LOSS_LIMIT: float = settings.scalp.daily_loss_limit
+
+# DeepSeek (disabled code)
+DEEPSEEK_API_KEY: str = settings.deepseek.api_key
+DEEPSEEK_MODEL: str = settings.deepseek.model
+DEEPSEEK_QUICK_MODEL: str = settings.deepseek.quick_model
+DEEPSEEK_DEEP_MODEL: str = settings.deepseek.deep_model
+DEEPSEEK_MIN_CONFIDENCE: float = settings.deepseek.min_confidence
+DEEPSEEK_SCHEMA_VERSION: str = settings.deepseek.schema_version
+DEEPSEEK_CACHE_MINUTES: int = settings.deepseek.cache_minutes
+DEEPSEEK_R_MULT_TOLERANCE: float = settings.deepseek.r_mult_tolerance
+DEEPSEEK_QUICK_TIMEOUT_SECONDS: float = settings.deepseek.quick_timeout_seconds
+DEEPSEEK_DEEP_TIMEOUT_SECONDS: float = settings.deepseek.deep_timeout_seconds
+DEEPSEEK_ENABLE_DEEP_VERIFY: bool = settings.deepseek.enable_deep_verify
+DEEPSEEK_DEEP_VERIFY_MIN_CONFIDENCE: float = settings.deepseek.deep_verify_min_confidence
+DEEPSEEK_AGENT_SWARM_ENABLED: bool = settings.deepseek.agent_swarm_enabled
+DEEPSEEK_AGENT_SWARM_MAX_AGENTS: int = settings.deepseek.agent_swarm_max_agents
+DEEPSEEK_AGENT_SWARM_PROFILES: str = settings.deepseek.agent_swarm_profiles
+DEEPSEEK_MESH_ENABLED: bool = settings.deepseek.mesh_enabled
+DEEPSEEK_MESH_MIN_ACTIVE_AGENTS: int = settings.deepseek.mesh_min_active_agents
+DEEPSEEK_MESH_LATENCY_PENALTY: float = settings.deepseek.mesh_latency_penalty
+DEEPSEEK_MESH_TRUST_ALPHA: float = settings.deepseek.mesh_trust_alpha
+DEEPSEEK_MESH_MIN_TRUST: float = settings.deepseek.mesh_min_trust
+DEEPSEEK_MESH_MAX_TRUST: float = settings.deepseek.mesh_max_trust
+DEEPSEEK_METRICS_LOG_EVERY: int = settings.deepseek.metrics_log_every
+
+# DeepSeek council weights (disabled code)
+COUNCIL_DEEPSEEK_ICT_WEIGHT: float = float(_get_env("COUNCIL_DEEPSEEK_ICT_WEIGHT", "0.15"))
+COUNCIL_DEEPSEEK_DANIAL_WEIGHT: float = float(_get_env("COUNCIL_DEEPSEEK_DANIAL_WEIGHT", "0.15"))
+COUNCIL_DEEPSEEK_TRAD_WEIGHT: float = float(_get_env("COUNCIL_DEEPSEEK_TRAD_WEIGHT", "0.35"))
+COUNCIL_DEEPSEEK_WORLD_WEIGHT: float = float(_get_env("COUNCIL_DEEPSEEK_WORLD_WEIGHT", "0.35"))
+
+# Neural models dir (special — computed path)
+NEURAL_MODELS_DIR: str = str(
+    Path(__file__).resolve().parent.parent / "models" / "neural"
+)

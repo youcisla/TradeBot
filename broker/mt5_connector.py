@@ -60,46 +60,79 @@ class MT5Connector(BrokerConnector):
     # ── account ──────────────────────────────────────────────────────────
 
     def connect(self) -> bool:
-        if not mt5.initialize():
-            logger.error("MT5 initialize failed: %s", mt5.last_error())
-            return False
+        import time
 
-        try:
-            account = int(self._account)
-        except (TypeError, ValueError):
-            logger.error(
-                "Invalid BROKER_ACCOUNT value %r — must be a numeric account number",
-                self._account,
+        max_retries = 3
+        base_delay = 5.0
+        last_error_msg = ""
+
+        for attempt in range(1, max_retries + 1):
+            if attempt > 1:
+                delay = base_delay * (2 ** (attempt - 2))
+                logger.warning(
+                    "MT5 connect attempt %d/%d — waiting %.1fs before retry",
+                    attempt,
+                    max_retries,
+                    delay,
+                )
+                time.sleep(delay)
+
+            if not _mt5.initialize():
+                last_error_msg = str(_mt5.last_error())
+                logger.warning(
+                    "MT5 initialize failed (attempt %d/%d): %s",
+                    attempt,
+                    max_retries,
+                    last_error_msg,
+                )
+                _mt5.shutdown()
+                continue
+
+            try:
+                account = int(self._account)
+            except (TypeError, ValueError):
+                logger.error(
+                    "Invalid BROKER_ACCOUNT value %r — must be a numeric account number",
+                    self._account,
+                )
+                _mt5.shutdown()
+                return False
+
+            authorized = _mt5.login(
+                account,
+                password=self._password,
+                server=self._server,
             )
-            mt5.shutdown()
-            return False
+            if not authorized:
+                last_error_msg = str(_mt5.last_error())
+                logger.warning(
+                    "MT5 login failed (attempt %d/%d): %s",
+                    attempt,
+                    max_retries,
+                    last_error_msg,
+                )
+                _mt5.shutdown()
+                continue
 
-        authorized = mt5.login(
-            account,
-            password=self._password,
-            server=self._server,
-        )
-        if not authorized:
-            logger.error("MT5 login failed: %s", mt5.last_error())
-            mt5.shutdown()
-            return False
+            info = _mt5.account_info()
+            logger.info(
+                "MT5 connected: account=%d  server=%s  balance=%.2f  leverage=%d",
+                info.login, info.server, info.balance, info.leverage,
+            )
+            self.account_info_cache = {
+                "login": info.login,
+                "server": info.server,
+                "balance": info.balance,
+                "equity": info.equity,
+                "leverage": info.leverage,
+                "name": info.name,
+                "company": info.company,
+            }
+            self._connected = True
+            return True
 
-        info = mt5.account_info()
-        logger.info(
-            "MT5 connected: account=%d  server=%s  balance=%.2f  leverage=%d",
-            info.login, info.server, info.balance, info.leverage,
-        )
-        self.account_info_cache = {
-            "login": info.login,
-            "server": info.server,
-            "balance": info.balance,
-            "equity": info.equity,
-            "leverage": info.leverage,
-            "name": info.name,
-            "company": info.company,
-        }
-        self._connected = True
-        return True
+        logger.error("MT5 connection failed after %d attempts: %s", max_retries, last_error_msg)
+        return False
 
     def get_available_symbols(self, candidates: list[str]) -> list[str]:
         """Return the subset of *candidates* that are visible in the MT5 terminal.
