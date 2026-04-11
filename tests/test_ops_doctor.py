@@ -27,7 +27,7 @@ def test_doctor_detects_mt5_disabled_and_spread_noise(tmp_path: Path):
         log_lines.append("WARNING | agents.risk_agent | RISK REJECT [SPREAD]: too high")
     for _ in range(3):
         log_lines.append("ERROR | agents.execution_agent | MT5 error 10027: AutoTrading disabled by client")
-    _write(tmp_path / "logs" / "bot_2026-01-01.log", "\n".join(log_lines))
+    _write(tmp_path / "logs" / "backend" / "backend_2026-01-01.log", "\n".join(log_lines))
 
     report = run_doctor(tmp_path)
     checks = {c.name: c for c in report.checks}

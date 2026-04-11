@@ -29,7 +29,7 @@ This playbook covers bot-side operational failures for the Python runtime, broke
    - Crucix healthy (if enabled)
    - Web dashboard reachable
 2. Check recent logs:
-   - logs/bot_YYYY-MM-DD.log
+   - logs/backend/backend_YYYY-MM-DD.log
    - agent_events table for risk/execution/council messages
 3. Verify broker state:
    - Active account credentials

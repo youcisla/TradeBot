@@ -168,9 +168,12 @@ Write-Host "    PID: $($botJob.Id)" -ForegroundColor DarkGray
 # 4. Launch Next.js dashboard
 
 Write-Host "[*] Starting Next.js dashboard on http://localhost:3000 ..." -ForegroundColor Green
+$frontendLogDir = Join-Path (Join-Path $Root "logs") "frontend"
+New-Item -ItemType Directory -Force -Path $frontendLogDir | Out-Null
+$webLogFile = Join-Path $frontendLogDir "dev_server.log"
 $webJob = Start-Process `
     -FilePath "cmd.exe" `
-    -ArgumentList "/c", "npm", "run", "dev" `
+    -ArgumentList "/c npm run dev > `"$webLogFile`" 2>&1" `
     -WorkingDirectory $webDir `
     -PassThru `
     -NoNewWindow

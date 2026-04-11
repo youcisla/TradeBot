@@ -35,6 +35,11 @@ YFINANCE_ENABLED: bool = os.getenv("YFINANCE_ENABLED", "true").lower() == "true"
 INTELLIGENCE_SWEEP_INTERVAL_MINUTES: int = int(
     os.getenv("INTELLIGENCE_SWEEP_INTERVAL_MINUTES", "15")
 )
+# Periodic MT5 → DB sync keeps the dashboard aligned with live broker state.
+# Set to 0 to disable periodic sync (reconcile still runs on startup).
+MT5_DB_SYNC_INTERVAL_SECONDS: int = int(
+    os.getenv("MT5_DB_SYNC_INTERVAL_SECONDS", "300")
+)
 
 # ── OpenRouter LLM Gateway ───────────────────────────────────────────────
 OPENROUTER_API_KEY: str = os.getenv("OPENROUTER_API_KEY", "")
@@ -215,10 +220,10 @@ NEURAL_MODELS_DIR: str     = os.getenv(
 # Multi-timeframe candle counts fetched by MarketAgent
 # Analysis TFs: M30 (bridge), H1 (main), H4 (structure), D1 (bias)
 # Entry TFs:    M15 (trigger), M5/M1 (precision — future)
-H4_CANDLE_COUNT: int  = int(os.getenv("H4_CANDLE_COUNT",  "50"))
+H4_CANDLE_COUNT: int  = int(os.getenv("H4_CANDLE_COUNT",  "200"))  # raised from 50: ICT needs 200 for HTF bias/OB detection
 D1_CANDLE_COUNT: int  = int(os.getenv("D1_CANDLE_COUNT",  "20"))
 M30_CANDLE_COUNT: int = int(os.getenv("M30_CANDLE_COUNT", "100"))
-M15_CANDLE_COUNT: int = int(os.getenv("M15_CANDLE_COUNT", "100"))
+M15_CANDLE_COUNT: int = int(os.getenv("M15_CANDLE_COUNT", "250"))  # raised from 100: ICT needs 250 for FVG/OB patterns
 M5_CANDLE_COUNT: int = int(os.getenv("M5_CANDLE_COUNT", "100"))
 # MTF alignment: confidence boost when all TFs agree, D1 veto when it contradicts
 MTF_ALIGNMENT_BOOST: float = float(os.getenv("MTF_ALIGNMENT_BOOST", "0.05"))

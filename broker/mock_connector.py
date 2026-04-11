@@ -179,6 +179,10 @@ class MockConnector(BrokerConnector):
                     len(self._positions))
         return self.get_open_positions()
 
+    def get_spread(self, symbol: str) -> float:
+        """Return a simulated spread in points (points, not pips)."""
+        return round(random.uniform(8, 25), 1)  # 0.8–2.5 pips simulated
+
     def get_available_symbols(self, symbols=None) -> list[str]:
         # Return a list of mock symbols for testing, or filter if a list is provided
         mock_symbols = ["BTCUSD", "ETHUSD", "LTCUSD", "BCHUSD", "XRPUSD"]

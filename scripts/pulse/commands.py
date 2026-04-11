@@ -80,7 +80,7 @@ def show_status() -> int:
     console.print(table)
 
     # Log file check
-    log_files = sorted(LOGS_DIR.glob("bot_*.log"), key=lambda p: p.stat().st_mtime)
+    log_files = sorted((LOGS_DIR / "backend").glob("backend_*.log"), key=lambda p: p.stat().st_mtime)
     if log_files:
         latest = log_files[-1]
         age_m = (datetime.now() - datetime.fromtimestamp(latest.stat().st_mtime)).total_seconds() / 60
@@ -117,9 +117,9 @@ def tail_logs(
 
     paths_by_source = {}
     if source in ("all", "bot"):
-        bot_files = sorted(_log_dir.glob("bot_*.log"), key=lambda p: p.stat().st_mtime)
-        if bot_files:
-            paths_by_source["BOT"] = bot_files[-1]
+        backend_files = sorted((_log_dir / "backend").glob("backend_*.log"), key=lambda p: p.stat().st_mtime)
+        if backend_files:
+            paths_by_source["BACKEND"] = backend_files[-1]
 
     for label, path in paths_by_source.items():
         color = LOG_SOURCE_COLORS.get(label, "white")
@@ -144,16 +144,16 @@ async def _tail_follow(source: str, lines: int, log_dir: Path) -> None:
             if op != "modified":
                 continue
             path = Path(path_str)
-            if source == "web" and "npm" not in path.name:
+            if source == "web" and "dev_server" not in path.name:
                 continue
-            if source == "bot" and "bot_" not in path.name:
+            if source == "bot" and "backend_" not in path.name:
                 continue
             try:
                 with open(path, "r", encoding="utf-8", errors="replace") as f:
                     f.seek(max(0, path.stat().st_size - 4096))
                     new_lines = f.readlines()
                 for line in new_lines[-lines:]:
-                    label = "WEB" if "npm" in path.name else "BOT"
+                    label = "WEB" if "frontend" in path_str or "dev_server" in path.name else "BACKEND"
                     color = LOG_SOURCE_COLORS.get(label, "white")
                     console.print(f"[{color}]{line.rstrip()}[/{color}]")
             except OSError:

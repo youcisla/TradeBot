@@ -295,6 +295,22 @@ BEGIN
 END $$;
 """
 
+_ALTER_BOT_STATUS_INTELLIGENCE = """
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                   WHERE table_name='bot_status' AND column_name='spread_condition') THEN
+        ALTER TABLE bot_status ADD COLUMN spread_condition TEXT DEFAULT 'unknown';
+        ALTER TABLE bot_status ADD COLUMN current_session TEXT DEFAULT 'unknown';
+        ALTER TABLE bot_status ADD COLUMN market_regime TEXT DEFAULT 'unknown';
+        ALTER TABLE bot_status ADD COLUMN spread_pips REAL DEFAULT 0;
+        ALTER TABLE bot_status ADD COLUMN vix REAL DEFAULT 0;
+        ALTER TABLE bot_status ADD COLUMN daily_loss_pct REAL DEFAULT 0;
+        ALTER TABLE bot_status ADD COLUMN equity_drawdown_pct REAL DEFAULT 0;
+    END IF;
+END $$;
+"""
+
 _CREATE_SYMBOL_FAULT = """
 CREATE TABLE IF NOT EXISTS symbol_fault (
     symbol        TEXT PRIMARY KEY,
@@ -551,6 +567,7 @@ class Database:
                         cur.execute(ddl)
                     cur.execute(_INIT_BOT_STATUS)
                     cur.execute(_ALTER_BOT_STATUS_BROKER)
+                    cur.execute(_ALTER_BOT_STATUS_INTELLIGENCE)
                     cur.execute(_ALTER_TRADES_COMMISSION)
                     cur.execute(_ALTER_TRADES_TP4)
                     cur.execute(_ALTER_TRADES_EXPECTANCY)
@@ -711,6 +728,20 @@ class Database:
         try:
             with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
                 cur.execute("SELECT * FROM trades WHERE id = %s", (trade_id,))
+                row = cur.fetchone()
+                return self._row_to_trade(row) if row else None
+        finally:
+            self._put_conn(conn)
+
+    def get_trade_by_broker_ticket(self, broker_ticket: int) -> Trade | None:
+        """Look up a trade by its MT5 broker ticket number."""
+        conn = self._get_conn()
+        try:
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute(
+                    "SELECT * FROM trades WHERE broker_ticket = %s",
+                    (broker_ticket,),
+                )
                 row = cur.fetchone()
                 return self._row_to_trade(row) if row else None
         finally:
@@ -1309,7 +1340,14 @@ class Database:
                           open_trades: int, daily_pnl: float,
                           broker_account: str = "", broker_server: str = "",
                           broker_name: str = "", balance: float = 0.0,
-                          leverage: int = 0) -> None:
+                          leverage: int = 0,
+                          spread_condition: str = "unknown",
+                          current_session: str = "unknown",
+                          market_regime: str = "unknown",
+                          spread_pips: float = 0.0,
+                          vix: float = 0.0,
+                          daily_loss_pct: float = 0.0,
+                          equity_drawdown_pct: float = 0.0) -> None:
         conn = self._get_conn()
         try:
             with conn:
@@ -1319,11 +1357,17 @@ class Database:
                                state = %s, last_tick = NOW(),
                                equity = %s, open_trades = %s, daily_pnl = %s,
                                broker_account = %s, broker_server = %s,
-                               broker_name = %s, balance = %s, leverage = %s
+                               broker_name = %s, balance = %s, leverage = %s,
+                               spread_condition = %s, current_session = %s,
+                               market_regime = %s, spread_pips = %s,
+                               vix = %s, daily_loss_pct = %s,
+                               equity_drawdown_pct = %s
                            WHERE id = 1""",
                         (state, equity, open_trades, daily_pnl,
                          broker_account, broker_server, broker_name,
-                         balance, leverage),
+                         balance, leverage,
+                         spread_condition, current_session, market_regime,
+                         spread_pips, vix, daily_loss_pct, equity_drawdown_pct),
                     )
         finally:
             self._put_conn(conn)

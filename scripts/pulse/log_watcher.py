@@ -55,10 +55,11 @@ class LogWatcher:
         return self._lines
 
     async def _get_latest_log_path(self) -> Path | None:
-        """Find the most recent bot log file (bot_YYYY-MM-DD.log)."""
-        if not self.log_dir.exists():
+        """Find the most recent backend log file (backend_YYYY-MM-DD.log)."""
+        backend_dir = self.log_dir / "backend"
+        if not backend_dir.exists():
             return None
-        files = sorted(self.log_dir.glob("bot_*.log"), key=lambda p: p.stat().st_mtime)
+        files = sorted(backend_dir.glob("backend_*.log"), key=lambda p: p.stat().st_mtime)
         if not files:
             return None
         return files[-1]
@@ -158,10 +159,10 @@ async def tail_logs(
         # Batch mode: read last N lines and exit
         paths = []
         if source in ("all", "bot"):
-            bot_files = sorted(_log_dir.glob("bot_*.log"), key=lambda p: p.stat().st_mtime)
-            paths.extend(bot_files)
+            backend_files = sorted((_log_dir / "backend").glob("backend_*.log"), key=lambda p: p.stat().st_mtime)
+            paths.extend(backend_files)
         if web_log and source in ("all", "web"):
-            web_log_path = Path("web/npm.log")
+            web_log_path = _log_dir / "frontend" / "dev_server.log"
             if web_log_path.exists():
                 paths.append(web_log_path)
 
@@ -170,7 +171,7 @@ async def tail_logs(
                 with open(path, "r", encoding="utf-8", errors="replace") as f:
                     all_lines = f.readlines()
                 recent = all_lines[-lines:] if len(all_lines) > lines else all_lines
-                label = "BOT" if "bot_" in path.name else "WEB"
+                label = "BACKEND" if "backend_" in path.name else "WEB"
                 for line in recent:
                     _console.print(
                         f"[bold {LOG_SOURCE_COLORS.get(label, 'white')}]{label}[/bold {LOG_SOURCE_COLORS.get(label, 'white')}]  {line.rstrip()}"

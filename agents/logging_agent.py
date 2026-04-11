@@ -87,8 +87,8 @@ class LoggingAgent:
 
     def __init__(self, db: Database, log_dir: str = "logs") -> None:
         self._db = db
-        self._log_dir = Path(log_dir)
-        self._log_dir.mkdir(exist_ok=True)
+        self._log_dir = Path(log_dir) / "backend"
+        self._log_dir.mkdir(parents=True, exist_ok=True)
         self._trade_csv = self._log_dir / "trade_journal.csv"
         self._risk_reject_throttle_seconds = 300.0
         self._risk_reject_cache: dict[tuple[str, str, str, str], tuple[float, int]] = {}
@@ -220,7 +220,7 @@ class LoggingAgent:
 
         # ── File: full debug log, rotating ───────────────────────────────
         from utils.helpers import local_now
-        log_file = self._log_dir / f"bot_{local_now().strftime('%Y-%m-%d')}.log"
+        log_file = self._log_dir / f"backend_{local_now().strftime('%Y-%m-%d')}.log"
         fh = logging.handlers.RotatingFileHandler(
             log_file, maxBytes=5_000_000, backupCount=5, encoding="utf-8",
         )

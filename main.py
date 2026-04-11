@@ -55,6 +55,7 @@ from utils import telegram_bot
 from utils import candle_server
 from utils import terminal_ui as tui
 from utils.helpers import current_session, is_market_open, is_any_market_open, is_weekend, local_now
+from utils.spread_monitor import SpreadMonitor
 from utils.orchestration_profiler import OrchestrationProfiler, OrchestrationTargets
 from utils.symbol_event_tracker import SymbolEventTracker
 from utils.opportunity_lifecycle import OpportunityLifecycleManager
@@ -66,6 +67,9 @@ logger = logging.getLogger(__name__)
 # ── Global shutdown flag ────────────────────────────────────────────────
 _shutdown = False
 _session_id: int = 0
+
+# ── Spread monitor (initialised in __main__ once broker is available) ──
+_spread_monitor: "SpreadMonitor | None" = None
 
 
 def _request_shutdown() -> None:
@@ -126,6 +130,13 @@ def main() -> None:
 
     state = StatePersistence(db, broker)
     crucix_agent = CrucixAgent(db=db)
+    global _spread_monitor
+    _spread_monitor = SpreadMonitor(
+        threshold_low=1.0,
+        threshold_normal=2.0,
+        threshold_high=5.0,
+        pip_size=0.0001,
+    )
 
     # ── Filter symbols to those available on the broker ─────────────────
     global _active_symbols
@@ -396,6 +407,7 @@ def main() -> None:
     logger.info("Entering main loop (interval=%ds)", settings.LOOP_INTERVAL_SECONDS)
 
     _market_closed_logged = False
+    _last_mt5_sync_ts: float = 0.0   # monotonic time of last MT5→DB sync
     _last_scan_ts: dict[str, float] = {}  # symbol → monotonic time of last analysis
     _deferred_entries: list[dict[str, object]] = []
     _metrics: dict[str, float] = {
@@ -478,10 +490,10 @@ def main() -> None:
                 _market_closed_logged = True
             # Still process commands and heartbeat
             try:
-                _update_heartbeat(db, broker, trade_manager)
-            except Exception:
-                logger.warning("Heartbeat update failed — continuing")
-            _process_commands(db, trade_manager, tool_system)
+                _update_heartbeat(db, broker, trade_manager, crucix_agent)
+            except Exception as e:
+                logger.warning(f"Heartbeat update failed — continuing: {e}")
+            _process_commands(db, trade_manager, tool_system, state)
             # Sleep in short bursts so kill/commands are picked up quickly
             for _ in range(30):  # 30 × 10s = 5 min total
                 if _shutdown or telegram_bot.is_kill_requested():
@@ -571,6 +583,19 @@ def main() -> None:
         except Exception:
             logger.warning("Heartbeat update failed — continuing")
 
+        # ── Periodic MT5 → DB sync ───────────────────────────────────────
+        # Keeps the dashboard aligned with live broker state on a timer
+        # rather than only at startup. Uses monotonic time so it is unaffected
+        # by wall-clock jumps (e.g. NTP corrections).
+        if settings.MT5_DB_SYNC_INTERVAL_SECONDS > 0:
+            now_mono = time.monotonic()
+            if now_mono - _last_mt5_sync_ts >= settings.MT5_DB_SYNC_INTERVAL_SECONDS:
+                _last_mt5_sync_ts = now_mono
+                try:
+                    state.sync_mt5_to_db()
+                except Exception:
+                    logger.warning("MT5→DB sync failed — continuing", exc_info=True)
+
         if settings.METRICS_LOG_EVERY_N_LOOPS > 0 and loop_count % settings.METRICS_LOG_EVERY_N_LOOPS == 0:
             profile = profiler.snapshot()
             bottleneck = profiler.primary_bottleneck()
@@ -652,7 +677,7 @@ def main() -> None:
                 logger.exception("Tool system cycle failed — continuing")
 
         # ── Process UI command queue ─────────────────────────────────────
-        _process_commands(db, trade_manager, tool_system)
+        _process_commands(db, trade_manager, tool_system, state)
 
         # ── Daily summary (triggered at DAILY_SUMMARY_HOUR in local time) ──
         now = local_now()
@@ -714,6 +739,7 @@ def _process_commands(
     db: Database,
     trade_manager: TradeManagerAgent,
     tool_system: AutonomousToolSystem | None = None,
+    state: StatePersistence | None = None,
 ) -> None:
     """Poll the bot_commands table and Telegram kill flag for pending commands."""
 
@@ -897,6 +923,18 @@ def _process_commands(
                         "failed",
                         f"Unknown tool action: {action}",
                     )
+            elif cmd_name == "sync_mt5":
+                if state is None:
+                    db.update_command(cmd["id"], "failed", "State persistence not available")
+                else:
+                    state.sync_mt5_to_db()
+                    duration_ms = (time.perf_counter() - started_at) * 1000.0
+                    db.update_command(
+                        cmd["id"],
+                        "done",
+                        _final_result_message("MT5→DB sync complete", trace_id=trace_id, duration_ms=duration_ms),
+                    )
+                    logger.info("Manual MT5→DB sync triggered from dashboard")
             else:
                 db.update_command(cmd["id"], "failed", f"Unknown command: {cmd_name}")
 
@@ -943,9 +981,10 @@ def _update_heartbeat(
     db: Database,
     broker: BrokerConnector,
     trade_manager: TradeManagerAgent,
+    crucix_agent: CrucixAgent,
 ) -> None:
     """Write current bot metrics to bot_status row."""
-    global _hb_equity, _hb_balance
+    global _hb_equity, _hb_balance, _spread_monitor
     # Call directly on the main thread — MT5 API is NOT thread-safe and
     # returns None when called from a ThreadPoolExecutor thread.
     try:
@@ -1003,6 +1042,53 @@ def _update_heartbeat(
         broker_name = info.get("name", "")
         leverage = info.get("leverage", 0)
 
+    # ── Spread monitoring ──────────────────────────────────────────────
+    spread_pips = 0.0
+    spread_cond = "unknown"
+    if _spread_monitor is not None:
+        try:
+            spread_pts = broker.get_spread("EURUSD")
+            spread_pips = spread_pts / 10.0  # convert MT5 points to pips (5-digit broker)
+            _spread_monitor.record(spread_pips)
+            spread_cond = _spread_monitor.condition.name.lower()
+        except Exception:
+            pass
+
+    # ── Session + market regime ────────────────────────────────────────
+    current_sess = current_session(datetime.now(UTC))
+    if spread_cond in ("high", "extreme"):
+        regime = "volatile"
+    elif current_sess == "overlap":
+        regime = "high_volume"
+    elif current_sess == "asian":
+        regime = "quiet"
+    else:
+        regime = "normal"
+
+    # ── VIX from Crucix ────────────────────────────────────────────────
+    vix = 0.0
+    try:
+        if crucix_agent:
+            ctx = crucix_agent.get_context()
+            vix = getattr(ctx, "vix", 0.0) or 0.0
+    except Exception:
+        pass
+
+    # ── Risk metrics ───────────────────────────────────────────────────
+    daily_loss_pct = abs(daily_pnl) / balance if balance > 0 else 0.0
+    # Equity drawdown % from peak (reads persisted peak from EquityDrawdownGuard state)
+    eq_dd_pct = 0.0
+    try:
+        import json as _json, pathlib as _pathlib
+        peak_file = _pathlib.Path(__file__).resolve().parent / "data" / "equity_peak.json"
+        if peak_file.exists():
+            with open(peak_file) as _f:
+                peak = _json.load(_f).get("peak", 0.0)
+            if peak > 0:
+                eq_dd_pct = max(0.0, (peak - equity) / peak)
+    except Exception:
+        pass
+
     db.update_bot_status(
         state, equity, open_count, daily_pnl,
         broker_account=broker_account,
@@ -1010,6 +1096,13 @@ def _update_heartbeat(
         broker_name=broker_name,
         balance=balance,
         leverage=leverage,
+        spread_condition=spread_cond,
+        current_session=current_sess,
+        market_regime=regime,
+        spread_pips=spread_pips,
+        vix=vix,
+        daily_loss_pct=daily_loss_pct,
+        equity_drawdown_pct=eq_dd_pct,
     )
 
     ui = tui.get_ui()
@@ -1195,17 +1288,38 @@ def _run_iteration(
         if symbol == btc_symbol:
             symbol_cooldown = max(0, settings.BTC_PRIORITY_SCAN_COOLDOWN_SECONDS)
 
-        is_cooldown = False
+        # BTC always scans — it needs fresh data every loop regardless of cooldown.
+        if symbol == btc_symbol:
+            try:
+                if _tui:
+                    _tui.set_agent_status("market", f"fetching {symbol}")
+                data = market_agent.get_data(symbol)
+            except DataValidationError as e:
+                err_str = str(e)
+                is_ipc = ("IPC" in err_str or "No tick data" in err_str
+                          or "-10004" in err_str or "Terminal: Call failed" in err_str)
+                return (symbol, "error", is_re_enabled, None, None, err_str, is_ipc)
+
+            if _tui:
+                _tui.set_agent_status("analysis", f"analyzing {symbol}")
+            context = analysis_agent.analyze(data)
+
+            if _tui:
+                _tui.set_agent_status("strategy", f"scanning {symbol}")
+            signals = strategy_agent.detect_all(context)
+
+            return (symbol, "success", is_re_enabled, context, signals, None, False)
+
+        # Non-BTC symbols: skip aggressively if cooldown hasn't expired and
+        # no new candle has arrived since the last scan.
         if now_mono - last_scan_ts.get(symbol, 0.0) < symbol_cooldown:
+            # Only force a rescan if a genuine new candle has arrived.
             if settings.EVENT_DRIVEN_RESCAN_ON_NEW_CANDLE:
                 last_candle_ts = symbol_event_tracker.get(symbol, "last_candle")
-                if last_candle_ts <= 0 or time.time() - last_candle_ts > symbol_cooldown:
-                    is_cooldown = True
+                if last_candle_ts > 0 and (time.time() - last_candle_ts) < symbol_cooldown:
+                    return (symbol, "cooldown", is_re_enabled, None, None, None, False)
             else:
-                is_cooldown = True
-        
-        if is_cooldown:
-            return (symbol, "cooldown", is_re_enabled, None, None, None, False)
+                return (symbol, "cooldown", is_re_enabled, None, None, None, False)
 
         try:
             if _tui:

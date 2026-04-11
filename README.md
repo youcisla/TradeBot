@@ -456,8 +456,9 @@ Every signal passes a mandatory 6-step validation gate before a trade is opened:
 
 | File | Purpose |
 |---|---|
-| `logs/bot_YYYY-MM-DD.log` | Full DEBUG-level rotating log (5 MB, 5 backups) |
-| `logs/trade_journal.csv` | Every trade with all fields -- importable into Excel or pandas |
+| `logs/backend/backend_YYYY-MM-DD.log` | Full DEBUG-level rotating log (5 MB, 5 backups) |
+| `logs/backend/trade_journal.csv` | Every trade with all fields -- importable into Excel or pandas |
+| `logs/frontend/dev_server.log` | Next.js (frontend) stdout/stderr |
 
 ### Telegram Alerts
 

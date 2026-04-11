@@ -106,9 +106,9 @@ def _log_checks(repo_root: Path, recommendations: list[str]) -> list[CheckResult
     if not logs_dir.exists():
         logs_dir.mkdir(parents=True, exist_ok=True)
 
-    bot_logs = sorted(logs_dir.glob("bot_*.log*"), key=lambda p: p.stat().st_mtime, reverse=True)
+    bot_logs = sorted((logs_dir / "backend").glob("backend_*.log*"), key=lambda p: p.stat().st_mtime, reverse=True)
     if not bot_logs:
-        out.append(CheckResult("Logs", "warn", "No bot_*.log files found"))
+        out.append(CheckResult("Logs", "warn", "No logs/backend_*.log files found"))
         return out
 
     # Keep the most recent two rotated files to keep analysis fast.

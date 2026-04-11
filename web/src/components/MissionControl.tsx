@@ -461,6 +461,13 @@ export default function MissionControl() {
             >
               Force Snapshot
             </CommandButton>
+            <CommandButton
+              onClick={() => sendCommand("sync_mt5")}
+              variant="info"
+              confirmMessage="Sync all MT5 data to DB?"
+            >
+              Sync MT5
+            </CommandButton>
           </CardBody>
         </Card>
       </div>

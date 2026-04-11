@@ -43,7 +43,7 @@ crucix/.env
 crucix/node_modules/
 
 *.pkl
-
+*.pid
 # Playwright
 .playwright-results/
 *.playwright/*.yml

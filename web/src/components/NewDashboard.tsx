@@ -1,11 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import TopBar from "@/components/TopBar";
 import SymbolSidebar from "@/components/SymbolSidebar";
-import AnalyticsPanel from "@/components/AnalyticsPanel";
+import IntelligencePanel from "@/components/IntelligencePanel";
 import TradingChart from "@/components/TradingChart";
 import TradeTable from "@/components/TradeTable";
+import SmartAlertFeed from "@/components/SmartAlertFeed";
 import WorldStrip from "@/components/WorldStrip";
 
 export default function DashboardPage() {
@@ -50,14 +51,19 @@ export default function DashboardPage() {
             <TradingChart symbol={symbol} timeframe={timeframe} count={500} />
           </div>
 
+          {/* Smart alert feed */}
+          <div style={styles.alertArea}>
+            <SmartAlertFeed />
+          </div>
+
           {/* Trade table */}
           <div style={styles.tableArea}>
             <TradeTable />
           </div>
         </div>
 
-        {/* Right: analytics */}
-        <AnalyticsPanel />
+        {/* Right: intelligence panel */}
+        <IntelligencePanel />
       </div>
 
       {/* Bottom: world strip */}
@@ -125,19 +131,25 @@ const styles: Record<string, React.CSSProperties> = {
     marginLeft: "auto",
   },
   chartArea: {
-    flex: "1 1 60%",
+    flex: "1 1 55%",
     minHeight: 0,
     background: "#0D0D0F",
     overflow: "hidden",
   },
+  alertArea: {
+    flex: "0 0 auto",
+    padding: "6px 12px",
+    background: "#1C1C1E",
+    borderTop: "1px solid rgba(95,122,158,0.2)",
+    borderBottom: "1px solid rgba(95,122,158,0.2)",
+  },
   tableArea: {
-    flex: "0 0 40%",
-    minHeight: 180,
-    maxHeight: 380,
+    flex: "0 0 45%",
+    minHeight: 160,
+    maxHeight: 340,
     overflow: "hidden",
     display: "flex",
     flexDirection: "column",
     background: "#FFFFFF",
-    borderTop: "1px solid #F0F0F0",
   },
 };

@@ -161,6 +161,15 @@ class BrokerConnector(ABC):
         """
         return 0.0
 
+    def get_spread(self, symbol: str) -> float:
+        """Return current spread for *symbol* in MT5 price points (not pips).
+
+        MT5Connector overrides this with live symbol_info.spread.
+        The default returns 0.0 so connectors that don't support spread
+        queries remain functional.
+        """
+        return 0.0
+
     # ── reconciliation ───────────────────────────────────────────────────
 
     @abstractmethod

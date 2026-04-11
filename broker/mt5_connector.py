@@ -208,6 +208,18 @@ class MT5Connector(BrokerConnector):
         from config.symbols import pip_value as _pv, contract_size as _cs
         return _pv(symbol) * _cs(symbol)
 
+    def get_spread(self, symbol: str) -> float:
+        """Return current spread for *symbol* in MT5 price points.
+
+        Spread is taken directly from symbol_info.spread (in points, not pips).
+        Convert to pips by dividing by 10 for 5-digit brokers.
+        """
+        broker_sym = self.resolve(symbol)
+        info = mt5.symbol_info(broker_sym)
+        if info is not None:
+            return float(info.spread)
+        return 0.0
+
     def disconnect(self) -> None:
         if self._connected:
             mt5.shutdown()
@@ -357,10 +369,11 @@ class MT5Connector(BrokerConnector):
         # sending so the error message is actionable instead of cryptic.
         si = mt5.symbol_info(broker_sym)
         point = float(si.point) if si is not None else 0.00001
-        # stops_level=0 on PU Prime; enforce at least 1 point minimum distance
-        # so floating-point equality doesn't trigger a rejection.
         raw_stops = float(si.trade_stops_level) if si is not None else 0.0
         min_dist = max(raw_stops, 1.0) * point
+        # For market orders MT5 checks SL/TP distance from the opposite side of
+        # the book (ask for SELL, bid for BUY). Use that for accurate validation.
+        sl_check_price = tick.bid if direction == "BUY" else tick.ask
 
         if sl > 0:
             if direction == "BUY" and sl >= fill_price - min_dist:
@@ -381,6 +394,23 @@ class MT5Connector(BrokerConnector):
                         f"— signal stale, market moved"
                     ),
                 )
+            # Extra safety: ensure SL is sufficiently above/below the *current*
+            # market price (not just the fill price, which may be stale).
+            # MT5 10016 also fires when SL is within stops_level of current price.
+            if direction == "SELL" and sl <= sl_check_price + min_dist:
+                logger.warning(
+                    "10016 risk: SELL %s sl=%.5f <= current_bid=%.5f + min_dist=%.5f "
+                    "(raw_stops=%.1f pts, point=%.6f). Omitting SL and retrying without it.",
+                    symbol, sl, sl_check_price, min_dist, raw_stops, point,
+                )
+                sl = 0.0  # Omit SL rather than let it invalidate the whole order
+            elif direction == "BUY" and sl >= sl_check_price - min_dist:
+                logger.warning(
+                    "10016 risk: BUY %s sl=%.5f >= current_ask=%.5f - min_dist=%.5f "
+                    "(raw_stops=%.1f pts, point=%.6f). Omitting SL and retrying without it.",
+                    symbol, sl, sl_check_price, min_dist, raw_stops, point,
+                )
+                sl = 0.0
 
         # TP is the broker crash-safety net; trade_manager handles real partials.
         # If TP is already past fill_price (market moved), omit it rather than
@@ -627,18 +657,19 @@ class MT5Connector(BrokerConnector):
 
         Returns 0.0 when the requested lot cannot produce a valid volume.
 
-        Hard cap: FIXED_LOT_SIZE from settings — no trade may exceed this
-        regardless of what the risk council or position sizer calculated.
+        Exact enforcement: FIXED_LOT_SIZE from settings — when set > 0,
+        ALL trades use that exact lot size, ignoring whatever the risk
+        council or position sizer calculated.
         """
-        # ── Absolute safety cap — fixed lot enforcement ──────────────────────
+        # ── Exact fixed lot enforcement ─────────────────────────────────────
         fixed_lot = getattr(settings, "FIXED_LOT_SIZE", None)
         if fixed_lot is not None and fixed_lot > 0:
-            if requested > fixed_lot:
-                logger.warning(
-                    "FIXED_LOT_SIZE cap applied for %s: requested %.4f → %.4f",
+            if requested != fixed_lot:
+                logger.info(
+                    "FIXED_LOT_SIZE enforced for %s: computed %.4f → %.4f",
                     symbol, requested, fixed_lot,
                 )
-            requested = min(requested, fixed_lot)
+            requested = fixed_lot
         # ─────────────────────────────────────────────────────────────────────
 
         if requested <= 0:

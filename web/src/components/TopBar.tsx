@@ -2,8 +2,24 @@
 
 import { useCallback, useEffect, useState } from "react";
 
+const SESSION_COLORS: Record<string, string> = {
+  asian:   "#9333EA",
+  london:  "#2563EB",
+  overlap: "#16A34A",
+  newyork: "#D97706",
+};
+
+interface IntelData {
+  session: string;
+  sessionLabel: string;
+  spreadCondition: string;
+  spreadPips: number;
+  marketRegime: string;
+}
+
 export default function TopBar() {
   const [data, setData] = useState<Record<string, unknown> | null>(null);
+  const [intel, setIntel] = useState<IntelData | null>(null);
   const [tick, setTick] = useState<string>("—");
 
   const fetch_ = useCallback(async () => {
@@ -13,11 +29,19 @@ export default function TopBar() {
     } catch { /* keep last */ }
   }, []);
 
+  const fetchIntel = useCallback(async () => {
+    try {
+      const r = await fetch("/api/intelligence");
+      if (r.ok) setIntel(await r.json());
+    } catch { /* keep last */ }
+  }, []);
+
   useEffect(() => {
     fetch_();
-    const id = setInterval(fetch_, 8_000);
+    fetchIntel();
+    const id = setInterval(() => { fetch_(); fetchIntel(); }, 8_000);
     return () => clearInterval(id);
-  }, [fetch_]);
+  }, [fetch_, fetchIntel]);
 
   // Tick: use browser's local clock, always accurate
   useEffect(() => {
@@ -77,11 +101,42 @@ export default function TopBar() {
 
         {/* Session + time */}
         <div style={styles.right}>
-          <span style={styles.session}>overlap</span>
+          {intel ? (
+            <SessionChip session={intel.session} />
+          ) : (
+            <span style={styles.session}>—</span>
+          )}
           <span style={styles.tick}>{tick}</span>
         </div>
       </div>
     </header>
+  );
+}
+
+function SessionChip({ session }: { session: string }) {
+  const color = SESSION_COLORS[session] ?? "#6B7280";
+  const label = session.toUpperCase();
+  return (
+    <div style={{
+      display: "flex", alignItems: "center", gap: 5,
+      background: `${color}18`,
+      border: `1px solid ${color}50`,
+      borderRadius: 6,
+      padding: "3px 8px",
+    }}>
+      <span style={{
+        width: 6, height: 6, borderRadius: "50%",
+        background: color, display: "inline-block",
+        boxShadow: `0 0 4px ${color}`,
+      }} />
+      <span style={{
+        fontSize: 10, fontWeight: 700, color,
+        fontFamily: "'IBM Plex Mono', monospace",
+        letterSpacing: "0.06em",
+      }}>
+        {label}
+      </span>
+    </div>
   );
 }
 

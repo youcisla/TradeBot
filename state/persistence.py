@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 import time
+from datetime import UTC, datetime, timedelta
 from typing import Callable
 
 from broker.connector import BrokerConnector, PositionInfo
@@ -25,6 +26,7 @@ class StatePersistence:
     def __init__(self, db: Database, broker: BrokerConnector) -> None:
         self._db = db
         self._broker = broker
+        self._last_closed_deal_sync: datetime | None = None
 
     # ── basic CRUD ───────────────────────────────────────────────────────
 
@@ -138,3 +140,183 @@ class StatePersistence:
 
         record_call("state_reconcile", (time.monotonic() - _t0) * 1000.0, True)
         return self._db.get_open_trades()
+
+    # ── periodic MT5 → DB sync ─────────────────────────────────────────
+
+    def sync_mt5_to_db(self) -> None:
+        """Push live MT5 state into the DB every sync cycle.
+
+        Covers:
+        - Open positions: lot_size, stop_loss, take_profit, current_price
+        - Closed deals since last sync: new CLOSED trades with P&L
+        - Account equity and balance → bot_status
+        """
+        _t0 = time.monotonic()
+        self._sync_open_trades()
+        self._sync_closed_trades()
+        self._sync_account_status()
+        logger.debug("MT5→DB sync complete in %.1fms", (time.monotonic() - _t0) * 1000.0)
+
+    def _sync_open_trades(self) -> None:
+        """Overwrite open-trade DB rows with live MT5 values."""
+        import logging
+        _log = logging.getLogger(__name__ + "._sync_open_trades")
+        broker_positions = self._broker.get_open_positions()
+        if not broker_positions:
+            return
+        db_trades = {t.broker_ticket: t for t in self._db.get_open_trades()}
+        for pos in broker_positions:
+            if not pos.ticket:
+                continue
+            if pos.ticket in db_trades:
+                trade = db_trades[pos.ticket]
+                changed: list[str] = []
+                if abs(trade.lot_size - pos.lot_size) > 0.0001:
+                    changed.append(f"lot {trade.lot_size}→{pos.lot_size}")
+                    trade.lot_size = pos.lot_size
+                if abs(trade.stop_loss - pos.stop_loss) > 0.00001:
+                    changed.append(f"sl {trade.stop_loss:.5f}→{pos.stop_loss:.5f}")
+                    trade.stop_loss = pos.stop_loss
+                if pos.take_profit and abs(trade.take_profit_1 - pos.take_profit) > 0.00001:
+                    trade.take_profit_1 = pos.take_profit
+                if pos.current_price and trade.current_price != pos.current_price:
+                    trade.current_price = pos.current_price
+                if changed:
+                    self.save_trade(trade)
+                    _log.debug("Synced ticket %d: %s", pos.ticket, ", ".join(changed))
+            else:
+                # Orphan: in MT5 but not in DB — create minimal entry
+                new_trade = Trade(
+                    symbol=pos.symbol,
+                    strategy="MT5_SYNC",
+                    direction=pos.direction,
+                    entry_price=pos.entry_price,
+                    lot_size=pos.lot_size,
+                    stop_loss=pos.stop_loss,
+                    take_profit_1=pos.take_profit or 0.0,
+                    status="OPEN",
+                    open_time=datetime.now(UTC),
+                    broker_ticket=pos.ticket,
+                    current_price=pos.current_price or pos.entry_price,
+                )
+                self.save_trade(new_trade)
+                _log.warning("MT5→DB: adopted orphan ticket %d (%s) into DB", pos.ticket, pos.symbol)
+
+    def _sync_closed_trades(self) -> None:
+        """Fetch closed deals from MT5 since last sync and upsert as CLOSED trades."""
+        import logging
+        from datetime import UTC, timedelta
+        _log = logging.getLogger(__name__ + "._sync_closed_trades")
+
+        try:
+            import MetaTrader5 as mt5
+        except Exception:
+            _log.debug("MT5 not available for closed deal sync")
+            return
+
+        now_utc = datetime.now(UTC)
+        # First sync: go back 7 days to catch recently closed trades
+        if self._last_closed_deal_sync is None:
+            sync_start = now_utc - timedelta(days=7)
+        else:
+            sync_start = self._last_closed_deal_sync
+
+        try:
+            deals = mt5.history_deals_get(sync_start, now_utc)
+        except Exception as exc:
+            _log.warning("history_deals_get failed: %s", exc)
+            return
+
+        if not deals:
+            self._last_closed_deal_sync = now_utc
+            return
+
+        # Group deals by position ticket
+        by_ticket: dict[int, list] = {}
+        for deal in deals:
+            if deal.position_id:
+                by_ticket.setdefault(deal.position_id, []).append(deal)
+
+        synced = 0
+        for ticket, ticket_deals in by_ticket.items():
+            # Skip if already CLOSED in DB (idempotent — won't re-create)
+            existing = self._db.get_trade_by_broker_ticket(ticket)
+            if existing and existing.status == "CLOSED":
+                continue
+
+            first = ticket_deals[0]
+            last = ticket_deals[-1]
+            pnl = float(sum(d.profit for d in ticket_deals))
+            swap = float(sum(d.swap for d in ticket_deals))
+            commission = float(sum(abs(d.commission) for d in ticket_deals))
+            entry_price = float(first.price)
+            close_price = float(last.price)
+            direction = "BUY" if first.type_enum in (
+                mt5.ORDER_TYPE_BUY, mt5.ORDER_TYPE_BUY_LIMIT,
+                mt5.ORDER_TYPE_BUY_STOP,
+            ) else "SELL"
+
+            # Resolve symbol from first deal
+            symbol = str(first.symbol) if first.symbol else ""
+            if not symbol:
+                _log.debug("Skipping deal ticket=%d — no symbol", ticket)
+                continue
+
+            trade = Trade(
+                id=f"MT5-{ticket}",
+                symbol=symbol,
+                strategy="MT5_SYNC",
+                direction=direction,
+                entry_price=entry_price,
+                lot_size=float(first.volume),
+                stop_loss=0.0,
+                take_profit_1=0.0,
+                take_profit_2=0.0,
+                take_profit_3=0.0,
+                take_profit_4=0.0,
+                tp1_lots=0.0, tp2_lots=0.0, tp3_lots=0.0, tp4_lots=0.0,
+                tp1_hit=False, tp2_hit=False, tp3_hit=False, tp4_hit=False,
+                status="CLOSED",
+                open_time=datetime.fromtimestamp(first.time, tz=UTC),
+                close_time=datetime.fromtimestamp(last.time, tz=UTC),
+                pnl=round(pnl, 2),
+                current_price=close_price,
+                commission=round(commission, 2),
+                swap=round(swap, 2),
+                close_reason="MT5_SYNC",
+                broker_ticket=ticket,
+                spread_at_entry=0.0,
+            )
+            self.save_trade(trade)
+            synced += 1
+
+        self._last_closed_deal_sync = now_utc
+        if synced:
+            _log.info("MT5→DB: synced %d new closed trade(s)", synced)
+
+    def _sync_account_status(self) -> None:
+        """Push live equity and balance from MT5 to bot_status."""
+        import logging
+        _log = logging.getLogger(__name__ + "._sync_account_status")
+        equity = self._broker.get_equity()
+        balance = self._broker.get_balance()
+        positions = self._broker.get_open_positions()
+        open_trades = len(positions)
+
+        # Compute daily P&L from MT5 deal history (midnight UTC → now)
+        daily_pnl = 0.0
+        try:
+            daily_pnl = self._broker.get_daily_pnl()
+        except Exception:
+            pass
+
+        try:
+            self._db.update_bot_status(
+                state="running",
+                equity=equity,
+                open_trades=open_trades,
+                daily_pnl=round(daily_pnl, 2),
+                balance=balance,
+            )
+        except Exception as exc:
+            _log.warning("update_bot_status failed: %s", exc)

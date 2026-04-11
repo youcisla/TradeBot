@@ -119,6 +119,7 @@ class SniperEntryGuard:
         # Reconstruct a minimal Signal
         sig = Signal(
             strategy=d["signal_strategy"],
+            symbol=d["symbol"],          # restore symbol that was saved separately
             direction=d["signal_direction"],
             entry_price=d["signal_entry_price"],
             stop_loss=d["signal_stop_loss"],

@@ -53,6 +53,37 @@ def day_of_week() -> str:
     return local_now().strftime("%A")
 
 
+# ── Session overlap ─────────────────────────────────────────────────────────
+
+def is_london_session(dt: datetime | None = None) -> bool:
+    """Return True when the London session is open (07:00–15:59 UTC)."""
+    hour = (dt if dt is not None else datetime.now(UTC)).hour
+    return 7 <= hour < 16
+
+
+def is_newyork_session(dt: datetime | None = None) -> bool:
+    """Return True when the New York session is open (16:00–20:59 UTC)."""
+    hour = (dt if dt is not None else datetime.now(UTC)).hour
+    return 16 <= hour < 21
+
+
+def is_overlap(dt: datetime | None = None) -> bool:
+    """Return True when London and New York overlap (12:00–15:59 UTC).
+
+    This is the highest-volume period of the trading day — both major
+    liquidity sources are active simultaneously, producing tighter spreads
+    and stronger trending moves.
+    """
+    hour = (dt if dt is not None else datetime.now(UTC)).hour
+    return 12 <= hour < 16
+
+
+def is_asian_session(dt: datetime | None = None) -> bool:
+    """Return True when the Asian session is open (00:00–06:59 UTC)."""
+    hour = (dt if dt is not None else datetime.now(UTC)).hour
+    return 0 <= hour < 7
+
+
 # ── Market hours ─────────────────────────────────────────────────────────
 
 def is_market_open(symbol: str, now: datetime | None = None) -> bool:

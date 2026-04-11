@@ -277,6 +277,15 @@ class RiskAgent:
             scale = settings.SIZE_SCALE_FULL
         lot_size = round(lot_size * scale, 2)
 
+        # Equity drawdown lot reduction (injected by EquityDrawdownGuard).
+        multiplier = signal.metadata.get("lot_multiplier", 1.0)
+        if multiplier < 1.0:
+            lot_size = round(lot_size * multiplier, 2)
+            logger.info(
+                "EquityDrawdownGuard: lot reduced by %.0f%% → %.2f",
+                (1 - multiplier) * 100, lot_size,
+            )
+
         # Macro risk scaling from Crucix
         if self._crucix:
             try:

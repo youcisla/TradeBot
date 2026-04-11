@@ -138,26 +138,46 @@ class ICTStrategy(BaseStrategy):
             self._emit("warn", f"ICT {ctx.symbol}: only {len(candles)} candles (need 30+) — skipping")
             return None
 
-        # Fetch HTF candles from broker (H4 for bias/regime)
-        htf_candles: list[Candle] = []
-        if self._broker:
+        # Reuse HTF (H4) candles already cached by MarketAgent on the context.
+        # MarketAgent fetches H4_CANDLE_COUNT=200, satisfying self._htf_count=200.
+        # Fall back to a live broker fetch only when the context is too shallow
+        # (e.g. unit tests, first-boot cold cache, or env override).
+        # This eliminates 2 redundant MT5 IPC calls per symbol per scan (~340 calls/scan).
+        htf_candles: list[Candle] = (
+            ctx.h4_candles if len(ctx.h4_candles) >= self._htf_count else []
+        )
+        if not htf_candles and self._broker:
             try:
                 htf_candles = self._broker.get_candles(
                     ctx.symbol, self._htf_tf, self._htf_count,
                 )
+                logger.debug(
+                    "ICT %s: H4 cache shallow (%d < %d) — fetched %d from broker",
+                    ctx.symbol, len(ctx.h4_candles), self._htf_count, len(htf_candles),
+                )
             except Exception:
                 logger.warning("Failed to fetch HTF candles for %s", ctx.symbol)
 
-        # Fetch entry-TF candles (M15) for more precise setup detection
+        # Reuse M15 candles already cached by MarketAgent on the context.
+        # MarketAgent fetches M15_CANDLE_COUNT=250, satisfying self._entry_count=250.
+        # Same shallow-cache fallback as above.
         entry_candles: list[Candle] = []
-        if self._broker and self._entry_tf != settings.DEFAULT_TIMEFRAME:
-            try:
-                entry_candles = self._broker.get_candles(
-                    ctx.symbol, self._entry_tf, self._entry_count,
-                )
-            except Exception:
-                logger.warning("Failed to fetch %s candles for %s",
-                               self._entry_tf, ctx.symbol)
+        if self._entry_tf != settings.DEFAULT_TIMEFRAME:
+            entry_candles = (
+                ctx.m15_candles if len(ctx.m15_candles) >= self._entry_count else []
+            )
+            if not entry_candles and self._broker:
+                try:
+                    entry_candles = self._broker.get_candles(
+                        ctx.symbol, self._entry_tf, self._entry_count,
+                    )
+                    logger.debug(
+                        "ICT %s: M15 cache shallow (%d < %d) — fetched %d from broker",
+                        ctx.symbol, len(ctx.m15_candles), self._entry_count, len(entry_candles),
+                    )
+                except Exception:
+                    logger.warning("Failed to fetch %s candles for %s",
+                                   self._entry_tf, ctx.symbol)
 
         # Run on entry TF first (more precise), fall back to H1
         execution_candles = entry_candles if len(entry_candles) >= 30 else candles

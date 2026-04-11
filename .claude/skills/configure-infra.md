@@ -207,5 +207,5 @@ All under `web/src/app/api/`:
 - Bot runs as a Python process; keep MT5 terminal open on the same Windows machine
 - Dashboard can run separately (Vercel, local server)
 - Database is hosted on Supabase — no local Postgres needed
-- Logs written to `logs/bot_YYYY-MM-DD.log` (rotating daily)
+- Logs written to `logs/backend_YYYY-MM-DD.log` (rotating daily)
 - `DEMO_MODE=False` in `settings.py` must be manually changed to go live — it is NOT an env var

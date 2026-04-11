@@ -241,6 +241,98 @@ class DailyDrawdownGuard(Guard):
         return True, ""
 
 
+class EquityDrawdownGuard(Guard):
+    """Block or reduce sizing when equity drawdown from peak exceeds thresholds.
+
+    Tracks the running peak equity.  When current equity falls below peak by more
+    than a threshold, the guard returns a graduated response:
+
+    - "reduce"  : current drawdown >= reduce_threshold  → lot size halved
+    - "block"   : current drawdown >= block_threshold   → trade rejected
+
+    This protects against equity-curve degradation without hard-stopping on every
+    drawdown spike — partial sizing continues until the situation worsens.
+
+    Parameters
+    ----------
+    reduce_threshold : float
+        Drawdown fraction (e.g. 0.10 = 10%) at which to return "reduce" action.
+    block_threshold : float
+        Drawdown fraction at which to return "block" action.
+    """
+
+    def __init__(
+        self,
+        reduce_threshold: float = 0.10,
+        block_threshold: float = 0.20,
+    ) -> None:
+        self._reduce = reduce_threshold
+        self._block = block_threshold
+        self._peak_file = str(_ROOT / "data" / "equity_peak.json")
+
+    # ── Peak equity persistence ───────────────────────────────────────────────
+
+    def _load_peak(self) -> float:
+        import json
+        path = pathlib.Path(self._peak_file)
+        if not path.exists():
+            return 0.0
+        try:
+            with open(path) as f:
+                return json.load(f).get("peak", 0.0)
+        except Exception:
+            return 0.0
+
+    def _save_peak(self, peak: float) -> None:
+        import json
+        path = pathlib.Path(self._peak_file)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            with open(path, "w") as f:
+                json.dump({"peak": peak}, f)
+        except Exception:
+            pass
+
+    def record_closed_trade_pnl(self, pnl: float) -> None:
+        """Called when a trade closes — no action needed for peak tracking.
+
+        Peak equity is updated from broker.get_equity() on each guard check
+        so this method is a no-op to satisfy the interface.
+        """
+
+    # ── Guard.check ────────────────────────────────────────────────────────────
+
+    def check(self, signal, open_trades, broker):
+        try:
+            equity = broker.get_equity()
+            if equity <= 0:
+                return True, ""
+
+            peak = self._load_peak()
+            if equity > peak:
+                self._save_peak(equity)
+                peak = equity
+
+            drawdown = (peak - equity) / peak if peak > 0 else 0.0
+
+            if drawdown >= self._block:
+                return False, (
+                    f"EquityDrawdownGuard: drawdown {drawdown:.1%} "
+                    f"(peak={peak:.2f}, equity={equity:.2f}) >= block {self._block:.1%}"
+                )
+            if drawdown >= self._reduce:
+                # Inject a hint into signal metadata so risk_agent halves the lot
+                signal.metadata["lot_multiplier"] = 0.5
+                logger.debug(
+                    "EquityDrawdownGuard: drawdown %.1f%% — signalling lot reduction",
+                    drawdown,
+                )
+
+        except Exception as exc:
+            logger.warning("EquityDrawdownGuard: broker call failed (%s) — skipping", exc)
+        return True, ""
+
+
 class MarketHoursGuard(Guard):
     """Avoid placing trades during low-liquidity hours (server time UTC).
 
@@ -509,6 +601,7 @@ class GuardPipeline:
         SymbolWhitelistGuard(),
         CooldownGuard(min_seconds_between_trades=300),
         DailyDrawdownGuard(max_daily_loss_pct=0.05),
+        EquityDrawdownGuard(reduce_threshold=0.10, block_threshold=0.20),
         MarketHoursGuard(),
         VolatilityGuard(max_vix=40.0),
         FeedFreshnessGuard(max_staleness_seconds=120),
