@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import sys
 
@@ -14,6 +15,11 @@ from orchestrator.bot import TradingBot
 
 if __name__ == "__main__":
     bot = TradingBot()
-    bot.startup()
-    bot.run()
+    try:
+        bot.startup()
+        bot.run()
+    except Exception:
+        logging.exception("Fatal error")
+        bot.shutdown()
+        sys.exit(1)
 

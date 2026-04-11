@@ -75,16 +75,6 @@ class CrucixAgent:
                     )
             else:
                 logger.debug("CrucixAgent: Crucix not available — macro context skipped")
-            # Persist regime to memory for cross-session warm-start.
-            try:
-                self._memory.update_market_regime({  # type: ignore[union-attr]
-                    "risk_tier": ctx.risk_tier,
-                    "vix": ctx.vix,
-                    "osint_sentiment": ctx.osint_sentiment,
-                    "lot_scale_factor": ctx.lot_scale_factor,
-                })
-            except Exception:
-                pass
             record_call("crucix", (time.monotonic() - _t0) * 1000.0, True)
             return ctx
         except Exception:
