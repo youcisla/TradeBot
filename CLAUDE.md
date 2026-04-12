@@ -38,6 +38,7 @@ Never skip step 1-3. Never write code based on memory alone. Always read → the
 | `guard-pipeline` | GuardPipeline, guards.py, ExposureCoach — pre-execution safety |
 | `ml-pipeline` | LGBMEnsemble, GARCH regime, Kalman filter, feature pipeline |
 | `intelligence-sweep` | IntelligenceSweep, MacroSnapshot, FRED/yfinance/EIA/GDELT sources |
+| `hku-marketplace` | HKU signal ingestion, marketplace API, reputation reporting |
 
 **Before writing any frontend code → read `coding-standards` skill first.**
 
@@ -52,7 +53,20 @@ SUPPORT:   learning · model_manager · logging · debate · exposure · memory
 
 Agent event keys in DB (for `AgentFeed.tsx`):
 - `crucix`, `market`, `analysis`, `strategy`, `neural`, `council`, `risk`, `execution`, `trade_manager`
-- `learning`, `model_manager`, `logging`, `debate`, `exposure`, `memory`
+- `learning`, `model_manager`, `logging`, `debate`, `exposure`, `memory`, `hku`
+
+---
+
+## HKU Marketplace Integration
+
+The bot integrates with the HKU AI-Trader marketplace for social signal trading:
+- `agents/hku_client.py` — HKU API client with rate limiting, circuit breaker, and agent registration
+- `agents/hku_signal_adapter.py` — Converts HKU signals to internal Signal format (0.80 confidence discount)
+- External HKU signals flow through the same scan → rank → execute pipeline as internal signals, but bypass the opportunity lifecycle gate (no market context at fetch time)
+- Publishing to HKU: STRATEGY and DISCUSSION intent signals only (never EXECUTION)
+- Trade outcomes are reported back to HKU for agent reputation scoring
+- Graceful degradation: HKU outages never stall the trading loop (fail-open + circuit breaker)
+
 
 ---
 
@@ -77,6 +91,8 @@ agents/
   guards.py                      ← GuardPipeline + 7 guards
   exposure_coach.py              ← Concentration/correlation advisor
   reflector.py                   ← Post-trade reflection utility
+  hku_client.py                ← HKU marketplace API client
+  hku_signal_adapter.py        ← HKU signal normalizer (0.80 discount factor)
 
 filters/
   crucix_client.py               ← CrucixClient + MacroContext

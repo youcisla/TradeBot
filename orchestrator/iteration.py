@@ -9,7 +9,8 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import TYPE_CHECKING, cast
+from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from config import settings
 from database.db import Database
@@ -25,6 +26,9 @@ from agents.risk_agent import RiskAgent
 from agents.sniper_entry_guard import SniperEntryGuard
 from agents.strategy_agent import StrategyAgent
 from agents.trade_manager import TradeManagerAgent
+
+if TYPE_CHECKING:
+    from agents.hku_client import HKUClient
 from broker.connector import BrokerConnector
 from utils import telegram_bot
 from utils import terminal_ui as tui
@@ -34,6 +38,63 @@ from utils.symbol_event_tracker import SymbolEventTracker
 from .iteration_phases import ScanPhase, RankPhase, ExecutePhase, ScanResult
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class MetricsDelta:
+    """Values written to the cumulative metrics dict by a single run_iteration call.
+
+    Using a dataclass instead of a bare dict makes the contract explicit —
+    callers know exactly which keys may be written without cross-file inspection.
+    """
+    loops: int = 0
+    scanned_symbols: int = 0
+    raw_signals: int = 0
+    ranked_signals: int = 0
+    council_rejections: int = 0
+    risk_rejections: int = 0
+    risk_soft_rejections: int = 0
+    fast_lane_attempts: int = 0
+    fast_lane_fills: int = 0
+    fast_lane_closed: int = 0
+    full_lane_fills: int = 0
+    deferred_added: int = 0
+    deferred_promoted: int = 0
+    budget_scan_hits: int = 0
+    budget_rank_hits: int = 0
+    budget_exec_hits: int = 0
+    budget_iteration_hits: int = 0
+    budget_council_skips: int = 0
+    last_scan_latency_ms: float = 0.0
+    last_rank_latency_ms: float = 0.0
+    last_execution_latency_ms: float = 0.0
+    last_signal_to_order_ms: float = -1.0
+
+    def merge_into(self, cumulative: dict[str, float]) -> None:
+        """Add all deltas into a cumulative metrics dict (mutates cumulative)."""
+        cumulative["loops"] = cumulative.get("loops", 0) + self.loops
+        cumulative["scanned_symbols"] = cumulative.get("scanned_symbols", 0) + self.scanned_symbols
+        cumulative["raw_signals"] = cumulative.get("raw_signals", 0) + self.raw_signals
+        cumulative["ranked_signals"] = cumulative.get("ranked_signals", 0) + self.ranked_signals
+        cumulative["council_rejections"] = cumulative.get("council_rejections", 0) + self.council_rejections
+        cumulative["risk_rejections"] = cumulative.get("risk_rejections", 0) + self.risk_rejections
+        cumulative["risk_soft_rejections"] = cumulative.get("risk_soft_rejections", 0) + self.risk_soft_rejections
+        cumulative["fast_lane_attempts"] = cumulative.get("fast_lane_attempts", 0) + self.fast_lane_attempts
+        cumulative["fast_lane_fills"] = cumulative.get("fast_lane_fills", 0) + self.fast_lane_fills
+        cumulative["fast_lane_closed"] = cumulative.get("fast_lane_closed", 0) + self.fast_lane_closed
+        cumulative["full_lane_fills"] = cumulative.get("full_lane_fills", 0) + self.full_lane_fills
+        cumulative["deferred_added"] = cumulative.get("deferred_added", 0) + self.deferred_added
+        cumulative["deferred_promoted"] = cumulative.get("deferred_promoted", 0) + self.deferred_promoted
+        cumulative["budget_scan_hits"] = cumulative.get("budget_scan_hits", 0) + self.budget_scan_hits
+        cumulative["budget_rank_hits"] = cumulative.get("budget_rank_hits", 0) + self.budget_rank_hits
+        cumulative["budget_exec_hits"] = cumulative.get("budget_exec_hits", 0) + self.budget_exec_hits
+        cumulative["budget_iteration_hits"] = cumulative.get("budget_iteration_hits", 0) + self.budget_iteration_hits
+        cumulative["budget_council_skips"] = cumulative.get("budget_council_skips", 0) + self.budget_council_skips
+        # Overwrite (not accumulate) per-iteration latency values
+        cumulative["last_scan_latency_ms"] = self.last_scan_latency_ms
+        cumulative["last_rank_latency_ms"] = self.last_rank_latency_ms
+        cumulative["last_execution_latency_ms"] = self.last_execution_latency_ms
+        cumulative["last_signal_to_order_ms"] = self.last_signal_to_order_ms
 
 
 def run_iteration(
@@ -53,6 +114,7 @@ def run_iteration(
     log_agent: LoggingAgent,
     sniper_guard: SniperEntryGuard | None,
     symbol_event_tracker: SymbolEventTracker,
+    hku_client: "HKUClient | None" = None,
     last_scan_ts: dict[str, float],
     scan_cooldown: float,
     deferred_entries: list[dict[str, object]],
@@ -66,7 +128,7 @@ def run_iteration(
     weekend_symbols: list[str] | None = None,
     scan_workers: int = 6,
     risk_reject_reason_counts: dict[str, int] | None = None,
-) -> None:
+) -> MetricsDelta:
     """Single iteration of the trading loop.
 
     Uses a **scan-all → rank → execute-best** pipeline:
@@ -139,12 +201,13 @@ def run_iteration(
         logger.info("Opportunity lifecycle rollover: %s",
                     ", ".join(rolled_symbols[:10]))
 
-    metrics["loops"] = metrics.get("loops", 0) + 1
+    m = MetricsDelta()
+    m.loops = 1
 
     # ── Skip new signals if paused ─────────────────────────────────────────
     if telegram_bot.is_paused():
         logger.warning("Bot is PAUSED — skipping signal detection (loop %d)", loop_count)
-        return
+        return m
 
     # ══════════════════════════════════════════════════════════════════════
     # PHASE 1: Scan
@@ -158,6 +221,7 @@ def run_iteration(
         strategy_agent=strategy_agent,
         db=db,
         symbol_event_tracker=symbol_event_tracker,
+        hku_client=hku_client,
     )
     scan_result: ScanResult = scan_phase.run(
         active_symbols=active_symbols,
@@ -174,12 +238,12 @@ def run_iteration(
         metrics=metrics,
         loop_count=loop_count,
     )
-    metrics["scanned_symbols"] = metrics.get("scanned_symbols", 0) + len(scan_result.scanned)
-    metrics["raw_signals"] = metrics.get("raw_signals", 0) + len(scan_result.all_signals)
-    metrics["last_scan_latency_ms"] = scan_result.latency_ms
+    m.scanned_symbols = len(scan_result.scanned)
+    m.raw_signals = len(scan_result.all_signals)
+    m.last_scan_latency_ms = scan_result.latency_ms
 
     if hard_budget_enabled and scan_result.latency_ms > max_scan_ms:
-        metrics["budget_scan_hits"] = metrics.get("budget_scan_hits", 0) + 1
+        m.budget_scan_hits = 1
         logger.warning(
             "Scan hard budget exceeded: %.1fms > %.1fms",
             scan_result.latency_ms, max_scan_ms,
@@ -192,31 +256,32 @@ def run_iteration(
             {"trace_id": iter_trace_id, "loop": loop_count,
              "reason": scan_result.abort_reason, "action": "skip_rank_and_execute"},
         )
-        metrics["last_rank_latency_ms"] = 0.0
-        metrics["last_execution_latency_ms"] = 0.0
-        metrics["last_signal_to_order_ms"] = -1.0
-        return
+        m.last_rank_latency_ms = 0.0
+        m.last_execution_latency_ms = 0.0
+        m.last_signal_to_order_ms = -1.0
+        return m
 
     if not scan_result.scanned:
-        metrics["last_rank_latency_ms"] = 0.0
-        metrics["last_execution_latency_ms"] = 0.0
-        metrics["last_signal_to_order_ms"] = -1.0
+        m.last_rank_latency_ms = 0.0
+        m.last_execution_latency_ms = 0.0
+        m.last_signal_to_order_ms = -1.0
         logger.debug("Loop %d: all symbols on cooldown or skipped", loop_count)
-        return
+        return m
 
     if not scan_result.all_signals:
         if settings.DEFERRED_ENTRY_ENABLED and deferred_entries:
-            _promote_deferred_inline(
+            promoted = _promote_deferred_inline(
                 deferred_entries, scan_result.signal_contexts,
-                metrics, scan_result.all_signals,
+                scan_result.all_signals,
             )
+            m.deferred_promoted = promoted
         if not scan_result.all_signals:
-            metrics["last_rank_latency_ms"] = 0.0
-            metrics["last_execution_latency_ms"] = 0.0
-            metrics["last_signal_to_order_ms"] = -1.0
+            m.last_rank_latency_ms = 0.0
+            m.last_execution_latency_ms = 0.0
+            m.last_signal_to_order_ms = -1.0
             logger.info("Loop %d: scanned %s — no signals generated",
                          loop_count, ", ".join(scan_result.scanned))
-            return
+            return m
 
     # ══════════════════════════════════════════════════════════════════════
     # PHASE 2: Rank
@@ -236,7 +301,7 @@ def run_iteration(
     )
     scan_result.signal_contexts = rank_result.signal_contexts  # updated with deferred
 
-    metrics["last_rank_latency_ms"] = rank_result.latency_ms
+    m.last_rank_latency_ms = rank_result.latency_ms
 
     # ══════════════════════════════════════════════════════════════════════
     # PHASE 3: Execute
@@ -262,17 +327,17 @@ def run_iteration(
         iter_start_ts=iter_start_ts,
     )
 
-    metrics["last_execution_latency_ms"] = exec_result.latency_ms
-    metrics["last_signal_to_order_ms"] = exec_result.first_signal_to_order_ms
+    m.last_execution_latency_ms = exec_result.latency_ms
+    m.last_signal_to_order_ms = exec_result.first_signal_to_order_ms
 
     logger.debug(
         "Loop %d timing | session=%s scan=%.1fms rank=%.1fms exec=%.1fms "
         "signal_to_order=%.1fms total=%.1fms",
         loop_count, session_profile,
-        metrics["last_scan_latency_ms"],
-        metrics["last_rank_latency_ms"],
-        metrics["last_execution_latency_ms"],
-        metrics["last_signal_to_order_ms"],
+        m.last_scan_latency_ms,
+        m.last_rank_latency_ms,
+        m.last_execution_latency_ms,
+        m.last_signal_to_order_ms,
         (time.monotonic() - iter_start_ts) * 1000.0,
     )
 
@@ -285,10 +350,10 @@ def run_iteration(
                 "scanned": len(scan_result.scanned),
                 "scan_errors": len(scan_result.scan_error_symbols),
                 "ranked_processed": len(rank_result.ranked),
-                "scan_latency_ms": metrics["last_scan_latency_ms"],
-                "rank_latency_ms": metrics["last_rank_latency_ms"],
-                "exec_latency_ms": metrics["last_execution_latency_ms"],
-                "signal_to_order_ms": metrics["last_signal_to_order_ms"],
+                "scan_latency_ms": m.last_scan_latency_ms,
+                "rank_latency_ms": m.last_rank_latency_ms,
+                "exec_latency_ms": m.last_execution_latency_ms,
+                "signal_to_order_ms": m.last_signal_to_order_ms,
             },
         )
 
@@ -296,16 +361,18 @@ def run_iteration(
         for name in ("market", "analysis", "strategy", "risk", "execution", "trade_mgr"):
             _ui.set_agent_idle(name)
 
+    return m
+
 
 def _promote_deferred_inline(
     deferred_entries: list[dict[str, object]],
     signal_contexts: dict[int, MarketContext],
-    metrics: dict[str, float],
     all_signals: list[Signal],
-) -> None:
+) -> int:
     """Promote deferred signals inline when no fresh signals were generated.
 
     Extracted from RankPhase to avoid complexity when there are no new signals.
+    Returns the number of signals promoted.
     """
     def _to_float(value: object, default: float = 0.0) -> float:
         if isinstance(value, (int, float)):
@@ -334,4 +401,4 @@ def _promote_deferred_inline(
     deferred_entries.extend(remaining)
     if promoted:
         all_signals.extend(promoted)
-        metrics["deferred_promoted"] = metrics.get("deferred_promoted", 0) + len(promoted)
+    return len(promoted)

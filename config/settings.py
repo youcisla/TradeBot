@@ -264,6 +264,9 @@ class OrchestrationSettings(BaseModel):
     # symbol fault
     symbol_max_fail_count: int = Field(default=12, ge=1)
     symbol_disable_seconds: int = Field(default=3600, ge=0)
+    # market closed sleep (total = sleep_total / sleep_interval, e.g. 300/10 = 30 iterations × 10s = 5 min)
+    market_closed_sleep_total_seconds: int = Field(default=300, ge=1)
+    market_closed_sleep_interval_seconds: int = Field(default=10, ge=1)
     # HTF cache TTLs
     htf_cache_ttl_m15_seconds: float = Field(default=20, ge=0)
     htf_cache_ttl_m5_seconds: float = Field(default=15, ge=0)
@@ -410,6 +413,19 @@ class MCPSettings(BaseModel):
     port: int = Field(default=8080, ge=1, le=65535)
 
 
+# ── HKU Marketplace settings ──────────────────────────────────────────────
+
+class HKUSettings(BaseModel):
+    enabled: bool = False
+    api_url: str = ""
+    api_key: str = ""
+    signal_discount: float = Field(default=0.80, ge=0.0, le=1.0)
+    publish_on_strategy: bool = True
+    publish_on_discussion: bool = True
+    feed_limit: int = Field(default=10, ge=1, le=50)
+    circuit_breaker_timeout_secs: int = Field(default=300, ge=60)
+
+
 # ── Tool system settings ───────────────────────────────────────────────────
 
 class ToolSystemSettings(BaseModel):
@@ -511,6 +527,7 @@ class _Settings(BaseSettings):
     openrouter: OpenRouterSettings = Field(default_factory=OpenRouterSettings)
     mcp: MCPSettings = Field(default_factory=MCPSettings)
     tool_system: ToolSystemSettings = Field(default_factory=ToolSystemSettings)
+    hku: HKUSettings = Field(default_factory=HKUSettings)
     execution_failure: ExecutionFailureSettings = Field(default_factory=ExecutionFailureSettings)
     data_validation: DataValidationSettings = Field(default_factory=DataValidationSettings)
 
@@ -920,6 +937,18 @@ def _build_settings() -> _Settings:
         spike_percent_threshold=_float("SPIKE_PERCENT_THRESHOLD", "2.0"),
     )
 
+    # HKU
+    hku = HKUSettings(
+        enabled=_bool("HKU_ENABLED", "false"),
+        api_url=_str("HKU_API_URL", ""),
+        api_key=_str("HKU_API_KEY", ""),
+        signal_discount=_float("HKU_SIGNAL_DISCOUNT", "0.80"),
+        publish_on_strategy=_bool("HKU_PUBLISH_ON_STRATEGY", "true"),
+        publish_on_discussion=_bool("HKU_PUBLISH_ON_DISCUSSION", "true"),
+        feed_limit=_int("HKU_FEED_LIMIT", "10"),
+        circuit_breaker_timeout_secs=_int("HKU_CIRCUIT_BREAKER_TIMEOUT_SECS", "300"),
+    )
+
     return _Settings(
         demo_mode=demo_mode,
         bot_profile=bot_profile,
@@ -951,6 +980,7 @@ def _build_settings() -> _Settings:
         tool_system=tool_system,
         execution_failure=execution_failure,
         data_validation=data_validation,
+        hku=hku,
     )
 
 
@@ -1181,6 +1211,8 @@ ORCHESTRATION_MAX_ITERATION_MS: float = settings.orchestration.max_iteration_ms
 ORCHESTRATION_EXEC_BUDGET_COUNCIL_MARGIN_MS: float = settings.orchestration.exec_budget_council_margin_ms
 SYMBOL_MAX_FAIL_COUNT: int = settings.orchestration.symbol_max_fail_count
 SYMBOL_DISABLE_SECONDS: int = settings.orchestration.symbol_disable_seconds
+MARKET_CLOSED_SLEEP_TOTAL_SECONDS: int = settings.orchestration.market_closed_sleep_total_seconds
+MARKET_CLOSED_SLEEP_INTERVAL_SECONDS: int = settings.orchestration.market_closed_sleep_interval_seconds
 HTF_CACHE_TTL_M15_SECONDS: float = settings.orchestration.htf_cache_ttl_m15_seconds
 HTF_CACHE_TTL_M5_SECONDS: float = settings.orchestration.htf_cache_ttl_m5_seconds
 HTF_CACHE_TTL_M30_SECONDS: float = settings.orchestration.htf_cache_ttl_m30_seconds
@@ -1318,3 +1350,13 @@ SPIKE_PERCENT_THRESHOLD: float = settings.data_validation.spike_percent_threshol
 NEURAL_MODELS_DIR: str = str(
     Path(__file__).resolve().parent.parent / "models" / "neural"
 )
+
+# HKU Marketplace
+HKU_ENABLED: bool = settings.hku.enabled
+HKU_API_URL: str = settings.hku.api_url
+HKU_API_KEY: str = settings.hku.api_key
+HKU_SIGNAL_DISCOUNT: float = settings.hku.signal_discount
+HKU_PUBLISH_ON_STRATEGY: bool = settings.hku.publish_on_strategy
+HKU_PUBLISH_ON_DISCUSSION: bool = settings.hku.publish_on_discussion
+HKU_FEED_LIMIT: int = settings.hku.feed_limit
+HKU_CIRCUIT_BREAKER_TIMEOUT_SECS: int = settings.hku.circuit_breaker_timeout_secs

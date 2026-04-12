@@ -10,6 +10,7 @@ export async function GET(request: Request) {
       type:     searchParams.get("type")     ?? undefined,
       strategy: searchParams.get("strategy") ?? undefined,
       author:   searchParams.get("author")   ?? undefined,
+      source:   searchParams.get("source")   ?? undefined,
       limit:    Math.min(Number(searchParams.get("limit") ?? 50), 200),
     });
     return NextResponse.json(signals, {

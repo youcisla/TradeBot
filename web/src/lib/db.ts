@@ -693,6 +693,8 @@ export interface Signal {
   points_awarded: boolean;
   follower_score: number;
   created_at: string;
+  source: string;
+  hku_signal_id: string | null;
 }
 
 export async function getSignals(params: {
@@ -700,6 +702,7 @@ export async function getSignals(params: {
   type?: string;
   strategy?: string;
   author?: string;
+  source?: string;
   limit?: number;
 }): Promise<Signal[]> {
   const conditions: string[] = [];
@@ -708,6 +711,7 @@ export async function getSignals(params: {
   if (params.type)      { vals.push(params.type);    conditions.push(`signal_type = $${vals.length}`); }
   if (params.strategy)  { vals.push(params.strategy); conditions.push(`strategy = $${vals.length}`); }
   if (params.author)    { vals.push(params.author);   conditions.push(`author = $${vals.length}`); }
+  if (params.source)   { vals.push(params.source);  conditions.push(`source = $${vals.length}`); }
   vals.push(params.limit ?? 50);
   const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
   const rows = await query(

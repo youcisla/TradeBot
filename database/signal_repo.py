@@ -69,12 +69,64 @@ class SignalRepo:
         finally:
             self._put(conn)
 
+    def save_hku_signal(
+        self,
+        signal,
+        hku_signal_id: str,
+        author: str = "bot",
+    ) -> int:
+        """Save an external HKU signal to the signals table.
+
+        Args:
+            signal:       Signal instance to save.
+            hku_signal_id: Original HKU signal ID for cross-reference.
+            author:       Author tag — defaults to "bot"; use "hku:{agent_id}" for HKU.
+
+        Returns:
+            The inserted row ID.
+        """
+        conn = self._conn()
+        try:
+            with conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """INSERT INTO signals
+                           (signal_intent, signal_type, strategy, symbol, direction,
+                            entry_price, stop_loss, take_profit_1, confidence,
+                            reason, bull_case, bear_case, author, tags,
+                            source, hku_signal_id)
+                           VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                           RETURNING id""",
+                        (
+                            signal.signal_intent,
+                            "OPERATION",
+                            signal.strategy,
+                            signal.symbol,
+                            signal.direction,
+                            signal.entry_price,
+                            signal.stop_loss,
+                            signal.take_profit_1,
+                            signal.confidence,
+                            signal.reason,
+                            signal.bull_case,
+                            signal.bear_case,
+                            author,
+                            ["hku"],
+                            "hku",
+                            hku_signal_id,
+                        ),
+                    )
+                    return cur.fetchone()[0]
+        finally:
+            self._put(conn)
+
     def get_signals(
         self,
         signal_intent: str | None = None,
         signal_type: str | None = None,
         strategy: str | None = None,
         author: str | None = None,
+        source: str | None = None,
         limit: int = 50,
     ) -> list[dict]:
         conn = self._conn()
@@ -94,6 +146,9 @@ class SignalRepo:
                 if author:
                     conditions.append("author = %s")
                     params.append(author)
+                if source:
+                    conditions.append("source = %s")
+                    params.append(source)
                 where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
                 params.append(max(1, limit))
                 cur.execute(

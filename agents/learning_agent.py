@@ -36,6 +36,7 @@ from models.trade import Trade
 
 if TYPE_CHECKING:
     from agents.reflector import Reflector
+    from agents.hku_client import HKUClient
 
 logger = logging.getLogger(__name__)
 
@@ -65,13 +66,18 @@ class LearningAgent:
     CONFIDENCE_MIN   = 0.10
     CONFIDENCE_MAX   = 1.00
 
-    def __init__(self, db: Database) -> None:
+    def __init__(self, db: Database, hku_client: "HKUClient | None" = None) -> None:
         self._db = db
         self._reflector: "Reflector | None" = None
+        self._hku_client = hku_client
 
     def set_reflector(self, reflector: "Reflector") -> None:
         """Attach the Reflector so post-trade lessons are generated automatically."""
         self._reflector = reflector
+
+    def set_hku_client(self, client: "HKUClient") -> None:
+        """Inject the HKU client once it's been initialized in bot startup()."""
+        self._hku_client = client
 
     # ── public API ───────────────────────────────────────────────────────
 
@@ -143,6 +149,10 @@ class LearningAgent:
         # Trigger async post-trade reflection (non-blocking)
         if self._reflector is not None:
             self._reflector.reflect_async(trade, context)
+
+        # Report HKU outcome if this trade was sourced from an external HKU signal
+        if self._hku_client is not None and trade.metadata.get("source") == "hku":
+            self._update_hku_reputation(trade, score)
 
         # Check adaptive LGBM retrain threshold (non-blocking)
         self._maybe_retrain_lgbm()
@@ -544,6 +554,18 @@ class LearningAgent:
             cs = contract_size(trade.symbol)
             return sl_distance * (trade.lot_size or 0) * cs
         return 1.0
+
+    def _update_hku_reputation(self, trade: Trade, score: float) -> None:
+        """Send trade outcome back to HKU marketplace to update agent reputation.
+
+        Fire-and-forget — failures are logged but never raised.
+        """
+        try:
+            hku_signal_id = trade.metadata.get("hku_signal_id")
+            if hku_signal_id and self._hku_client:
+                self._hku_client.report_outcome(hku_signal_id, score > 0)
+        except Exception as exc:
+            logger.debug("HKU reputation update failed: %s", exc)
 
     # ── adaptive LGBM retraining ──────────────────────────────────────────
 

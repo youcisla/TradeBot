@@ -31,6 +31,7 @@ from agents.logging_agent import LoggingAgent
 from agents.reflector import Reflector
 from agents.crucix_agent import CrucixAgent
 from agents.sniper_entry_guard import SniperEntryGuard
+from agents.hku_client import HKUClient
 
 from utils import telegram_bot
 from utils import candle_server
@@ -83,6 +84,7 @@ class TradingBot:
         self.opportunity_lifecycle: OpportunityLifecycleManager | None = None
         self.symbol_event_tracker: SymbolEventTracker | None = None
         self.heartbeat: HeartbeatManager | None = None
+        self.hku_client: "HKUClient | None" = None
         self._active_symbols: list[str] = []
         self._weekend_symbols: list[str] = []
 
@@ -187,7 +189,7 @@ class TradingBot:
             "all": self._active_symbols,
         }
 
-        path = pathlib.Path("data") / "symbols.json"
+        path = Path(__file__).resolve().parent.parent / "data" / "symbols.json"
         path.parent.mkdir(parents=True, exist_ok=True)
         try:
             path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
@@ -222,7 +224,7 @@ class TradingBot:
         candle_server.start(self.broker, self.db)
 
         # ── Learning agent + post-trade Reflector ─────────────────────────
-        learning = LearningAgent(self.db)
+        learning = LearningAgent(self.db, hku_client=None)
         self.learning = learning
         reflector = Reflector()
         self.reflector = reflector
@@ -270,10 +272,14 @@ class TradingBot:
         self.market_agent = market_agent
         analysis_agent = AnalysisAgent(self.crucix_agent, db=self.db)
         self.analysis_agent = analysis_agent
-        risk_agent = RiskAgent(self.broker, lambda: [], self.crucix_agent, db=self.db)
-        execution_agent = ExecutionAgent(self.broker, self.state, risk_agent.calculate_position_size, db=self.db)
-        trade_manager = TradeManagerAgent(self.broker, self.state, self.db, guard_pipeline=execution_agent.guard_pipeline)
+
+        # trade_manager must be created BEFORE risk_agent so that
+        # risk_agent.calculate_position_size binds to the real get_open_trades
+        trade_manager = TradeManagerAgent(self.broker, self.state, self.db, guard_pipeline=None)
         risk_agent = RiskAgent(self.broker, trade_manager.get_open_trades, self.crucix_agent, db=self.db)
+        execution_agent = ExecutionAgent(self.broker, self.state, risk_agent.calculate_position_size, db=self.db)
+        # Now wire guard_pipeline (guards need execution_agent's guard_pipeline)
+        trade_manager = TradeManagerAgent(self.broker, self.state, self.db, guard_pipeline=execution_agent.guard_pipeline)
         self.risk_agent = risk_agent
         self.execution_agent = execution_agent
         self.trade_manager = trade_manager
@@ -290,6 +296,7 @@ class TradingBot:
         def _set_active_symbols_local(new_symbols: list[str]) -> None:
             self._active_symbols = new_symbols[:]
             logger.warning("Tool system updated active symbols: %s", ", ".join(self._active_symbols))
+            self._write_symbols_manifest()
 
         tool_system = AutonomousToolSystem(
             repo_root=Path(__file__).resolve().parent.parent,
@@ -335,10 +342,24 @@ class TradingBot:
             log_agent.record("STARTUP", "SniperEntryGuard DISABLED")
         self.sniper_guard = sniper_guard
 
-        # ── Council (DISABLED — kept for call signature compatibility) ─────
-        council = None  # noqa: F401
+        # ── HKU Marketplace client ───────────────────────────────────────
+        self.hku_client: HKUClient | None = None
+        if settings.HKU_ENABLED:
+            self.hku_client = HKUClient(
+                base_url=settings.HKU_API_URL,
+                api_key=settings.HKU_API_KEY,
+                db=self.db,
+            )
+            if self.hku_client.register_if_needed():
+                logger.info("HKU agent registered: agent_id=%s", self.hku_client._agent_id)
+                learning.set_hku_client(self.hku_client)
+            else:
+                logger.warning("HKU registration failed — marketplace features disabled")
+                self.hku_client = None
+        else:
+            logger.info("HKU marketplace integration disabled")
 
-        # ── Startup reconciliation ───────────────────────────────────────
+        # ── Startup reconciliation ──────────────────────────────────────
         trade_manager.load_open_trades()
         trade_manager.reconcile()
         log_agent.record("STARTUP", f"Reconciliation done — {len(trade_manager.get_open_trades())} open trades")
@@ -440,8 +461,22 @@ class TradingBot:
         _msg = f"Model warmup complete in {_elapsed*1000:.1f}ms — loaded: {', '.join(_loaded) if _loaded else 'none'}"
         if _skipped:
             _msg += f" | skipped: {', '.join(_skipped)}"
-        logger.info(_msg)
-        self.log_agent.record("STARTUP", _msg)
+            # Surface degraded ML readiness to operator via Telegram
+            try:
+                telegram_bot.send_message(
+                    f"⚠️ Model warmup incomplete\n"
+                    f"Failed to load: {', '.join(_skipped)}\n"
+                    f"Bot continues but ML accuracy may be reduced.",
+                    priority="high",
+                    force=False,
+                )
+            except Exception:
+                pass
+            self.log_agent.record("STARTUP", _msg, level="WARNING")
+            logger.warning(_msg)
+        else:
+            logger.info(_msg)
+            self.log_agent.record("STARTUP", _msg)
 
     def run(self) -> None:
         """Main loop — everything after startup() before shutdown()."""
@@ -492,19 +527,13 @@ class TradingBot:
                 total_ms=settings.ORCHESTRATION_TARGET_TOTAL_MS,
             )
         )
-        scan_workers = max(
-            settings.ORCHESTRATION_SCAN_WORKERS_MIN,
-            min(
-                settings.ORCHESTRATION_SCAN_WORKERS_DEFAULT,
-                settings.ORCHESTRATION_SCAN_WORKERS_MAX,
-            ),
-        )
+        scan_workers = settings.ORCHESTRATION_SCAN_WORKERS_DEFAULT
+        _base_cooldown = 0  # set each loop before passing to run_iteration
+        _active_scan_cooldown = 0.0  # computed from base cooldown + worker ratio
 
         # ── Symbol fault tracking ────────────────────────────────────────
         _symbol_fail_count: dict[str, int] = {}
         _symbol_disabled_until: dict[str, float] = {}
-        _SYMBOL_MAX_FAILS = settings.SYMBOL_MAX_FAIL_COUNT
-        _SYMBOL_DISABLE_SECS = float(settings.SYMBOL_DISABLE_SECONDS)
 
         try:
             _now_utc = datetime.now(UTC)
@@ -541,30 +570,24 @@ class TradingBot:
             scanned_before = _metrics.get("scanned_symbols", 0)
             _active_session = current_session(datetime.now(UTC))
             if _active_session in {"london", "newyork", "overlap"}:
-                _active_scan_cooldown = float(settings.SCAN_COOLDOWN_SECONDS_LONDON_NY)
+                _base_cooldown = float(settings.SCAN_COOLDOWN_SECONDS_LONDON_NY)
             else:
-                _active_scan_cooldown = float(settings.SCAN_COOLDOWN_SECONDS_ASIA)
+                _base_cooldown = float(settings.SCAN_COOLDOWN_SECONDS_ASIA)
 
             # ── Market hours: if ALL markets are closed, sleep longer ────────
             if not is_any_market_open(self._active_symbols):
                 if not _market_closed_logged:
                     logger.info("All markets closed — sleeping (still processing commands & heartbeat)")
                     _market_closed_logged = True
-                try:
-                    self.heartbeat.update(
-                        trade_manager=self.trade_manager,
-                        crucix_agent=self.crucix_agent,
-                    )
-                except Exception as e:
-                    logger.warning(f"Heartbeat update failed — continuing: {e}")
                 process_commands(
                     self.db, self.trade_manager,
                     self._request_shutdown, self.tool_system, self.state,
                 )
-                for _ in range(30):  # 30 × 10s = 5 min total
+                _intervals = settings.MARKET_CLOSED_SLEEP_TOTAL_SECONDS // settings.MARKET_CLOSED_SLEEP_INTERVAL_SECONDS
+                for _ in range(_intervals):
                     if self._shutdown or telegram_bot.is_kill_requested():
                         break
-                    time.sleep(10)
+                    time.sleep(settings.MARKET_CLOSED_SLEEP_INTERVAL_SECONDS)
                 continue
             elif _market_closed_logged:
                 logger.info("Markets reopened — resuming normal operation")
@@ -572,7 +595,7 @@ class TradingBot:
 
             try:
                 _weekend = is_weekend()
-                run_iteration(
+                delta = run_iteration(
                     loop_count=loop_count,
                     active_symbols=self._active_symbols,
                     db=self.db,
@@ -586,23 +609,24 @@ class TradingBot:
                     trade_manager=self.trade_manager,
                     learning=self.learning,
                     log_agent=self.log_agent,
-                    council=None,
                     sniper_guard=self.sniper_guard,
                     symbol_event_tracker=self.symbol_event_tracker,
+                    hku_client=self.hku_client,
                     last_scan_ts=_last_scan_ts,
                     scan_cooldown=_active_scan_cooldown,
                     deferred_entries=_deferred_entries,
                     metrics=_metrics,
                     symbol_fail_count=_symbol_fail_count,
                     symbol_disabled_until=_symbol_disabled_until,
-                    symbol_max_fails=_SYMBOL_MAX_FAILS,
-                    symbol_disable_secs=_SYMBOL_DISABLE_SECS,
+                    symbol_max_fails=settings.SYMBOL_MAX_FAIL_COUNT,
+                    symbol_disable_secs=float(settings.SYMBOL_DISABLE_SECONDS),
                     session_profile=_active_session,
                     opportunity_lifecycle=self.opportunity_lifecycle,
                     weekend_symbols=self._weekend_symbols if _weekend else None,
-                    scan_workers=scan_workers,
+                    scan_workers=settings.ORCHESTRATION_SCAN_WORKERS_DEFAULT,
                     risk_reject_reason_counts=_risk_reject_reason_counts,
                 )
+                delta.merge_into(_metrics)
                 _metrics["iter_consecutive_failures"] = 0
             except (KeyboardInterrupt, SystemExit):
                 raise
@@ -640,6 +664,12 @@ class TradingBot:
                     )
                     scan_workers = suggested
 
+            # ── Cooldown scales inversely with worker count ─────────────────
+            # More workers → symbols scanned faster → shorter cooldown needed
+            _default_workers = settings.ORCHESTRATION_SCAN_WORKERS_DEFAULT
+            _worker_ratio = _default_workers / max(scan_workers, 1)
+            _active_scan_cooldown = _base_cooldown * _worker_ratio
+
             # ── Periodic reconciliation ──────────────────────────────────
             if loop_count % settings.RECONCILE_EVERY_N_LOOPS == 0:
                 try:
@@ -666,7 +696,7 @@ class TradingBot:
                     crucix_agent=self.crucix_agent,
                 )
             except Exception as e:
-                logger.warning(f"Heartbeat update failed — continuing: {e}")
+                logger.warning("Heartbeat update failed — continuing: %s", e)
 
             # ── Periodic MT5 → DB sync ───────────────────────────────────
             if settings.MT5_DB_SYNC_INTERVAL_SECONDS > 0:

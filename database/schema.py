@@ -280,6 +280,20 @@ BEGIN
 END $$;
 """
 
+_ALTER_SIGNALS_HKU = """
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                   WHERE table_name='signals' AND column_name='source') THEN
+        ALTER TABLE signals ADD COLUMN source TEXT DEFAULT 'internal';
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                   WHERE table_name='signals' AND column_name='hku_signal_id') THEN
+        ALTER TABLE signals ADD COLUMN hku_signal_id TEXT;
+    END IF;
+END $$;
+"""
+
 _ALTER_BOT_STATUS_GUARD_STATUS = """
 DO $$
 BEGIN
@@ -469,4 +483,5 @@ _SCHEMA_MIGRATIONS = [
     _ALTER_TRADES_LIVE,
     _ALTER_STRATEGY_CONFIDENCE_STREAK,
     _ALTER_BOT_COMMANDS_RUNNING,
+    _ALTER_SIGNALS_HKU,
 ]

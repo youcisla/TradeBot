@@ -19,9 +19,12 @@ from models.signal import Signal
 from utils import terminal_ui as tui
 from utils.helpers import is_market_open
 
+from agents.hku_signal_adapter import adapt_hku_signal
+
 if TYPE_CHECKING:
     from agents.analysis_agent import AnalysisAgent
     from agents.execution_agent import ExecutionAgent
+    from agents.hku_client import HKUClient
     from agents.learning_agent import LearningAgent
     from agents.logging_agent import LoggingAgent
     from agents.market_agent import MarketAgent
@@ -150,6 +153,7 @@ class ScanPhase:
         strategy_agent: StrategyAgent,
         db: Database,
         symbol_event_tracker: SymbolEventTracker,
+        hku_client: "HKUClient | None" = None,
     ) -> None:
         self._broker = broker
         self._market_agent = market_agent
@@ -157,6 +161,7 @@ class ScanPhase:
         self._strategy_agent = strategy_agent
         self._db = db
         self._symbol_event_tracker = symbol_event_tracker
+        self._hku_client = hku_client
 
     def run(
         self,
@@ -350,7 +355,47 @@ class ScanPhase:
             logger.debug("ScanPhase cooldown active for: %s",
                          ", ".join(result.skipped_cooldown))
 
+        # Fetch and normalize external HKU signals after internal scan completes
+        self._fetch_hku_signals(result)
+
         return result
+
+    def _fetch_hku_signals(self, result: ScanResult) -> None:
+        """Fetch external HKU marketplace signals and inject into the scan result.
+
+        HKU signals are normalized with a confidence discount so they never
+        reach full confidence until our own LGBM pipeline validates them.
+        They bypass opportunity lifecycle (no market context at fetch time).
+        Fails open — any error logs a warning and leaves result unchanged.
+        """
+        if not self._hku_client:
+            return
+
+        try:
+            raw_signals = self._hku_client.get_external_signals(
+                limit=settings.HKU_FEED_LIMIT,
+            )
+            if not raw_signals:
+                return
+
+            for payload in raw_signals:
+                sig = adapt_hku_signal(payload, discount_factor=settings.HKU_SIGNAL_DISCOUNT)
+                result.all_signals.append(sig)
+                # HKU signals have no market context — lifecycle gate will skip them
+                result.signal_contexts[id(sig)] = None
+                hku_id = sig.metadata.get("hku_signal_id", "")
+                try:
+                    self._db.signal_repo.save_hku_signal(
+                        sig,
+                        hku_signal_id=hku_id,
+                        author=f"hku:{sig.metadata.get('hku_agent_id', 'unknown')}",
+                    )
+                except Exception as exc:
+                    logger.debug("Failed to persist HKU signal %s: %s", hku_id, exc)
+
+            logger.debug("ScanPhase: injected %d HKU signals", len(raw_signals))
+        except Exception as exc:
+            logger.warning("HKU signal fetch failed (failing open): %s", exc)
 
     def _handle_mt5_disconnect(
         self,
@@ -452,16 +497,25 @@ class RankPhase:
                          len(ranked), max_ranked)
             ranked = ranked[:max_ranked]
 
-        # Lifecycle gate
-        ranked, lifecycle_rejects = self._lifecycle.filter_ranked_signals(
-            ranked, signal_contexts,
+        # Lifecycle gate — HKU signals bypass (no market context at fetch time)
+        ranked_internal = []
+        ranked_hku = []
+        for sig in ranked:
+            if sig.source == "hku":
+                ranked_hku.append(sig)
+            else:
+                ranked_internal.append(sig)
+
+        ranked_internal, lifecycle_rejects = self._lifecycle.filter_ranked_signals(
+            ranked_internal, signal_contexts,
         )
         result.lifecycle_rejects = lifecycle_rejects
         if lifecycle_rejects:
             logger.info("RankPhase: lifecycle gate rejected %d signal(s)",
                          len(lifecycle_rejects))
 
-        result.ranked = ranked
+        # HKU signals always pass lifecycle gate; merged back after filtering
+        result.ranked = ranked_internal + ranked_hku
         result.signal_contexts = signal_contexts
         result.latency_ms = (time.monotonic() - rank_phase_start) * 1000.0
 

@@ -76,3 +76,7 @@ class Signal:
     # Arbitrary metadata dict — used by guards to pass hints to risk_agent
     # (e.g. EquityDrawdownGuard sets lot_multiplier here).
     metadata: dict = field(default_factory=dict)
+    # Signal source: "internal" (our own strategies) or "hku" (external HKU marketplace).
+    # HKU signals are normalized with a confidence discount and bypass opportunity
+    # lifecycle (no market context available at fetch time).
+    source: str = "internal"
