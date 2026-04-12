@@ -537,3 +537,164 @@ class GuardPipeline:
         )
         if dd_guard is not None:
             dd_guard.record_closed_trade_pnl(pnl)
+
+    # ── Status snapshot for dashboard ─────────────────────────────────────────
+
+    def get_status(
+        self,
+        broker: "BrokerConnector",
+        open_trades: list["Trade"] | None = None,
+    ) -> list[dict]:
+        """Return current status of all guards as a list of dicts.
+
+        Used by HeartbeatManager to persist guard state to the DB so the
+        dashboard can display it via GET /api/risk without running a guard
+        check against a live signal.
+        """
+        import uuid
+        from dataclasses import dataclass
+
+        @dataclass
+        class DummySignal:
+            symbol: str = "EURUSD"
+            direction: str = "buy"
+            lot_size_override: float | None = None
+            macro_vix: float = 0.0
+            candle_timestamp: datetime | None = None
+
+        signal = DummySignal()
+        trades = open_trades or []
+        results: list[dict] = []
+
+        for guard in self._guards:
+            gname = type(guard).__name__.replace("Guard", "")
+            try:
+                passed, reason = guard.check(signal, trades, broker)
+            except Exception as exc:
+                results.append({
+                    "name": gname,
+                    "status": "warn",
+                    "threshold": "?",
+                    "current": f"error: {exc}",
+                })
+                continue
+
+            # Derive current/threshold human-readable strings per guard type
+            if isinstance(guard, DailyDrawdownGuard):
+                threshold = f"{guard._max_pct:.0%}"
+                try:
+                    equity = broker.get_equity()
+                    starting, realised = guard._ensure_today_state(broker)
+                    if starting > 0:
+                        loss_pct = max(0.0, -(starting + realised - equity) / starting)
+                        current = f"{loss_pct:.1%}"
+                        status = "fail" if loss_pct >= guard._max_pct else "pass"
+                    else:
+                        current = "—"
+                        status = "pass"
+                except Exception:
+                    current = "—"
+                    status = "pass"
+                results.append({"name": gname, "status": status,
+                                "threshold": threshold, "current": current})
+
+            elif isinstance(guard, EquityDrawdownGuard):
+                threshold = f"{guard._block:.0%}"
+                try:
+                    equity = broker.get_equity()
+                    peak = guard._load_peak()
+                    if peak > 0:
+                        dd_pct = max(0.0, (peak - equity) / peak)
+                        current = f"{dd_pct:.1%}"
+                        if dd_pct >= guard._block:
+                            status = "fail"
+                        elif dd_pct >= guard._reduce:
+                            status = "warn"
+                        else:
+                            status = "pass"
+                    else:
+                        current = "0.0%"
+                        status = "pass"
+                except Exception:
+                    current = "—"
+                    status = "pass"
+                results.append({"name": gname, "status": status,
+                                "threshold": threshold, "current": current})
+
+            elif isinstance(guard, CooldownGuard):
+                threshold = f"{guard._min_s:.0f}s"
+                if trades:
+                    now = datetime.now(UTC)
+                    ages = []
+                    for t in trades:
+                        opened = getattr(t, "opened_at", None) or getattr(t, "open_time", None)
+                        if opened:
+                            if opened.tzinfo is None:
+                                opened = opened.replace(tzinfo=UTC)
+                            ages.append((now - opened).total_seconds())
+                    youngest = min(ages) if ages else 0.0
+                    current = f"{youngest:.0f}s"
+                    status = "warn" if youngest < guard._min_s else "pass"
+                else:
+                    current = "idle"
+                    status = "pass"
+                results.append({"name": gname, "status": status,
+                                "threshold": threshold, "current": current})
+
+            elif isinstance(guard, VolatilityGuard):
+                threshold = f"VIX>{guard._max_vix}"
+                vix = getattr(signal, "macro_vix", 0.0)
+                current = f"VIX {vix:.1f}" if vix > 0 else "VIX —"
+                status = "fail" if vix > guard._max_vix else "pass"
+                results.append({"name": gname, "status": status,
+                                "threshold": threshold, "current": current})
+
+            elif isinstance(guard, MaxPositionSizeGuard):
+                threshold = f"{guard._max:.1f} lots"
+                current = "—"
+                status = "pass"
+                results.append({"name": gname, "status": status,
+                                "threshold": threshold, "current": current})
+
+            elif isinstance(guard, SymbolWhitelistGuard):
+                threshold = "whitelist"
+                current = "—"
+                status = "pass"
+                results.append({"name": gname, "status": status,
+                                "threshold": threshold, "current": current})
+
+            elif isinstance(guard, MarketHoursGuard):
+                threshold = "active session"
+                now = datetime.now(UTC)
+                sess = current_session(now)
+                # Check if we're in an avoided hour
+                in_avoid = now.hour in guard._avoid
+                status = "warn" if in_avoid else "pass"
+                current = sess.capitalize()
+                results.append({"name": gname, "status": status,
+                                "threshold": threshold, "current": current})
+
+            elif isinstance(guard, FeedFreshnessGuard):
+                threshold = f"{guard._max_stale:.0f}s stale"
+                # Can't determine without a real signal candle — report last known
+                current = "—"
+                status = "pass"
+                results.append({"name": gname, "status": status,
+                                "threshold": threshold, "current": current})
+
+            elif isinstance(guard, VolumeFilterGuard):
+                threshold = f"vol > {guard._min_pct:.0%}"
+                current = "—"
+                status = "pass"
+                results.append({"name": gname, "status": status,
+                                "threshold": threshold, "current": current})
+
+            else:
+                results.append({
+                    "name": gname,
+                    "status": "pass" if passed else "fail",
+                    "threshold": "—",
+                    "current": reason if reason else "ok",
+                })
+
+        return results

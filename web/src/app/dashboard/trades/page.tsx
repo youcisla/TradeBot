@@ -1,5 +1,5 @@
-import TradesPage from "@/components/TradesPage";
+import HistoryPage from "@/components/history/HistoryPage";
 
-export default function TradeOperationsPage() {
-  return <TradesPage />;
+export default function TradesPage() {
+  return <HistoryPage />;
 }

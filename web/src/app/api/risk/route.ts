@@ -47,8 +47,26 @@ export async function GET() {
     const maxDailyLoss = parseFloat(process.env.MAX_DAILY_LOSS ?? "0.03");
     const councilMinConf = parseFloat(process.env.COUNCIL_MIN_CONFIDENCE ?? "0.55");
 
+    // Guard pipeline status — written by Python HeartbeatManager each loop
+    const rawGuards = (
+      status != null && "guard_status" in status
+        ? (status as unknown as { guard_status?: unknown }).guard_status
+        : undefined
+    ) as
+      | Array<{ name: string; status: string; threshold: string; current: string }>
+      | undefined;
+    const guards = (rawGuards ?? []).map((g) => ({
+      name: g.name,
+      status:
+        g.status === "pass" || g.status === "warn" || g.status === "fail"
+          ? g.status
+          : "pass",
+      threshold: g.threshold ?? "—",
+      current: g.current ?? "—",
+    }));
+
     return NextResponse.json({
-      // ── Equity snapshot ──────────────────────────────────────────────
+      // ── Equity snapshot
       equity,
       balance,
       daily_pnl: dailyPnl,
@@ -56,16 +74,16 @@ export async function GET() {
       daily_loss_pct: dailyLossPct,
       monthly_loss_pct: monthlyLossPct,
 
-      // ── Configured limits ─────────────────────────────────────────────
+      // ── Configured limits
       max_daily_loss_pct: maxDailyLoss * 100,
       max_monthly_loss_pct: maxMonthlyLoss * 100,
       max_open_trades: maxOpenTrades,
 
-      // ── Bot state ─────────────────────────────────────────────────────
+      // ── Bot state
       open_trades: status?.open_trades ?? 0,
       bot_state: status?.state ?? "offline",
 
-      // ── Position sizing params ────────────────────────────────────────
+      // ── Position sizing params
       position_size_mode: positionSizeMode,
       max_risk_per_trade: maxRiskPerTrade,
       kelly_half: kellyHalf,
@@ -73,14 +91,17 @@ export async function GET() {
       kelly_lookback_days: kellyLookbackDays,
       council_min_confidence: councilMinConf,
 
-      // ── WFO assessment (last alert event from learning agent) ─────────
+      // ── Guard pipeline status
+      guards,
+
+      // ── WFO assessment (last alert event from learning agent)
       wfo_overfitting: (wfoEvent?.data?.overfitting as number) ?? null,
       wfo_stability: (wfoEvent?.data?.stability as number) ?? null,
       wfo_num_windows: (wfoEvent?.data?.num_windows as number) ?? null,
       wfo_last_run: wfoEvent?.created_at ?? null,
       wfo_strategy: (wfoEvent?.data?.strategy as string) ?? null,
 
-      // ── Emergency caps ────────────────────────────────────────────────
+      // ── Emergency caps
       emergency_caps_active: emergencyEvent != null,
       emergency_event_at: emergencyEvent?.created_at ?? null,
     });

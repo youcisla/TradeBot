@@ -1,51 +1,91 @@
 "use client";
 
-import { createContext, useContext } from "react";
-import { useBotStatus } from "@/lib/swr";
-import type { BotStatus as SwrBotStatus } from "@/lib/swr";
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import { useBotStatus, useEvents, useOpenTrades, useIntelligence } from "@/lib/swr";
+import type { AgentEvent, BotStatus, Intelligence, Trade } from "@/lib/swr";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
-
-export interface BotStatus extends SwrBotStatus {}
-
-// ── Context ───────────────────────────────────────────────────────────────────
 
 interface AppShellCtx {
   status: BotStatus | undefined;
   isRunning: boolean;
-  relTime: (ts?: string) => string;
+  wsEvents: AgentEvent[];
+  openTrades: Trade[];
+  intelligence: Intelligence | undefined;
 }
 
 const AppShellContext = createContext<AppShellCtx>({
   status: undefined,
   isRunning: false,
-  relTime: () => "—",
+  wsEvents: [],
+  openTrades: [],
+  intelligence: undefined,
 });
-
-// ── Hook ─────────────────────────────────────────────────────────────────────
 
 export function useAppShell(): AppShellCtx {
   return useContext(AppShellContext);
 }
 
-// ── Provider ─────────────────────────────────────────────────────────────────
+// ── WebSocket bridge ─────────────────────────────────────────────────────────
 
-function relTime(ts?: string | null): string {
-  if (!ts) return "—";
-  const ms = Date.now() - new Date(ts).getTime();
-  if (ms < 60_000)  return Math.floor(ms / 1_000)    + "s ago";
-  if (ms < 3_600_000) return Math.floor(ms / 60_000)   + "m ago";
-  return                     Math.floor(ms / 3_600_000) + "h ago";
+const WS_URL =
+  typeof window !== "undefined"
+    ? (window as unknown as { NEXT_PUBLIC_WS_URL?: string }).NEXT_PUBLIC_WS_URL ?? null
+    : null;
+
+function useGlobalWebSocket() {
+  const [wsEvents, setWsEvents] = useState<AgentEvent[]>([]);
+  const wsRef = useRef<WebSocket | null>(null);
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    if (!WS_URL) return;
+    mountedRef.current = true;
+
+    let reconnectTimer: ReturnType<typeof setTimeout>;
+
+    function connect() {
+      try {
+        const ws = new WebSocket(WS_URL as string);
+        ws.onmessage = (msg) => {
+          if (!mountedRef.current) return;
+          try {
+            const incoming: AgentEvent[] = JSON.parse(msg.data);
+            setWsEvents((prev) => [...incoming, ...prev].slice(0, 200));
+          } catch { /* ignore */ }
+        };
+        ws.onclose = () => {
+          if (!mountedRef.current) return;
+          reconnectTimer = setTimeout(connect, 3_000);
+        };
+        wsRef.current = ws;
+      } catch { /* not available */ }
+    }
+
+    connect();
+
+    return () => {
+      mountedRef.current = false;
+      clearTimeout(reconnectTimer);
+      wsRef.current?.close();
+    };
+  }, []);
+
+  return wsEvents;
 }
 
+// ── Provider ─────────────────────────────────────────────────────────────────
+
 export default function AppShell({ children }: { children: React.ReactNode }) {
-  // Single SWR fetcher — all components that call useBotStatus() share this cache
   const { data: status } = useBotStatus();
+  const { data: openTrades = [] } = useOpenTrades();
+  const { data: intelligence } = useIntelligence();
+  const wsEvents = useGlobalWebSocket();
 
   const isRunning = status?.state === "running";
 
   return (
-    <AppShellContext.Provider value={{ status, isRunning, relTime }}>
+    <AppShellContext.Provider value={{ status, isRunning, wsEvents, openTrades, intelligence }}>
       {children}
     </AppShellContext.Provider>
   );

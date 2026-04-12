@@ -161,8 +161,42 @@ class TradingBot:
             self._active_symbols = SYMBOLS[:]
         logger.info("Active symbols: %s", ", ".join(self._active_symbols))
 
+    def _write_symbols_manifest(self) -> None:
+        """Export active symbols + categories to data/symbols.json.
+
+        Consumed by the Next.js GET /api/symbols endpoint.
+        """
+        import json
+        import pathlib
+
+        from config.symbols import (
+            FOREX_MAJORS, FOREX_CROSSES, FOREX_S_SUFFIX,
+            COMMODITIES, INDICES,
+        )
+
+        categories = [
+            {"id": "forex-majors",  "label": "Forex Majors",   "symbols": FOREX_MAJORS},
+            {"id": "forex-crosses", "label": "Forex Crosses",  "symbols": FOREX_CROSSES},
+            {"id": "forex-s",       "label": "Forex (.s)",     "symbols": FOREX_S_SUFFIX},
+            {"id": "commodities",    "label": "Commodities",    "symbols": COMMODITIES},
+            {"id": "indices",        "label": "Indices",        "symbols": INDICES},
+        ]
+
+        payload = {
+            "categories": categories,
+            "all": self._active_symbols,
+        }
+
+        path = pathlib.Path("data") / "symbols.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+            logger.info("symbols.json written: %d symbols", len(self._active_symbols))
+        except Exception as exc:
+            logger.warning("Failed to write symbols.json: %s", exc)
+
         # ── Logging agent first (sets up Python logging) ─────────────────
-        log_agent = LoggingAgent(db)
+        log_agent = LoggingAgent(self.db)
         self.log_agent = log_agent
         log_agent.record("STARTUP", f"Bot started — DEMO_MODE={settings.DEMO_MODE}")
 
@@ -317,6 +351,7 @@ class TradingBot:
             db=db,
             broker=broker,
             spread_monitor=self._spread_monitor,
+            guard_pipeline=execution_agent.guard_pipeline,
         )
 
         # ── Terminal UI ──────────────────────────────────────────────────
@@ -412,6 +447,9 @@ class TradingBot:
         """Main loop — everything after startup() before shutdown()."""
         if self.db is None or self.broker is None:
             raise RuntimeError("TradingBot.startup() must be called before run()")
+
+        # ── Write symbols manifest for Next.js dashboard ─────────────────────
+        self._write_symbols_manifest()
 
         loop_count = 0
         last_summary_date = ""

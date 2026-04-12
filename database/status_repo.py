@@ -65,6 +65,23 @@ class StatusRepo:
         finally:
             self._put(conn)
 
+    @with_retry()
+    def update_guard_status(self, guard_status: list[dict]) -> None:
+        """Persist guard pipeline status snapshot as JSONB."""
+        import json
+        conn = self._conn()
+        try:
+            with conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """UPDATE bot_status
+                           SET guard_status = %s, last_tick = NOW()
+                           WHERE id = 1""",
+                        (json.dumps(guard_status),),
+                    )
+        finally:
+            self._put(conn)
+
     def set_bot_uptime_start(self) -> None:
         conn = self._conn()
         try:

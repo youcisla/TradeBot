@@ -55,6 +55,14 @@ export interface BotStatus {
   broker_name: string;
   balance: number;
   leverage: number;
+  guard_status?: GuardStatusRaw[];
+}
+
+export interface GuardStatusRaw {
+  name: string;
+  status: string;
+  threshold: string;
+  current: string;
 }
 
 export interface AgentEvent {

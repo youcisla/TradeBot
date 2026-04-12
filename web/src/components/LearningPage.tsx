@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useAppShell } from "@/components/AppShell";
-import { useAgentEvents } from "@/lib/swr";
+import { useEvents } from "@/lib/swr";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -492,7 +492,7 @@ function RewardScoringFeed({ scores }: { scores: TradeScore[] }) {
 
 export default function LearningPage() {
   const { status: shellStatus } = useAppShell();
-  const { data: events } = useAgentEvents(50);
+  const { data: events } = useEvents(50);
 
   const [learningData, setLearningData] = useState<{
     confidences: StrategyConfidence[];

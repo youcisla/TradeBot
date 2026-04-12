@@ -29,10 +29,12 @@ class HeartbeatManager:
         db: Database,
         broker: BrokerConnector,
         spread_monitor,  # SpreadMonitor | None
+        guard_pipeline=None,  # GuardPipeline | None
     ) -> None:
         self._db = db
         self._broker = broker
         self._spread_monitor = spread_monitor
+        self._guard_pipeline = guard_pipeline
         self._hb_equity = 0.0
         self._hb_balance = 0.0
 
@@ -160,6 +162,17 @@ class HeartbeatManager:
             daily_loss_pct=daily_loss_pct,
             equity_drawdown_pct=eq_dd_pct,
         )
+
+        # ── Guard pipeline status ─────────────────────────────────────────────
+        if self._guard_pipeline is not None:
+            try:
+                guard_status = self._guard_pipeline.get_status(
+                    self._broker,
+                    trade_manager.get_open_trades(),
+                )
+                self._db.status.update_guard_status(guard_status)
+            except Exception as exc:
+                logger.warning("Guard status snapshot failed: %s", exc)
 
         # ── Terminal UI update ────────────────────────────────────────────
         ui = tui.get_ui()

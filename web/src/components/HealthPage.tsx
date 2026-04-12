@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 import { useAppShell } from "@/components/AppShell";
-import { useBotStatus, useAgentEvents } from "@/lib/swr";
+import { useBotStatus, useEvents } from "@/lib/swr";
 import type { AgentEvent } from "@/lib/swr";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -191,7 +191,7 @@ function ErrorRateChart({ events }: { events: AgentEvent[] }) {
 export default function HealthPage() {
   const { isRunning } = useAppShell();
   const { data: status } = useBotStatus();
-  const { data: events, isLoading } = useAgentEvents(500);
+  const { data: events, isLoading } = useEvents(500);
 
   const uptime     = status?.uptime_start ? fmtUptime(status.uptime_start) : "—";
   const lastTick   = relTime(status?.last_tick ?? null);

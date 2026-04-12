@@ -1,11 +1,11 @@
-# Environment
+# ─── Environment ────────────────────────────────────────────────────────────────
 .env
 .env.local
 .env*.local
 web/.env
 web/.env.local
 
-# Python
+# ─── Python ───────────────────────────────────────────────────────────────────
 __pycache__/
 *.py[cod]
 *.egg-info/
@@ -14,43 +14,60 @@ build/
 .venv/
 .pytest_cache/
 *.log
+*.pkl
+*.pid
 
-# Node / Web
+# ─── Node / Web ───────────────────────────────────────────────────────────────
 node_modules/
 web/node_modules/
 web/.next/
+web/coverage/
+web/tsconfig.tsbuildinfo
 
-# Data & logs
+# ─── Data & Logs ───────────────────────────────────────────────────────────────
 data/
 logs/
+*.log
 
-# Trained LSTM models (large binary files — regenerated at startup)
+# ─── Neural / ML Models ────────────────────────────────────────────────────────
+# Large binary files — regenerated at startup
 models/neural/
+models/lgbm_model.pkl
+models/lgbm_ensemble.pkl
 *.pt
 *.pth
+*.onnx
 
-# IDE
+# ─── IDE ───────────────────────────────────────────────────────────────────────
 .vscode/
 .idea/
+*.swp
+*.swo
 
-# OS
+# ─── OS ────────────────────────────────────────────────────────────────────────
 Thumbs.db
 .DS_Store
+*.bak
 
-# Crucix submodule runtime data
+# ─── Crucix Submodule ─────────────────────────────────────────────────────────
 crucix/runs/
 crucix/.env
 crucix/node_modules/
 
-*.pkl
-*.pid
-# Playwright
+# ─── Testing ───────────────────────────────────────────────────────────────────
 .playwright-results/
 *.playwright/*.yml
 *.playwright-snapshots/
 .playwright-mcp/
 
-# Next.js
-web/coverage/
+# ─── Next.js / Vercel ──────────────────────────────────────────────────────────
+.next/
+.vercel/
 
+# ─── Cache / Temp ──────────────────────────────────────────────────────────────
 *cache*
+*.cache
+.jest/
+.turbo/
+tmp/
+temp/

@@ -1,5 +1,5 @@
-import NewDashboard from "@/components/NewDashboard";
+import CommandPage from "@/components/command/CommandPage";
 
 export default function CommandCenterPage() {
-  return <NewDashboard />;
+  return <CommandPage />;
 }

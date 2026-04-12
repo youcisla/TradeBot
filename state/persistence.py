@@ -280,7 +280,7 @@ class StatePersistence:
             commission = float(sum(abs(d.commission) for d in ticket_deals))
             entry_price = float(first.price)
             close_price = float(last.price)
-            direction = "BUY" if first.type_enum in (
+            direction = "BUY" if first.type in (
                 mt5.ORDER_TYPE_BUY, mt5.ORDER_TYPE_BUY_LIMIT,
                 mt5.ORDER_TYPE_BUY_STOP,
             ) else "SELL"

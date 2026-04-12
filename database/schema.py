@@ -280,6 +280,16 @@ BEGIN
 END $$;
 """
 
+_ALTER_BOT_STATUS_GUARD_STATUS = """
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                   WHERE table_name='bot_status' AND column_name='guard_status') THEN
+        ALTER TABLE bot_status ADD COLUMN guard_status JSONB DEFAULT '[]';
+    END IF;
+END $$;
+"""
+
 _CREATE_SYMBOL_FAULT = """
 CREATE TABLE IF NOT EXISTS symbol_fault (
     symbol        TEXT PRIMARY KEY,
@@ -452,6 +462,7 @@ _ALL_TABLES = [
 _SCHEMA_MIGRATIONS = [
     _ALTER_BOT_STATUS_BROKER,
     _ALTER_BOT_STATUS_INTELLIGENCE,
+    _ALTER_BOT_STATUS_GUARD_STATUS,
     _ALTER_TRADES_COMMISSION,
     _ALTER_TRADES_TP4,
     _ALTER_TRADES_EXPECTANCY,
