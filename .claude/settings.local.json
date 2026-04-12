@@ -82,7 +82,10 @@
       "Bash(.venv/Scripts/python.exe main.py)",
       "Bash(echo \"EXIT:$?\")",
       "Bash(grep -E \"\\\\.\\(ts|tsx\\)$\")",
-      "Bash(*)"
+      "Bash(*)",
+      "mcp__plugin_serena_serena__list_memories",
+      "mcp__plugin_serena_serena__list_dir",
+      "mcp__plugin_serena_serena__get_symbols_overview"
     ],
     "deny": []
   },

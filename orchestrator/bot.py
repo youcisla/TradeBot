@@ -219,18 +219,18 @@ class TradingBot:
             logger.info("Crucix intelligence: NOT RUNNING — starting without macro context")
 
         # ── Candle HTTP server for dashboard charts ──────────────────────
-        candle_server.start(broker, db)
+        candle_server.start(self.broker, self.db)
 
         # ── Learning agent + post-trade Reflector ─────────────────────────
-        learning = LearningAgent(db)
+        learning = LearningAgent(self.db)
         self.learning = learning
         reflector = Reflector()
         self.reflector = reflector
         learning.set_reflector(reflector)
 
         # ── ICT-only unified strategy ────────────────────────────────────
-        ict_strategy = ICTStrategy(broker=broker, db=db, min_confidence=35.0)
-        plugin_strategies = load_strategy_plugins(db=db, broker=broker)
+        ict_strategy = ICTStrategy(broker=self.broker, db=self.db, min_confidence=35.0)
+        plugin_strategies = load_strategy_plugins(db=self.db, broker=self.broker)
         base_strategies = [ict_strategy]
         unified_strategy = UnifiedStrategy(base_strategies + plugin_strategies)
         strategies = [unified_strategy]
@@ -244,12 +244,12 @@ class TradingBot:
 
         # ── Weekend crypto strategies ────────────────────────────────────
         ict_btc_h1d1 = ICTStrategy(
-            broker=broker, db=db, min_confidence=35.0,
+            broker=self.broker, db=self.db, min_confidence=35.0,
             htf_timeframe="D1", htf_candle_count=100,
             entry_timeframe="H1", entry_candle_count=200,
         )
         ict_btc_h4w1 = ICTStrategy(
-            broker=broker, db=db, min_confidence=35.0,
+            broker=self.broker, db=self.db, min_confidence=35.0,
             htf_timeframe="W1", htf_candle_count=52,
             entry_timeframe="H4", entry_candle_count=150,
         )
@@ -266,19 +266,19 @@ class TradingBot:
         ]
 
         # ── Agents ────────────────────────────────────────────────────────
-        market_agent = MarketAgent(broker, db=db)
+        market_agent = MarketAgent(self.broker, db=self.db)
         self.market_agent = market_agent
-        analysis_agent = AnalysisAgent(self.crucix_agent, db=db)
+        analysis_agent = AnalysisAgent(self.crucix_agent, db=self.db)
         self.analysis_agent = analysis_agent
-        risk_agent = RiskAgent(broker, lambda: [], self.crucix_agent, db=db)
-        execution_agent = ExecutionAgent(broker, self.state, risk_agent.calculate_position_size, db=db)
-        trade_manager = TradeManagerAgent(broker, self.state, db, guard_pipeline=execution_agent.guard_pipeline)
-        risk_agent = RiskAgent(broker, trade_manager.get_open_trades, self.crucix_agent, db=db)
+        risk_agent = RiskAgent(self.broker, lambda: [], self.crucix_agent, db=self.db)
+        execution_agent = ExecutionAgent(self.broker, self.state, risk_agent.calculate_position_size, db=self.db)
+        trade_manager = TradeManagerAgent(self.broker, self.state, self.db, guard_pipeline=execution_agent.guard_pipeline)
+        risk_agent = RiskAgent(self.broker, trade_manager.get_open_trades, self.crucix_agent, db=self.db)
         self.risk_agent = risk_agent
         self.execution_agent = execution_agent
         self.trade_manager = trade_manager
-        self.strategy_agent = StrategyAgent(strategies, learning.get_confidence, db=db)
-        self.weekend_strategy_agent = StrategyAgent(weekend_strategies, learning.get_confidence, db=db)
+        self.strategy_agent = StrategyAgent(strategies, learning.get_confidence, db=self.db)
+        self.weekend_strategy_agent = StrategyAgent(weekend_strategies, learning.get_confidence, db=self.db)
 
         # ── Warmup ML models ───────────────────────────────────────────────
         self._warmup_models(learning)
@@ -293,8 +293,8 @@ class TradingBot:
 
         tool_system = AutonomousToolSystem(
             repo_root=Path(__file__).resolve().parent.parent,
-            db=db,
-            broker=broker,
+            db=self.db,
+            broker=self.broker,
             trade_manager=trade_manager,
             risk_agent=risk_agent,
             get_active_symbols=_get_active_symbols_local,
@@ -308,8 +308,8 @@ class TradingBot:
         sniper_guard: SniperEntryGuard | None = None
         if settings.SNIPER_ENTRY_ENABLED:
             sniper_guard = SniperEntryGuard(
-                broker=broker,
-                db=db,
+                broker=self.broker,
+                db=self.db,
                 threshold=settings.SNIPER_CONF_THRESHOLD,
                 timeout_minutes=settings.SNIPER_TIMEOUT_MINUTES,
                 max_entry_atr_distance=settings.SNIPER_MAX_ENTRY_ATR_DISTANCE,
@@ -342,14 +342,14 @@ class TradingBot:
         trade_manager.load_open_trades()
         trade_manager.reconcile()
         log_agent.record("STARTUP", f"Reconciliation done — {len(trade_manager.get_open_trades())} open trades")
-        db.set_bot_uptime_start()
-        self._session_id = db.start_session(version=getattr(settings, "VERSION", ""))
+        self.db.set_bot_uptime_start()
+        self._session_id = self.db.start_session(version=getattr(settings, "VERSION", ""))
         log_agent.record("STARTUP", f"Session started — id={self._session_id}")
 
         # ── Heartbeat manager ─────────────────────────────────────────────
         self.heartbeat = HeartbeatManager(
-            db=db,
-            broker=broker,
+            db=self.db,
+            broker=self.broker,
             spread_monitor=self._spread_monitor,
             guard_pipeline=execution_agent.guard_pipeline,
         )

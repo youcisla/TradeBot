@@ -1,9 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "read",
-      "write",
-      "execute"
+      "Read",
+      "Write",
+      "Execute"
     ],
     "deny": []
   },
