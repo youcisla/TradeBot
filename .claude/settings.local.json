@@ -87,7 +87,10 @@
       "mcp__plugin_serena_serena__list_dir",
       "mcp__plugin_serena_serena__get_symbols_overview",
       "mcp__plugin_serena_serena__read_file",
-      "WebFetch(domain:ai4trade.ai)"
+      "WebFetch(domain:ai4trade.ai)",
+      "mcp__plugin_github_github__get_file_contents",
+      "mcp__ide__getDiagnostics",
+      "WebFetch(domain:localhost)"
     ],
     "deny": []
   },

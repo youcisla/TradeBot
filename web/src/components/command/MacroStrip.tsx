@@ -24,8 +24,6 @@ export default function MacroStrip() {
   const regime   = intelligence?.marketRegime ?? "—";
   const vix      = intelligence?.vix;
   const spread   = intelligence?.spreadCondition ?? "—";
-  const riskTier = intelligence?.riskTier ?? 0;
-  const sweepAge = intelligence?.sweepAgeMin;
   const loopCount = status?.loop_count ?? 0;
 
   return (
@@ -41,18 +39,6 @@ export default function MacroStrip() {
       />
       <Divider />
       <MacroPill label="Spread" value={spread} color="var(--text-2)" />
-      <Divider />
-      <MacroPill
-        label="Risk Tier"
-        value={String(riskTier)}
-        color={riskTier === 0 ? "var(--green)" : riskTier === 1 ? "var(--orange)" : "var(--red)"}
-      />
-      {sweepAge !== undefined && (
-        <>
-          <Divider />
-          <MacroPill label="Sweep" value={`${sweepAge}m`} color="var(--text-3)" />
-        </>
-      )}
       <Divider />
       <MacroPill label="Loops" value={String(loopCount)} color="var(--text-3)" />
     </div>

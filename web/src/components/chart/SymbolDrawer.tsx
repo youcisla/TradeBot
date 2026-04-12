@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useAppShell } from "@/components/AppShell";
 
 interface SymbolCategory {
   id: string;
@@ -27,8 +26,6 @@ interface Props {
 export default function SymbolDrawer({ selected, onSelect }: Props) {
   const [open, setOpen] = useState(false);
   const [categories, setCategories] = useState<SymbolCategory[]>(FALLBACK);
-  const { intelligence } = useAppShell();
-  const sweepAge = intelligence?.sweepAgeMin;
 
   useEffect(() => {
     fetch("/api/symbols")
@@ -80,12 +77,6 @@ export default function SymbolDrawer({ selected, onSelect }: Props) {
               )
             )}
 
-            {sweepAge !== undefined && (
-              <div style={styles.sweepInfo}>
-                <span style={styles.sweepLabel}>Last sweep:</span>
-                <span style={styles.sweepValue}>{sweepAge}m ago</span>
-              </div>
-            )}
           </div>
         </div>
       )}
@@ -189,23 +180,5 @@ const styles: Record<string, React.CSSProperties> = {
     background: "var(--accent)",
     border:    "1px solid var(--accent)",
     color:     "#0e0e0e",
-  },
-  sweepInfo: {
-    display:       "flex",
-    alignItems:    "center",
-    gap:           "var(--space-2)",
-    paddingTop:    "var(--space-2)",
-    borderTop:     "1px solid var(--border)",
-  },
-  sweepLabel: {
-    fontFamily: "var(--font-mono)",
-    fontSize:   10,
-    color:      "var(--text-3)",
-  },
-  sweepValue: {
-    fontFamily: "var(--font-mono)",
-    fontSize:   10,
-    fontWeight: 700,
-    color:      "var(--text-2)",
   },
 };

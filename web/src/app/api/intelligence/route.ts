@@ -119,7 +119,15 @@ export async function GET() {
 
     // Performance from closed trades today
     const today = new Date().toISOString().slice(0, 10);
-    const todayTrades = closedTrades.filter((t) => t.close_time?.startsWith(today));
+    function closeTimeIso(t: { close_time: unknown }): string {
+      const v = t.close_time;
+      if (typeof v === "string") return v;
+      if (v instanceof Date) return v.toISOString();
+      return "";
+    }
+    const todayTrades = closedTrades.filter(
+      (t) => closeTimeIso(t).startsWith(today)
+    );
     const todayPnl = todayTrades.reduce((s, t) => s + (Number(t.pnl) || 0), 0);
     const wins = todayTrades.filter((t) => Number(t.pnl) > 0);
     const winRate = todayTrades.length > 0

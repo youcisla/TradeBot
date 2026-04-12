@@ -424,6 +424,14 @@ class HKUSettings(BaseModel):
     publish_on_discussion: bool = True
     feed_limit: int = Field(default=10, ge=1, le=50)
     circuit_breaker_timeout_secs: int = Field(default=300, ge=60)
+    # Copy trading
+    copy_trading_enabled: bool = False
+    copy_leader_ids: list[str] = Field(default_factory=list)
+    copy_margin_fraction: float = Field(default=0.05, ge=0.01, le=0.25)
+    copy_max_trades: int = Field(default=3, ge=1, le=10)
+    copy_min_winrate: float = Field(default=0.55, ge=0.0, le=1.0)
+    copy_sl_atr: float = Field(default=1.5, ge=0.5, le=5.0)
+    copy_tp_atr: float = Field(default=2.5, ge=0.5, le=10.0)
 
 
 # ── Tool system settings ───────────────────────────────────────────────────
@@ -1360,3 +1368,10 @@ HKU_PUBLISH_ON_STRATEGY: bool = settings.hku.publish_on_strategy
 HKU_PUBLISH_ON_DISCUSSION: bool = settings.hku.publish_on_discussion
 HKU_FEED_LIMIT: int = settings.hku.feed_limit
 HKU_CIRCUIT_BREAKER_TIMEOUT_SECS: int = settings.hku.circuit_breaker_timeout_secs
+HKU_COPY_TRADING_ENABLED: bool = settings.hku.copy_trading_enabled
+HKU_COPY_LEADER_IDS: list[str] = settings.hku.copy_leader_ids
+HKU_COPY_MARGIN_FRACTION: float = settings.hku.copy_margin_fraction
+HKU_COPY_MAX_TRADES: int = settings.hku.copy_max_trades
+HKU_COPY_MIN_WINRATE: float = settings.hku.copy_min_winrate
+HKU_COPY_SL_ATR: float = settings.hku.copy_sl_atr
+HKU_COPY_TP_ATR: float = settings.hku.copy_tp_atr

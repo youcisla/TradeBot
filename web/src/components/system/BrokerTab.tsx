@@ -5,13 +5,13 @@ import { useAppShell } from "@/components/AppShell";
 
 interface BrokerAccount {
   id: number;
-  account: string;
+  account_number: string;
   server: string;
-  broker_name: string;
+  name: string;
   is_demo: boolean;
-  is_connected: boolean;
-  balance?: number;
-  equity?: number;
+  is_active: boolean;
+  created_at: string;
+  last_connected: string | null;
 }
 
 export default function BrokerTab() {
@@ -55,15 +55,15 @@ export default function BrokerTab() {
         ) : (
           accounts.map((acc) => (
             <div key={acc.id} style={styles.row}>
-              <span style={styles.accNum}>{acc.account}</span>
+              <span style={styles.accNum}>{acc.account_number}</span>
               <span style={styles.accServer}>{acc.server}</span>
-              <span style={styles.accBroker}>{acc.broker_name}</span>
+              <span style={styles.accBroker}>{acc.name}</span>
               {acc.is_demo && <span style={styles.demoBadge}>DEMO</span>}
               <span
                 style={{
                   ...styles.connDot,
-                  background: acc.is_connected ? "var(--green)" : "var(--red)",
-                  boxShadow: acc.is_connected ? "0 0 6px var(--green)" : "0 0 6px var(--red)",
+                  background: acc.is_active ? "var(--green)" : "var(--red)",
+                  boxShadow: acc.is_active ? "0 0 6px var(--green)" : "0 0 6px var(--red)",
                 }}
               />
             </div>

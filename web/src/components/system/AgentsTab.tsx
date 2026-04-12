@@ -1,21 +1,39 @@
 "use client";
 
-import { useAppShell } from "@/components/AppShell";
+import { useEffect, useState } from "react";
 import { AgentBadge } from "@/components/ui/Badges";
 
-// Known agents from the pipeline
+// All documented pipeline agents + support agents
 const AGENTS = [
   "crucix", "market", "analysis", "strategy",
   "neural", "council", "risk", "execution",
-  "manager", "learning", "logging",
+  "trade_manager", "learning", "model_manager",
+  "logging", "debate", "exposure", "memory",
+  "hku", "tool_system",
 ];
 
-export default function AgentsTab() {
-  const { wsEvents } = useAppShell();
+interface AgentEvent {
+  id?: string | number;
+  agent: string;
+  level: string;
+  message?: string;
+  msg?: string;
+  created_at?: string;
+}
 
-  // Count events per agent in the last 100 events
+export default function AgentsTab() {
+  const [events, setEvents] = useState<AgentEvent[]>([]);
+
+  useEffect(() => {
+    fetch("/api/events?limit=200")
+      .then((r) => r.json())
+      .then((d: AgentEvent[]) => setEvents(Array.isArray(d) ? d : []))
+      .catch(() => setEvents([]));
+  }, []);
+
+  // Count events per agent in the last 200 events
   const counts: Record<string, number> = {};
-  for (const e of wsEvents.slice(0, 100)) {
+  for (const e of events) {
     counts[e.agent] = (counts[e.agent] ?? 0) + 1;
   }
 
@@ -23,7 +41,7 @@ export default function AgentsTab() {
     <div style={styles.wrapper}>
       <div style={styles.header}>
         <span style={styles.title}>Agent</span>
-        <span style={styles.title}>Events (last 100)</span>
+        <span style={styles.title}>Events (last 200)</span>
       </div>
 
       {AGENTS.map((agent) => (

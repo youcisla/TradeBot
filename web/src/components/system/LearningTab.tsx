@@ -1,45 +1,35 @@
 "use client";
 
-import { useLearning } from "@/lib/swr";
+import { useLearning, useRisk } from "@/lib/swr";
 import { fmtPct } from "@/lib/format";
-
-const TREND_ICON: Record<string, string> = {
-  up:   "↑",
-  down: "↓",
-  flat: "→",
-};
-const TREND_COLOR: Record<string, string> = {
-  up:   "var(--green)",
-  down: "var(--red)",
-  flat: "var(--text-3)",
-};
 
 export default function LearningTab() {
   const { data: ld } = useLearning();
+  const { data: risk } = useRisk();
 
   return (
     <div style={styles.root}>
-      {/* WFO scores */}
+      {/* WFO scores — from /api/risk */}
       <div style={styles.wfoRow}>
         <WFOCard
           label="Overfitting Score"
-          value={ld?.wfoOverfittingScore != null ? fmtPct(ld.wfoOverfittingScore * 100) : "—"}
-          color={ld?.wfoOverfittingScore != null && ld.wfoOverfittingScore > 0.7 ? "var(--red)" : "var(--green)"}
+          value={risk?.wfo_overfitting != null ? fmtPct(risk.wfo_overfitting * 100) : "—"}
+          color={risk?.wfo_overfitting != null && risk.wfo_overfitting > 0.7 ? "var(--red)" : "var(--green)"}
         />
         <WFOCard
           label="Stability Score"
-          value={ld?.wfoStabilityScore != null ? fmtPct(ld.wfoStabilityScore * 100) : "—"}
-          color={ld?.wfoStabilityScore != null && ld.wfoStabilityScore < 0.5 ? "var(--orange)" : "var(--green)"}
+          value={risk?.wfo_stability != null ? fmtPct(risk.wfo_stability * 100) : "—"}
+          color={risk?.wfo_stability != null && risk.wfo_stability < 0.5 ? "var(--orange)" : "var(--green)"}
         />
       </div>
 
       {/* Strategy confidences */}
       <div style={styles.tableCard}>
         <span style={styles.tableTitle}>Strategy Confidence</span>
-        {(ld?.strategies ?? []).length === 0 ? (
+        {(ld?.confidences ?? []).length === 0 ? (
           <p style={styles.empty}>No strategy data</p>
         ) : (
-          ld?.strategies.map((s) => (
+          ld?.confidences.map((s) => (
             <div key={s.strategy} style={styles.row}>
               <span style={styles.strategy}>{s.strategy}</span>
               <div style={styles.confBar}>
@@ -52,10 +42,7 @@ export default function LearningTab() {
                 />
               </div>
               <span style={styles.confPct}>{fmtPct(s.confidence * 100)}</span>
-              <span style={styles.trades}>{s.totalTrades}t</span>
-              <span style={{ ...styles.trend, color: TREND_COLOR[s.trend] }}>
-                {TREND_ICON[s.trend]}
-              </span>
+              <span style={styles.trades}>{s.total_trades}t</span>
             </div>
           ))
         )}
@@ -132,7 +119,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   row: {
     display: "grid",
-    gridTemplateColumns: "100px 1fr 48px 32px 20px",
+    gridTemplateColumns: "100px 1fr 48px 32px",
     alignItems: "center",
     gap: "var(--space-2)",
     padding: "4px 0",

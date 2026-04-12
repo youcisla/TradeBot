@@ -9,8 +9,8 @@ export default function RiskDashboard() {
   const { status } = useAppShell();
   const { data: risk } = useRisk();
 
-  const openPos  = risk?.openPositions  ?? 0;
-  const maxPos   = risk?.maxPositions   ?? 0;
+  const openPos  = risk?.open_trades  ?? 0;
+  const maxPos   = risk?.max_open_trades   ?? 0;
 
   const posColor = openPos >= maxPos ? "var(--red)" : openPos >= maxPos * 0.7 ? "var(--orange)" : "var(--green)";
 

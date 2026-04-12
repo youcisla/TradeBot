@@ -13,8 +13,8 @@ export default function TradeHistory() {
   const [filter, setFilter] = useState<"all" | "closed" | "open">("closed");
 
   const filtered = trades.filter((t) => {
-    if (filter === "closed") return t.status === "closed";
-    if (filter === "open")   return t.status === "open";
+    if (filter === "closed") return t.status === "CLOSED";
+    if (filter === "open")   return t.status === "OPEN" || t.status === "PARTIAL";
     return true;
   });
 

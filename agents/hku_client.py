@@ -13,18 +13,25 @@ outages never stall the trading loop.
 
 from __future__ import annotations
 
+import json
 import logging
+import threading
 import time
-from dataclasses import dataclass
-from typing import TYPE_CHECKING
+import uuid
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Callable
 
 import requests
+import websocket
 
 from config import settings
 from database.db import Database
 
 if TYPE_CHECKING:
     from models.signal import Signal
+
+# Type alias for heartbeat/copy-trade callbacks
+HKUNotificationCallback = Callable[[dict], None]
 
 logger = logging.getLogger(__name__)
 
@@ -72,12 +79,21 @@ class HKUClient:
 
     _token: str | None = None
     _agent_id: str | None = None
-    _rate_limiter: TokenBucketRateLimiter = None
+    _rate_limiter: TokenBucketRateLimiter = field(default_factory=lambda: TokenBucketRateLimiter(rate=1.0, capacity=1.0))
     _consecutive_failures: int = 0
     _circuit_open_until: float = 0.0
+    # Heartbeat & WebSocket state
+    _heartbeat_interval_secs: float = 30.0
+    _heartbeat_thread: threading.Thread | None = None
+    _heartbeat_stop: threading.Event = field(default_factory=threading.Event)
+    _ws_client: websocket.WebSocketApp | None = None
+    _ws_thread: threading.Thread | None = None
+    _ws_reconnect_delay: float = 5.0
+    _ws_max_reconnect_delay: float = 60.0
+    _notification_callbacks: list[HKUNotificationCallback] = field(default_factory=list)
+    _client_id: str = field(default_factory=lambda: str(uuid.uuid4()))
 
     def __post_init__(self) -> None:
-        self._rate_limiter = TokenBucketRateLimiter(rate=1.0, capacity=1.0)
         self._load_credentials()
 
     # ── Credentials persistence ─────────────────────────────────────────
@@ -85,9 +101,8 @@ class HKUClient:
     def _load_credentials(self) -> None:
         """Restore stored credentials from bot_memory if available."""
         try:
-            block = self.db.get_bot_memory("hku_agent_credentials")
+            block = self.db.read_memory_block("hku_agent_credentials")
             if block:
-                import json
                 data = json.loads(block)
                 self._agent_id = data.get("agent_id")
                 self._token = data.get("token")
@@ -98,9 +113,8 @@ class HKUClient:
     def _save_credentials(self) -> None:
         """Persist agent_id + token to bot_memory."""
         try:
-            import json
             data = json.dumps({"agent_id": self._agent_id, "token": self._token})
-            self.db.save_bot_memory("hku_agent_credentials", data)
+            self.db.write_memory_block("hku_agent_credentials", data)
         except Exception as exc:
             logger.warning("Failed to save HKU credentials: %s", exc)
 
@@ -125,6 +139,73 @@ class HKUClient:
         self._consecutive_failures += 1
         if self._consecutive_failures >= 3:
             self._trip_circuit()
+
+    # ── Copy trading: follow / unfollow ───────────────────────────────
+
+    def follow_agent(self, leader_id: str) -> bool:
+        """Follow a leader agent to receive their signals for auto-copy.
+
+        Returns True on success, False on failure.
+        """
+        if self._circuit_open:
+            return False
+        try:
+            if not self._rate_limiter.acquire(timeout=2.0):
+                return False
+            self._post(
+                "/api/signals/follow",
+                json={"leader_id": leader_id},
+            )
+            self._record_success()
+            logger.info("HKU following leader: %s", leader_id)
+            return True
+        except Exception as exc:
+            self._record_failure()
+            logger.warning("HKU follow_agent failed: %s", exc)
+            return False
+
+    def unfollow_agent(self, leader_id: str) -> bool:
+        """Stop copying a leader agent.
+
+        Returns True on success, False on failure.
+        """
+        if self._circuit_open:
+            return False
+        try:
+            if not self._rate_limiter.acquire(timeout=2.0):
+                return False
+            self._post(
+                "/api/signals/unfollow",
+                json={"leader_id": leader_id},
+            )
+            self._record_success()
+            logger.info("HKU unfollowed leader: %s", leader_id)
+            return True
+        except Exception as exc:
+            self._record_failure()
+            logger.warning("HKU unfollow_agent failed: %s", exc)
+            return False
+
+    def get_copied_positions(self) -> list[dict]:
+        """Fetch current copied positions from HKU platform.
+
+        Returns a list of dicts with keys: id, symbol, direction, entry_price,
+        current_price, pnl, status.  Empty list on failure (fail-open).
+        """
+        if self._circuit_open:
+            return []
+        try:
+            if not self._rate_limiter.acquire(timeout=2.0):
+                return []
+            resp = self._get("/api/positions")
+            data = resp.json()
+            positions = data if isinstance(data, list) else data.get("positions", [])
+            self._record_success()
+            return positions if isinstance(positions, list) else []
+        except Exception as exc:
+            self._record_failure()
+            logger.warning("HKU get_copied_positions failed: %s", exc)
+            return []
 
     # ── Registration ──────────────────────────────────────────────────
 
@@ -271,3 +352,135 @@ class HKUClient:
         resp = requests.post(url, json=json, timeout=10, headers=self._auth_headers())
         resp.raise_for_status()
         return resp
+
+    # ── Heartbeat polling ───────────────────────────────────────────────
+
+    def start_heartbeat(self) -> None:
+        """Start background heartbeat thread (30s interval).
+
+        Sends POST /api/claw/agents/heartbeat to keep agent registration alive.
+        Also attempts WebSocket connection for real-time notifications.
+        """
+        if self._heartbeat_thread and self._heartbeat_thread.is_alive():
+            logger.debug("Heartbeat thread already running")
+            return
+
+        self._heartbeat_stop.clear()
+        self._heartbeat_thread = threading.Thread(
+            target=self._heartbeat_loop,
+            name="hku-heartbeat",
+            daemon=True,
+        )
+        self._heartbeat_thread.start()
+        logger.info("HKU heartbeat thread started (interval=%.1fs)", self._heartbeat_interval_secs)
+
+    def stop_heartbeat(self) -> None:
+        """Stop the heartbeat thread gracefully."""
+        self._heartbeat_stop.set()
+        if self._ws_client:
+            self._ws_client.close()
+        if self._heartbeat_thread and self._heartbeat_thread.is_alive():
+            self._heartbeat_thread.join(timeout=5.0)
+        logger.info("HKU heartbeat thread stopped")
+
+    def _heartbeat_loop(self) -> None:
+        """Background loop: send heartbeat + maintain WebSocket."""
+        while not self._heartbeat_stop.wait(timeout=self._heartbeat_interval_secs):
+            self._send_heartbeat()
+            self._ensure_ws_connected()
+
+    def _send_heartbeat(self) -> None:
+        """Fire-and-forget heartbeat POST."""
+        if not self._agent_id or self._circuit_open:
+            return
+        try:
+            if not self._rate_limiter.acquire(timeout=1.0):
+                return
+            self._post(
+                "/api/claw/agents/heartbeat",
+                json={"agent_id": self._agent_id, "status": "active"},
+            )
+            self._record_success()
+            logger.debug("HKU heartbeat sent")
+        except Exception as exc:
+            self._record_failure()
+            logger.debug("HKU heartbeat failed: %s", exc)
+
+    # ── WebSocket real-time notifications ──────────────────────────────
+
+    def register_notification_callback(self, callback: HKUNotificationCallback) -> None:
+        """Register a handler for HKU WebSocket notifications.
+
+        Callback receives a dict with keys: type, data, timestamp
+        Supported notification types:
+          - 'signal_copied'  : another agent copied our published signal
+          - 'position_update': copied position TP/SL hit or closed
+          - 'points_update'  : points balance changed
+          - 'new_follower'   : new agent started following us
+        """
+        self._notification_callbacks.append(callback)
+
+    def _ensure_ws_connected(self) -> None:
+        """Connect WebSocket if not connected or disconnected."""
+        if self._ws_client is not None:
+            return  # already connected
+        try:
+            self._ws_connect()
+        except Exception as exc:
+            logger.warning("HKU WebSocket connection failed: %s", exc)
+            # Exponential backoff for next retry
+            self._ws_reconnect_delay = min(
+                self._ws_reconnect_delay * 1.5, self._ws_max_reconnect_delay
+            )
+
+    def _ws_connect(self) -> None:
+        """Establish WebSocket connection to HKU notification channel."""
+        ws_url = f"wss://ai4trade.ai/ws/notify/{self._client_id}"
+        headers = {}
+        if self._token:
+            headers["Authorization"] = f"Bearer {self._token}"
+
+        self._ws_client = websocket.WebSocketApp(
+            ws_url,
+            header=headers,
+            on_message=self._ws_on_message,
+            on_error=self._ws_on_error,
+            on_close=self._ws_on_close,
+            on_open=self._ws_on_open,
+        )
+        self._ws_thread = threading.Thread(
+            target=self._ws_client.run_forever,
+            name="hku-ws",
+            daemon=True,
+        )
+        self._ws_thread.start()
+        logger.info("HKU WebSocket thread started: %s", ws_url)
+
+    def _ws_on_open(self, ws: websocket.WebSocketApp) -> None:
+        logger.info("HKU WebSocket connected")
+        self._ws_reconnect_delay = 5.0  # reset backoff
+
+    def _ws_on_message(self, ws: websocket.WebSocketApp, raw: str) -> None:
+        """Dispatch incoming WebSocket notification to registered callbacks."""
+        try:
+            msg = json.loads(raw) if isinstance(raw, str) else json.loads(raw.decode())
+            notification_type = msg.get("type", "unknown")
+            data = msg.get("data", {})
+            logger.debug("HKU WS notification: type=%s data=%s", notification_type, data)
+            for callback in self._notification_callbacks:
+                try:
+                    callback({"type": notification_type, "data": data})
+                except Exception as exc:
+                    logger.warning("HKU notification callback error: %s", exc)
+        except Exception as exc:
+            logger.warning("HKU WS failed to parse message: %s", exc)
+
+    def _ws_on_error(self, ws: websocket.WebSocketApp, error: Exception) -> None:
+        logger.warning("HKU WebSocket error: %s", error)
+
+    def _ws_on_close(self, ws: websocket.WebSocketApp, close_status_code: int, close_msg: str) -> None:
+        logger.info("HKU WebSocket closed: code=%s msg=%s", close_status_code, close_msg)
+        self._ws_client = None
+        # Schedule reconnect if not stopping
+        if not self._heartbeat_stop.is_set():
+            threading.Timer(self._ws_reconnect_delay, self._ensure_ws_connected).start()

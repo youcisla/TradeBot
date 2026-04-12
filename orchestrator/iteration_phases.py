@@ -220,7 +220,7 @@ class ScanPhase:
             if symbol != btc_symbol:
                 if now_mono - last_scan_ts.get(symbol, 0.0) < symbol_cooldown:
                     if settings.EVENT_DRIVEN_RESCAN_ON_NEW_CANDLE:
-                        last_candle_ts = symbol_event_tracker.get(symbol, "last_candle")
+                        last_candle_ts = self._symbol_event_tracker.get(symbol, "last_candle")
                         if last_candle_ts > 0 and (time.time() - last_candle_ts) < symbol_cooldown:
                             return (symbol, "cooldown", is_re_enabled, None, None, None, False)
                     else:

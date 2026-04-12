@@ -49,3 +49,6 @@ shap>=0.44.0
 
 # ── MCP server (tools/mcp_server.py) ─────────────────────────────────────
 fastmcp>=0.1.0
+
+# ── HKU marketplace real-time notifications (agents/hku_client.py) ─────────
+websocket-client>=1.7

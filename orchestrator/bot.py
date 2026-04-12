@@ -32,6 +32,7 @@ from agents.reflector import Reflector
 from agents.crucix_agent import CrucixAgent
 from agents.sniper_entry_guard import SniperEntryGuard
 from agents.hku_client import HKUClient
+from agents.hku_copy_trader import HKUCopyTradingService, CopyTradeConfig
 
 from utils import telegram_bot
 from utils import candle_server
@@ -344,6 +345,7 @@ class TradingBot:
 
         # ── HKU Marketplace client ───────────────────────────────────────
         self.hku_client: HKUClient | None = None
+        self.copy_trader: HKUCopyTradingService | None = None
         if settings.HKU_ENABLED:
             self.hku_client = HKUClient(
                 base_url=settings.HKU_API_URL,
@@ -353,6 +355,28 @@ class TradingBot:
             if self.hku_client.register_if_needed():
                 logger.info("HKU agent registered: agent_id=%s", self.hku_client._agent_id)
                 learning.set_hku_client(self.hku_client)
+                # Start heartbeat (keeps registration alive + maintains WebSocket)
+                self.hku_client.start_heartbeat()
+                # Wire up copy trading if enabled
+                if settings.HKU_COPY_TRADING_ENABLED:
+                    self.copy_trader = HKUCopyTradingService(
+                        hku_client=self.hku_client,
+                        broker=self.broker,
+                        config=CopyTradeConfig(
+                            enabled=True,
+                            margin_fraction_per_trade=settings.HKU_COPY_MARGIN_FRACTION,
+                            max_copy_trades=settings.HKU_COPY_MAX_TRADES,
+                            min_leader_winrate=settings.HKU_COPY_MIN_WINRATE,
+                            sl_atr_multiples=settings.HKU_COPY_SL_ATR,
+                            tp_atr_multiples=settings.HKU_COPY_TP_ATR,
+                        ),
+                    )
+                    self.copy_trader.start()
+                    # Follow configured leader agents
+                    for leader_id in settings.HKU_COPY_LEADER_IDS:
+                        if self.hku_client.follow_agent(leader_id):
+                            logger.info("HKU following leader: %s", leader_id)
+                    log_agent.record("STARTUP", f"HKU copy trading ENABLED ({len(settings.HKU_COPY_LEADER_IDS)} leaders)")
             else:
                 logger.warning("HKU registration failed — marketplace features disabled")
                 self.hku_client = None

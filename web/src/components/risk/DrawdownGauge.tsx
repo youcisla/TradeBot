@@ -10,13 +10,14 @@ export default function DrawdownGauge() {
     return <div style={cardStyle}>Loading…</div>;
   }
 
-  const dailyPct  = risk.dailyDrawdownPct  ?? 0;
-  const equityPct = risk.equityDrawdownPct ?? 0;
-  const dailyMax  = risk.dailyDrawdownMax  ?? 0;
-  const equityMax = risk.equityDrawdownMax  ?? 0;
-  const monthlyPnl = risk.monthlyPnl ?? 0;
+  const dailyPct  = risk.daily_loss_pct  ?? 0;
+  const monthlyPct = risk.monthly_loss_pct ?? 0;
+  const dailyMax   = risk.max_daily_loss_pct   ?? 0;
+  const monthlyMax = risk.max_monthly_loss_pct ?? 0;
+  const dailyPnl    = risk.daily_pnl    ?? 0;
+  const monthlyPnl  = risk.monthly_pnl  ?? 0;
 
-  function gauge(pct: number, label: string, color: string) {
+  function gauge(pct: number, label: string, color: string, max: number) {
     const clamped = Math.min(Math.abs(pct), 100);
     return (
       <div style={gaugeStyle}>
@@ -34,7 +35,7 @@ export default function DrawdownGauge() {
           <span style={{ ...gaugePct, color: pct >= 80 ? "var(--red)" : pct >= 50 ? "var(--orange)" : color }}>
             {pct.toFixed(1)}%
           </span>
-          <span style={gaugeLimit}>/ {dailyMax > 0 ? fmtPct(dailyMax * 100) : "—"}</span>
+          <span style={gaugeLimit}>/ {max > 0 ? fmtPct(max / 100) : "—"}</span>
         </div>
       </div>
     );
@@ -44,8 +45,8 @@ export default function DrawdownGauge() {
     <div style={cardStyle}>
       <span style={cardTitle}>Drawdown Controls</span>
       <div style={gaugesStyle}>
-        {gauge(dailyPct, "Daily Loss", "var(--green)")}
-        {gauge(equityPct, "Equity DD", "var(--green)")}
+        {gauge(dailyPct, "Daily Loss", "var(--green)", dailyMax)}
+        {gauge(monthlyPct, "Monthly Loss", "var(--green)", monthlyMax)}
       </div>
       <div style={monthlyStyle}>
         <span style={monthlyLabel}>Monthly P&L</span>

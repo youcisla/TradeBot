@@ -133,15 +133,30 @@ export interface GuardStatus {
 }
 
 export interface RiskData {
-  dailyDrawdownPct: number;
-  dailyDrawdownMax: number;
-  equityDrawdownPct: number;
-  equityDrawdownMax: number;
-  monthlyPnl: number;
-  monthlyLossLimit: number;
-  openPositions: number;
-  maxPositions: number;
+  // Equity snapshot
+  equity: number;
+  balance: number;
+  daily_pnl: number;
+  monthly_pnl: number;
+  // Loss percentages (daily_loss_pct = daily PnL / balance * 100)
+  daily_loss_pct: number;
+  monthly_loss_pct: number;
+  // Configured limits (as百分比, e.g. 3.0 = 3%)
+  max_daily_loss_pct: number;
+  max_monthly_loss_pct: number;
+  // Bot state
+  open_trades: number;
+  max_open_trades: number;
   guards: GuardStatus[];
+  // WFO assessment
+  wfo_overfitting: number | null;
+  wfo_stability: number | null;
+  wfo_num_windows: number | null;
+  wfo_last_run: string | null;
+  wfo_strategy: string | null;
+  // Emergency caps
+  emergency_caps_active: boolean;
+  emergency_event_at: string | null;
 }
 
 export function useRisk() {
@@ -160,9 +175,6 @@ export interface Intelligence {
   spreadCondition: string;
   spreadPips?: number;
   marketRegime: string;
-  riskTier: number;
-  osintSentiment: string;
-  sweepAgeMin?: number;
 }
 
 export function useIntelligence() {
@@ -214,24 +226,26 @@ export function useIctSetups(symbol: string) {
 export interface StrategyConfidence {
   strategy: string;
   confidence: number;
-  totalTrades: number;
-  avgScore: number;
-  trend: "up" | "down" | "flat";
+  total_trades: number;
+  total_score: number;
+  last_updated: string;
 }
 
 export interface TradeScore {
   id: number;
+  trade_id: string;
+  strategy: string;
   symbol: string;
+  session: string;
+  market_condition: string;
   score: number;
   pnl: number;
-  timestamp: string;
+  created_at: string;
 }
 
 export interface LearningData {
-  strategies: StrategyConfidence[];
-  recentScores: TradeScore[];
-  wfoOverfittingScore?: number;
-  wfoStabilityScore?: number;
+  confidences: StrategyConfidence[];
+  scores: TradeScore[];
 }
 
 export function useLearning() {

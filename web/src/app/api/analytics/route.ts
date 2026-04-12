@@ -40,7 +40,21 @@ export async function GET(request: Request) {
       symbolStats,
       directionStats,
       dailyPnl,
-      kpis,
+      kpis: {
+        winRate: kpis.total_trades > 0
+          ? (Number(kpis.wins) / Number(kpis.total_trades)) * 100
+          : 0,
+        profitFactor: Number(kpis.avg_loss) !== 0
+          ? Math.abs(Number(kpis.total_pnl) / Number(kpis.avg_loss))
+          : 0,
+        totalPnl:    Number(kpis.total_pnl) || 0,
+        avgWin:      Number(kpis.avg_win) || 0,
+        avgLoss:     Number(kpis.avg_loss) || 0,
+        expectancy:  Number(kpis.avg_pnl) || 0,
+        totalTrades: Number(kpis.total_trades) || 0,
+        bestTrade:   Number(kpis.best_trade) || 0,
+        worstTrade:  Number(kpis.worst_trade) || 0,
+      },
     });
   } catch (err) {
     console.error("[api/analytics]", (err as Error).message);
