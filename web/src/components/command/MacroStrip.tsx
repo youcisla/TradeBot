@@ -3,18 +3,18 @@
 import { useAppShell } from "@/components/AppShell";
 
 const SESSION_COLORS: Record<string, string> = {
-  london:  "#00e5ff",
-  newyork: "#ff9f0a",
-  overlap: "#30d158",
-  asian:   "#bf5af2",
-  closed:  "#6e6e73",
+  london:  "var(--cyan)",
+  newyork: "var(--orange)",
+  overlap: "var(--green)",
+  asian:   "var(--purple)",
+  closed:  "var(--text-3)",
 };
 
 const REGIME_COLORS: Record<string, string> = {
-  trending:  "#30d158",
-  ranging:  "#ff9f0a",
-  volatile: "#ff453a",
-  quiet:    "#6e6e73",
+  trending:  "var(--positive)",
+  ranging:   "var(--warning)",
+  volatile:  "var(--negative)",
+  quiet:     "var(--text-3)",
 };
 
 export default function MacroStrip() {

@@ -65,6 +65,9 @@ class TradeManagerAgent:
         are adopted, before we start monitoring.
         """
         self.reconcile()
+        # Restore in-memory _open_trades from DB after reconcile so the manager
+        # tracks what the broker actually has open (gabagool pattern).
+        self._open_trades = self._state.get_open_trades()
         self._emit("info", f"Loaded {len(self._open_trades)} open trades from MT5 (reconciled)")
         logger.info("Loaded %d open trades from MT5 (reconciled)", len(self._open_trades))
 

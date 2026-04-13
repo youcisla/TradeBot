@@ -1,5 +1,6 @@
-import AppShell from "@/components/AppShell";
-import AppShellLayout from "@/components/shell/app-shell";
+import { AppShellProvider } from "@/components/app/AppShellProvider";
+import { AppShellLayout } from "@/components/app/AppShellLayout";
+import { ErrorBoundary } from "@/components/ui/error-boundary";
 
 export default function DashboardLayout({
   children,
@@ -7,8 +8,10 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   return (
-    <AppShell>
-      <AppShellLayout>{children}</AppShellLayout>
-    </AppShell>
+    <ErrorBoundary>
+      <AppShellProvider>
+        <AppShellLayout>{children}</AppShellLayout>
+      </AppShellProvider>
+    </ErrorBoundary>
   );
 }

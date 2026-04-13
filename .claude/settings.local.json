@@ -90,7 +90,8 @@
       "WebFetch(domain:ai4trade.ai)",
       "mcp__plugin_github_github__get_file_contents",
       "mcp__ide__getDiagnostics",
-      "WebFetch(domain:localhost)"
+      "WebFetch(domain:localhost)",
+      "mcp__plugin_github_github__search_repositories"
     ],
     "deny": []
   },

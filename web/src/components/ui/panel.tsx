@@ -5,7 +5,7 @@ import { ReactNode } from "react";
 interface PanelProps {
   children: ReactNode;
   className?: string;
-  title?: string;
+  title?: ReactNode;
   action?: ReactNode;
   noPadding?: boolean;
 }

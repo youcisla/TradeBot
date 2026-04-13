@@ -1,4 +1,4 @@
-import SignalsPage from "@/components/signals/signals-page";
+import SignalsPage from "@/components/command/SignalsPage";
 
 export default function SignalsRoutePage() {
   return <SignalsPage />;

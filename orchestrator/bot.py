@@ -438,6 +438,55 @@ class TradingBot:
         logger.info("Signal %d received — shutting down", signum)
         self._request_shutdown()
 
+    def _log_status(
+        self,
+        loop_count: int,
+        metrics: dict[str, float],
+        scan_workers: int,
+        session: str,
+        profiler: OrchestrationProfiler,
+    ) -> None:
+        """Structured periodic status dump (gabagool pattern)."""
+        open_trades = len(self.trade_manager.get_open_trades()) if self.trade_manager else 0
+        equity = self.broker.get_equity() if self.broker else 0.0
+        balance = self.broker.get_balance() if self.broker else 0.0
+        profile = profiler.snapshot()
+        win_rate = 0.0
+        total_trades = 0
+        try:
+            stats = self.db.get_performance_stats() if self.db else {}
+            total_trades = stats.get("total_trades", 0)
+            win_rate = stats.get("win_rate", 0.0)
+        except Exception:
+            pass
+        logger.info("-" * 50)
+        logger.info("STATUS UPDATE @loop %d", loop_count)
+        logger.info(
+            "  Trades: %d open | %d total | %.1f%% win rate",
+            open_trades,
+            total_trades,
+            win_rate * 100,
+        )
+        logger.info(
+            "  Balance: $%.2f | Equity: $%.2f",
+            balance,
+            equity,
+        )
+        logger.info(
+            "  Session: %s | Cooldown: %.0fs | Workers: %d",
+            session,
+            0,  # placeholder — available from closure if needed
+            scan_workers,
+        )
+        logger.info(
+            "  Latency: scan=%.1fms rank=%.1fms exec=%.1fms total=%.1fms",
+            metrics.get("last_scan_latency_ms", 0),
+            metrics.get("last_rank_latency_ms", 0),
+            metrics.get("last_execution_latency_ms", 0),
+            profile.get("avg_total_ms", 0),
+        )
+        logger.info("-" * 50)
+
     def _warmup_models(self, learning: LearningAgent) -> None:
         """Eagerly load all ML/prediction models at startup."""
         _t0 = time.monotonic()
@@ -661,6 +710,9 @@ class TradingBot:
                 if _fail_count >= 3:
                     logger.error("CRITICAL: %d consecutive main-loop failures — consider pausing the bot", _fail_count)
                     self.log_agent.record("CRITICAL", f"{_fail_count} consecutive loop failures")
+                    if _fail_count >= 5:
+                        logger.warning("Multiple failures, backing off 30s before retry…")
+                        time.sleep(30)
 
             loop_elapsed_ms = time.monotonic() - loop_start
             profiler.record(
@@ -802,6 +854,10 @@ class TradingBot:
                     },
                 )
 
+            # ── Periodic structured status (gabagool pattern every 100 loops) ──
+            if loop_count > 0 and loop_count % 100 == 0:
+                self._log_status(loop_count, _metrics, scan_workers, _active_session, profiler)
+
             if (
                 settings.TOOL_SYSTEM_ENABLED
                 and settings.TOOL_SYSTEM_AUTORUN_EVERY_N_LOOPS > 0
@@ -866,6 +922,13 @@ class TradingBot:
         candle_server.stop()
         telegram_bot.stop_polling()
         telegram_bot.send_message("🛑 Bot shutting down.")
+        # Persist open positions before closing broker connection
+        # (gabagool pattern — ensures state survives hard interrupts)
+        if self.trade_manager and self.state:
+            for trade in self.trade_manager.get_open_trades():
+                self.state.save_trade(trade)
+            logger.info("Persisted %d open trades before broker disconnect",
+                        len(self.trade_manager.get_open_trades()))
         if self.db and self._session_id:
             self.db.end_session(self._session_id, exit_reason="graceful")
             self.db.set_bot_stopped()

@@ -8,24 +8,41 @@ module.exports = {
       none: "0px",
       sm: "3px",
       md: "4px",
-      lg: "6px",
-      xl: "8px",
-      "2xl": "12px",
-      "3xl": "16px",
+      lg: "8px",
+      xl: "12px",
+      "2xl": "16px",
       full: "9999px",
       pill: "999px",
     },
     extend: {
       colors: {
+        /* Surfaces */
         bg: "var(--bg)",
         "bg-2": "var(--bg-2)",
         "bg-3": "var(--bg-3)",
         "bg-4": "var(--bg-4)",
+        "bg-5": "var(--bg-5)",
+        /* Borders */
         border: "var(--border)",
+        "border-subtle": "var(--border-subtle)",
         "border-active": "var(--border-active)",
+        "border-focus": "var(--border-focus)",
+        /* Text */
         "text-1": "var(--text-1)",
         "text-2": "var(--text-2)",
         "text-3": "var(--text-3)",
+        "text-disabled": "var(--text-disabled)",
+        /* Semantic status */
+        positive: "var(--positive)",
+        "positive-dim": "var(--positive-dim)",
+        negative: "var(--negative)",
+        "negative-dim": "var(--negative-dim)",
+        warning: "var(--warning)",
+        "warning-dim": "var(--warning-dim)",
+        info: "var(--info)",
+        "info-dim": "var(--info-dim)",
+        accent: "var(--accent)",
+        /* Raw semantic (kept for backwards compat) */
         gold: "var(--gold)",
         "gold-dim": "var(--gold-dim)",
         red: "var(--red)",
@@ -38,6 +55,7 @@ module.exports = {
         orange: "var(--orange)",
         blue: "var(--blue)",
         "blue-dim": "var(--blue-dim)",
+        /* Agent accents */
         agent: {
           crucix: "var(--agent-crucix)",
           market: "var(--agent-market)",
@@ -53,12 +71,21 @@ module.exports = {
           debate: "var(--agent-debate)",
           exposure: "var(--agent-exposure)",
           memory: "var(--agent-memory)",
-        }
+        },
       },
       fontFamily: {
         mono: ["IBM Plex Mono", "monospace"],
         ui: ["IBM Plex Sans Condensed", "system-ui", "sans-serif"],
         sans: ["IBM Plex Sans Condensed", "system-ui", "sans-serif"],
+        data: ["JetBrains Mono", "monospace"],
+      },
+      boxShadow: {
+        "sm": "var(--shadow-sm)",
+        "md": "var(--shadow-md)",
+        "lg": "var(--shadow-lg)",
+        "glow-positive": "var(--shadow-glow-positive)",
+        "glow-negative": "var(--shadow-glow-negative)",
+        "glow-accent": "var(--shadow-glow-accent)",
       },
     },
   },
