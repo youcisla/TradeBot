@@ -303,6 +303,9 @@ class ProtectionSettings(BaseModel):
     global_loss_guard_lookback_minutes: int = Field(default=120, ge=0)
     global_loss_guard_max_losses: int = Field(default=4, ge=0)
     global_loss_guard_lock_minutes: int = Field(default=45, ge=0)
+    # Consecutive-reject circuit breaker (gabagool pattern)
+    consecutive_reject_limit: int = Field(default=5, ge=2)
+    consecutive_reject_cooldown_minutes: int = Field(default=15, ge=1)
 
 
 # ── Time-phase confidence gate settings ───────────────────────────────────
@@ -814,6 +817,8 @@ def _build_settings() -> _Settings:
         global_loss_guard_lookback_minutes=_int("PROTECTION_GLOBAL_LOSS_GUARD_LOOKBACK_MINUTES", "120"),
         global_loss_guard_max_losses=_int("PROTECTION_GLOBAL_LOSS_GUARD_MAX_LOSSES", "4"),
         global_loss_guard_lock_minutes=_int("PROTECTION_GLOBAL_LOSS_GUARD_LOCK_MINUTES", "45"),
+        consecutive_reject_limit=_int("CONSECUTIVE_REJECT_LIMIT", "5"),
+        consecutive_reject_cooldown_minutes=_int("CONSECUTIVE_REJECT_COOLDOWN_MINUTES", "15"),
     )
 
     # Time phase
@@ -1250,6 +1255,8 @@ PROTECTION_STOPLOSS_GUARD_LOCK_MINUTES: int = settings.protection.stoploss_guard
 PROTECTION_GLOBAL_LOSS_GUARD_LOOKBACK_MINUTES: int = settings.protection.global_loss_guard_lookback_minutes
 PROTECTION_GLOBAL_LOSS_GUARD_MAX_LOSSES: int = settings.protection.global_loss_guard_max_losses
 PROTECTION_GLOBAL_LOSS_GUARD_LOCK_MINUTES: int = settings.protection.global_loss_guard_lock_minutes
+CONSECUTIVE_REJECT_LIMIT: int = settings.protection.consecutive_reject_limit
+CONSECUTIVE_REJECT_COOLDOWN_MINUTES: int = settings.protection.consecutive_reject_cooldown_minutes
 
 # Time phase
 TIME_PHASE_CONFIDENCE_ENABLED: bool = settings.time_phase.enabled

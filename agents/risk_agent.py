@@ -110,6 +110,10 @@ class RiskAgent:
         self._crucix = crucix_agent
         self._db = db
 
+        # Consecutive-reject circuit breaker (gabagool pattern)
+        self._consec_failures: int = 0
+        self._consec_failure_until: datetime | None = None
+
         # Drawdown tracking
         self._day_start_equity: float = 0.0
         self._day_date: str = ""
@@ -397,7 +401,14 @@ class RiskAgent:
             self._emit("warn", "Drawdown breaker is ON — no trades allowed!", {"check": "drawdown"})
             return False
 
-        # 1b. Crucix macro blackout check
+        # 1b. Consecutive-reject circuit breaker (gabagool pattern)
+        if self._check_consecutive_failures():
+            self._emit("warn",
+                       f"CONSEC FAILURES — {self._consec_failures} consecutive rejects — circuit breaker active",
+                       {"check": "consec_failures", "count": self._consec_failures})
+            return False
+
+        # 1c. Crucix macro blackout check
         if self._crucix and self._crucix.is_blackout(signal.symbol):
             self._emit("warn", f"MACRO BLACKOUT: FLASH alert active on {signal.symbol}",
                        {"symbol": signal.symbol, "check": "crucix_blackout"})
@@ -405,6 +416,7 @@ class RiskAgent:
 
         # 1c. Protection layer (cooldown, stoploss guard, global loss guard).
         if not self._check_protections(signal):
+            self._record_reject("protection")
             return False
 
         agile_high_conf = self._is_agile_high_conf(signal)
@@ -418,6 +430,7 @@ class RiskAgent:
                            f"not in {settings.ENTRY_ALLOWED_SESSIONS}",
                            {"symbol": signal.symbol, "session": sess,
                             "allowed": settings.ENTRY_ALLOWED_SESSIONS})
+                self._record_reject("session_gate")
                 return False
 
         # 1e. Day-of-week gate — block systematic losing days
@@ -431,10 +444,12 @@ class RiskAgent:
                            f"DAY GATE: {signal.symbol} blocked — {today} in blocked days",
                            {"symbol": signal.symbol, "day": today,
                             "blocked": settings.ENTRY_BLOCKED_DAYS})
+                self._record_reject("day_gate")
                 return False
 
         # 1f. Time-phase confidence gate (optional).
         if not self._check_time_phase_confidence(signal):
+            self._record_reject("time_phase_confidence")
             return False
 
         open_trades = self._get_open_trades()
@@ -442,18 +457,22 @@ class RiskAgent:
         # 2. Duplicate and correlation exposure guards
         if self._check_duplicate(signal, open_trades):
             self._emit("warn", f"DUPLICATE — {signal.symbol} {signal.direction} already open")
+            self._record_reject("duplicate")
             return False
         if self._check_correlation(signal, open_trades) and not agile_high_conf:
             self._emit("warn", f"CORRELATION — {signal.symbol} {signal.direction} blocked")
+            self._record_reject("correlation")
             return False
 
         # 3. Max concurrent trades
         if not self._check_open_trade_cap(open_trades):
             self._emit("warn", "MAX_TRADES — concurrent position cap reached", {"check": "max_trades"})
+            self._record_reject("max_trades")
             return False
 
         # 4. Spread check (fast path)
         if not self._check_spread(signal):
+            self._record_reject("spread")
             return False
 
         return True
@@ -463,11 +482,10 @@ class RiskAgent:
         if self._check_drawdown():
             logger.warning("RISK REJECT [DRAWDOWN]: circuit breaker active")
             self._emit("warn", "Drawdown breaker is ON — no trades allowed!", {"check": "drawdown"})
+            self._record_reject("drawdown")
             return False
 
         # 1a. Daily realised-PnL gate — blocks rest-of-day when closed-trade loss ≥ MAX_DAILY_LOSS.
-        # Complements the equity-based drawdown circuit breaker (check 1 above) with a
-        # realised-only view so partial-close profits don't mask locked-in losses.
         if self._check_daily_loss():
             self._emit(
                 "warn",
@@ -475,6 +493,7 @@ class RiskAgent:
                 " — no new trades today",
                 {"check": "daily_loss"},
             )
+            self._record_reject("daily_loss")
             return False
 
         # 1b. Monthly realised-PnL gate (MT5_Trade_Connector RiskManagement_v1 pattern)
@@ -484,6 +503,17 @@ class RiskAgent:
                 f"MONTHLY LOSS GATE: MTD loss exceeds {settings.MAX_MONTHLY_LOSS:.0%} — trading halted",
                 {"check": "monthly_loss"},
             )
+            self._record_reject("monthly_loss")
+            return False
+
+        # 1c. Consecutive-reject circuit breaker (gabagool pattern)
+        if self._check_consecutive_failures():
+            self._emit(
+                "warn",
+                f"CONSEC FAILURES — {self._consec_failures} consecutive rejects — circuit breaker active",
+                {"check": "consec_failures", "count": self._consec_failures},
+            )
+            self._record_reject("consec_failures")
             return False
 
         # 1b. Crucix macro blackout check
@@ -491,17 +521,17 @@ class RiskAgent:
             self._emit("warn",
                        f"MACRO BLACKOUT: FLASH alert active on {signal.symbol}",
                        {"symbol": signal.symbol, "check": "crucix_blackout"})
+            self._record_reject("crucix_blackout")
             return False
 
         # 1c. Protection layer — skip on post-entry checks.
         if not skip_duplicate and not self._check_protections(signal):
+            self._record_reject("protection")
             return False
 
         agile_high_conf = self._is_agile_high_conf(signal)
 
         # 1d. Session gate — only allow new entries in proven sessions.
-        # skip_duplicate=True means this is a post-entry check; don't close
-        # a trade simply because the session changed after entry.
         if not skip_duplicate and settings.ENTRY_ALLOWED_SESSIONS and not agile_high_conf:
             sess = signal.entry_snapshot.session or current_session()
             if sess not in settings.ENTRY_ALLOWED_SESSIONS:
@@ -514,6 +544,7 @@ class RiskAgent:
                            f"session={sess} not in {settings.ENTRY_ALLOWED_SESSIONS}",
                            {"symbol": signal.symbol, "session": sess,
                             "check": "session_gate"})
+                self._record_reject("session_gate")
                 return False
 
         # 1e. Day-of-week gate — skip on post-entry checks for same reason.
@@ -531,10 +562,12 @@ class RiskAgent:
                            f"DAY GATE: {signal.symbol} blocked — {today} in blocked days",
                            {"symbol": signal.symbol, "day": today,
                             "check": "day_gate"})
+                self._record_reject("day_gate")
                 return False
 
         # 1f. Time-phase confidence gate — skip on post-entry checks.
         if not skip_duplicate and not self._check_time_phase_confidence(signal):
+            self._record_reject("time_phase_confidence")
             return False
 
         open_trades = self._get_open_trades()
@@ -562,6 +595,7 @@ class RiskAgent:
                         "ceiling": _exp.exposure_ceiling_pct,
                     },
                 )
+                self._record_reject("exposure")
                 return False
 
         # 2. Duplicate signal guard — skipped on post-entry validation because
@@ -577,7 +611,6 @@ class RiskAgent:
             return False
 
         # 3. Correlation guard (same symbol or correlated pair, same direction)
-        # Returns (blocked, lot_multiplier). Multiplier > 1.0 means no reduction needed.
         if not skip_duplicate:
             corr_blocked, corr_mult = self._check_correlation(signal, open_trades)
             if corr_blocked and not agile_high_conf:
@@ -588,6 +621,7 @@ class RiskAgent:
                 self._emit("warn",
                            f"CORRELATION — {signal.symbol} {signal.direction} blocked by correlated open position",
                            {"symbol": signal.symbol, "check": "correlation"})
+                self._record_reject("correlation")
                 return False
             if corr_mult < 1.0:
                 signal.metadata["correlation_multiplier"] = corr_mult
@@ -608,10 +642,12 @@ class RiskAgent:
                  "count": len(open_trades),
                  "limit": self._emergency_max_open_trades or settings.MAX_OPEN_TRADES},
             )
+            self._record_reject("max_trades")
             return False
 
         # 5. Live spread check (per-asset-class limits)
         if not self._check_spread(signal):
+            self._record_reject("spread")
             return False
 
         # 7. Position size sanity
@@ -623,6 +659,7 @@ class RiskAgent:
                        f"LOT_SIZE — {signal.symbol} calculated {lot_size:.3f} < min {settings.MIN_LOT_SIZE}",
                        {"symbol": signal.symbol, "check": "lot_size",
                         "lot_size": lot_size, "min": settings.MIN_LOT_SIZE})
+            self._record_reject("lot_size")
             return False
 
         logger.info("RISK APPROVED: %s %s %s (lot=%.2f)",
@@ -631,6 +668,7 @@ class RiskAgent:
                    f"All clear — {signal.direction} {signal.symbol} approved (lot={lot_size:.2f})",
                    {"symbol": signal.symbol, "direction": signal.direction,
                     "lot_size": lot_size})
+        self._consec_failures = 0  # reset on success
         return True
 
     def _check_signal_geometry(self, signal: Signal) -> bool:
@@ -1075,7 +1113,21 @@ class RiskAgent:
             "crucix_blackout",
             "max_trades",
             "lot_size",
+            "consec_failures",
         }
+
+    def _record_reject(self, reason: str) -> None:
+        """Increment consecutive-failure counter and arm cooldown if limit reached."""
+        from config import settings as s
+        self._consec_failures += 1
+        if self._consec_failures >= s.CONSECUTIVE_REJECT_LIMIT:
+            self._consec_failure_until = datetime.now(UTC) + timedelta(
+                minutes=s.CONSECUTIVE_REJECT_COOLDOWN_MINUTES
+            )
+            logger.warning(
+                "CONSEC FAILURES: %d rejects in a row — circuit breaker active for %dm",
+                self._consec_failures, s.CONSECUTIVE_REJECT_COOLDOWN_MINUTES,
+            )
 
     def get_last_reject_info(self) -> dict[str, str | bool]:
         return {
@@ -1131,6 +1183,24 @@ class RiskAgent:
             telegram_bot.send_message(msg)
             return True
 
+        return False
+
+    def _check_consecutive_failures(self) -> bool:
+        """Return True when consecutive rejections exceed the limit (gabagool pattern)."""
+        if self._consec_failure_until is None:
+            return False
+        now = datetime.now(UTC)
+        if now < self._consec_failure_until:
+            return True
+        # Cooldown expired — reset counter and allow trading to resume
+        self._consec_failure_until = None
+        prev = self._consec_failures
+        self._consec_failures = 0
+        logger.info(
+            "Consecutive-failure circuit breaker expired after %dm cooldown — "
+            "trading resumed (%d prior rejects cleared)",
+            settings.CONSECUTIVE_REJECT_COOLDOWN_MINUTES, prev,
+        )
         return False
 
     # ── daily / monthly loss gates ──────────────────────────────────────

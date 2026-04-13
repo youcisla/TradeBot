@@ -56,6 +56,22 @@ class Trade:
     def is_open(self) -> bool:
         return self.status in ("OPEN", "PARTIAL")
 
+    def time_remaining(self) -> float | None:
+        """Hours until MAX_HOURS_IN_TRADE is reached, or None if the trade is closed."""
+        if not self.is_open():
+            return None
+        try:
+            from config import settings
+            open_ts = self.open_time
+            if open_ts.tzinfo is None:
+                open_ts = open_ts.replace(tzinfo=UTC)
+            else:
+                open_ts = open_ts.astimezone(UTC)
+            elapsed = (datetime.now(UTC) - open_ts).total_seconds() / 3600
+            return max(0.0, settings.MAX_HOURS_IN_TRADE - elapsed)
+        except Exception:
+            return None
+
     def remaining_lots(self) -> float:
         closed = 0.0
         if self.tp1_hit:
