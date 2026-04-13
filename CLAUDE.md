@@ -204,9 +204,46 @@ When you learn something new about this project (new file, new pattern, design d
 
 ## What NOT to Do
 
-- Do not use Tailwind CSS classes on any new or modified frontend file — always use inline styles
-- Do not use `className` in new JSX (existing ones being migrated, do not add new ones)
+- Do not use `className` in new JSX — always use Tailwind utility classes with CSS custom properties (design tokens)
 - Do not skip reading files before editing them
 - Do not invent file paths or API shapes — verify them first
 - Do not commit without asking
 - Do not push without asking
+
+---
+
+## Frontend Architecture (2026-04-13 Redesign)
+
+The dashboard was migrated from inline styles to **Tailwind CSS v3 + shadcn/ui + TanStack Table**.
+
+### Stack
+- **Tailwind CSS v3** — design system and utility classes
+- **shadcn/ui** — manually installed components (Dialog, DropdownMenu, Select, Tabs, etc.); do NOT use `npx shadcn@latest add` — the CLI outputs v4 syntax which conflicts with the v3 codebase
+- **TanStack Table** (`@tanstack/react-table`) — sortable/filterable/paginated data tables
+- **SWR** — data fetching with polling intervals
+- **CSS custom properties** — design tokens defined in `globals.css`, referenced via `var(--token)` in both Tailwind config and inline styles
+
+### shadcn Gotcha
+The shadcn CLI (any version) outputs `@import "shadcn/tailwind.css"` which is v4 syntax. The installed shadcn npm package does not ship this file. **Always remove this import** when adding new shadcn components — all design tokens are already merged in `globals.css`.
+
+### Data Table Pattern
+All list/table views use the `useDataTable` hook + `DataTable` UI component:
+```
+hooks/use-data-table.ts        ← useReactTable wrapper (sorting, filter, pagination)
+components/ui/data-table.tsx   ← DataTable UI (search bar, sortable headers, pagination)
+```
+Columns defined as `ColumnDef<T>[]` using `@tanstack/react-table`.
+
+### Key Frontend Files
+```
+web/src/components/shell/app-shell.tsx        ← Header, sidebar, bottom nav (Tailwind)
+web/src/components/ui/data-table.tsx         ← Reusable TanStack Table shell
+web/src/components/ui/panel.tsx              ← Card wrapper with title slot
+web/src/components/ui/stat-card.tsx          ← KPI stat card
+web/src/components/ui/badges.tsx             ← DirectionBadge, StrategyBadge
+web/src/components/ui/tabs-craft.tsx          ← Reusable tab switcher
+web/src/components/history/trade-history.tsx  ← TanStack Table, filter buttons
+web/src/components/risk/guard-table.tsx       ← TanStack Table, status dots
+web/src/components/settings/settings-page.tsx ← 2-col grid settings form
+web/src/app/globals.css                       ← Design tokens (CSS vars), Tailwind base
+```
