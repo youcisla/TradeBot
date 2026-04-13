@@ -21,6 +21,7 @@ from models.ict_models import (
     Bias, Regime, OBType, FVGType, SetupModel, ICTContext, SetupCandidate,
     LiquiditySweep, FairValueGap, OrderBlock, StructureBreak, Displacement,
 )
+from config import settings
 
 
 def detect_all_setups(ctx: ICTContext) -> list[SetupCandidate]:
@@ -165,10 +166,33 @@ def _calc_tps(
     sl: float,
     direction: str,
 ) -> tuple[float, float, float, str]:
-    """Calculate 3 take-profit levels using Fib extensions, opposing liquidity, or RR."""
+    """Calculate 3 take-profit levels using Fib extensions, opposing liquidity, or RR.
+
+    ATR multipliers are regime-aware:
+      Trending: TP1×1.5  TP2×2.5  TP3×4.0  (TP4/runner uses TP4×6.0 via settings)
+      Ranging: TP1×0.8  TP2×1.5  TP3×2.5  (tighter — price tends to range within ATR)
+      Unknown/Volatile: fallback 1.5/2.5/3.5
+    """
     risk = abs(entry - sl)
     if risk == 0:
         risk = ctx.atr if ctx.atr > 0 else 0.001
+
+    # ── Regime-aware ATR multipliers ──────────────────────────────────
+    _regime = ctx.htf_regime
+    if _regime == Regime.TRENDING:
+        m1, m2, m3 = (
+            settings.TP_TRENDING_TP1_MULT,   # 1.5
+            settings.TP_TRENDING_TP2_MULT,   # 2.5
+            settings.TP_TRENDING_TP3_MULT,   # 4.0
+        )
+    elif _regime == Regime.RANGING:
+        m1, m2, m3 = (
+            settings.TP_RANGING_TP1_MULT,   # 0.8
+            settings.TP_RANGING_TP2_MULT,   # 1.5
+            settings.TP_RANGING_TP3_MULT,   # 2.5
+        )
+    else:
+        m1, m2, m3 = 1.5, 2.5, 3.5  # volatile / unknown fallback
 
     # NEW: 1.0, -0.272, -0.618 Fibonacci institutional targets
     if ctx.fibonacci:
@@ -186,13 +210,13 @@ def _calc_tps(
         )
         if len(above) >= 2:
             tp1 = above[0].price
-            tp2 = above[1].price if len(above) > 1 else entry + risk * 2
-            tp3 = above[2].price if len(above) > 2 else entry + risk * 3
+            tp2 = above[1].price if len(above) > 1 else entry + risk * m2
+            tp3 = above[2].price if len(above) > 2 else entry + risk * m3
             reason = "bsl_targets"
         else:
-            tp1 = round(entry + risk * 1.5, 5)
-            tp2 = round(entry + risk * 2.5, 5)
-            tp3 = round(entry + risk * 3.5, 5)
+            tp1 = round(entry + risk * m1, 5)
+            tp2 = round(entry + risk * m2, 5)
+            tp3 = round(entry + risk * m3, 5)
             reason = "rr_based"
     else:
         below = sorted(
@@ -202,13 +226,13 @@ def _calc_tps(
         )
         if len(below) >= 2:
             tp1 = below[0].price
-            tp2 = below[1].price if len(below) > 1 else entry - risk * 2
-            tp3 = below[2].price if len(below) > 2 else entry - risk * 3
+            tp2 = below[1].price if len(below) > 1 else entry - risk * m2
+            tp3 = below[2].price if len(below) > 2 else entry - risk * m3
             reason = "ssl_targets"
         else:
-            tp1 = round(entry - risk * 1.5, 5)
-            tp2 = round(entry - risk * 2.5, 5)
-            tp3 = round(entry - risk * 3.5, 5)
+            tp1 = round(entry - risk * m1, 5)
+            tp2 = round(entry - risk * m2, 5)
+            tp3 = round(entry - risk * m3, 5)
             reason = "rr_based"
 
     return round(tp1, 5), round(tp2, 5), round(tp3, 5), reason

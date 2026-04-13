@@ -274,7 +274,23 @@ class ICTStrategy(BaseStrategy):
         realtime_conf = max(0.1, min(1.0, best.confidence / 100.0))
         final_conf = (historical_conf + realtime_conf) / 2.0
 
-        if final_conf < settings.CONFIDENCE_ALLOW:
+        # ── Regime-aware minimum confidence gate ───────────────────────────
+        # In ranging markets ICT HTF bias is unreliable → use higher threshold.
+        # ADX measures trend strength; low ADX in a "trending" regime means
+        # the regime classification was wrong — treat it as ranging.
+        _regime = ctx.regime.lower() if ctx.regime else "unknown"
+        _adx = ctx.adx if ctx.adx > 0 else settings.REGIME_ADX_TRENDING
+        if _regime == "ranging" or (_regime == "trending" and _adx < settings.REGIME_ADX_TRENDING):
+            _min_conf = max(
+                settings.CONFIDENCE_ALLOW,
+                settings.MIN_CONF_RANGING + settings.REGIME_CONFIDENCE_PENALTY,
+            )
+            if final_conf < _min_conf:
+                self._emit("info",
+                           f"ICT {ctx.symbol}: regime={_regime} adx={_adx:.1f} — "
+                           f"blended conf {final_conf:.2f} < regime min {_min_conf:.2f} — skipped")
+                return None
+        elif final_conf < settings.CONFIDENCE_ALLOW:
             self._emit("info", f"Rejecting {best.model.name} (blended conf {final_conf:.2f} < {settings.CONFIDENCE_ALLOW})")
             return None
 

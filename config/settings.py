@@ -207,10 +207,13 @@ class ICTSettings(BaseModel):
     regime_adx_trending: float = Field(default=25.0, ge=0.0)
     regime_adx_ranging: float = Field(default=20.0, ge=0.0)
     regime_confidence_penalty: float = Field(default=0.10, ge=0.0, le=1.0)
+    tp_trending_tp1_mult: float = Field(default=1.5, ge=0.0)
+    tp_trending_tp2_mult: float = Field(default=2.5, ge=0.0)
     tp_trending_tp3_mult: float = Field(default=4.0, ge=0.0)
     tp_trending_tp4_mult: float = Field(default=6.0, ge=0.0)
     tp_ranging_tp1_mult: float = Field(default=0.8, ge=0.0)
     tp_ranging_tp2_mult: float = Field(default=1.5, ge=0.0)
+    tp_ranging_tp3_mult: float = Field(default=2.5, ge=0.0)
     max_hours_in_trade: int = Field(default=48, ge=0)
     min_ict_score_crypto: float = Field(default=35.0, ge=0.0)
     # confidence floors by regime
@@ -337,6 +340,7 @@ class TelegramSettings(BaseModel):
 # ── Intelligence / data feed settings ─────────────────────────────────────
 
 class IntelligenceSettings(BaseModel):
+    deepseek_api_key: str = ""
     alpha_vantage_key: str = ""
     twelve_data_key: str = ""
     fred_api_key: str = ""
@@ -732,10 +736,13 @@ def _build_settings() -> _Settings:
         regime_adx_trending=_float("REGIME_ADX_TRENDING", "25.0"),
         regime_adx_ranging=_float("REGIME_ADX_RANGING", "20.0"),
         regime_confidence_penalty=_float("REGIME_CONFIDENCE_PENALTY", "0.10"),
+        tp_trending_tp1_mult=_float("TP_TRENDING_TP1_MULT", "1.5"),
+        tp_trending_tp2_mult=_float("TP_TRENDING_TP2_MULT", "2.5"),
         tp_trending_tp3_mult=_float("TP_TRENDING_TP3_MULT", "4.0"),
         tp_trending_tp4_mult=_float("TP_TRENDING_TP4_MULT", "6.0"),
         tp_ranging_tp1_mult=_float("TP_RANGING_TP1_MULT", "0.8"),
         tp_ranging_tp2_mult=_float("TP_RANGING_TP2_MULT", "1.5"),
+        tp_ranging_tp3_mult=_float("TP_RANGING_TP3_MULT", "2.5"),
         max_hours_in_trade=_int("MAX_HOURS_IN_TRADE", "48"),
         min_ict_score_crypto=_float("MIN_ICT_SCORE_CRYPTO", "35.0"),
         min_conf_trending=_float("MIN_CONF_TRENDING", "0.40"),
@@ -847,6 +854,7 @@ def _build_settings() -> _Settings:
 
     # Intelligence
     intelligence = IntelligenceSettings(
+        deepseek_api_key=_str("DEEPSEEK_API_KEY", ""),
         alpha_vantage_key=_str("ALPHA_VANTAGE_KEY", ""),
         twelve_data_key=_str("TWELVE_DATA_KEY", ""),
         fred_api_key=_str("FRED_API_KEY", ""),
@@ -1174,10 +1182,13 @@ MTF_D1_VETO: bool = settings.ict.mtf_d1_veto
 REGIME_ADX_TRENDING: float = settings.ict.regime_adx_trending
 REGIME_ADX_RANGING: float = settings.ict.regime_adx_ranging
 REGIME_CONFIDENCE_PENALTY: float = settings.ict.regime_confidence_penalty
+TP_TRENDING_TP1_MULT: float = settings.ict.tp_trending_tp1_mult
+TP_TRENDING_TP2_MULT: float = settings.ict.tp_trending_tp2_mult
 TP_TRENDING_TP3_MULT: float = settings.ict.tp_trending_tp3_mult
 TP_TRENDING_TP4_MULT: float = settings.ict.tp_trending_tp4_mult
 TP_RANGING_TP1_MULT: float = settings.ict.tp_ranging_tp1_mult
 TP_RANGING_TP2_MULT: float = settings.ict.tp_ranging_tp2_mult
+TP_RANGING_TP3_MULT: float = settings.ict.tp_ranging_tp3_mult
 MAX_HOURS_IN_TRADE: int = settings.ict.max_hours_in_trade
 MIN_ICT_SCORE_CRYPTO: float = settings.ict.min_ict_score_crypto
 MIN_CONF_TRENDING: float = settings.ict.min_conf_trending
@@ -1288,6 +1299,7 @@ MT5_DB_SYNC_INTERVAL_SECONDS: int = settings.intelligence.mt5_db_sync_interval_s
 NEWS_CALENDAR_SOURCE: str = settings.intelligence.news_calendar_source
 FINNHUB_API_KEY: str = settings.intelligence.finnhub_api_key
 NEWS_BLACKOUT_MINUTES: int = settings.intelligence.news_blackout_minutes
+DEEPSEEK_API_KEY: str = settings.intelligence.deepseek_api_key
 CRUCIX_URL: str = settings.intelligence.crucix_url
 
 # Learning
