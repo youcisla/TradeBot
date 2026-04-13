@@ -254,3 +254,42 @@ export function useLearning() {
     refreshInterval: 60_000,
   });
 }
+
+// ── Backtest ───────────────────────────────────────────────────────────────────────
+
+export interface StrategyStats {
+  symbol: string;
+  strategy: string;
+  signals: number;
+  wins: number;
+  tp1_hits: number;
+  tp2_hits: number;
+  tp3_hits: number;
+  sl_hits: number;
+  timeouts: number;
+  total_r: number;
+  avg_r: number;
+  win_rate: number;
+  profit_factor: number;
+  score: number;
+}
+
+export interface BacktestJob {
+  jobId: string;
+  status: "running" | "done" | "error";
+  started_at: string;
+  result: StrategyStats[] | null;
+  error: string | null;
+}
+
+export function useBacktestStatus(jobId: string | null) {
+  return useSWR<BacktestJob>(
+    jobId ? `/api/backtest/status?jobId=${encodeURIComponent(jobId)}` : null,
+    fetcher,
+    {
+      ...BASE_CONF,
+      refreshInterval: jobId ? 3_000 : 0,
+      revalidateOnFocus: false,
+    },
+  );
+}

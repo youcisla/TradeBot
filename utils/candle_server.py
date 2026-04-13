@@ -17,9 +17,12 @@ from __future__ import annotations
 
 import json
 import logging
+import sys
 import threading
+import uuid
 from datetime import datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 from typing import Any, Optional
 
@@ -37,7 +40,10 @@ _broker: BrokerConnector | None = None
 _server: ThreadingHTTPServer | None = None
 _ict_contexts: dict[str, Any] = {}  # symbol → latest ICTContext
 _ict_lock = threading.Lock()
-_db: Optional["Database"] = None  # set by start() — shared with bot
+_backtest_jobs: dict[str, dict] = {}   # jobId → {status, started_at, result, error}
+_backtest_lock = threading.Lock()
+# Lazily populated when first backtest endpoint is hit
+_bt_mod = None  # module handle for scripts.backtest once imported
 
 # Allowed CORS origin for browser clients (defaults to Next.js dev server).
 # Override via DASHBOARD_ORIGIN env var for production Vercel deployments.
@@ -71,6 +77,11 @@ class _CandleHandler(BaseHTTPRequestHandler):
 
         if parsed.path != "/candles":
             self._json_response(404, {"error": "Not found"})
+            return
+
+        # ── Backtest status (GET) ──────────────────────────────────────
+        if parsed.path == "/api/backtest/status":
+            self._handle_backtest_status()
             return
 
         # ── /candles ────────────────────────────────────────────────────
@@ -296,10 +307,115 @@ class _CandleHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(payload)))
         self.send_header("Access-Control-Allow-Origin", _CORS_ORIGIN)
-        self.send_header("Access-Control-Allow-Methods", "GET, OPTIONS")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Content-Type")
         self.end_headers()
         self.wfile.write(payload)
+
+    # ── Backtest endpoints ─────────────────────────────────────────────────
+
+    def do_POST(self) -> None:  # noqa: N802
+        """Dispatch POST requests to the appropriate handler."""
+        parsed = urlparse(self.path)
+        if parsed.path == "/api/backtest/run":
+            self._handle_backtest_run()
+            return
+        self._json_response(404, {"error": "Not found"})
+
+    def _handle_backtest_run(self) -> None:
+        """Start a backtest job in a daemon thread and return a job ID."""
+        global _bt_mod
+        try:
+            content_len = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(content_len).decode("utf-8") if content_len > 0 else "{}"
+            params = json.loads(body)
+        except (ValueError, TypeError):
+            self._json_response(400, {"error": "Invalid JSON body"})
+            return
+
+        symbol = params.get("symbol", "").upper()
+        strategy = params.get("strategy", "")
+        if not symbol:
+            self._json_response(400, {"error": "symbol is required"})
+            return
+
+        job_id = f"bt_{uuid.uuid4().hex[:12]}"
+        with _backtest_lock:
+            _backtest_jobs[job_id] = {
+                "status": "running",
+                "started_at": datetime.now(timezone.utc).isoformat(),
+                "result": None,
+                "error": None,
+            }
+
+        # Lazy-import backtest module on first request
+        global _bt_mod  # noqa: used in _run_backtest_job
+        if _bt_mod is None:
+            _repo = Path(__file__).resolve().parents[1]
+            if str(_repo) not in sys.path:
+                sys.path.insert(0, str(_repo))
+            try:
+                import scripts.backtest as _bt
+                _bt_mod = _bt
+            except Exception as exc:
+                logger.error("Could not import scripts.backtest: %s", exc)
+                with _backtest_lock:
+                    _backtest_jobs[job_id].update(status="error", error=str(exc))
+                self._json_response(500, {"error": f"Could not import backtest module: {exc}"})
+                return
+
+        # Spawn daemon thread to run the backtest
+        thread = threading.Thread(
+            target=self._run_backtest_job,
+            args=(job_id, symbol, strategy),
+            daemon=True,
+        )
+        thread.start()
+        self._json_response(202, {"jobId": job_id, "status": "running"})
+
+    def _run_backtest_job(self, job_id: str, symbol: str, strategy: str) -> None:
+        """Execute the backtest in a thread and populate the job result."""
+        global _bt_mod
+        try:
+            bt = _bt_mod
+            # Fetch 2yr H1 candles for the symbol (uses MT5)
+            logger.info("[backtest %s] Fetching candles for %s", job_id, symbol)
+            candles = bt._fetch_candles(symbol, candle_count=17_520)
+            if not candles:
+                raise ValueError(f"No candles returned for {symbol}")
+            strategies = bt._build_strategies(filter_name=strategy or None, broker=_broker)
+            results = bt._backtest_symbol(symbol, candles, strategies, broker=_broker)
+            stats = bt._aggregate(results)
+            with _backtest_lock:
+                _backtest_jobs[job_id].update(status="done", result=stats)
+            logger.info("[backtest %s] Done — %d results", job_id, len(stats))
+        except Exception as exc:
+            logger.exception("[backtest %s] Error: %s", job_id, exc)
+            with _backtest_lock:
+                _backtest_jobs[job_id].update(status="error", error=str(exc))
+
+    def _handle_backtest_status(self) -> None:
+        """Return the current status/result for a backtest job."""
+        parsed = urlparse(self.path)
+        params = parse_qs(parsed.query)
+        job_id = (params.get("jobId") or [""])[0]
+        if not job_id:
+            self._json_response(400, {"error": "jobId is required"})
+            return
+        with _backtest_lock:
+            job = _backtest_jobs.get(job_id)
+        if not job:
+            self._json_response(404, {"error": "Job not found"})
+            return
+        # Return a clean dict (strip internal keys)
+        payload = {
+            "jobId": job_id,
+            "status": job["status"],
+            "started_at": job["started_at"],
+            "result": job.get("result"),
+            "error": job.get("error"),
+        }
+        self._json_response(200, payload)
 
     def log_message(self, format: str, *args: object) -> None:  # noqa: A002
         """Suppress per-request access logs — errors are logged explicitly."""
