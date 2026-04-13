@@ -1,4 +1,4 @@
-import HistoryPage from "@/components/history/HistoryPage";
+import HistoryPage from "@/components/history/history-page";
 
 export default function TradesPage() {
   return <HistoryPage />;

@@ -24,6 +24,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Sequence
 
 from config import settings
+from utils.helpers import current_session
 
 # Project root — one level up from the agents/ directory
 _ROOT = pathlib.Path(__file__).resolve().parent.parent

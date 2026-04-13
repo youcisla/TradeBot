@@ -1,53 +1,55 @@
 /* IBM Plex fonts from Google Fonts */
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=IBM+Plex+Sans+Condensed:wght@300;400;500;600;700&display=swap');
+@import "tailwindcss-animate";
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+/* ── Existing design tokens (source of truth) ───────────────────────────── */
 :root {
   /* Base surfaces */
-  --bg:           #0D0D0F;   /* page background */
-  --bg-2:         #141417;   /* card / panel */
-  --bg-3:         #1C1C21;   /* input / elevated card */
-  --bg-4:         #252529;   /* hover state */
+  --bg:           #0D0D0F;
+  --bg-2:         #141417;
+  --bg-3:         #1C1C21;
+  --bg-4:         #252529;
   --border:       rgba(255, 255, 255, 0.07);
   --border-active: rgba(240, 180, 41, 0.35);
 
   /* Typography */
-  --text-1:       #F4F4F5;   /* primary text */
-  --text-2:       rgba(244, 244, 245, 0.55); /* secondary */
-  --text-3:       rgba(244, 244, 245, 0.30); /* disabled/hint */
+  --text-1:       #F4F4F5;
+  --text-2:       rgba(244, 244, 245, 0.55);
+  --text-3:       rgba(244, 244, 245, 0.30);
 
-  /* Semantic colors */
-  --gold:         #F0B429;   /* primary accent / long / up */
+  /* Semantic */
+  --gold:         #F0B429;
   --gold-dim:     rgba(240, 180, 41, 0.15);
-  --red:          #FF453A;   /* short / down / danger */
+  --red:          #FF453A;
   --red-dim:      rgba(255, 69, 58, 0.12);
-  --cyan:         #64D2FF;   /* info / active / live */
+  --cyan:         #64D2FF;
   --cyan-dim:     rgba(100, 210, 255, 0.10);
-  --green:        #30D158;   /* confirmed / success */
+  --green:        #30D158;
   --green-dim:    rgba(48, 209, 88, 0.10);
-  --purple:       #BF5AF2;   /* neural / AI */
-  --orange:       #FF9F0A;   /* council / warning */
-  --blue:         #0A84FF;   /* session / info */
+  --purple:       #BF5AF2;
+  --orange:       #FF9F0A;
+  --blue:         #0A84FF;
   --blue-dim:     rgba(10, 132, 255, 0.12);
 
-  /* Agent accent map */
-  --agent-crucix:       #64D2FF;
-  --agent-market:       #32ADE6;
-  --agent-analysis:     #F4F4F5;
-  --agent-strategy:     #30D158;
-  --agent-neural:       #BF5AF2;
-  --agent-council:      #FF9F0A;
-  --agent-risk:         #FF453A;
-  --agent-execution:    #F0B429;
-  --agent-trade-mgr:    #64D2FF;
-  --agent-learning:     #30D158;
-  --agent-logging:      rgba(244,244,245,0.25);
-  --agent-debate:       #BF5AF2;
-  --agent-exposure:     #FF9F0A;
-  --agent-memory:       #64D2FF;
+  /* Agent accents */
+  --agent-crucix:     #64D2FF;
+  --agent-market:     #32ADE6;
+  --agent-analysis:   #F4F4F5;
+  --agent-strategy:   #30D158;
+  --agent-neural:     #BF5AF2;
+  --agent-council:    #FF9F0A;
+  --agent-risk:       #FF453A;
+  --agent-execution:  #F0B429;
+  --agent-trade-mgr:  #64D2FF;
+  --agent-learning:   #30D158;
+  --agent-logging:    rgba(244,244,245,0.25);
+  --agent-debate:     #BF5AF2;
+  --agent-exposure:   #FF9F0A;
+  --agent-memory:     #64D2FF;
 
   /* Fonts */
   --font-mono:  'IBM Plex Mono', 'Fira Code', monospace;
@@ -62,17 +64,47 @@
   --radius-md:  4px;
   --radius-pill: 999px;
 
-  /* Spacing scale */
-  --space-1: 4px;
-  --space-2: 8px;
-  --space-3: 12px;
-  --space-4: 16px;
-  --space-5: 24px;
-  --space-6: 32px;
-  --space-7: 48px;
+  /* Spacing */
+  --space-1: 4px; --space-2: 8px; --space-3: 12px;
+  --space-4: 16px; --space-5: 24px; --space-6: 32px; --space-7: 48px;
 
   /* Accent */
   --accent: #00DC82;
+
+  /* shadcn dark theme — point to existing design tokens */
+  --background:        var(--bg);
+  --foreground:        var(--text-1);
+  --card:              var(--bg-2);
+  --card-foreground:   var(--text-1);
+  --popover:           var(--bg-3);
+  --popover-foreground:var(--text-1);
+  --primary:           var(--accent);
+  --primary-foreground:#000;
+  --secondary:         var(--bg-3);
+  --secondary-foreground:var(--text-1);
+  --muted:             var(--bg-3);
+  --muted-foreground:  var(--text-2);
+  --accent:            var(--bg-3);
+  --accent-foreground: var(--text-1);
+  --destructive:       var(--red);
+  --destructive-foreground:#fff;
+  --border:            var(--border);
+  --input:             var(--bg-3);
+  --ring:              var(--accent);
+  --radius:            0.25rem;
+  --chart-1:           var(--cyan);
+  --chart-2:           var(--green);
+  --chart-3:           var(--gold);
+  --chart-4:           var(--purple);
+  --chart-5:           var(--orange);
+  --sidebar:           var(--bg-2);
+  --sidebar-foreground:var(--text-1);
+  --sidebar-primary:   var(--accent);
+  --sidebar-primary-foreground:#000;
+  --sidebar-accent:    var(--bg-3);
+  --sidebar-accent-foreground:var(--text-1);
+  --sidebar-border:    var(--border);
+  --sidebar-ring:      var(--accent);
 }
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -86,21 +118,28 @@ body {
   overflow-x: hidden;
 }
 
-/* ── Material Symbols ────────────────────────────────────────────────────── */
 .material-symbols-outlined {
   font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24;
   user-select: none;
   line-height: 1;
 }
 
-/* Material Symbols loaded via Google Fonts CDN in layout.tsx */
-
-.text-mono {
-  font-family: var(--font-mono);
-}
+.text-mono { font-family: var(--font-mono); }
 
 /* Scrollbar */
 ::-webkit-scrollbar       { width: 3px; height: 3px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--text-3); border-radius: 2px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--text-2); }
+
+/* Pulse animation for StatusBadge live indicator */
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; box-shadow: 0 0 4px currentColor; }
+  50%       { opacity: 0.4; box-shadow: 0 0 2px currentColor; }
+}
+
+@layer base {
+  * { border-color: var(--border); outline-color: var(--ring); }
+  body { background: var(--background); color: var(--foreground); }
+  html { font-family: var(--font-sans); }
+}

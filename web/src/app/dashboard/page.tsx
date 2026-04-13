@@ -1,5 +1,5 @@
-import CommandPage from "@/components/command/CommandPage";
+import CommandCenter from "@/components/command/command-center";
 
 export default function CommandCenterPage() {
-  return <CommandPage />;
+  return <CommandCenter />;
 }

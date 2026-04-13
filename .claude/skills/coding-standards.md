@@ -9,30 +9,18 @@ date_added: "2026-03-28"
 
 # PulseTrade Coding Standards
 
-## CRITICAL FRONTEND RULES (non-negotiable)
+## CRITICAL FRONTEND RULES
 
-### 1. NO Tailwind on new or modified frontend files
-```tsx
-// ❌ WRONG — never add new Tailwind classes
-<div className="flex items-center gap-3 px-4 py-2 text-sm font-bold">
+### 1. Tailwind is the design system — use utility classes for all styling
+New files and migrated files use Tailwind utility classes exclusively (per senior-frontend redesign, 2026-04-13).
 
-// ✅ CORRECT — inline styles only
-<div style={{ display: "flex", alignItems: "center", gap: 12, padding: "8px 16px", fontSize: 14, fontWeight: 700 }}>
-```
+### 2. shadcn/ui component primitives
+Use shadcn/ui + Radix for all compound UI components (Dialog, DropdownMenu, Select, Tabs, etc.).
+Install new components via: `npx shadcn@latest add <component>`
 
-### 2. NO new `className` in JSX
-Existing `className` attributes are being migrated — do NOT add new ones.
-```tsx
-// ❌ WRONG
-<span className="material-symbols-outlined text-primary">
-
-// ✅ CORRECT
-<span className="material-symbols-outlined" style={{ color: "#00fd87" }}>
-// Exception: material-symbols-outlined class is required for the icon font to work
-```
-
-### 3. CSS Variables for colors
-Use the project's CSS custom properties when styling inline:
+### 3. Design tokens via Tailwind config + CSS variables
+Custom tokens (colors, fonts, spacing) live in `tailwind.config.ts` and `globals.css`.
+Do not hardcode hex values in components.
 ```tsx
 // Design token reference:
 // --matrix / #00fd87       = primary green (active, positive, live)
