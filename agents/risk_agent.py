@@ -290,6 +290,15 @@ class RiskAgent:
                 (1 - multiplier) * 100, lot_size,
             )
 
+        # Correlation lot reduction (from CorrelationGate dynamic analysis).
+        corr_mult = signal.metadata.get("correlation_multiplier", 1.0)
+        if corr_mult < 1.0:
+            lot_size = round(lot_size * corr_mult, 2)
+            logger.info(
+                "CorrelationGate: lot reduced by %.0f%% → %.2f",
+                (1 - corr_mult) * 100, lot_size,
+            )
+
         # Macro risk scaling from Crucix
         if self._crucix:
             try:
@@ -322,7 +331,9 @@ class RiskAgent:
 
         Reference: BackTrader KellyCriterion Sizer, Thorp (1962)
         """
-        from datetime import UTC, timedelta
+        if self._db is None:
+            logger.debug("Kelly: no DB — using equity_pct fallback")
+            return settings.MAX_RISK_PER_TRADE
         since = datetime.now(UTC) - timedelta(days=settings.KELLY_LOOKBACK_DAYS)
         trades = self._db.get_closed_trades_since(since, limit=500)
 
@@ -566,15 +577,20 @@ class RiskAgent:
             return False
 
         # 3. Correlation guard (same symbol or correlated pair, same direction)
-        if not skip_duplicate and self._check_correlation(signal, open_trades) and not agile_high_conf:
-            logger.warning(
-                "RISK REJECT [CORRELATION]: %s %s blocked by existing exposure",
-                signal.symbol, signal.direction,
-            )
-            self._emit("warn",
-                       f"CORRELATION — {signal.symbol} {signal.direction} blocked by correlated open position",
-                       {"symbol": signal.symbol, "check": "correlation"})
-            return False
+        # Returns (blocked, lot_multiplier). Multiplier > 1.0 means no reduction needed.
+        if not skip_duplicate:
+            corr_blocked, corr_mult = self._check_correlation(signal, open_trades)
+            if corr_blocked and not agile_high_conf:
+                logger.warning(
+                    "RISK REJECT [CORRELATION]: %s %s blocked by existing exposure",
+                    signal.symbol, signal.direction,
+                )
+                self._emit("warn",
+                           f"CORRELATION — {signal.symbol} {signal.direction} blocked by correlated open position",
+                           {"symbol": signal.symbol, "check": "correlation"})
+                return False
+            if corr_mult < 1.0:
+                signal.metadata["correlation_multiplier"] = corr_mult
 
         # 4. Maximum concurrent open trades
         if not self._check_open_trade_cap(open_trades):
@@ -1218,10 +1234,23 @@ class RiskAgent:
 
     # ── correlation guard ────────────────────────────────────────────────
 
-    def _check_correlation(self, signal: Signal, open_trades: list[Trade]) -> bool:
-        """Block if already holding the same symbol+direction from any strategy,
-        OR if holding a highly-correlated pair in the same direction."""
-        # Dynamic gate — attempt first if price history is available
+    def _check_correlation(
+        self, signal: Signal, open_trades: list[Trade]
+    ) -> tuple[bool, float]:
+        """Check correlation with open positions.
+
+        Returns:
+            (blocked, lot_multiplier)
+            blocked = True only when dynamic gate detects strong correlation
+                      AND both static and dynamic gates agree on blocking.
+            lot_multiplier = 1.0 normally, or 0.5 when moderate correlation
+                            is detected (only applied by calculate_position_size
+                            when this method returns blocked=False).
+        """
+        # Dynamic gate — attempt first if price history is available.
+        # Compute both the block signal and the size multiplier.
+        dynamic_blocked = False
+        dynamic_multiplier = 1.0
         try:
             if self._corr_gate.has_data(signal.symbol):
                 all_symbols = list(
@@ -1241,29 +1270,48 @@ class RiskAgent:
                     for t in open_trades
                     if t.is_open()
                 ]
-                _, multiplier = self._corr_gate.check_correlation(
+                can_trade, multiplier = self._corr_gate.check_correlation(
                     signal.symbol, open_pos_dicts, price_history
                 )
-                if multiplier < 1.0:
-                    logger.debug(
-                        "Correlation block (dynamic): %s %s multiplier=%.2f",
-                        signal.direction, signal.symbol, multiplier,
-                    )
-                    return True
+                dynamic_multiplier = multiplier
+                # Only hard-block when correlation is very strong (multiplier ≤ 0.5).
+                if multiplier <= 0.5:
+                    dynamic_blocked = True
+
+                # ── Portfolio delta exposure report (gabagool pattern) ──────────
+                corr_matrix = self._corr_gate.get_correlation_matrix(
+                    all_symbols, price_history
+                )
+                delta_exposure = self._corr_gate.portfolio_delta_exposure(
+                    open_pos_dicts, corr_matrix
+                )
+                logger.debug(
+                    "Correlation gate: %s %s multiplier=%.2f delta_exposure=%s",
+                    signal.direction, signal.symbol, multiplier, delta_exposure,
+                )
         except Exception:
             pass
 
         # Static fallback — use the hard-coded correlated-pairs table
+        static_blocked = False
         correlated = _CORRELATED_PAIRS.get(signal.symbol, frozenset())
         for t in open_trades:
             if not t.is_open():
                 continue
             if t.symbol == signal.symbol and t.direction == signal.direction:
-                return True
+                static_blocked = True
+                break
             if t.symbol in correlated and t.direction == signal.direction:
-                logger.debug(
-                    "Correlation block (static): %s %s blocked by open %s %s",
-                    signal.direction, signal.symbol, t.direction, t.symbol,
-                )
-                return True
-        return False
+                static_blocked = True
+                break
+
+        if dynamic_blocked and static_blocked:
+            logger.debug(
+                "Correlation block (dynamic + static): %s %s multiplier=%.2f",
+                signal.direction, signal.symbol, dynamic_multiplier,
+            )
+            return True, 1.0
+
+        # No hard block.  Return the dynamic multiplier so calculate_position_size
+        # can reduce the lot size without rejecting the trade outright.
+        return False, dynamic_multiplier

@@ -71,3 +71,5 @@ crucix/node_modules/
 .turbo/
 tmp/
 temp/
+*.csv
+*.txt

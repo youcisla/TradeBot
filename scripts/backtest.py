@@ -144,8 +144,17 @@ def _atr(candles: list[Candle], period: int = 14) -> float:
     return round(sum(recent) / len(recent), 5) if recent else 0.0
 
 
-def _build_context(symbol: str, window: list[Candle]) -> MarketContext:
-    """Build a MarketContext from a candle window — no broker/DB needed."""
+def _build_context(
+    symbol: str,
+    window: list[Candle],
+    broker=None,
+    m15_cache: dict[str, list[Candle]] | None = None,
+) -> MarketContext:
+    """Build a MarketContext from a candle window.
+
+    When m15_cache is provided, injects pre-resampled M15 candles for
+    session-range strategy compatibility.
+    """
     closes  = [c.close for c in window]
     mid     = window[-1].close
     atr     = _atr(window, 14)
@@ -169,6 +178,12 @@ def _build_context(symbol: str, window: list[Candle]) -> MarketContext:
     trend = "bullish" if sma_f > sma_s else ("bearish" if sma_f < sma_s else "neutral")
 
     ts = window[-1].timestamp
+
+    # M15 candles for session-range strategy (pre-resampled, fast lookup)
+    m15_candles: list[Candle] = []
+    if m15_cache is not None:
+        m15_candles = m15_cache.get(symbol, [])
+
     return MarketContext(
         symbol=symbol,
         current_price=mid,
@@ -189,7 +204,109 @@ def _build_context(symbol: str, window: list[Candle]) -> MarketContext:
         day_of_week=ts.strftime("%A"),
         near_news_event=False,
         candles=window,
+        m15_candles=m15_candles,
     )
+
+
+# ── Backtest broker ─────────────────────────────────────────────────────────
+
+class BacktestBroker:
+    """Broker shim that serves candles derived from cached H1 history.
+
+    Allows broker-dependent strategies (ICT, PairsSpread) to run in the
+    backtest without a live MT5 connection.
+    """
+
+    def __init__(self, candle_map: dict[str, list[Candle]]) -> None:
+        self._cache = candle_map
+
+    def get_candles(
+        self,
+        symbol: str,
+        timeframe: str,
+        count: int,
+    ) -> list[Candle]:
+        """Return candles for the given symbol and timeframe.
+
+        H1  → served directly from cache
+        H4  → derived by grouping every 4 H1 candles
+        D1  → derived by grouping every 24 H1 candles
+        M15 → not served here (pre-resampled once per symbol in main())
+        """
+        h1 = self._cache.get(symbol, [])
+        if not h1:
+            return []
+
+        if timeframe == "H1":
+            return h1[-count:] if len(h1) >= count else h1
+        if timeframe == "H4":
+            grouped: list[Candle] = []
+            for i in range(0, len(h1), 4):
+                chunk = h1[i : i + 4]
+                if not chunk:
+                    continue
+                grouped.append(
+                    Candle(
+                        timestamp=chunk[0].timestamp,
+                        open=chunk[0].open,
+                        high=max(c.high for c in chunk),
+                        low=min(c.low for c in chunk),
+                        close=chunk[-1].close,
+                        volume=sum(c.volume for c in chunk),
+                    )
+                )
+            return grouped[-count:] if len(grouped) >= count else grouped
+        if timeframe == "D1":
+            grouped: list[Candle] = []
+            for i in range(0, len(h1), 24):
+                chunk = h1[i : i + 24]
+                if not chunk:
+                    continue
+                grouped.append(
+                    Candle(
+                        timestamp=chunk[0].timestamp,
+                        open=chunk[0].open,
+                        high=max(c.high for c in chunk),
+                        low=min(c.low for c in chunk),
+                        close=chunk[-1].close,
+                        volume=sum(c.volume for c in chunk),
+                    )
+                )
+            return grouped[-count:] if len(grouped) >= count else grouped
+
+        return h1[-count:] if len(h1) >= count else h1
+
+
+# ── M15 pre-resampler ─────────────────────────────────────────────────────────
+
+def _resample_h1_to_m15(candle_map: dict[str, list[Candle]]) -> dict[str, list[Candle]]:
+    """Resample H1 candles to M15 for all symbols.
+
+    Each H1 bar is split into 4 M15 bars at xx:00, xx:15, xx:30, xx:45.
+    This gives proper 15-minute session alignment for SessionRangeStrategy.
+    Runtime: O(total_h1_candles) once per backtest run.
+    """
+    from datetime import timedelta
+    result: dict[str, list[Candle]] = {}
+    for symbol, h1_candles in candle_map.items():
+        m15: list[Candle] = []
+        for h1c in h1_candles:
+            base = h1c.timestamp
+            for offset_minutes in (0, 15, 30, 45):
+                ts = base + timedelta(minutes=offset_minutes)
+                m15.append(
+                    Candle(
+                        timestamp=ts,
+                        open=h1c.open,
+                        high=h1c.high,
+                        low=h1c.low,
+                        close=h1c.close,
+                        volume=h1c.volume,
+                    )
+                )
+        result[symbol] = m15
+        logger.info("%s: resampled %d H1 → %d M15 candles", symbol, len(h1_candles), len(m15))
+    return result
 
 
 # ── MT5 data fetching ────────────────────────────────────────────────────────
@@ -309,8 +426,14 @@ def _backtest_symbol(
     symbol: str,
     candles: list[Candle],
     strategies: list,
+    broker=None,
+    m15_cache: dict[str, list[Candle]] | None = None,
 ) -> list[TradeResult]:
-    """Run all strategies over a symbol's candle history."""
+    """Run all strategies over a symbol's candle history.
+
+    When m15_cache is provided, steps through M15 candles for proper session-range
+    granularity.  Otherwise falls back to H1 stepping.
+    """
     results: list[TradeResult] = []
     n = len(candles)
 
@@ -322,23 +445,83 @@ def _backtest_symbol(
     last_signal_bar: dict[str, int] = {}
     SIGNAL_COOLDOWN = 5  # bars between signals per strategy
 
-    logger.info("%s: walking %d candles across %d strategies…", symbol, n, len(strategies))
+    use_m15 = m15_cache is not None and symbol in m15_cache
+    if use_m15:
+        m15_all = m15_cache[symbol]
+        m15_n = len(m15_all)
+        # Walk M15 from index WINDOW_SIZE to m15_n - MAX_HOLD_BARS * 4
+        max_m15_steps = m15_n - MAX_HOLD_BARS * 4
+        if max_m15_steps <= WINDOW_SIZE:
+            logger.warning("%s: not enough M15 candles — falling back to H1 stepping", symbol)
+            use_m15 = False
 
+    if use_m15:
+        logger.info("%s: walking %d M15 candles across %d strategies…", symbol, m15_n, len(strategies))
+    else:
+        logger.info("%s: walking %d candles across %d strategies…", symbol, n, len(strategies))
+
+    # ── M15-stepping path (session-range compatible) ──────────────────────────
+    if use_m15:
+        # M15 cooldown unit: 5 M15 bars ≈ 75 minutes
+        for step in range(WINDOW_SIZE, max_m15_steps, STEP_SIZE):
+            # Build H1 context from the corresponding H1 bar for ATR/RSI/SMA
+            h1_bar = step // 4   # approximate H1 index for this M15 position
+            h1_bar = min(h1_bar, n - 1)
+            window = candles[max(0, h1_bar - WINDOW_SIZE): h1_bar]
+            ctx = _build_context(symbol, window, broker=broker, m15_cache=m15_cache)
+
+            # Trim m15_candles to only those at/before this step's timestamp
+            step_ts = m15_all[step].timestamp
+            ctx.m15_candles = [c for c in ctx.m15_candles if c.timestamp <= step_ts]
+
+            for strat in strategies:
+                sname = strat.name
+                if step - last_signal_bar.get(sname, 0) < SIGNAL_COOLDOWN:
+                    continue
+                try:
+                    signal = strat.detect(ctx)
+                except Exception:
+                    continue
+                if signal is None:
+                    continue
+
+                last_signal_bar[sname] = step
+                # Future H1 bars for simulation (use step // 4 to get H1 index)
+                h1_idx = step // 4
+                future_h1_start = min(h1_idx + 1, n - 1)
+                future = candles[future_h1_start: future_h1_start + MAX_HOLD_BARS + 1]
+                outcome, pnl_r, bars_held = _simulate_trade(signal, future)
+
+                results.append(TradeResult(
+                    symbol=symbol,
+                    strategy=sname,
+                    direction=signal.direction,
+                    entry=signal.entry_price,
+                    sl=signal.stop_loss,
+                    tp1=signal.take_profit_1,
+                    tp2=signal.take_profit_2,
+                    tp3=signal.take_profit_3,
+                    open_bar=step,
+                    outcome=outcome,
+                    pnl_r=round(pnl_r, 4),
+                    bars_held=bars_held,
+                ))
+
+        return results
+
+    # ── H1-stepping path (legacy) ─────────────────────────────────────────────
     for bar in range(WINDOW_SIZE, n - MAX_HOLD_BARS, STEP_SIZE):
         window = candles[bar - WINDOW_SIZE: bar]
-        ctx = _build_context(symbol, window)
+        ctx = _build_context(symbol, window, broker=broker, m15_cache=m15_cache)
 
         for strat in strategies:
             sname = strat.name
-            # Enforce cooldown
             if bar - last_signal_bar.get(sname, 0) < SIGNAL_COOLDOWN:
                 continue
-
             try:
                 signal = strat.detect(ctx)
             except Exception:
                 continue
-
             if signal is None:
                 continue
 
@@ -568,21 +751,23 @@ def _seed_db(stats: list[StrategyStats]) -> None:
 
 # ── Strategy factory ─────────────────────────────────────────────────────────
 
-def _build_strategies(filter_name: str | None = None) -> list:
-    """Instantiate all backtestable strategies (no API calls, no DB)."""
-    from strategies.sma_crossover import SmaCrossoverStrategy
+def _build_strategies(filter_name: str | None = None, broker=None) -> list:
+    """Instantiate all backtestable strategies with optional broker for HTF / secondary candles."""
     from strategies.ict_strategy import ICTStrategy
+    from strategies.pairs_spread import PairsSpreadStrategy
+    from strategies.session_range import SessionRangeStrategy
 
     strats = [
-        SmaCrossoverStrategy(),
-        ICTStrategy(),
+        ICTStrategy(broker=broker),
+        PairsSpreadStrategy(broker=broker),
+        SessionRangeStrategy(broker=broker),
     ]
 
     if filter_name:
         strats = [s for s in strats if filter_name in s.name]
         if not strats:
             logger.warning("No strategy matches '%s' — running all", filter_name)
-            return _build_strategies()
+            return _build_strategies(broker=broker)
 
     return strats
 
@@ -646,13 +831,6 @@ def main() -> None:
         [s.strip() for s in args.symbols.split(",") if s.strip()]
         if args.symbols else SYMBOLS
     )
-    strategies = _build_strategies(args.strategy or None)
-
-    logger.info(
-        "Backtesting %d symbols × %d strategies | %d H1 bars | %d workers",
-        len(target_symbols), len(strategies), args.candles, args.workers,
-    )
-    logger.info("Strategies: %s", ", ".join(s.name for s in strategies))
 
     if args.no_cache:
         for sym in target_symbols:
@@ -679,17 +857,34 @@ def main() -> None:
         logger.error("No candle data available. Is MT5 running?")
         sys.exit(1)
 
+    # Build broker shim and pre-resample M15 candles after candle_map is available
+    bt_broker = BacktestBroker(candle_map)
+    m15_cache = _resample_h1_to_m15(candle_map)
+    strategies = _build_strategies(args.strategy or None, broker=bt_broker)
+
+    logger.info(
+        "Backtesting %d symbols × %d strategies | %d H1 bars | %d workers",
+        len(target_symbols), len(strategies), args.candles, args.workers,
+    )
+    logger.info("Strategies: %s", ", ".join(s.name for s in strategies))
+
     # ── Run walk-forward in parallel ─────────────────────────────────────
     all_results: list[TradeResult] = []
 
-    def _run(sym: str) -> list[TradeResult]:
-        # Each worker gets its own strategy instances (not thread-safe to share)
-        local_strats = _build_strategies(args.strategy or None)
-        return _backtest_symbol(sym, candle_map[sym], local_strats)
-
     t1 = time.time()
-    with concurrent.futures.ProcessPoolExecutor(max_workers=args.workers) as ex:
-        futures = {ex.submit(_run, sym): sym for sym in candle_map}
+    # Use ThreadPoolExecutor — ProcessPoolExecutor fails on closures in Python
+    with concurrent.futures.ThreadPoolExecutor(max_workers=args.workers) as ex:
+        futures: dict[concurrent.futures.Future, str] = {
+            ex.submit(
+                _backtest_symbol,
+                sym,
+                candle_map[sym],
+                _build_strategies(args.strategy or None, broker=bt_broker),
+                bt_broker,
+                m15_cache,
+            ): sym
+            for sym in candle_map
+        }
         done = 0
         for fut in concurrent.futures.as_completed(futures):
             sym = futures[fut]
