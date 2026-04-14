@@ -24,7 +24,7 @@ export default function BreakdownChart() {
                   style={{
                     ...styles.bar,
                     width: `${Math.min(s.winRate * 100, 100)}%`,
-                    background: s.winRate >= 0.5 ? "var(--green)" : "var(--red)",
+                    background: s.winRate >= 0.5 ? "var(--positive)" : "var(--negative)",
                   }}
                 />
               </div>
@@ -52,7 +52,7 @@ export default function BreakdownChart() {
                   style={{
                     ...styles.bar,
                     width: `${Math.min(d.winRate * 100, 100)}%`,
-                    background: d.winRate >= 0.5 ? "var(--green)" : "var(--red)",
+                    background: d.winRate >= 0.5 ? "var(--positive)" : "var(--negative)",
                   }}
                 />
               </div>
@@ -91,7 +91,7 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 700,
     color: "var(--text-3)",
     textTransform: "uppercase",
-    letterSpacing: "0.06em",
+    letterSpacing: "0.08em",
     marginBottom: "var(--space-1)",
   },
   divider: {

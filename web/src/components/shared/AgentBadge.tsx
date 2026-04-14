@@ -11,20 +11,20 @@ export function AgentBadge({ agent, active = false }: AgentBadgeProps) {
   const key = agent.toLowerCase().replace(/-/g, "");
 
   const COLORS: Record<string, { bg: string; text: string; border: string }> = {
-    crucix:    { bg: "rgba(100,210,255,0.15)", text: "#64d2ff", border: "rgba(100,210,255,0.30)" },
-    market:    { bg: "rgba(50,173,230,0.15)",  text: "#32ade6",  border: "rgba(50,173,230,0.30)"  },
-    analysis:  { bg: "rgba(244,244,245,0.10)", text: "#b8b8bc", border: "rgba(244,244,245,0.20)" },
-    strategy:  { bg: "rgba(48,209,88,0.15)",  text: "#30d158",  border: "rgba(48,209,88,0.30)"  },
-    neural:    { bg: "rgba(191,90,242,0.15)", text: "#bf5af2", border: "rgba(191,90,242,0.30)" },
-    council:   { bg: "rgba(255,159,10,0.15)", text: "#ff9f0a", border: "rgba(255,159,10,0.30)" },
-    risk:      { bg: "rgba(255,69,58,0.15)",  text: "#ff453a", border: "rgba(255,69,58,0.30)"  },
-    execution: { bg: "rgba(240,180,41,0.15)", text: "#f0b429", border: "rgba(240,180,41,0.30)" },
-    manager:   { bg: "rgba(100,210,255,0.15)", text: "#64d2ff", border: "rgba(100,210,255,0.30)" },
-    learning:  { bg: "rgba(48,209,88,0.15)",  text: "#30d158", border: "rgba(48,209,88,0.30)"  },
-    logging:   { bg: "rgba(244,244,245,0.08)", text: "#adaaaa", border: "rgba(244,244,245,0.15)" },
-    debate:    { bg: "rgba(191,90,242,0.15)", text: "#bf5af2", border: "rgba(191,90,242,0.30)" },
-    exposure:  { bg: "rgba(255,159,10,0.15)", text: "#ff9f0a", border: "rgba(255,159,10,0.30)" },
-    memory:    { bg: "rgba(100,210,255,0.15)", text: "#64d2ff", border: "rgba(100,210,255,0.30)" },
+    crucix:    { bg: "rgba(100,210,255,0.15)", text: "var(--agent-crucix)",    border: "rgba(100,210,255,0.30)" },
+    market:    { bg: "rgba(50,173,230,0.15)",  text: "var(--agent-market)",    border: "rgba(50,173,230,0.30)"  },
+    analysis:  { bg: "rgba(244,244,245,0.10)", text: "var(--agent-analysis)",  border: "rgba(244,244,245,0.20)" },
+    strategy:  { bg: "rgba(48,209,88,0.15)",   text: "var(--agent-strategy)",  border: "rgba(48,209,88,0.30)"  },
+    neural:    { bg: "rgba(191,90,242,0.15)",  text: "var(--agent-neural)",    border: "rgba(191,90,242,0.30)" },
+    council:   { bg: "rgba(255,159,10,0.15)",  text: "var(--agent-council)",   border: "rgba(255,159,10,0.30)" },
+    risk:      { bg: "rgba(255,69,58,0.15)",    text: "var(--agent-risk)",      border: "rgba(255,69,58,0.30)"  },
+    execution: { bg: "rgba(240,180,41,0.15)",  text: "var(--agent-execution)", border: "rgba(240,180,41,0.30)" },
+    manager:   { bg: "rgba(100,210,255,0.15)", text: "var(--agent-trade-mgr)", border: "rgba(100,210,255,0.30)" },
+    learning:  { bg: "rgba(48,209,88,0.15)",   text: "var(--agent-learning)",  border: "rgba(48,209,88,0.30)"  },
+    logging:   { bg: "rgba(244,244,245,0.08)", text: "var(--agent-logging)",   border: "rgba(244,244,245,0.15)" },
+    debate:    { bg: "rgba(191,90,242,0.15)",  text: "var(--agent-debate)",    border: "rgba(191,90,242,0.30)" },
+    exposure:  { bg: "rgba(255,159,10,0.15)",  text: "var(--agent-exposure)",  border: "rgba(255,159,10,0.30)" },
+    memory:    { bg: "rgba(100,210,255,0.15)", text: "var(--agent-memory)",    border: "rgba(100,210,255,0.30)" },
   };
 
   const c = Object.keys(COLORS).find((k) => key.includes(k)) ? COLORS[key] : COLORS.logging;

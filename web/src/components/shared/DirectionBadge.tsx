@@ -25,7 +25,7 @@ export function DirectionBadge({ direction, pill = false }: DirectionBadgeProps)
         display:        "inline-flex",
         alignItems:     "center",
         padding:        "2px 8px",
-        borderRadius:    pill ? 9999 : 4,
+        borderRadius:    pill ? "var(--radius-pill)" : "var(--radius-md)",
         fontSize:       10,
         fontFamily:     "var(--font-mono)",
         fontWeight:     700,

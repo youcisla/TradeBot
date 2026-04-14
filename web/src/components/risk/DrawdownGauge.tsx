@@ -74,7 +74,7 @@ const cardTitle: React.CSSProperties = {
   fontWeight: 700,
   color: "var(--text-3)",
   textTransform: "uppercase",
-  letterSpacing: "0.06em",
+  letterSpacing: "0.08em",
 };
 
 const gaugesStyle: React.CSSProperties = {

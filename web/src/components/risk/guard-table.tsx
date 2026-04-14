@@ -85,7 +85,7 @@ export default function GuardTable() {
               color,
               fontFamily: "var(--font-mono)",
               fontSize: 9,
-              letterSpacing: "0.06em",
+              letterSpacing: "0.08em",
             }}
           >
             {s}
@@ -110,7 +110,7 @@ export default function GuardTable() {
             color: "var(--text-3)",
             fontFamily: "var(--font-mono)",
             fontSize: 9,
-            letterSpacing: "0.06em",
+            letterSpacing: "0.08em",
           }}
         >
           Guard Pipeline

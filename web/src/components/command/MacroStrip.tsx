@@ -35,7 +35,7 @@ export default function MacroStrip() {
       <MacroPill
         label="VIX"
         value={vix !== undefined ? vix.toFixed(1) : "—"}
-        color={vix !== undefined ? (vix > 30 ? "var(--red)" : vix > 20 ? "var(--orange)" : "var(--green)") : "var(--text-3)"}
+        color={vix !== undefined ? (vix > 30 ? "var(--negative)" : vix > 20 ? "var(--warning)" : "var(--positive)") : "var(--text-3)"}
       />
       <Divider />
       <MacroPill label="Spread" value={spread} color="var(--text-2)" />
@@ -91,7 +91,7 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 700,
     color: "var(--text-3)",
     textTransform: "uppercase",
-    letterSpacing: "0.06em",
+    letterSpacing: "0.08em",
   },
   pillValue: {
     fontFamily: "var(--font-mono)",

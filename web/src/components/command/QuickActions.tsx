@@ -156,12 +156,12 @@ const styles: Record<string, React.CSSProperties> = {
     color: "var(--accent)",
   },
   btnWarn: {
-    border: "1px solid var(--orange)",
-    color: "var(--orange)",
+    border: "1px solid var(--warning)",
+    color: "var(--warning)",
   },
   btnDanger: {
-    background: "rgba(255,69,58,0.15)",
-    border: "1px solid var(--red)",
-    color: "var(--red)",
+    background: "var(--negative-dim)",
+    border: "1px solid var(--negative)",
+    color: "var(--negative)",
   },
 };

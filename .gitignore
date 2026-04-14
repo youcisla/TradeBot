@@ -1,9 +1,6 @@
 # ─── Environment ────────────────────────────────────────────────────────────────
-.env
-.env.local
-.env*.local
-web/.env
-web/.env.local
+*.env
+*.env.local
 
 # ─── Python ───────────────────────────────────────────────────────────────────
 __pycache__/
@@ -11,18 +8,17 @@ __pycache__/
 *.egg-info/
 dist/
 build/
-.venv/
-.pytest_cache/
+*.venv/
+*.pytest_cache/
 *.log
 *.pkl
 *.pid
 
 # ─── Node / Web ───────────────────────────────────────────────────────────────
-node_modules/
-web/node_modules/
-web/.next/
-web/coverage/
-web/tsconfig.tsbuildinfo
+*/node_modules/
+*/.next/
+*/coverage/
+*/tsconfig.tsbuildinfo
 
 # ─── Data & Logs ───────────────────────────────────────────────────────────────
 data/

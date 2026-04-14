@@ -12,7 +12,7 @@ interface StatusBadgeProps {
 const VARIANT_STYLES: Record<BadgeVariant, { bg: string; text: string; border: string; dot: string }> = {
   default:  { bg: "var(--bg-3)",       text: "var(--text-2)",  border: "var(--border)",        dot: "var(--text-3)"  },
   success:  { bg: "var(--green-dim)", text: "var(--green)",   border: "rgba(48,209,88,0.25)",  dot: "var(--green)"   },
-  warning:  { bg: "var(--orange)",     text: "#000",           border: "rgba(255,159,10,0.35)", dot: "#000"            },
+  warning:  { bg: "var(--warning-dim)", text: "var(--warning)", border: "rgba(255,159,10,0.35)", dot: "var(--warning)" },
   danger:   { bg: "var(--red-dim)",    text: "var(--red)",     border: "rgba(255,69,58,0.25)",   dot: "var(--red)"     },
   info:     { bg: "var(--cyan-dim)",   text: "var(--cyan)",    border: "rgba(100,210,255,0.25)",dot: "var(--cyan)"    },
   muted:    { bg: "transparent",       text: "var(--text-3)",  border: "transparent",             dot: "var(--text-3)"  },

@@ -30,7 +30,7 @@ export function Panel({ children, className = "", title, action, noPadding = fal
               color: "var(--text-3)",
               fontFamily: "var(--font-mono)",
               fontSize: 9,
-              letterSpacing: "0.06em",
+              letterSpacing: "0.08em",
             }}
           >
             {title}

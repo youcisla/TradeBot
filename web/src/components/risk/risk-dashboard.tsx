@@ -30,19 +30,19 @@ export default function RiskDashboard() {
           <div className="flex items-baseline gap-1">
             <span
               className="font-bold"
-              style={{ color: posColor, fontFamily: "var(--font-mono)", fontSize: 44, lineHeight: 1 }}
+              style={{ color: posColor, fontFamily: "var(--font-mono)", fontSize: "var(--space-7)", lineHeight: 1 }}
             >
               {openPos}
             </span>
             <span
               className="font-bold"
-              style={{ color: "var(--text-3)", fontFamily: "var(--font-mono)", fontSize: 24 }}
+              style={{ color: "var(--text-3)", fontFamily: "var(--font-mono)", fontSize: "var(--space-5)" }}
             >
               /
             </span>
             <span
               className="font-bold"
-              style={{ color: "var(--text-3)", fontFamily: "var(--font-mono)", fontSize: 22 }}
+              style={{ color: "var(--text-3)", fontFamily: "var(--font-mono)", fontSize: "var(--space-5)" }}
             >
               {maxPos}
             </span>

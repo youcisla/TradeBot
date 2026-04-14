@@ -7,10 +7,10 @@ interface LevelBadgeProps {
 }
 
 const COLORS: Record<string, { bg: string; text: string }> = {
-  info:  { bg: "rgba(0,229,255,0.12)",  text: "#00e5ff" },
-  warn:  { bg: "rgba(255,159,10,0.12)", text: "#ff9f0a" },
-  error: { bg: "rgba(255,69,58,0.12)",  text: "#ff453a" },
-  debug: { bg: "rgba(244,244,245,0.08)", text: "#adaaaa" },
+  info:  { bg: "var(--cyan-dim)",    text: "var(--cyan)"    },
+  warn:  { bg: "var(--warning-dim)", text: "var(--warning)" },
+  error: { bg: "var(--negative-dim)", text: "var(--negative)" },
+  debug: { bg: "rgba(244,244,245,0.08)", text: "var(--text-3)" },
 };
 
 export function LevelBadge({ level }: LevelBadgeProps) {
@@ -23,12 +23,12 @@ export function LevelBadge({ level }: LevelBadgeProps) {
         display:        "inline-flex",
         alignItems:     "center",
         padding:        "2px 7px",
-        borderRadius:    4,
+        borderRadius:    "var(--radius-md)",
         fontSize:       10,
         fontFamily:     "var(--font-mono)",
         fontWeight:     700,
         textTransform:  "uppercase",
-        letterSpacing: "0.06em",
+        letterSpacing: "0.08em",
         backgroundColor: c.bg,
         color:          c.text,
       }}

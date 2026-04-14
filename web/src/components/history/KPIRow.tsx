@@ -33,7 +33,7 @@ export default function KPIRow() {
   const trades   = k && k.totalTrades != null ? String(k.totalTrades) : "—";
 
   const pnlColor = k && k.totalPnl != null
-    ? (k.totalPnl >= 0 ? "var(--green)" : "var(--red)")
+    ? (k.totalPnl >= 0 ? "var(--positive)" : "var(--negative)")
     : "var(--text-1)";
 
   return (
@@ -41,8 +41,8 @@ export default function KPIRow() {
       <KPI label="Win Rate"    value={winRate} />
       <KPI label="Profit Factor" value={pf} />
       <KPI label="Total P&L"   value={total}  color={pnlColor} />
-      <KPI label="Avg Win"     value={avgWin} color="var(--green)" />
-      <KPI label="Avg Loss"    value={avgLoss} color="var(--red)" />
+      <KPI label="Avg Win"     value={avgWin} color="var(--positive)" />
+      <KPI label="Avg Loss"    value={avgLoss} color="var(--negative)" />
       <KPI label="Expectancy"  value={expect} />
       <KPI label="Total Trades" value={trades} />
     </div>
