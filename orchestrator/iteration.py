@@ -29,6 +29,7 @@ from agents.trade_manager import TradeManagerAgent
 
 if TYPE_CHECKING:
     from agents.hku_client import HKUClient
+    from agents.ssrt_agent import SSRTAgent
 from broker.connector import BrokerConnector
 from utils import telegram_bot
 from utils import terminal_ui as tui
@@ -112,6 +113,7 @@ def run_iteration(
     trade_manager: TradeManagerAgent,
     learning: LearningAgent,
     log_agent: LoggingAgent,
+    ssrt_agent: "SSRTAgent | None",
     sniper_guard: SniperEntryGuard | None,
     symbol_event_tracker: SymbolEventTracker,
     hku_client: "HKUClient | None" = None,
@@ -141,6 +143,9 @@ def run_iteration(
 
     Phase implementation lives in orchestrator/iteration_phases.py.
     """
+    # Deferred SSRT processing — queue closed trades here so we can resolve
+    # their regime from scan_contexts AFTER scan_phase.run() completes.
+    _pending_ssrt_trades: list[tuple] = []
 
     # ── Weekend mode notice ──────────────────────────────────────────────────
     if weekend_symbols is not None:
@@ -192,6 +197,8 @@ def run_iteration(
             log_agent.log_trade(closed_trade.id, "CLOSED",
                                 f"{closed_trade.close_reason} PnL={closed_trade.pnl:.2f}")
             opportunity_lifecycle.register_trade_close(closed_trade)
+            # Queue for SSRT processing — regime will be resolved post-scan
+            _pending_ssrt_trades.append((closed_trade, closed_trade.symbol))
 
     rolled_symbols = opportunity_lifecycle.on_iteration_start(
         symbols=active_symbols,
@@ -281,6 +288,9 @@ def run_iteration(
             m.last_signal_to_order_ms = -1.0
             logger.info("Loop %d: scanned %s — no signals generated",
                          loop_count, ", ".join(scan_result.scanned))
+            # Process deferred SSRT trades even with no fresh signals
+            if ssrt_agent and _pending_ssrt_trades:
+                _process_ssrt_queue(_pending_ssrt_trades, scan_result.signal_contexts, ssrt_agent)
             return m
 
     # ══════════════════════════════════════════════════════════════════════
@@ -361,7 +371,39 @@ def run_iteration(
         for name in ("market", "analysis", "strategy", "risk", "execution", "trade_mgr"):
             _ui.set_agent_idle(name)
 
+    # Process any pending SSRT trades now that scan_contexts is fully populated
+    if ssrt_agent and _pending_ssrt_trades:
+        _process_ssrt_queue(_pending_ssrt_trades, scan_result.signal_contexts, ssrt_agent)
+
     return m
+
+
+def _process_ssrt_queue(
+    pending: list[tuple],
+    signal_contexts: dict[int, MarketContext],
+    ssrt_agent: "SSRTAgent",
+) -> None:
+    """Resolve regime from scan_contexts and call SSRT update for each queued trade."""
+    for trade, symbol in pending:
+        context: MarketContext | None = None
+        for ctx in signal_contexts.values():
+            if ctx.symbol == symbol:
+                context = ctx
+                break
+        if context is None:
+            logger.warning("SSRT: no MarketContext for %s — using defaults", symbol)
+            garch_regime, trend_direction = "normal", "neutral"
+        else:
+            garch_regime = getattr(context, "garch_regime", "normal")
+            trend_direction = getattr(context, "trend_direction", "neutral")
+        verdict = ssrt_agent.update_trade(trade, garch_regime, trend_direction)
+        if verdict and verdict.retired:
+            logger.info(
+                "SSRT retired strategy=%s symbol=%s verdict=%s "
+                "total_trades=%d final_msptr=%s",
+                trade.strategy, trade.symbol, verdict.verdict,
+                verdict.total_trades, f"{verdict.mixture_sprt:.4f}" if verdict.mixture_sprt else "n/a",
+            )
 
 
 def _promote_deferred_inline(

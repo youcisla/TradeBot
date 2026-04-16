@@ -33,6 +33,7 @@ from agents.crucix_agent import CrucixAgent
 from agents.sniper_entry_guard import SniperEntryGuard
 from agents.hku_client import HKUClient
 from agents.hku_copy_trader import HKUCopyTradingService, CopyTradeConfig
+from agents.ssrt_agent import SSRTAgent
 
 from utils import telegram_bot
 from utils import candle_server
@@ -86,6 +87,7 @@ class TradingBot:
         self.symbol_event_tracker: SymbolEventTracker | None = None
         self.heartbeat: HeartbeatManager | None = None
         self.hku_client: "HKUClient | None" = None
+        self.ssrt_agent: SSRTAgent | None = None
         self._active_symbols: list[str] = []
         self._weekend_symbols: list[str] = []
 
@@ -227,6 +229,7 @@ class TradingBot:
         # ── Learning agent + post-trade Reflector ─────────────────────────
         learning = LearningAgent(self.db, hku_client=None)
         self.learning = learning
+        self.ssrt_agent = SSRTAgent(self.db)
         reflector = Reflector()
         self.reflector = reflector
         learning.set_reflector(reflector)
@@ -685,6 +688,7 @@ class TradingBot:
                     learning=self.learning,
                     log_agent=self.log_agent,
                     sniper_guard=self.sniper_guard,
+                    ssrt_agent=self.ssrt_agent,
                     symbol_event_tracker=self.symbol_event_tracker,
                     hku_client=self.hku_client,
                     last_scan_ts=_last_scan_ts,
