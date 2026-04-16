@@ -408,10 +408,12 @@ class TradingBot:
             equity = broker.get_equity()
             balance = broker.get_balance()
             open_count = len(trade_manager.get_open_trades())
+            mt5_restarts = getattr(broker, "connection_count", 0)
             return (
                 "📡 Live Bot Status\n"
                 f"Balance: {balance:.2f} | Equity: {equity:.2f}\n"
                 f"Open trades: {open_count}\n"
+                f"MT5 restarts: {mt5_restarts}\n"
                 f"Loop interval: {settings.LOOP_INTERVAL_SECONDS}s\n"
                 f"Demo mode: {settings.DEMO_MODE}"
             )

@@ -190,7 +190,12 @@ def send_message(
     token = settings.TELEGRAM_BOT_TOKEN
     chat_id = settings.TELEGRAM_CHAT_ID
     if not token or not chat_id:
-        logger.debug("Telegram not configured — skipping message")
+        if priority == "critical":
+            # Telegram alerts must never be silently dropped for critical priority —
+            # escalate to the console so operators see mismatches immediately.
+            logger.critical("[TELEGRAM UNAVAILABLE] %s", text)
+        else:
+            logger.debug("Telegram not configured — skipping message")
         return False
 
     key = dedupe_key or text.strip()

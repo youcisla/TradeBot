@@ -56,6 +56,9 @@ class MT5Connector(BrokerConnector):
         # After the first failure, skip this symbol for ~30s; doubles on repeat.
         self._ipc_backoff_until: dict[str, float] = {}
         self._ipc_backoff_secs: float = 30.0
+        # MT5 connection lifecycle counter — increments each time connect() succeeds.
+        # Useful to detect unexpected restarts (see ops_doctor MT5 restart check).
+        self.connection_count: int = 0
 
     # ── account ──────────────────────────────────────────────────────────
 
@@ -129,6 +132,8 @@ class MT5Connector(BrokerConnector):
                 "company": info.company,
             }
             self._connected = True
+            self.connection_count += 1
+            logger.info("MT5 connected (connection_count=%d)", self.connection_count)
             return True
 
         logger.error("MT5 connection failed after %d attempts: %s", max_retries, last_error_msg)

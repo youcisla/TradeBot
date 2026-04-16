@@ -125,6 +125,7 @@ def _log_checks(repo_root: Path, recommendations: list[str]) -> list[CheckResult
         return out
 
     mt5_disabled = len(re.findall(r"(10027|10017|autotrading disabled)", text, flags=re.IGNORECASE))
+    mt5_connects = len(re.findall(r"MT5 connected", text))
     spread_rejects = len(re.findall(r"RISK REJECT \[SPREAD\]", text))
     stuck_quotes = len(re.findall(r"Stuck quote", text))
     db_ssl_errors = len(re.findall(r"SSL connection has been closed unexpectedly", text))
@@ -140,6 +141,19 @@ def _log_checks(repo_root: Path, recommendations: list[str]) -> list[CheckResult
         recommendations.append("Enable Algo Trading in MT5 terminal before starting bot")
     else:
         out.append(CheckResult("MT5 autotrading", "ok", "No autotrading-disabled errors detected"))
+
+    # mt5_connects > 1 means MT5 restarted at least once during this log window
+    if mt5_connects > 1:
+        out.append(
+            CheckResult(
+                "MT5 restarts",
+                "warn",
+                f"MT5 reconnected {mt5_connects - 1} time(s) — possible feed instability",
+            )
+        )
+        recommendations.append("Investigate why MT5 is restarting repeatedly (crash, auto-update, network)")
+    else:
+        out.append(CheckResult("MT5 restarts", "ok", "No unexpected MT5 restarts detected"))
 
     if spread_rejects > 50:
         out.append(CheckResult("Spread rejects", "warn", f"High spread rejections: {spread_rejects}"))
