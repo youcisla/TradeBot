@@ -2,21 +2,19 @@
 
 import { useAppShell } from "@/components/app/AppShellProvider";
 import { Clock } from "@/components/app/Clock";
+import { cn } from "@/lib/utils";
 
 const SESSION_COLORS: Record<string, string> = {
-  asian:   "#9333EA",
-  london:  "#2563EB",
-  overlap: "#16A34A",
-  newyork: "#D97706",
+  asian:   "var(--purple)",
+  london:  "var(--blue)",
+  overlap: "var(--green)",
+  newyork: "var(--orange)",
 };
 
 function HeaderKpi({ label, value, color }: { label: string; value: string; color?: string }) {
   return (
     <div className="flex flex-col items-center gap-0.5">
-      <span
-        className="font-mono uppercase tracking-widest"
-        style={{ color: "var(--text-3)", fontFamily: "var(--font-mono)", fontSize: 9 }}
-      >
+      <span className="font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--text-3)]">
         {label}
       </span>
       <span
@@ -37,11 +35,11 @@ function HeaderKpi({ label, value, color }: { label: string; value: string; colo
 export function Header() {
   const { status, isRunning, openTrades, intelligence } = useAppShell();
 
-  const equity   = Number(status?.equity     ?? 0);
-  const balance  = Number(status?.balance    ?? 0);
-  const dailyPnl = Number(status?.daily_pnl ?? 0);
+  const equity     = Number(status?.equity      ?? 0);
+  const balance   = Number(status?.balance    ?? 0);
+  const dailyPnl  = Number(status?.daily_pnl  ?? 0);
   const openCount = openTrades.length;
-  const session  = intelligence?.session ?? "—";
+  const session   = intelligence?.session ?? "—";
   const sessionColor = SESSION_COLORS[session] ?? "var(--text-3)";
 
   const fmt = (v: number) =>
@@ -59,12 +57,8 @@ export function Header() {
 
   return (
     <header
-      className="fixed top-0 left-0 right-0 z-50 flex items-center gap-6 px-4"
-      style={{
-        height: "var(--header-h)",
-        background: "var(--bg-2)",
-        borderBottom: "1px solid var(--border)",
-      }}
+      className="fixed top-0 left-0 right-0 z-50 flex items-center gap-6 px-4 bg-[var(--bg-2)]"
+      style={{ height: "var(--header-h)", borderBottom: "1px solid var(--border)" }}
     >
       {/* Brand + live indicator */}
       <div className="flex items-center gap-2 flex-shrink-0">
@@ -110,10 +104,7 @@ export function Header() {
             background: `${sessionColor}18`,
           }}
         >
-          <span
-            className="rounded-full flex-shrink-0"
-            style={{ width: 6, height: 6, background: sessionColor }}
-          />
+          <span className="rounded-full flex-shrink-0" style={{ width: 6, height: 6, background: sessionColor }} />
           <span
             className="font-mono font-bold uppercase tracking-widest"
             style={{ color: sessionColor, fontFamily: "var(--font-mono)", fontSize: 10 }}

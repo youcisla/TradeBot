@@ -29,27 +29,41 @@ export default function ConfigTab() {
   }, []);
 
   if (loading) {
-    return <div style={styles.loading}>Loading…</div>;
+    return (
+      <p className="font-mono text-sm text-center py-5" style={{ fontFamily: "var(--font-mono)", color: "var(--text-3)" }}>
+        Loading…
+      </p>
+    );
   }
 
   if (!data?.groups?.length) {
     return (
-      <div style={styles.empty}>
-        <span style={styles.emptyIcon}>⚙</span>
-        <p>No config data available.</p>
+      <div className="bg-[var(--bg-2)] border border-[var(--border)] rounded-md px-6 py-6 flex flex-col items-center gap-2 text-center">
+        <span className="text-2xl opacity-30">⚙</span>
+        <p className="font-mono text-sm" style={{ color: "var(--text-3)" }}>
+          No config data available.
+        </p>
       </div>
     );
   }
 
   return (
-    <div style={styles.wrapper}>
+    <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(360px, 1fr))" }}>
       {data.groups.map((group) => (
-        <div key={group.label} style={styles.group}>
-          <div style={styles.groupHeader}>{group.label}</div>
+        <div key={group.label} className="bg-[var(--bg-2)] border border-[var(--border)] rounded-md overflow-hidden">
+          <div className="px-4 py-2 bg-[var(--bg-3)] border-b border-[var(--border)]">
+            <span className="text-[10px] font-bold uppercase" style={{ fontFamily: "var(--font-ui)", color: "var(--text-3)", letterSpacing: "0.08em" }}>
+              {group.label}
+            </span>
+          </div>
           {group.items.map((item) => (
-            <div key={item.key} style={styles.row}>
-              <span style={styles.key}>{item.key}</span>
-              <span style={styles.value}>{item.value}</span>
+            <div key={item.key} className="flex justify-between items-center px-4 py-[7px] border-b border-[var(--border)] gap-4">
+              <span className="font-mono text-sm font-semibold text-[var(--text-2)] flex-shrink-0" style={{ fontFamily: "var(--font-mono)" }}>
+                {item.key}
+              </span>
+              <span className="font-mono text-sm text-[var(--text-1)] text-right break-all" style={{ fontFamily: "var(--font-mono)" }}>
+                {item.value}
+              </span>
             </div>
           ))}
         </div>
@@ -57,72 +71,3 @@ export default function ConfigTab() {
     </div>
   );
 }
-
-const styles: Record<string, React.CSSProperties> = {
-  wrapper: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fill, minmax(360, 1fr))",
-    gap: "var(--space-4)",
-  },
-  group: {
-    background: "var(--bg-2)",
-    border: "1px solid var(--border)",
-    borderRadius: "var(--radius-md)",
-    overflow: "hidden",
-  },
-  groupHeader: {
-    fontFamily: "var(--font-ui)",
-    fontSize: 10,
-    fontWeight: 700,
-    color: "var(--text-3)",
-    textTransform: "uppercase",
-    letterSpacing: "0.08em",
-    padding: "var(--space-2) var(--space-4)",
-    background: "var(--bg-3)",
-    borderBottom: "1px solid var(--border)",
-  },
-  row: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    padding: "7px var(--space-4)",
-    borderBottom: "1px solid var(--border)",
-    gap: "var(--space-4)",
-  },
-  key: {
-    fontFamily: "var(--font-mono)",
-    fontSize: 11,
-    fontWeight: 600,
-    color: "var(--text-2)",
-    flexShrink: 0,
-  },
-  value: {
-    fontFamily: "var(--font-mono)",
-    fontSize: 11,
-    color: "var(--text-1)",
-    textAlign: "right",
-    wordBreak: "break-all",
-  },
-  loading: {
-    fontFamily: "var(--font-mono)",
-    fontSize: 11,
-    color: "var(--text-3)",
-    textAlign: "center",
-    padding: "var(--space-5)",
-  },
-  empty: {
-    background: "var(--bg-2)",
-    border: "1px solid var(--border)",
-    borderRadius: "var(--radius-md)",
-    padding: "var(--space-6)",
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    gap: "var(--space-2)",
-    textAlign: "center",
-  },
-  emptyIcon: {
-    fontSize: 28,
-    opacity: 0.3,
-  },
-};

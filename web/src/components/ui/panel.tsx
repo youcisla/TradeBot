@@ -1,6 +1,7 @@
 "use client";
 
-import { ReactNode } from "react";
+import { type ReactNode } from "react";
+import { cn } from "@/lib/utils";
 
 interface PanelProps {
   children: ReactNode;
@@ -13,16 +14,11 @@ interface PanelProps {
 export function Panel({ children, className = "", title, action, noPadding = false }: PanelProps) {
   return (
     <div
-      className={`rounded flex flex-col ${className}`}
-      style={{
-        background: "var(--bg-2)",
-        border: "1px solid var(--border)",
-      }}
+      className={cn("rounded flex flex-col bg-[var(--bg-2)] border border-[var(--border)]", className)}
     >
       {title && (
         <div
-          className="flex items-center justify-between px-4 py-3 border-b flex-shrink-0"
-          style={{ borderColor: "var(--border)" }}
+          className="flex items-center justify-between px-4 py-3 border-b border-[var(--border)] flex-shrink-0"
         >
           <span
             className="text-xs font-bold uppercase tracking-widest"

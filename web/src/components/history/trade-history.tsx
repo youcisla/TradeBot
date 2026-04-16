@@ -7,6 +7,7 @@ import { DataTable } from "@/components/ui/data-table";
 import { useDataTable } from "@/hooks/use-data-table";
 import { formatPrice, fmtPnl, fmtDateTime } from "@/lib/format";
 import { useState } from "react";
+import { cn } from "@/lib/utils";
 
 type Trade = {
   id: number;
@@ -25,7 +26,7 @@ function PnlCell({ value }: { value?: number }) {
   return (
     <span
       className="font-bold"
-      style={{ color: value >= 0 ? "var(--green)" : "var(--red)" }}
+      style={{ color: value >= 0 ? "var(--positive)" : "var(--negative)" }}
     >
       {fmtPnl(value)}
     </span>
@@ -130,17 +131,17 @@ export default function TradeHistory() {
           Trade History
         </span>
         <div className="flex items-center gap-2">
-          {/* Inline filter buttons */}
           {(["all", "closed", "open"] as const).map((f) => (
             <button
               key={f}
-              className="rounded px-2 py-1 text-xs font-mono font-bold uppercase tracking-wider cursor-pointer transition-all"
-              style={{
-                background: filter === f ? "var(--bg-3)" : "transparent",
-                border: `1px solid ${filter === f ? "var(--border-active)" : "var(--border)"}`,
-                color: filter === f ? "var(--accent)" : "var(--text-3)",
-                letterSpacing: "0.05em",
-              }}
+              className={cn(
+                "rounded px-2 py-1 text-xs font-mono font-bold uppercase tracking-wider cursor-pointer transition-all",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--accent)]",
+                filter === f
+                  ? "bg-[var(--bg-3)] border border-[var(--border-active)] text-[var(--accent)]"
+                  : "bg-transparent border border-[var(--border)] text-[var(--text-3)]"
+              )}
+              style={{ letterSpacing: "0.05em" }}
               onClick={() => setFilter(f)}
             >
               {f}

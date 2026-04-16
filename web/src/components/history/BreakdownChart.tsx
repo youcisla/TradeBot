@@ -10,57 +10,31 @@ export default function BreakdownChart() {
   const dirStats = analytics?.directionStats ?? [];
 
   return (
-    <div style={styles.wrapper}>
-      <div style={styles.section}>
-        <span style={styles.sectionTitle}>By Symbol</span>
+    <div className="bg-[var(--bg-2)] border border-[var(--border)] rounded-md px-4 py-4 flex gap-4 items-start">
+      <div className="flex-1 flex flex-col gap-2 min-w-0">
+        <span className="font-mono text-[9px] font-bold uppercase mb-1" style={{ fontFamily: "var(--font-mono)", color: "var(--text-3)", letterSpacing: "0.08em" }}>
+          By Symbol
+        </span>
         {symStats.length === 0 ? (
-          <p style={styles.empty}>No data</p>
+          <p className="font-mono text-sm m-0" style={{ fontFamily: "var(--font-mono)", color: "var(--text-3)" }}>No data</p>
         ) : (
           symStats.map((s) => (
-            <div key={s.symbol} style={styles.row}>
-              <span style={styles.rowLabel}>{s.symbol}</span>
-              <div style={styles.barWrap}>
-                <div
-                  style={{
-                    ...styles.bar,
-                    width: `${Math.min(s.winRate * 100, 100)}%`,
-                    background: s.winRate >= 0.5 ? "var(--positive)" : "var(--negative)",
-                  }}
-                />
-              </div>
-              <span style={styles.rowValue}>{fmtPct(s.winRate * 100)}</span>
-              <span style={{ ...styles.rowPnl, color: s.pnl >= 0 ? "var(--green)" : "var(--red)" }}>
-                {fmtUsd(s.pnl, false)}
-              </span>
-            </div>
+            <BreakdownRow key={s.symbol} label={s.symbol} winRate={s.winRate} pnl={s.pnl} />
           ))
         )}
       </div>
 
-      <div style={styles.divider} />
+      <span className="w-px self-stretch flex-shrink-0" style={{ background: "var(--border)" }} />
 
-      <div style={styles.section}>
-        <span style={styles.sectionTitle}>By Direction</span>
+      <div className="flex-1 flex flex-col gap-2 min-w-0">
+        <span className="font-mono text-[9px] font-bold uppercase mb-1" style={{ fontFamily: "var(--font-mono)", color: "var(--text-3)", letterSpacing: "0.08em" }}>
+          By Direction
+        </span>
         {dirStats.length === 0 ? (
-          <p style={styles.empty}>No data</p>
+          <p className="font-mono text-sm m-0" style={{ fontFamily: "var(--font-mono)", color: "var(--text-3)" }}>No data</p>
         ) : (
           dirStats.map((d) => (
-            <div key={d.direction} style={styles.row}>
-              <span style={styles.rowLabel}>{d.direction}</span>
-              <div style={styles.barWrap}>
-                <div
-                  style={{
-                    ...styles.bar,
-                    width: `${Math.min(d.winRate * 100, 100)}%`,
-                    background: d.winRate >= 0.5 ? "var(--positive)" : "var(--negative)",
-                  }}
-                />
-              </div>
-              <span style={styles.rowValue}>{fmtPct(d.winRate * 100)}</span>
-              <span style={{ ...styles.rowPnl, color: d.pnl >= 0 ? "var(--green)" : "var(--red)" }}>
-                {fmtUsd(d.pnl, false)}
-              </span>
-            </div>
+            <BreakdownRow key={d.direction} label={d.direction} winRate={d.winRate} pnl={d.pnl} />
           ))
         )}
       </div>
@@ -68,77 +42,28 @@ export default function BreakdownChart() {
   );
 }
 
-const styles: Record<string, React.CSSProperties> = {
-  wrapper: {
-    background: "var(--bg-2)",
-    border: "1px solid var(--border)",
-    borderRadius: "var(--radius-md)",
-    padding: "var(--space-4)",
-    display: "flex",
-    gap: "var(--space-4)",
-    alignItems: "flex-start",
-  },
-  section: {
-    flex: 1,
-    display: "flex",
-    flexDirection: "column",
-    gap: "var(--space-2)",
-    minWidth: 0,
-  },
-  sectionTitle: {
-    fontFamily: "var(--font-mono)",
-    fontSize: 9,
-    fontWeight: 700,
-    color: "var(--text-3)",
-    textTransform: "uppercase",
-    letterSpacing: "0.08em",
-    marginBottom: "var(--space-1)",
-  },
-  divider: {
-    width: 1,
-    background: "var(--border)",
-    alignSelf: "stretch",
-  },
-  row: {
-    display: "grid",
-    gridTemplateColumns: "56px 1fr 40px 64px",
-    alignItems: "center",
-    gap: "var(--space-2)",
-  },
-  rowLabel: {
-    fontFamily: "var(--font-mono)",
-    fontSize: 11,
-    fontWeight: 700,
-    color: "var(--text-1)",
-  },
-  barWrap: {
-    height: 4,
-    background: "var(--bg-3)",
-    borderRadius: 2,
-    overflow: "hidden",
-  },
-  bar: {
-    height: "100%",
-    borderRadius: 2,
-    transition: "width 0.3s",
-  },
-  rowValue: {
-    fontFamily: "var(--font-mono)",
-    fontSize: 10,
-    fontWeight: 600,
-    color: "var(--text-2)",
-    textAlign: "right",
-  },
-  rowPnl: {
-    fontFamily: "var(--font-mono)",
-    fontSize: 10,
-    fontWeight: 700,
-    textAlign: "right",
-  },
-  empty: {
-    fontFamily: "var(--font-mono)",
-    fontSize: 11,
-    color: "var(--text-3)",
-    margin: 0,
-  },
-};
+function BreakdownRow({ label, winRate, pnl }: { label: string; winRate: number; pnl: number }) {
+  const barColor = winRate >= 0.5 ? "var(--positive)" : "var(--negative)";
+  return (
+    <div className="grid items-center gap-2" style={{ gridTemplateColumns: "56px 1fr 40px 64px" }}>
+      <span className="font-mono text-sm font-bold" style={{ fontFamily: "var(--font-mono)", color: "var(--text-1)" }}>
+        {label}
+      </span>
+      <div className="h-1 bg-[var(--bg-3)] rounded overflow-hidden">
+        <div
+          className="h-full rounded transition-all"
+          style={{ width: `${Math.min(winRate * 100, 100)}%`, background: barColor }}
+        />
+      </div>
+      <span className="font-mono text-[10px] font-semibold text-right" style={{ fontFamily: "var(--font-mono)", color: "var(--text-2)" }}>
+        {fmtPct(winRate * 100)}
+      </span>
+      <span
+        className="font-mono text-[10px] font-bold text-right"
+        style={{ fontFamily: "var(--font-mono)", color: pnl >= 0 ? "var(--green)" : "var(--red)" }}
+      >
+        {fmtUsd(pnl, false)}
+      </span>
+    </div>
+  );
+}

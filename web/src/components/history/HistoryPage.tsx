@@ -7,18 +7,14 @@ import BreakdownChart from "@/components/history/BreakdownChart";
 
 export default function HistoryPage() {
   return (
-    <div style={styles.root}>
+    <div className="flex flex-col gap-3">
       {/* Top KPIs */}
       <KPIRow />
 
       {/* Equity curve + breakdown side by side */}
-      <div style={styles.midRow}>
-        <div style={styles.curveWrap}>
-          <EquityCurve />
-        </div>
-        <div style={styles.breakdownWrap}>
-          <BreakdownChart />
-        </div>
+      <div className="grid gap-3" style={{ gridTemplateColumns: "1fr 1fr", alignItems: "start" }}>
+        <EquityCurve />
+        <BreakdownChart />
       </div>
 
       {/* Trade history */}
@@ -26,23 +22,3 @@ export default function HistoryPage() {
     </div>
   );
 }
-
-const styles: Record<string, React.CSSProperties> = {
-  root: {
-    display: "flex",
-    flexDirection: "column",
-    gap: "var(--space-3)",
-  },
-  midRow: {
-    display: "grid",
-    gridTemplateColumns: "1fr 1fr",
-    gap: "var(--space-3)",
-    alignItems: "start",
-  },
-  curveWrap: {
-    minWidth: 0,
-  },
-  breakdownWrap: {
-    minWidth: 0,
-  },
-};

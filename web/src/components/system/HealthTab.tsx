@@ -11,13 +11,13 @@ export default function HealthTab() {
   const warns  = events.filter((e) => e.level === "WARN").slice(0, 5);
 
   return (
-    <div style={styles.root}>
+    <div className="flex flex-col gap-3">
       {/* Status row */}
-      <div style={styles.statusRow}>
+      <div className="grid grid-cols-4 gap-3">
         <HealthPill
           label="Bot State"
           value={status?.state ?? "—"}
-          color={isRunning ? "var(--green)" : "var(--text-3)"}
+          color={isRunning ? "var(--positive)" : "var(--text-3)"}
           pulse={isRunning}
         />
         <HealthPill
@@ -33,35 +33,47 @@ export default function HealthTab() {
         <HealthPill
           label="Scan Latency"
           value={status?.last_scan_latency_ms != null ? `${status.last_scan_latency_ms}ms` : "—"}
-          color={status?.last_scan_latency_ms != null && status.last_scan_latency_ms > 30000 ? "var(--orange)" : "var(--text-2)"}
+          color={status?.last_scan_latency_ms != null && status.last_scan_latency_ms > 30000 ? "var(--warning)" : "var(--text-2)"}
         />
       </div>
 
       {/* Errors */}
-      <div style={styles.section}>
-        <span style={styles.sectionTitle}>Recent Errors</span>
+      <div className="bg-[var(--bg-2)] border border-[var(--border)] rounded-md px-4 py-3 flex flex-col gap-2">
+        <span className="font-mono text-[9px] font-bold uppercase" style={{ fontFamily: "var(--font-mono)", color: "var(--text-3)", letterSpacing: "0.06em" }}>
+          Recent Errors
+        </span>
         {errors.length === 0 ? (
-          <p style={styles.ok}>No errors</p>
+          <p className="font-mono text-sm" style={{ fontFamily: "var(--font-mono)", color: "var(--positive)", margin: 0 }}>No errors</p>
         ) : (
           errors.map((e, i) => (
-            <div key={i} style={styles.eventRow}>
-              <span style={styles.eventTime}>{relTime(e.created_at)}</span>
-              <span style={styles.eventMsg}>{e.message ?? e.msg ?? "—"}</span>
+            <div key={i} className="flex gap-3 items-start py-1 border-b border-[var(--border)] last:border-b-0">
+              <span className="font-mono text-[10px] text-[var(--text-3)] min-w-[60px] flex-shrink-0" style={{ fontFamily: "var(--font-mono)" }}>
+                {relTime(e.created_at)}
+              </span>
+              <span className="font-mono text-sm text-[var(--text-2)] flex-1" style={{ fontFamily: "var(--font-mono)" }}>
+                {e.message ?? e.msg ?? "—"}
+              </span>
             </div>
           ))
         )}
       </div>
 
       {/* Warnings */}
-      <div style={styles.section}>
-        <span style={styles.sectionTitle}>Recent Warnings</span>
+      <div className="bg-[var(--bg-2)] border border-[var(--border)] rounded-md px-4 py-3 flex flex-col gap-2">
+        <span className="font-mono text-[9px] font-bold uppercase" style={{ fontFamily: "var(--font-mono)", color: "var(--text-3)", letterSpacing: "0.06em" }}>
+          Recent Warnings
+        </span>
         {warns.length === 0 ? (
-          <p style={styles.ok}>No warnings</p>
+          <p className="font-mono text-sm" style={{ fontFamily: "var(--font-mono)", color: "var(--positive)", margin: 0 }}>No warnings</p>
         ) : (
           warns.map((e, i) => (
-            <div key={i} style={styles.eventRow}>
-              <span style={styles.eventTime}>{relTime(e.created_at)}</span>
-              <span style={styles.eventMsg}>{e.message ?? e.msg ?? "—"}</span>
+            <div key={i} className="flex gap-3 items-start py-1 border-b border-[var(--border)] last:border-b-0">
+              <span className="font-mono text-[10px] text-[var(--text-3)] min-w-[60px] flex-shrink-0" style={{ fontFamily: "var(--font-mono)" }}>
+                {relTime(e.created_at)}
+              </span>
+              <span className="font-mono text-sm text-[var(--text-2)] flex-1" style={{ fontFamily: "var(--font-mono)" }}>
+                {e.message ?? e.msg ?? "—"}
+              </span>
             </div>
           ))
         )}
@@ -82,101 +94,18 @@ function HealthPill({
   pulse?: boolean;
 }) {
   return (
-    <div style={styles.pill}>
-      <span style={styles.pillLabel}>{label}</span>
-      <div style={styles.pillValueRow}>
-        {pulse && <span style={{ ...styles.dot, background: color, boxShadow: `0 0 6px ${color}` }} />}
-        <span style={{ ...styles.pillValue, color }}>{value}</span>
+    <div className="bg-[var(--bg-2)] border border-[var(--border)] rounded-md px-4 py-3 flex flex-col gap-1">
+      <span className="font-mono text-[9px] font-bold uppercase" style={{ fontFamily: "var(--font-mono)", color: "var(--text-3)", letterSpacing: "0.06em" }}>
+        {label}
+      </span>
+      <div className="flex items-center gap-1.5">
+        {pulse && (
+          <span className="rounded-full flex-shrink-0" style={{ width: 6, height: 6, background: color, boxShadow: `0 0 6px ${color}` }} />
+        )}
+        <span className="font-mono text-sm font-bold" style={{ fontFamily: "var(--font-mono)", color }}>
+          {value}
+        </span>
       </div>
     </div>
   );
 }
-
-const styles: Record<string, React.CSSProperties> = {
-  root: {
-    display: "flex",
-    flexDirection: "column",
-    gap: "var(--space-3)",
-  },
-  statusRow: {
-    display: "grid",
-    gridTemplateColumns: "repeat(4, 1fr)",
-    gap: "var(--space-3)",
-  },
-  pill: {
-    background: "var(--bg-2)",
-    border: "1px solid var(--border)",
-    borderRadius: "var(--radius-md)",
-    padding: "var(--space-3)",
-    display: "flex",
-    flexDirection: "column",
-    gap: 4,
-  },
-  pillLabel: {
-    fontFamily: "var(--font-mono)",
-    fontSize: 9,
-    fontWeight: 700,
-    color: "var(--text-3)",
-    textTransform: "uppercase",
-    letterSpacing: "0.06em",
-  },
-  pillValueRow: {
-    display: "flex",
-    alignItems: "center",
-    gap: 6,
-  },
-  dot: {
-    width: 6,
-    height: 6,
-    borderRadius: "50%",
-    flexShrink: 0,
-  },
-  pillValue: {
-    fontFamily: "var(--font-mono)",
-    fontSize: 13,
-    fontWeight: 700,
-  },
-  section: {
-    background: "var(--bg-2)",
-    border: "1px solid var(--border)",
-    borderRadius: "var(--radius-md)",
-    padding: "var(--space-3)",
-    display: "flex",
-    flexDirection: "column",
-    gap: "var(--space-2)",
-  },
-  sectionTitle: {
-    fontFamily: "var(--font-mono)",
-    fontSize: 9,
-    fontWeight: 700,
-    color: "var(--text-3)",
-    textTransform: "uppercase",
-    letterSpacing: "0.06em",
-  },
-  ok: {
-    fontFamily: "var(--font-mono)",
-    fontSize: 11,
-    color: "var(--green)",
-    margin: 0,
-  },
-  eventRow: {
-    display: "flex",
-    gap: "var(--space-3)",
-    alignItems: "flex-start",
-    padding: "4px 0",
-    borderBottom: "1px solid var(--border)",
-  },
-  eventTime: {
-    fontFamily: "var(--font-mono)",
-    fontSize: 10,
-    color: "var(--text-3)",
-    minWidth: 60,
-    flexShrink: 0,
-  },
-  eventMsg: {
-    fontFamily: "var(--font-mono)",
-    fontSize: 11,
-    color: "var(--text-2)",
-    flex: 1,
-  },
-};

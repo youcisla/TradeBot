@@ -6,6 +6,7 @@ import LearningTab from "@/components/system/LearningTab";
 import AgentsTab from "@/components/system/AgentsTab";
 import BrokerTab from "@/components/system/BrokerTab";
 import ConfigTab from "@/components/system/ConfigTab";
+import { cn } from "@/lib/utils";
 
 const TABS = [
   { id: "health",  label: "Health",  icon: "♥" },
@@ -21,26 +22,30 @@ export default function SystemPage() {
   const [active, setActive] = useState<TabId>("health");
 
   return (
-    <div style={styles.root}>
+    <div className="flex flex-col gap-3">
       {/* Tab bar */}
-      <div style={styles.tabBar}>
+      <div className="flex gap-2 flex-wrap">
         {TABS.map((tab) => (
           <button
             key={tab.id}
-            style={{
-              ...styles.tab,
-              ...(active === tab.id ? styles.tabActive : {}),
-            }}
+            className={cn(
+              "flex items-center gap-2 rounded-md px-3 py-1.5 cursor-pointer transition-all border text-xs font-semibold",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--accent)]",
+              active === tab.id
+                ? "bg-[var(--bg-3)] border-[var(--border-active)] text-[var(--accent)]"
+                : "bg-[var(--bg-2)] border-[var(--border)] text-[var(--text-2)]"
+            )}
+            style={{ fontFamily: "var(--font-ui)", letterSpacing: "0.03em" }}
             onClick={() => setActive(tab.id)}
           >
-            <span style={styles.tabIcon}>{tab.icon}</span>
-            <span style={styles.tabLabel}>{tab.label}</span>
+            <span style={{ fontSize: 14, lineHeight: 1 }}>{tab.icon}</span>
+            <span>{tab.label}</span>
           </button>
         ))}
       </div>
 
       {/* Tab content */}
-      <div style={styles.content}>
+      <div style={{ minHeight: 300 }}>
         {active === "health"  && <HealthTab />}
         {active === "learning" && <LearningTab />}
         {active === "agents"  && <AgentsTab />}
@@ -50,45 +55,3 @@ export default function SystemPage() {
     </div>
   );
 }
-
-const styles: Record<string, React.CSSProperties> = {
-  root: {
-    display: "flex",
-    flexDirection: "column",
-    gap: "var(--space-3)",
-  },
-  tabBar: {
-    display: "flex",
-    gap: "var(--space-2)",
-    flexWrap: "wrap",
-  },
-  tab: {
-    display: "flex",
-    alignItems: "center",
-    gap: "var(--space-2)",
-    background: "var(--bg-2)",
-    border: "1px solid var(--border)",
-    borderRadius: "var(--radius-md)",
-    color: "var(--text-2)",
-    cursor: "pointer",
-    fontFamily: "var(--font-ui)",
-    fontSize: 12,
-    fontWeight: 600,
-    padding: "6px 14px",
-  },
-  tabActive: {
-    background: "var(--bg-3)",
-    border:     "1px solid var(--border-active)",
-    color:      "var(--accent)",
-  },
-  tabIcon: {
-    fontSize: 14,
-    lineHeight: 1,
-  },
-  tabLabel: {
-    letterSpacing: "0.03em",
-  },
-  content: {
-    minHeight: 300,
-  },
-};

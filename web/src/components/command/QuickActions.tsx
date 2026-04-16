@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useAppShell } from "@/components/AppShell";
 import Modal from "@/components/shared/Modal";
 import { sendCommand } from "@/lib/ws";
+import { cn } from "@/lib/utils";
 
 type ActionType = "pause" | "resume" | "close_all" | "kill";
 
@@ -63,40 +64,21 @@ export default function QuickActions() {
 
   return (
     <>
-      <div style={styles.wrapper}>
-        <span style={styles.label}>Actions</span>
-        <div style={styles.buttons}>
+      <div className="bg-[var(--bg-2)] border border-[var(--border)] rounded-md px-4 py-3 flex items-center gap-4">
+        <span
+          className="text-[11px] font-bold uppercase flex-shrink-0"
+          style={{ fontFamily: "var(--font-ui)", color: "var(--text-2)", letterSpacing: "0.08em" }}
+        >
+          Actions
+        </span>
+        <div className="flex gap-2 flex-wrap">
           {isRunning ? (
-            <button
-              style={styles.btn}
-              onClick={() => setPending("pause")}
-              disabled={loading !== null}
-            >
-              Pause
-            </button>
+            <ActionBtn label="Pause"    onClick={() => setPending("pause")}    disabled={loading !== null} />
           ) : (
-            <button
-              style={{ ...styles.btn, ...styles.btnResume }}
-              onClick={() => setPending("resume")}
-              disabled={loading !== null}
-            >
-              Resume
-            </button>
+            <ActionBtn label="Resume"   onClick={() => setPending("resume")}   variant="accent" disabled={loading !== null} />
           )}
-          <button
-            style={{ ...styles.btn, ...styles.btnWarn }}
-            onClick={() => setPending("close_all")}
-            disabled={loading !== null}
-          >
-            Close All
-          </button>
-          <button
-            style={{ ...styles.btn, ...styles.btnDanger }}
-            onClick={() => setPending("kill")}
-            disabled={loading !== null}
-          >
-            Kill
-          </button>
+          <ActionBtn label="Close All" onClick={() => setPending("close_all")} variant="warn"   disabled={loading !== null} />
+          <ActionBtn label="Kill"     onClick={() => setPending("kill")}      variant="danger" disabled={loading !== null} />
         </div>
       </div>
 
@@ -116,52 +98,28 @@ export default function QuickActions() {
   );
 }
 
-const styles: Record<string, React.CSSProperties> = {
-  wrapper: {
-    background: "var(--bg-2)",
-    border: "1px solid var(--border)",
-    borderRadius: "var(--radius-md)",
-    padding: "var(--space-3) var(--space-4)",
-    display: "flex",
-    alignItems: "center",
-    gap: "var(--space-4)",
-  },
-  label: {
-    fontFamily: "var(--font-ui)",
-    fontSize: 11,
-    fontWeight: 700,
-    color: "var(--text-2)",
-    textTransform: "uppercase",
-    letterSpacing: "0.08em",
-    flexShrink: 0,
-  },
-  buttons: {
-    display: "flex",
-    gap: "var(--space-2)",
-    flexWrap: "wrap",
-  },
-  btn: {
-    background: "var(--bg-3)",
-    border: "1px solid var(--border)",
-    borderRadius: "var(--radius-sm)",
-    color: "var(--text-1)",
-    cursor: "pointer",
-    fontFamily: "var(--font-ui)",
-    fontSize: 12,
-    fontWeight: 600,
-    padding: "5px 14px",
-  },
-  btnResume: {
-    border: "1px solid var(--accent)",
-    color: "var(--accent)",
-  },
-  btnWarn: {
-    border: "1px solid var(--warning)",
-    color: "var(--warning)",
-  },
-  btnDanger: {
-    background: "var(--negative-dim)",
-    border: "1px solid var(--negative)",
-    color: "var(--negative)",
-  },
-};
+function ActionBtn({ label, onClick, variant = "default", disabled }: {
+  label: string;
+  onClick: () => void;
+  variant?: "default" | "accent" | "warn" | "danger";
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      className={cn(
+        "rounded px-3 py-1.5 text-xs font-semibold cursor-pointer transition-all border",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--accent)]",
+        "disabled:opacity-40 disabled:cursor-not-allowed",
+        variant === "default" && "bg-[var(--bg-3)] border-[var(--border)] text-[var(--text-1)]",
+        variant === "accent"  && "border-[var(--accent)] text-[var(--accent)] hover:bg-[var(--accent)]/10",
+        variant === "warn"    && "border-[var(--warning)] text-[var(--warning)] hover:bg-[var(--warning)]/10",
+        variant === "danger"  && "bg-[var(--negative-dim)] border-[var(--negative)] text-[var(--negative)]",
+      )}
+      style={{ fontFamily: "var(--font-ui)" }}
+      onClick={onClick}
+      disabled={disabled}
+    >
+      {label}
+    </button>
+  );
+}

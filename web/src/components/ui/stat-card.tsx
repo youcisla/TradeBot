@@ -1,5 +1,7 @@
 "use client";
 
+import { cn } from "@/lib/utils";
+
 type ColorVariant = "positive" | "negative" | "neutral" | "accent" | "warning" | "info";
 type TrendVariant = "up" | "down" | "flat";
 type SizeVariant = "sm" | "md" | "lg";
@@ -61,11 +63,11 @@ export function StatCard({
 
   return (
     <div
-      className={`rounded flex flex-col gap-1 p-3 relative overflow-hidden ${className ?? ""}`}
-      style={{
-        background: "var(--bg-2)",
-        border: "1px solid var(--border)",
-      }}
+      className={cn(
+        "rounded flex flex-col gap-1 p-3 relative overflow-hidden",
+        "bg-[var(--bg-2)] border border-[var(--border)]",
+        className
+      )}
     >
       {/* Top accent bar */}
       <div

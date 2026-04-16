@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { cn } from "@/lib/utils";
 
 interface SymbolCategory {
   id: string;
@@ -8,7 +9,6 @@ interface SymbolCategory {
   symbols: string[];
 }
 
-// Fallback hardcoded list — used until Python bot writes data/symbols.json
 const FALLBACK: SymbolCategory[] = [
   { id: "forex-majors",  label: "Forex Majors",  symbols: ["AUDUSD", "EURUSD", "GBPUSD", "USDCAD", "USDCHF", "USDJPY"] },
   { id: "forex-crosses", label: "Forex Crosses", symbols: ["GBXUSD", "USDAED", "USDCNH", "USDHKD", "USDSGD", "USDZAR"] },
@@ -35,38 +35,62 @@ export default function SymbolDrawer({ selected, onSelect }: Props) {
           setCategories(data.categories);
         }
       })
-      .catch(() => {
-        // Keep fallback on error
-      });
+      .catch(() => {});
   }, []);
 
   return (
     <>
-      <button style={styles.trigger} onClick={() => setOpen(true)}>
-        <span style={styles.sym}>{selected}</span>
-        <span style={styles.chevron}>▾</span>
+      <button
+        className="flex items-center gap-1 bg-[var(--bg-3)] border border-[var(--border)] rounded px-3 py-1 cursor-pointer"
+        onClick={() => setOpen(true)}
+      >
+        <span className="font-mono text-sm font-bold" style={{ fontFamily: "var(--font-mono)", color: "var(--text-1)" }}>
+          {selected}
+        </span>
+        <span className="text-[10px]" style={{ color: "var(--text-3)" }}>▾</span>
       </button>
 
       {open && (
-        <div style={styles.backdrop} onClick={() => setOpen(false)}>
-          <div style={styles.drawer} onClick={(e) => e.stopPropagation()}>
-            <div style={styles.drawerHeader}>
-              <span style={styles.drawerTitle}>Select Symbol</span>
-              <button style={styles.closeBtn} onClick={() => setOpen(false)}>✕</button>
+        <div
+          className="fixed inset-0 bg-black/70 z-[300] flex items-start justify-start"
+          style={{ padding: "60px 0 0 200px" }}
+          onClick={() => setOpen(false)}
+        >
+          <div
+            className="bg-[var(--bg-2)] border border-[var(--border)] rounded-md p-4 w-80 max-h-[calc(100vh-100px)] overflow-y-auto"
+            style={{ boxShadow: "0 24px 48px rgba(0,0,0,0.5)" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <span className="text-sm font-bold" style={{ fontFamily: "var(--font-ui)", color: "var(--text-1)" }}>
+                Select Symbol
+              </span>
+              <button
+                className="bg-none border-none text-[var(--text-3)] cursor-pointer text-sm"
+                style={{ background: "none", border: "none", color: "var(--text-3)", cursor: "pointer", padding: "0 4px" }}
+                onClick={() => setOpen(false)}
+              >
+                ✕
+              </button>
             </div>
 
             {categories.map((cat) =>
               cat.symbols.length === 0 ? null : (
-                <div key={cat.id} style={styles.group}>
-                  <span style={styles.groupLabel}>{cat.label}</span>
-                  <div style={styles.groupSymbols}>
+                <div key={cat.id} className="flex flex-col gap-1 mb-3">
+                  <span className="font-mono text-[9px] font-bold uppercase" style={{ fontFamily: "var(--font-mono)", color: "var(--text-3)", letterSpacing: "0.06em" }}>
+                    {cat.label}
+                  </span>
+                  <div className="flex flex-wrap gap-1">
                     {cat.symbols.map((s) => (
                       <button
                         key={s}
-                        style={{
-                          ...styles.symbolBtn,
-                          ...(s === selected ? styles.symbolBtnActive : {}),
-                        }}
+                        className={cn(
+                          "rounded px-2 py-1 font-mono text-xs font-semibold cursor-pointer transition-all border",
+                          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--accent)]",
+                          s === selected
+                            ? "bg-[var(--accent)] border-[var(--accent)] text-[#0e0e0e]"
+                            : "bg-[var(--bg-3)] border-[var(--border)] text-[var(--text-2)]"
+                        )}
                         onClick={() => { onSelect(s); setOpen(false); }}
                       >
                         {s}
@@ -76,109 +100,9 @@ export default function SymbolDrawer({ selected, onSelect }: Props) {
                 </div>
               )
             )}
-
           </div>
         </div>
       )}
     </>
   );
 }
-
-const styles: Record<string, React.CSSProperties> = {
-  trigger: {
-    display:       "flex",
-    alignItems:     "center",
-    gap:            4,
-    background:     "var(--bg-3)",
-    border:        "1px solid var(--border)",
-    borderRadius:  "var(--radius-sm)",
-    cursor:        "pointer",
-    padding:       "4px 10px",
-  },
-  sym: {
-    fontFamily: "var(--font-mono)",
-    fontSize:   12,
-    fontWeight:  700,
-    color:      "var(--text-1)",
-  },
-  chevron: {
-    fontSize: 10,
-    color:   "var(--text-3)",
-  },
-  backdrop: {
-    position:    "fixed",
-    inset:       0,
-    background:  "rgba(0,0,0,0.7)",
-    zIndex:     300,
-    display:    "flex",
-    alignItems: "flex-start",
-    justifyContent: "flex-start",
-    padding:    "60px 0 0 200px",
-  },
-  drawer: {
-    background:  "var(--bg-2)",
-    border:      "1px solid var(--border)",
-    borderRadius:"var(--radius-md)",
-    padding:     "var(--space-3)",
-    width:       320,
-    maxHeight:   "calc(100vh - 100px)",
-    overflowY:   "auto",
-    boxShadow:   "0 24px 48px rgba(0,0,0,0.5)",
-    display:    "flex",
-    flexDirection: "column",
-    gap:        "var(--space-3)",
-  },
-  drawerHeader: {
-    display:        "flex",
-    alignItems:     "center",
-    justifyContent: "space-between",
-  },
-  drawerTitle: {
-    fontFamily: "var(--font-ui)",
-    fontSize:   13,
-    fontWeight:  700,
-    color:      "var(--text-1)",
-  },
-  closeBtn: {
-    background: "none",
-    border:     "none",
-    color:      "var(--text-3)",
-    cursor:     "pointer",
-    fontSize:   12,
-    padding:    "0 4px",
-  },
-  group: {
-    display:       "flex",
-    flexDirection: "column",
-    gap:           "var(--space-1)",
-  },
-  groupLabel: {
-    fontFamily:    "var(--font-mono)",
-    fontSize:      9,
-    fontWeight:    700,
-    color:         "var(--text-3)",
-    textTransform: "uppercase",
-    letterSpacing: "0.06em",
-  },
-  groupSymbols: {
-    display:   "flex",
-    flexWrap:  "wrap",
-    gap:       4,
-  },
-  symbolBtn: {
-    background:  "var(--bg-3)",
-    border:     "1px solid var(--border)",
-    borderRadius: "var(--radius-sm)",
-    color:      "var(--text-2)",
-    cursor:     "pointer",
-    fontFamily: "var(--font-mono)",
-    fontSize:   11,
-    fontWeight: 600,
-    padding:    "3px 8px",
-  },
-  symbolBtnActive: {
-    background: "var(--accent)",
-    border:    "1px solid var(--accent)",
-    color:     "#0e0e0e",
-  },
-};

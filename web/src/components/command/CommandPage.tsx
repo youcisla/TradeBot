@@ -7,51 +7,18 @@ import MacroStrip from "@/components/command/MacroStrip";
 
 export default function CommandPage() {
   return (
-    <div style={styles.root}>
-      {/* Top: macro intelligence + quick actions */}
-      <div style={styles.topRow}>
-        <MacroStrip />
-      </div>
-      <div style={styles.actionsRow}>
-        <QuickActions />
-      </div>
+    <div className="flex flex-col gap-3">
+      {/* Macro intelligence strip */}
+      <MacroStrip />
 
-      {/* Bottom: positions + events (side-by-side) */}
-      <div style={styles.midRow}>
-        <div style={styles.positionsWrap}>
-          <PositionsCard />
-        </div>
-        <div style={styles.eventsWrap}>
-          <EventStream />
-        </div>
+      {/* Bot control actions */}
+      <QuickActions />
+
+      {/* Bottom: positions + events side-by-side */}
+      <div className="grid gap-3" style={{ gridTemplateColumns: "1fr 1fr", alignItems: "start" }}>
+        <PositionsCard />
+        <EventStream />
       </div>
     </div>
   );
 }
-
-const styles: Record<string, React.CSSProperties> = {
-  root: {
-    display: "flex",
-    flexDirection: "column",
-    gap: "var(--space-3)",
-  },
-  topRow: {
-    width: "100%",
-  },
-  actionsRow: {
-    width: "100%",
-  },
-  // Side-by-side on desktop; layout.tsx mobile path stacks vertically
-  midRow: {
-    display: "grid",
-    gridTemplateColumns: "1fr 1fr",
-    gap: "var(--space-3)",
-    alignItems: "start",
-  },
-  positionsWrap: {
-    minWidth: 0,
-  },
-  eventsWrap: {
-    minWidth: 0,
-  },
-};

@@ -1,12 +1,12 @@
 "use client";
 
 import { useRisk } from "@/lib/swr";
-import { relTime } from "@/lib/format";
+import { cn } from "@/lib/utils";
 
 const STATUS_COLOR: Record<string, string> = {
-  pass: "var(--green)",
-  warn: "var(--orange)",
-  fail: "var(--red)",
+  pass: "var(--positive)",
+  warn: "var(--warning)",
+  fail: "var(--negative)",
 };
 
 export default function GuardTable() {
@@ -14,32 +14,48 @@ export default function GuardTable() {
   const guards = risk?.guards ?? [];
 
   return (
-    <div style={styles.wrapper}>
-      <div style={styles.header}>
-        <span style={styles.title}>Guard Pipeline</span>
-        <span style={styles.count}>{guards.length} guards</span>
+    <div className="bg-[var(--bg-2)] border border-[var(--border)] rounded-md overflow-hidden flex flex-col">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border)] flex-shrink-0">
+        <span className="text-xs font-bold uppercase tracking-widest" style={{ fontFamily: "var(--font-ui)", color: "var(--text-2)", letterSpacing: "0.08em" }}>
+          Guard Pipeline
+        </span>
+        <span className="font-mono text-[10px]" style={{ fontFamily: "var(--font-mono)", color: "var(--text-3)" }}>
+          {guards.length} guards
+        </span>
       </div>
 
       {guards.length === 0 ? (
-        <p style={styles.empty}>No guard data</p>
+        <p className="font-mono text-sm text-center py-5" style={{ fontFamily: "var(--font-mono)", color: "var(--text-3)" }}>
+          No guard data
+        </p>
       ) : (
-        <div style={styles.table}>
+        <div className="overflow-y-auto flex-1">
           {guards.map((g) => (
-            <div key={g.name} style={styles.row}>
+            <div key={g.name} className="flex items-center gap-3 px-4 py-1.5 border-b border-[var(--border)]">
               <span
+                className="rounded-full flex-shrink-0"
                 style={{
-                  ...styles.statusDot,
+                  width: 8,
+                  height: 8,
                   background: STATUS_COLOR[g.status] ?? "var(--text-3)",
                   boxShadow: `0 0 6px ${STATUS_COLOR[g.status] ?? "transparent"}`,
                 }}
               />
-              <span style={styles.name}>{g.name}</span>
-              <span style={styles.current}>{g.current}</span>
-              <span style={styles.threshold}>/ {g.threshold}</span>
+              <span className="font-mono text-sm font-semibold flex-1" style={{ fontFamily: "var(--font-mono)", color: "var(--text-1)" }}>
+                {g.name}
+              </span>
+              <span className="font-mono text-sm min-w-[60px] text-right" style={{ fontFamily: "var(--font-mono)", color: "var(--text-2)" }}>
+                {g.current}
+              </span>
+              <span className="font-mono text-[10px] text-[var(--text-3)] min-w-[60px]">
+                / {g.threshold}
+              </span>
               <span
+                className="font-mono text-[9px] font-bold uppercase min-w-[36px] text-right"
                 style={{
-                  ...styles.statusLabel,
+                  fontFamily: "var(--font-mono)",
                   color: STATUS_COLOR[g.status] ?? "var(--text-3)",
+                  letterSpacing: "0.06em",
                 }}
               >
                 {g.status.toUpperCase()}
@@ -51,88 +67,3 @@ export default function GuardTable() {
     </div>
   );
 }
-
-const styles: Record<string, React.CSSProperties> = {
-  wrapper: {
-    background: "var(--bg-2)",
-    border: "1px solid var(--border)",
-    borderRadius: "var(--radius-md)",
-    overflow: "hidden",
-    display: "flex",
-    flexDirection: "column",
-  },
-  header: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: "var(--space-3) var(--space-4)",
-    borderBottom: "1px solid var(--border)",
-    flexShrink: 0,
-  },
-  title: {
-    fontFamily: "var(--font-ui)",
-    fontSize: 11,
-    fontWeight: 700,
-    color: "var(--text-2)",
-    textTransform: "uppercase",
-    letterSpacing: "0.08em",
-  },
-  count: {
-    fontFamily: "var(--font-mono)",
-    fontSize: 10,
-    color: "var(--text-3)",
-  },
-  table: {
-    overflowY: "auto",
-    flex: 1,
-  },
-  row: {
-    display: "flex",
-    alignItems: "center",
-    gap: "var(--space-3)",
-    padding: "6px var(--space-4)",
-    borderBottom: "1px solid var(--border)",
-  },
-  statusDot: {
-    width: 8,
-    height: 8,
-    borderRadius: "50%",
-    flexShrink: 0,
-  },
-  name: {
-    fontFamily: "var(--font-mono)",
-    fontSize: 11,
-    fontWeight: 600,
-    color: "var(--text-1)",
-    flex: 1,
-  },
-  current: {
-    fontFamily: "var(--font-mono)",
-    fontSize: 11,
-    color: "var(--text-2)",
-    minWidth: 60,
-    textAlign: "right",
-  },
-  threshold: {
-    fontFamily: "var(--font-mono)",
-    fontSize: 10,
-    color: "var(--text-3)",
-    minWidth: 60,
-  },
-  statusLabel: {
-    fontFamily: "var(--font-mono)",
-    fontSize: 9,
-    fontWeight: 700,
-    letterSpacing: "0.06em",
-    minWidth: 36,
-    textAlign: "right",
-  },
-  empty: {
-    fontFamily: "var(--font-mono)",
-    fontSize: 11,
-    color: "var(--text-3)",
-    textAlign: "center",
-    padding: "var(--space-5)",
-    margin: 0,
-  },
-};

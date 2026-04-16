@@ -5,6 +5,7 @@ import { useAppShell } from "@/components/AppShell";
 import { DirectionBadge } from "@/components/shared/DirectionBadge";
 import { formatPrice, fmtPnl, relTime } from "@/lib/format";
 import { sendCommand } from "@/lib/ws";
+import { cn } from "@/lib/utils";
 
 export default function PositionsCard() {
   const { openTrades } = useAppShell();
@@ -17,17 +18,19 @@ export default function PositionsCard() {
   }
 
   return (
-    <div className="flex flex-col">
+    <div className="flex flex-col" role="table" aria-label="Open positions">
       {/* Column headers */}
       <div
-        className="grid grid-cols-[2fr_56px_1fr_1fr_1fr_60px_28px] gap-2 px-4 py-2 border-b"
-        style={{ background: "var(--bg-3)", borderColor: "var(--border)" }}
+        className="grid grid-cols-[2fr_56px_1fr_1fr_1fr_60px_28px] gap-2 px-4 py-2 border-b bg-[var(--bg-3)] border-[var(--border)]"
+        role="row"
       >
-        {["Symbol", "Dir", "Entry", "PnL", "SL", "Age", ""].map((h) => (
+        {["Symbol", "Dir", "Entry", "PnL", "SL", "Age", ""].map((h, i) => (
           <span
             key={h}
+            role="columnheader"
             className="font-mono text-xs font-bold uppercase tracking-widest"
             style={{ color: "var(--text-3)", fontSize: 9, letterSpacing: "0.06em" }}
+            aria-colindex={i + 1}
           >
             {h}
           </span>
@@ -46,13 +49,11 @@ export default function PositionsCard() {
         openTrades.map((trade) => (
           <div
             key={trade.id}
-            className="grid grid-cols-[2fr_56px_1fr_1fr_1fr_60px_28px] gap-2 px-4 py-2.5 border-b transition-colors group"
-            style={{ borderColor: "var(--border-subtle)" }}
-            onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "var(--bg-3)")}
-            onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = "transparent")}
+            className="grid grid-cols-[2fr_56px_1fr_1fr_1fr_60px_28px] gap-2 px-4 py-2.5 border-b border-[var(--border-subtle)] transition-colors group"
+            role="row"
           >
             {/* Symbol */}
-            <div className="flex flex-col gap-0.5 min-w-0">
+            <div className="flex flex-col gap-0.5 min-w-0" role="cell">
               <span
                 className="font-mono font-bold"
                 style={{ color: "var(--text-1)", fontSize: 12 }}
@@ -70,11 +71,14 @@ export default function PositionsCard() {
             </div>
 
             {/* Direction */}
-            <DirectionBadge direction={trade.direction} />
+            <div role="cell">
+              <DirectionBadge direction={trade.direction} />
+            </div>
 
             {/* Entry */}
             <span
               className="font-mono text-right"
+              role="cell"
               style={{ color: "var(--text-2)", fontFamily: "var(--font-mono)", fontSize: 11 }}
             >
               {formatPrice(trade.entry_price)}
@@ -83,6 +87,7 @@ export default function PositionsCard() {
             {/* PnL */}
             <span
               className="font-mono text-right font-bold"
+              role="cell"
               style={{
                 color: typeof trade.pnl === "number" && trade.pnl < 0
                   ? "var(--negative)"
@@ -97,6 +102,7 @@ export default function PositionsCard() {
             {/* SL */}
             <span
               className="font-mono text-right"
+              role="cell"
               style={{ color: "var(--text-3)", fontFamily: "var(--font-mono)", fontSize: 11 }}
             >
               {trade.sl ? formatPrice(trade.sl) : "—"}
@@ -105,31 +111,25 @@ export default function PositionsCard() {
             {/* Age */}
             <span
               className="font-mono text-right"
+              role="cell"
               style={{ color: "var(--text-3)", fontFamily: "var(--font-mono)", fontSize: 11 }}
             >
               {relTime(trade.open_time)}
             </span>
 
             {/* Close */}
-            <div className="flex items-center justify-end">
+            <div className="flex items-center justify-end" role="cell">
               <button
-                className="rounded transition-colors px-1.5 py-0.5 font-mono text-xs"
-                style={{
-                  background: "transparent",
-                  border: "1px solid var(--border)",
-                  color: "var(--text-3)",
-                  fontSize: 10,
-                }}
+                className={cn(
+                  "rounded transition-colors px-1.5 py-0.5 font-mono text-xs",
+                  "border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--accent)]",
+                  closingId === trade.id
+                    ? "border-[var(--border)] text-[var(--text-3)] cursor-not-allowed"
+                    : "border-[var(--border)] text-[var(--text-3)] hover:border-[var(--negative)] hover:text-[var(--negative)]"
+                )}
                 onClick={() => handleClose(trade.id)}
                 disabled={closingId === trade.id}
-                onMouseEnter={(e) => {
-                  (e.currentTarget as HTMLElement).style.borderColor = "var(--negative)";
-                  (e.currentTarget as HTMLElement).style.color = "var(--negative)";
-                }}
-                onMouseLeave={(e) => {
-                  (e.currentTarget as HTMLElement).style.borderColor = "var(--border)";
-                  (e.currentTarget as HTMLElement).style.color = "var(--text-3)";
-                }}
+                aria-label={`Close ${trade.symbol} position`}
               >
                 {closingId === trade.id ? "…" : "✕"}
               </button>

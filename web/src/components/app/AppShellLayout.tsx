@@ -11,7 +11,7 @@ interface AppShellLayoutProps {
 
 export function AppShellLayout({ children }: AppShellLayoutProps) {
   return (
-    <div className="min-h-screen" style={{ background: "var(--bg)", color: "var(--text-1)" }}>
+    <div className="min-h-screen bg-[var(--bg)] text-[var(--text-1)]">
       {/* Fixed top header */}
       <Header />
 
@@ -22,24 +22,16 @@ export function AppShellLayout({ children }: AppShellLayoutProps) {
 
       {/* Main content — desktop */}
       <main
-        className="hidden lg:block"
-        style={{
-          paddingTop: "var(--header-h)",
-          paddingLeft: "var(--sidebar-w)",
-          minHeight: "100vh",
-        }}
+        className="hidden lg:block pt-[var(--header-h)] pl-[var(--sidebar-w)]"
+        style={{ minHeight: "100vh" }}
       >
         <div className="p-6">{children}</div>
       </main>
 
       {/* Main content — mobile */}
       <main
-        className="lg:hidden"
-        style={{
-          paddingTop: "var(--header-h)",
-          paddingBottom: "var(--nav-bottom-h)",
-          minHeight: "100vh",
-        }}
+        className="lg:hidden pt-[var(--header-h)]"
+        style={{ paddingBottom: "var(--nav-bottom-h)", minHeight: "100vh" }}
       >
         <div className="p-4">{children}</div>
       </main>

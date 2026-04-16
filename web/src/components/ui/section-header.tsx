@@ -1,5 +1,7 @@
 "use client";
 
+import { cn } from "@/lib/utils";
+
 interface SectionHeaderProps {
   title: string;
   /** Optional element on the right (filter chips, action button, count badge) */
@@ -20,7 +22,7 @@ interface SectionHeaderProps {
 export function SectionHeader({ title, action, className }: SectionHeaderProps) {
   return (
     <div
-      className={`flex items-center justify-between ${className ?? ""}`}
+      className={cn("flex items-center justify-between", className)}
     >
       <span
         className="text-xs font-bold uppercase tracking-widest"

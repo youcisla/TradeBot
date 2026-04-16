@@ -13,30 +13,38 @@ export default function RiskDashboard() {
   const maxPos   = risk?.max_open_trades   ?? 0;
 
   const posColor = openPos >= maxPos ? "var(--red)" : openPos >= maxPos * 0.7 ? "var(--orange)" : "var(--green)";
+  const pct = maxPos > 0 ? ((openPos / maxPos) * 100).toFixed(0) : "0";
 
   return (
-    <div style={styles.root}>
+    <div className="flex flex-col gap-3">
       {/* Position slot utilisation */}
-      <div style={styles.slotCard}>
-        <span style={styles.slotLabel}>Open Slots</span>
-        <div style={styles.slotNumbers}>
-          <span style={{ ...styles.slotValue, color: posColor }}>
+      <div className="bg-[var(--bg-2)] border border-[var(--border)] rounded-md px-4 py-4 flex flex-col gap-2">
+        <span
+          className="font-mono text-[9px] font-bold uppercase"
+          style={{ fontFamily: "var(--font-mono)", color: "var(--text-3)", letterSpacing: "0.06em" }}
+        >
+          Open Slots
+        </span>
+        <div className="flex items-baseline gap-1.5">
+          <span className="font-mono text-4xl font-bold leading-none" style={{ fontFamily: "var(--font-mono)", color: posColor }}>
             {openPos}
           </span>
-          <span style={styles.slotSep}>/</span>
-          <span style={styles.slotMax}>{maxPos}</span>
+          <span className="font-mono text-2xl" style={{ fontFamily: "var(--font-mono)", color: "var(--text-3)" }}>/</span>
+          <span className="font-mono text-xl font-bold" style={{ fontFamily: "var(--font-mono)", color: "var(--text-3)" }}>
+            {maxPos}
+          </span>
         </div>
-        <div style={styles.slotTrack}>
+        <div className="h-1.5 bg-[var(--bg-3)] rounded overflow-hidden">
           <div
+            className="h-full rounded transition-all"
             style={{
-              ...styles.slotFill,
               width: `${maxPos > 0 ? (openPos / maxPos) * 100 : 0}%`,
               background: posColor,
             }}
           />
         </div>
-        <span style={styles.slotPct}>
-          {maxPos > 0 ? ((openPos / maxPos) * 100).toFixed(0) : 0}% utilisation
+        <span className="font-mono text-[10px]" style={{ fontFamily: "var(--font-mono)", color: "var(--text-3)" }}>
+          {pct}% utilisation
         </span>
       </div>
 
@@ -48,66 +56,3 @@ export default function RiskDashboard() {
     </div>
   );
 }
-
-const styles: Record<string, React.CSSProperties> = {
-  root: {
-    display: "flex",
-    flexDirection: "column",
-    gap: "var(--space-3)",
-  },
-  slotCard: {
-    background: "var(--bg-2)",
-    border: "1px solid var(--border)",
-    borderRadius: "var(--radius-md)",
-    padding: "var(--space-4)",
-    display: "flex",
-    flexDirection: "column",
-    gap: "var(--space-2)",
-  },
-  slotLabel: {
-    fontFamily: "var(--font-mono)",
-    fontSize: 9,
-    fontWeight: 700,
-    color: "var(--text-3)",
-    textTransform: "uppercase",
-    letterSpacing: "0.06em",
-  },
-  slotNumbers: {
-    display: "flex",
-    alignItems: "baseline",
-    gap: 6,
-  },
-  slotValue: {
-    fontFamily: "var(--font-mono)",
-    fontSize: 40,
-    fontWeight: 700,
-    lineHeight: 1,
-  },
-  slotSep: {
-    fontFamily: "var(--font-mono)",
-    fontSize: 24,
-    color: "var(--text-3)",
-  },
-  slotMax: {
-    fontFamily: "var(--font-mono)",
-    fontSize: 20,
-    fontWeight: 700,
-    color: "var(--text-3)",
-  },
-  slotTrack: {
-    height: 6,
-    background: "var(--bg-3)",
-    borderRadius: 3,
-    overflow: "hidden",
-  },
-  slotFill: {
-    height: "100%",
-    borderRadius: 3,
-    transition: "width 0.4s, background 0.3s",
-  },
-  slotPct: {
-    fontFamily: "var(--font-mono)",
-    fontSize: 10,
-    color: "var(--text-3)",
-  },
-};

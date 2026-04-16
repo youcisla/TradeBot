@@ -1,5 +1,7 @@
 "use client";
 
+import { cn } from "@/lib/utils";
+
 const TIMEFRAMES = ["M1", "M5", "M15", "M30", "H1", "H4", "D1", "W1"] as const;
 type TF = typeof TIMEFRAMES[number];
 
@@ -10,14 +12,17 @@ interface Props {
 
 export default function TimeframeBar({ selected, onChange }: Props) {
   return (
-    <div style={styles.wrapper}>
+    <div className="flex items-center gap-0.5">
       {TIMEFRAMES.map((tf) => (
         <button
           key={tf}
-          style={{
-            ...styles.btn,
-            ...(tf === selected ? styles.btnActive : {}),
-          }}
+          className={cn(
+            "rounded px-2 py-1 font-mono text-xs font-semibold cursor-pointer transition-all border",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--accent)]",
+            tf === selected
+              ? "bg-[var(--bg-3)] border-[var(--border-active)] text-[var(--text-1)]"
+              : "bg-transparent border-transparent text-[var(--text-3)] hover:text-[var(--text-2)]"
+          )}
           onClick={() => onChange(tf)}
         >
           {tf}
@@ -26,27 +31,3 @@ export default function TimeframeBar({ selected, onChange }: Props) {
     </div>
   );
 }
-
-const styles: Record<string, React.CSSProperties> = {
-  wrapper: {
-    display:  "flex",
-    alignItems: "center",
-    gap:       2,
-  },
-  btn: {
-    background: "none",
-    border:     "1px solid transparent",
-    borderRadius: "var(--radius-sm)",
-    color:      "var(--text-3)",
-    cursor:     "pointer",
-    fontFamily: "var(--font-mono)",
-    fontSize:   11,
-    fontWeight: 600,
-    padding:    "3px 8px",
-  },
-  btnActive: {
-    background: "var(--bg-3)",
-    border:     "1px solid var(--border-active)",
-    color:      "var(--text-1)",
-  },
-};

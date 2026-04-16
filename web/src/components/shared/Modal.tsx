@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { cn } from "@/lib/utils";
 
 interface ModalProps {
   open: boolean;
@@ -36,26 +37,49 @@ export default function Modal({
   return (
     <div
       ref={overlayRef}
-      style={styles.overlay}
+      className="fixed inset-0 flex items-center justify-center z-[200]"
+      style={{ background: "rgba(0,0,0,0.75)", backdropFilter: "blur(4px)" }}
       onClick={(e) => { if (e.target === overlayRef.current) onCancel(); }}
     >
-      <div style={styles.dialog}>
-        <div style={styles.header}>
-          <span style={styles.title}>{title}</span>
-          <button style={styles.closeBtn} onClick={onCancel}>✕</button>
+      <div
+        className="bg-[var(--bg-2)] border border-[var(--border)] rounded-md w-full max-w-[400px]"
+        style={{ boxShadow: "0 24px 48px rgba(0,0,0,0.5)" }}
+      >
+        <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border)]">
+          <span className="text-sm font-bold" style={{ fontFamily: "var(--font-ui)", color: "var(--text-1)" }}>
+            {title}
+          </span>
+          <button
+            className="bg-none border-none text-[var(--text-3)] cursor-pointer text-sm p-0 px-1"
+            style={{ background: "none", border: "none", cursor: "pointer" }}
+            onClick={onCancel}
+          >
+            ✕
+          </button>
         </div>
 
         {(body || children) && (
-          <div style={styles.body}>
-            {body && <p style={styles.bodyText}>{body}</p>}
+          <div className="px-4 py-4">
+            {body && (
+              <p className="text-sm m-0" style={{ fontFamily: "var(--font-ui)", color: "var(--text-2)", lineHeight: 1.6 }}>
+                {body}
+              </p>
+            )}
             {children}
           </div>
         )}
 
-        <div style={styles.actions}>
-          <button style={styles.cancelBtn} onClick={onCancel}>{cancelLabel}</button>
+        <div className="flex justify-end gap-3 px-4 py-3 border-t border-[var(--border)]">
           <button
-            style={{ ...styles.confirmBtn, background: confirmColor }}
+            className="rounded px-4 py-1.5 text-sm cursor-pointer transition-all bg-[var(--bg-3)] border border-[var(--border)] text-[var(--text-2)] hover:border-[var(--text-3)]"
+            style={{ fontFamily: "var(--font-ui)" }}
+            onClick={onCancel}
+          >
+            {cancelLabel}
+          </button>
+          <button
+            className="rounded px-4 py-1.5 text-sm font-bold text-[#0e0e0e] cursor-pointer transition-all"
+            style={{ fontFamily: "var(--font-ui)", background: confirmColor, border: "none" }}
             onClick={onConfirm}
           >
             {confirmLabel}
@@ -65,65 +89,3 @@ export default function Modal({
     </div>
   );
 }
-
-const styles: Record<string, React.CSSProperties> = {
-  overlay: {
-    position: "fixed", inset: 0,
-    background: "rgba(0,0,0,0.75)",
-    display: "flex", alignItems: "center", justifyContent: "center",
-    zIndex: 200,
-    backdropFilter: "blur(4px)",
-  },
-  dialog: {
-    background: "var(--bg-2)",
-    border: "1px solid var(--border)",
-    borderRadius: "var(--radius-md)",
-    width: "100%",
-    maxWidth: 400,
-    boxShadow: "0 24px 48px rgba(0,0,0,0.5)",
-  },
-  header: {
-    display: "flex", alignItems: "center", justifyContent: "space-between",
-    padding: "var(--space-4)",
-    borderBottom: "1px solid var(--border)",
-  },
-  title: {
-    fontFamily: "var(--font-ui)",
-    fontSize: 14,
-    fontWeight: 700,
-    color: "var(--text-1)",
-  },
-  closeBtn: {
-    background: "none", border: "none",
-    color: "var(--text-3)", cursor: "pointer",
-    fontSize: 14, padding: "0 4px",
-  },
-  body: {
-    padding: "var(--space-4)",
-  },
-  bodyText: {
-    fontFamily: "var(--font-ui)",
-    fontSize: 13,
-    color: "var(--text-2)",
-    lineHeight: 1.6,
-    margin: 0,
-  },
-  actions: {
-    display: "flex", justifyContent: "flex-end", gap: "var(--space-3)",
-    padding: "var(--space-4)",
-    borderTop: "1px solid var(--border)",
-  },
-  cancelBtn: {
-    background: "var(--bg-3)", border: "1px solid var(--border)",
-    borderRadius: "var(--radius-sm)",
-    color: "var(--text-2)", cursor: "pointer",
-    fontFamily: "var(--font-ui)", fontSize: 13,
-    padding: "6px 16px",
-  },
-  confirmBtn: {
-    border: "none", borderRadius: "var(--radius-sm)",
-    color: "#0e0e0e", cursor: "pointer",
-    fontFamily: "var(--font-ui)", fontSize: 13, fontWeight: 700,
-    padding: "6px 16px",
-  },
-};

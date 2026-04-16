@@ -22,9 +22,17 @@ interface CustomTooltipProps {
 function CustomTooltip({ active, payload, label }: CustomTooltipProps) {
   if (!active || !payload?.length) return null;
   return (
-    <div style={tooltipStyle}>
-      <span style={tooltipLabel}>{label}</span>
-      <span style={{ ...tooltipValue, color: payload[0].value >= 0 ? "var(--green)" : "var(--red)" }}>
+    <div
+      className="rounded px-2 py-1.5 flex flex-col gap-0.5"
+      style={{ background: "var(--bg-3)", border: "1px solid var(--border)" }}
+    >
+      <span className="font-mono text-[9px]" style={{ fontFamily: "var(--font-mono)", color: "var(--text-3)" }}>
+        {label}
+      </span>
+      <span
+        className="font-mono text-xs font-bold"
+        style={{ fontFamily: "var(--font-mono)", color: payload[0].value >= 0 ? "var(--green)" : "var(--red)" }}
+      >
         {fmtUsd(payload[0].value)}
       </span>
     </div>
@@ -44,15 +52,27 @@ export default function EquityCurve() {
   }, [analytics]);
 
   if (!analytics) {
-    return <div style={emptyStyle}>Loading…</div>;
+    return (
+      <div className="bg-[var(--bg-2)] border border-[var(--border)] rounded-md px-4 py-4 text-center">
+        <span className="font-mono text-sm" style={{ fontFamily: "var(--font-mono)", color: "var(--text-3)" }}>
+          Loading…
+        </span>
+      </div>
+    );
   }
 
   if (curve.length === 0) {
-    return <div style={emptyStyle}>No equity data yet</div>;
+    return (
+      <div className="bg-[var(--bg-2)] border border-[var(--border)] rounded-md px-4 py-4 text-center">
+        <span className="font-mono text-sm" style={{ fontFamily: "var(--font-mono)", color: "var(--text-3)" }}>
+          No equity data yet
+        </span>
+      </div>
+    );
   }
 
   return (
-    <div style={styles.wrapper}>
+    <div className="bg-[var(--bg-2)] border border-[var(--border)] rounded-md px-4 py-4">
       <ResponsiveContainer width="100%" height={200}>
         <AreaChart data={curve} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
           <defs>
@@ -89,45 +109,3 @@ export default function EquityCurve() {
     </div>
   );
 }
-
-const styles: Record<string, React.CSSProperties> = {
-  wrapper: {
-    background: "var(--bg-2)",
-    border: "1px solid var(--border)",
-    borderRadius: "var(--radius-md)",
-    padding: "var(--space-4)",
-  },
-};
-
-const emptyStyle: React.CSSProperties = {
-  background: "var(--bg-2)",
-  border: "1px solid var(--border)",
-  borderRadius: "var(--radius-md)",
-  padding: "var(--space-4)",
-  fontFamily: "var(--font-mono)",
-  fontSize: 11,
-  color: "var(--text-3)",
-  textAlign: "center",
-};
-
-const tooltipStyle: React.CSSProperties = {
-  background: "var(--bg-3)",
-  border: "1px solid var(--border)",
-  borderRadius: "var(--radius-sm)",
-  padding: "6px 10px",
-  display: "flex",
-  flexDirection: "column",
-  gap: 2,
-};
-
-const tooltipLabel: React.CSSProperties = {
-  fontFamily: "var(--font-mono)",
-  fontSize: 9,
-  color: "var(--text-3)",
-};
-
-const tooltipValue: React.CSSProperties = {
-  fontFamily: "var(--font-mono)",
-  fontSize: 12,
-  fontWeight: 700,
-};

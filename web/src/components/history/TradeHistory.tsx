@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useAllTrades } from "@/lib/swr";
 import { DirectionBadge, StrategyBadge } from "@/components/ui/Badges";
 import { formatPrice, fmtPnl, fmtDateTime } from "@/lib/format";
+import { cn } from "@/lib/utils";
 
 const PAGE_SIZE = 30;
 
@@ -22,18 +23,26 @@ export default function TradeHistory() {
   const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
 
   return (
-    <div style={styles.wrapper}>
+    <div className="bg-[var(--bg-2)] border border-[var(--border)] rounded-md overflow-hidden flex flex-col">
       {/* Header + filter */}
-      <div style={styles.header}>
-        <span style={styles.title}>Trade History</span>
-        <div style={styles.filters}>
+      <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border)] flex-shrink-0">
+        <span
+          className="text-[11px] font-bold uppercase"
+          style={{ fontFamily: "var(--font-ui)", color: "var(--text-2)", letterSpacing: "0.08em" }}
+        >
+          Trade History
+        </span>
+        <div className="flex gap-1">
           {(["all", "closed", "open"] as const).map((f) => (
             <button
               key={f}
-              style={{
-                ...styles.filterBtn,
-                ...(filter === f ? styles.filterBtnActive : {}),
-              }}
+              className={cn(
+                "rounded px-1.5 py-0.5 font-mono text-[9px] font-bold uppercase tracking-wider cursor-pointer transition-all border",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--accent)]",
+                filter === f
+                  ? "bg-[var(--bg-3)] border-[var(--border-active)] text-[var(--text-1)]"
+                  : "border-[var(--border)] text-[var(--text-3)]"
+              )}
               onClick={() => { setFilter(f); setPage(0); }}
             >
               {f.toUpperCase()}
@@ -43,42 +52,50 @@ export default function TradeHistory() {
       </div>
 
       {/* Table */}
-      <div style={styles.tableWrap}>
-        <div style={styles.tableHeader}>
+      <div className="overflow-y-auto flex-1">
+        <div
+          className="grid gap-2 px-4 py-1"
+          style={{ gridTemplateColumns: "120px 80px 64px 80px 80px 80px 80px", background: "var(--bg-3)", borderBottom: "1px solid var(--border)" }}
+        >
           {["Date", "Symbol", "Dir", "Strategy", "Entry", "Exit", "P&L"].map((h) => (
-            <span key={h} style={styles.th}>{h}</span>
+            <span key={h} className="font-mono text-[9px] font-bold uppercase" style={{ fontFamily: "var(--font-mono)", color: "var(--text-3)", letterSpacing: "0.06em" }}>
+              {h}
+            </span>
           ))}
         </div>
 
         {paginated.length === 0 ? (
-          <p style={styles.empty}>No trades</p>
+          <p className="font-mono text-sm text-center py-5 m-0" style={{ fontFamily: "var(--font-mono)", color: "var(--text-3)" }}>
+            No trades
+          </p>
         ) : (
           paginated.map((trade) => (
-            <div key={trade.id} style={styles.row}>
-              <span style={styles.td}>
+            <div
+              key={trade.id}
+              className="grid gap-2 px-4 py-1.5 border-b border-[var(--border)] items-center"
+              style={{ gridTemplateColumns: "120px 80px 64px 80px 80px 80px 80px" }}
+            >
+              <span className="font-mono text-xs" style={{ fontFamily: "var(--font-mono)", color: "var(--text-2)" }}>
                 {trade.close_time ? fmtDateTime(trade.close_time) : "—"}
               </span>
-              <span style={styles.td}>
-                <strong style={styles.symbol}>{trade.symbol}</strong>
+              <span className="font-mono text-xs font-bold" style={{ fontFamily: "var(--font-mono)", color: "var(--text-1)" }}>
+                {trade.symbol}
               </span>
-              <span style={styles.td}>
+              <span className="font-mono text-xs">
                 <DirectionBadge direction={trade.direction} />
               </span>
-              <span style={styles.td}>
+              <span className="font-mono text-xs">
                 {trade.strategy && <StrategyBadge strategy={trade.strategy} />}
               </span>
-              <span style={styles.td}>{formatPrice(trade.entry_price)}</span>
-              <span style={styles.td}>
-                {trade.pnl != null ? formatPrice(trade.pnl) : "—"}
+              <span className="font-mono text-xs" style={{ fontFamily: "var(--font-mono)", color: "var(--text-2)" }}>
+                {formatPrice(trade.entry_price)}
+              </span>
+              <span className="font-mono text-xs" style={{ fontFamily: "var(--font-mono)", color: "var(--text-2)" }}>
+                {trade.close_time ? fmtDateTime(trade.close_time) : "—"}
               </span>
               <span
-                style={{
-                  ...styles.td,
-                  ...styles.pnlCell,
-                  ...(typeof trade.pnl === "number" && trade.pnl < 0
-                    ? styles.pnlNeg
-                    : styles.pnlPos),
-                }}
+                className="font-mono text-xs font-bold text-right"
+                style={{ fontFamily: "var(--font-mono)", color: typeof trade.pnl === "number" && trade.pnl < 0 ? "var(--red)" : "var(--green)" }}
               >
                 {fmtPnl(trade.pnl)}
               </span>
@@ -89,19 +106,21 @@ export default function TradeHistory() {
 
       {/* Pagination */}
       {totalPages > 1 && (
-        <div style={styles.pagination}>
+        <div className="flex items-center justify-center gap-3 px-4 py-3 border-t border-[var(--border)] flex-shrink-0">
           <button
-            style={styles.pageBtn}
+            className="rounded px-2 py-1 font-mono text-sm cursor-pointer transition-all bg-[var(--bg-3)] border border-[var(--border)] text-[var(--text-1)] hover:border-[var(--text-3)] disabled:opacity-40 disabled:cursor-not-allowed"
+            style={{ fontFamily: "var(--font-mono)" }}
             onClick={() => setPage((p) => Math.max(0, p - 1))}
             disabled={page === 0}
           >
             ←
           </button>
-          <span style={styles.pageInfo}>
+          <span className="font-mono text-xs" style={{ fontFamily: "var(--font-mono)", color: "var(--text-3)" }}>
             {page + 1} / {totalPages}
           </span>
           <button
-            style={styles.pageBtn}
+            className="rounded px-2 py-1 font-mono text-sm cursor-pointer transition-all bg-[var(--bg-3)] border border-[var(--border)] text-[var(--text-1)] hover:border-[var(--text-3)] disabled:opacity-40 disabled:cursor-not-allowed"
+            style={{ fontFamily: "var(--font-mono)" }}
             onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
             disabled={page >= totalPages - 1}
           >
@@ -112,125 +131,3 @@ export default function TradeHistory() {
     </div>
   );
 }
-
-const styles: Record<string, React.CSSProperties> = {
-  wrapper: {
-    background: "var(--bg-2)",
-    border: "1px solid var(--border)",
-    borderRadius: "var(--radius-md)",
-    overflow: "hidden",
-    display: "flex",
-    flexDirection: "column",
-  },
-  header: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: "var(--space-3) var(--space-4)",
-    borderBottom: "1px solid var(--border)",
-    flexShrink: 0,
-  },
-  title: {
-    fontFamily: "var(--font-ui)",
-    fontSize: 11,
-    fontWeight: 700,
-    color: "var(--text-2)",
-    textTransform: "uppercase",
-    letterSpacing: "0.08em",
-  },
-  filters: {
-    display: "flex",
-    gap: "var(--space-1)",
-  },
-  filterBtn: {
-    background: "none",
-    border: "1px solid var(--border)",
-    borderRadius: "var(--radius-sm)",
-    color: "var(--text-3)",
-    cursor: "pointer",
-    fontFamily: "var(--font-mono)",
-    fontSize: 9,
-    padding: "2px 6px",
-    letterSpacing: "0.05em",
-  },
-  filterBtnActive: {
-    background: "var(--bg-3)",
-    border:     "1px solid var(--border-active)",
-    color:      "var(--text-1)",
-  },
-  tableWrap: {
-    overflowY: "auto",
-    flex: 1,
-  },
-  tableHeader: {
-    display: "grid",
-    gridTemplateColumns: "120px 80px 64px 80px 80px 80px 80px",
-    padding: "4px var(--space-4)",
-    background: "var(--bg-3)",
-    borderBottom: "1px solid var(--border)",
-    gap: "var(--space-2)",
-  },
-  th: {
-    fontFamily: "var(--font-mono)",
-    fontSize: 9,
-    fontWeight: 700,
-    color: "var(--text-3)",
-    textTransform: "uppercase",
-    letterSpacing: "0.06em",
-  },
-  row: {
-    display: "grid",
-    gridTemplateColumns: "120px 80px 64px 80px 80px 80px 80px",
-    padding: "6px var(--space-4)",
-    borderBottom: "1px solid var(--border)",
-    gap: "var(--space-2)",
-    alignItems: "center",
-  },
-  td: {
-    fontFamily: "var(--font-mono)",
-    fontSize: 11,
-    color: "var(--text-2)",
-  },
-  symbol: {
-    fontWeight: 700,
-    color: "var(--text-1)",
-  },
-  pnlCell: {
-    textAlign: "right",
-    fontWeight: 700,
-  },
-  pnlPos: { color: "var(--green)" },
-  pnlNeg: { color: "var(--red)" },
-  empty: {
-    fontFamily: "var(--font-mono)",
-    fontSize: 11,
-    color: "var(--text-3)",
-    textAlign: "center",
-    padding: "var(--space-5)",
-    margin: 0,
-  },
-  pagination: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: "var(--space-3)",
-    padding: "var(--space-3)",
-    borderTop: "1px solid var(--border)",
-    flexShrink: 0,
-  },
-  pageBtn: {
-    background: "var(--bg-3)",
-    border: "1px solid var(--border)",
-    borderRadius: "var(--radius-sm)",
-    color: "var(--text-1)",
-    cursor: "pointer",
-    fontFamily: "var(--font-mono)",
-    fontSize: 13,
-    padding: "4px 10px",
-  },
-  pageInfo: {
-    fontFamily: "var(--font-mono)",
-    fontSize: 11,
-    color: "var(--text-3)",
-  },
-};

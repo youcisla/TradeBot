@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { MOBILE_NAV } from "@/components/app/nav-config";
+import { cn } from "@/lib/utils";
 
 function isActive(href: string, pathname: string) {
   if (href === "/dashboard") return pathname === "/dashboard";
@@ -14,14 +15,13 @@ export function MobileNav() {
 
   return (
     <nav
-      className="flex items-center justify-around"
+      className="flex items-center justify-around bg-[var(--bg-2)]"
       style={{
         position: "fixed",
         bottom: 0,
         left: 0,
         right: 0,
         height: "var(--nav-bottom-h)",
-        background: "var(--bg-2)",
         borderTop: "1px solid var(--border)",
         zIndex: 100,
       }}
@@ -32,8 +32,13 @@ export function MobileNav() {
           <Link
             key={item.href}
             href={item.href}
-            className="flex flex-col items-center justify-center gap-0.5 py-1 px-3 min-w-14"
-            style={{ textDecoration: "none", color: active ? "var(--accent)" : "var(--text-3)" }}
+            className={cn(
+              "flex flex-col items-center justify-center gap-0.5 py-1 px-3 min-w-14",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-inset",
+              active ? "text-[var(--accent)]" : "text-[var(--text-3)]"
+            )}
+            style={{ textDecoration: "none" }}
+            aria-label={item.label}
           >
             <span
               className="material-symbols-outlined"
@@ -48,12 +53,8 @@ export function MobileNav() {
             </span>
             {active && (
               <span
-                className="text-xs font-bold uppercase tracking-widest"
-                style={{
-                  fontFamily: "var(--font-ui)",
-                  fontSize: 9,
-                  letterSpacing: "0.04em",
-                }}
+                className="text-[9px] font-bold uppercase tracking-[0.04em]"
+                style={{ fontFamily: "var(--font-ui)" }}
               >
                 {item.label}
               </span>

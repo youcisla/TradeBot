@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { AgentBadge } from "@/components/ui/Badges";
+import { cn } from "@/lib/utils";
 
 // All documented pipeline agents + support agents
 const AGENTS = [
@@ -38,57 +39,24 @@ export default function AgentsTab() {
   }
 
   return (
-    <div style={styles.wrapper}>
-      <div style={styles.header}>
-        <span style={styles.title}>Agent</span>
-        <span style={styles.title}>Events (last 200)</span>
+    <div className="bg-[var(--bg-2)] border border-[var(--border)] rounded-md overflow-hidden">
+      <div className="grid grid-cols-2 gap-3 px-4 py-3 border-b border-[var(--border)] bg-[var(--bg-3)]">
+        <span className="font-mono text-[9px] font-bold uppercase tracking-widest" style={{ fontFamily: "var(--font-mono)", color: "var(--text-3)", letterSpacing: "0.06em" }}>
+          Agent
+        </span>
+        <span className="font-mono text-[9px] font-bold uppercase tracking-widest" style={{ fontFamily: "var(--font-mono)", color: "var(--text-3)", letterSpacing: "0.06em" }}>
+          Events (last 200)
+        </span>
       </div>
 
       {AGENTS.map((agent) => (
-        <div key={agent} style={styles.row}>
+        <div key={agent} className="grid grid-cols-2 gap-3 px-4 py-3 border-b border-[var(--border)] items-center">
           <AgentBadge agent={agent} />
-          <span style={styles.eventCount}>{counts[agent] ?? 0}</span>
+          <span className="font-mono text-sm font-bold" style={{ fontFamily: "var(--font-mono)", color: "var(--text-2)" }}>
+            {counts[agent] ?? 0}
+          </span>
         </div>
       ))}
     </div>
   );
 }
-
-const styles: Record<string, React.CSSProperties> = {
-  wrapper: {
-    background: "var(--bg-2)",
-    border: "1px solid var(--border)",
-    borderRadius: "var(--radius-md)",
-    overflow: "hidden",
-  },
-  header: {
-    display: "grid",
-    gridTemplateColumns: "1fr 1fr",
-    padding: "var(--space-3) var(--space-4)",
-    borderBottom: "1px solid var(--border)",
-    background: "var(--bg-3)",
-    gap: "var(--space-3)",
-  },
-  title: {
-    fontFamily: "var(--font-mono)",
-    fontSize: 9,
-    fontWeight: 700,
-    color: "var(--text-3)",
-    textTransform: "uppercase",
-    letterSpacing: "0.06em",
-  },
-  row: {
-    display: "grid",
-    gridTemplateColumns: "1fr 1fr",
-    alignItems: "center",
-    padding: "var(--space-3) var(--space-4)",
-    borderBottom: "1px solid var(--border)",
-    gap: "var(--space-3)",
-  },
-  eventCount: {
-    fontFamily: "var(--font-mono)",
-    fontSize: 13,
-    fontWeight: 700,
-    color: "var(--text-2)",
-  },
-};

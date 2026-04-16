@@ -12,19 +12,19 @@ export default function ChartPage() {
   const [timeframe, setTimeframe] = useState<"M1" | "M5" | "M15" | "M30" | "H1" | "H4" | "D1" | "W1">("H1");
 
   return (
-    <div style={styles.root}>
+    <div className="flex flex-col" style={{ height: "calc(100vh - var(--header-h) - var(--space-5) * 2)" }}>
       {/* Controls bar */}
-      <div style={styles.controls}>
+      <div className="flex items-center gap-3 flex-shrink-0">
         <SymbolDrawer selected={symbol} onSelect={(s) => setSymbol(s)} />
         <TimeframeBar selected={timeframe} onChange={setTimeframe} />
-        <span style={styles.chartStatus}>
-          <span style={styles.dot} />
+        <span className="flex items-center gap-1.5 ml-auto font-mono text-[10px] font-bold uppercase" style={{ fontFamily: "var(--font-mono)", color: "var(--positive)", letterSpacing: "0.08em" }}>
+          <span className="rounded-full" style={{ width: 6, height: 6, background: "var(--positive)", boxShadow: "0 0 6px var(--positive)" }} />
           LIVE
         </span>
       </div>
 
       {/* Chart area */}
-      <div style={styles.chartArea}>
+      <div className="flex-1 min-h-0 bg-[var(--bg-2)] border border-[var(--border)] rounded-md overflow-hidden mt-3">
         <TradingChart
           symbol={symbol}
           timeframe={timeframe}
@@ -34,44 +34,3 @@ export default function ChartPage() {
     </div>
   );
 }
-
-const styles: Record<string, React.CSSProperties> = {
-  root: {
-    display:        "flex",
-    flexDirection: "column",
-    height:        "calc(100vh - var(--header-h) - var(--space-5) * 2)",
-    gap:           "var(--space-3)",
-  },
-  controls: {
-    display:     "flex",
-    alignItems:  "center",
-    gap:         "var(--space-3)",
-    flexShrink:  0,
-  },
-  chartStatus: {
-    display:     "flex",
-    alignItems:  "center",
-    gap:         6,
-    marginLeft:  "auto",
-    fontFamily:  "var(--font-mono)",
-    fontSize:    10,
-    fontWeight:  700,
-    color:       "var(--green)",
-    letterSpacing: "0.08em",
-  },
-  dot: {
-    width:        6,
-    height:       6,
-    borderRadius: "50%",
-    background:   "var(--green)",
-    boxShadow:    "0 0 6px var(--green)",
-  },
-  chartArea: {
-    flex:       1,
-    minHeight:  0,
-    background: "var(--bg-2)",
-    border:     "1px solid var(--border)",
-    borderRadius: "var(--radius-md)",
-    overflow:   "hidden",
-  },
-};

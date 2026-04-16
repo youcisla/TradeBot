@@ -12,10 +12,24 @@ interface KPIProps {
 
 function KPI({ label, value, sub, color = "var(--text-1)" }: KPIProps) {
   return (
-    <div style={styles.kpi}>
-      <span style={styles.kpiLabel}>{label}</span>
-      <span style={{ ...styles.kpiValue, color }}>{value}</span>
-      {sub && <span style={styles.kpiSub}>{sub}</span>}
+    <div className="bg-[var(--bg-2)] border border-[var(--border)] rounded-md px-4 py-3 flex flex-col gap-1 items-center">
+      <span
+        className="font-mono text-[9px] font-bold uppercase"
+        style={{ fontFamily: "var(--font-mono)", color: "var(--text-3)", letterSpacing: "0.06em" }}
+      >
+        {label}
+      </span>
+      <span
+        className="font-mono text-base font-bold"
+        style={{ fontFamily: "var(--font-mono)", color }}
+      >
+        {value}
+      </span>
+      {sub && (
+        <span className="font-mono text-[9px]" style={{ fontFamily: "var(--font-mono)", color: "var(--text-3)" }}>
+          {sub}
+        </span>
+      )}
     </div>
   );
 }
@@ -37,50 +51,17 @@ export default function KPIRow() {
     : "var(--text-1)";
 
   return (
-    <div style={styles.wrapper}>
-      <KPI label="Win Rate"    value={winRate} />
-      <KPI label="Profit Factor" value={pf} />
-      <KPI label="Total P&L"   value={total}  color={pnlColor} />
-      <KPI label="Avg Win"     value={avgWin} color="var(--positive)" />
-      <KPI label="Avg Loss"    value={avgLoss} color="var(--negative)" />
-      <KPI label="Expectancy"  value={expect} />
-      <KPI label="Total Trades" value={trades} />
+    <div
+      className="grid gap-3"
+      style={{ gridTemplateColumns: "repeat(auto-fill, minmax(120px, 1fr))" }}
+    >
+      <KPI label="Win Rate"       value={winRate} />
+      <KPI label="Profit Factor"  value={pf} />
+      <KPI label="Total P&L"      value={total}  color={pnlColor} />
+      <KPI label="Avg Win"        value={avgWin} color="var(--positive)" />
+      <KPI label="Avg Loss"       value={avgLoss} color="var(--negative)" />
+      <KPI label="Expectancy"      value={expect} />
+      <KPI label="Total Trades"   value={trades} />
     </div>
   );
 }
-
-const styles: Record<string, React.CSSProperties> = {
-  wrapper: {
-    display: "grid",
-    gridTemplateColumns: "repeat(7, 1fr)",
-    gap: "var(--space-3)",
-  },
-  kpi: {
-    background: "var(--bg-2)",
-    border: "1px solid var(--border)",
-    borderRadius: "var(--radius-md)",
-    padding: "var(--space-3) var(--space-4)",
-    display: "flex",
-    flexDirection: "column",
-    gap: 4,
-    alignItems: "center",
-  },
-  kpiLabel: {
-    fontFamily: "var(--font-mono)",
-    fontSize: 9,
-    fontWeight: 700,
-    color: "var(--text-3)",
-    textTransform: "uppercase",
-    letterSpacing: "0.06em",
-  },
-  kpiValue: {
-    fontFamily: "var(--font-mono)",
-    fontSize: 16,
-    fontWeight: 700,
-  },
-  kpiSub: {
-    fontFamily: "var(--font-mono)",
-    fontSize: 9,
-    color: "var(--text-3)",
-  },
-};
