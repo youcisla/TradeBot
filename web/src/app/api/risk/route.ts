@@ -1,14 +1,15 @@
 import { NextResponse } from "next/server";
 import { getBotStatus, getAgentEvents, getMonthlyPnl } from "@/lib/db";
+import { swrCache } from "@/lib/api-cache";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
     const [status, events, monthlyPnl] = await Promise.all([
-      getBotStatus(),
-      getAgentEvents(300),
-      getMonthlyPnl(),
+      swrCache("bot_status", 3_000, getBotStatus),
+      swrCache("agent_events_300", 5_000, () => getAgentEvents(300)),
+      swrCache("monthly_pnl", 10_000, getMonthlyPnl),
     ]);
 
     // Latest WFO alert event emitted by learning_agent.run_wfo_assessment()

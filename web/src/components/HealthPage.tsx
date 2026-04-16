@@ -2,7 +2,6 @@
 
 import { useMemo } from "react";
 import { useAppShell } from "@/components/AppShell";
-import { useBotStatus, useEvents } from "@/lib/swr";
 import type { AgentEvent } from "@/lib/swr";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -189,13 +188,11 @@ function ErrorRateChart({ events }: { events: AgentEvent[] }) {
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function HealthPage() {
-  const { isRunning } = useAppShell();
-  const { data: status } = useBotStatus();
-  const { data: events, isLoading } = useEvents(500);
+  const { status, isRunning, wsEvents } = useAppShell();
 
-  const uptime     = status?.uptime_start ? fmtUptime(status.uptime_start) : "—";
-  const lastTick   = relTime(status?.last_tick ?? null);
-  const evts = events ?? [];
+  const uptime   = status?.uptime_start ? fmtUptime(status.uptime_start) : "—";
+  const lastTick = relTime(status?.last_tick ?? null);
+  const evts: AgentEvent[] = wsEvents;
 
   const recentErrors = useMemo(() =>
     evts.filter(e => severityOf(e) === "error").slice(0, 10),

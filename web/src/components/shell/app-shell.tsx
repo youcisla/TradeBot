@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAppShell } from "@/components/AppShell";
@@ -267,7 +268,6 @@ function HeaderKpi({ label, value, color }: { label: string; value: string; colo
 }
 
 function Clock() {
-  const { useEffect, useState } = require("react");
   const [tick, setTick] = useState("—");
 
   useEffect(() => {

@@ -553,7 +553,7 @@ class GuardPipeline:
         check against a live signal.
         """
         import uuid
-        from dataclasses import dataclass
+        from dataclasses import dataclass, field
 
         @dataclass
         class DummySignal:
@@ -562,6 +562,7 @@ class GuardPipeline:
             lot_size_override: float | None = None
             macro_vix: float = 0.0
             candle_timestamp: datetime | None = None
+            metadata: dict = field(default_factory=dict)
 
         signal = DummySignal()
         trades = open_trades or []

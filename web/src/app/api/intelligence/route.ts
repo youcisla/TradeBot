@@ -5,6 +5,7 @@ import {
   getClosedTrades,
   getKpis,
 } from "@/lib/db";
+import { swrCache } from "@/lib/api-cache";
 
 export const dynamic = "force-dynamic";
 
@@ -92,10 +93,10 @@ function generate_insight(
 export async function GET() {
   try {
     const [status, events, closedTrades, kpis] = await Promise.all([
-      getBotStatus(),
-      getAgentEvents(200),
-      getClosedTrades(),
-      getKpis(),
+      swrCache("bot_status", 3_000, getBotStatus),
+      swrCache("agent_events_200", 5_000, () => getAgentEvents(200)),
+      swrCache("closed_trades", 15_000, () => getClosedTrades()),
+      swrCache("kpis", 15_000, getKpis),
     ]);
 
     const spreadCond = (status as unknown as Record<string, unknown>)?.spread_condition as string ?? "unknown";

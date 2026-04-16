@@ -1,7 +1,4 @@
-/* IBM Plex fonts from Google Fonts */
-/* TODO: Migrate to next/font/local (self-hosted) for zero-CLS when IBM Plex
-   is downloaded to /public/fonts/. next/font/google does not include IBM Plex. */
-@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=IBM+Plex+Sans+Condensed:wght@300;400;500;600;700&display=swap');
+/* IBM Plex loaded via next/font/google in layout.tsx — zero CLS, no render-blocking */
 @import "tailwindcss-animate";
 
 @tailwind base;
@@ -53,10 +50,10 @@
   --agent-exposure:   #FF9F0A;
   --agent-memory:     #64D2FF;
 
-  /* Fonts */
-  --font-mono:  'IBM Plex Mono', 'Fira Code', monospace;
-  --font-ui:    'IBM Plex Sans Condensed', system-ui, sans-serif;
-  --font-data:  'JetBrains Mono', 'Fira Code', monospace;
+  /* Fonts — now loaded via next/font/google in layout.tsx */
+  --font-mono: var(--font-mono), 'Fira Code', monospace;
+  --font-ui:   var(--font-ui), system-ui, sans-serif;
+  --font-data: 'JetBrains Mono', 'Fira Code', monospace;
 
   /* Layout */
   --sidebar-w:  220px;

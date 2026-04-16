@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useAppShell } from "@/components/AppShell";
-import { useEvents } from "@/lib/swr";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -491,8 +490,8 @@ function RewardScoringFeed({ scores }: { scores: TradeScore[] }) {
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function LearningPage() {
-  const { status: shellStatus } = useAppShell();
-  const { data: events } = useEvents(50);
+  const { status: shellStatus, wsEvents } = useAppShell();
+  const events = wsEvents;
 
   const [learningData, setLearningData] = useState<{
     confidences: StrategyConfidence[];

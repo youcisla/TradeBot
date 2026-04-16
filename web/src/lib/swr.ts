@@ -7,7 +7,7 @@ import useSWR, { SWRConfiguration } from "swr";
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 const BASE_CONF: SWRConfiguration = {
-  revalidateOnFocus: true,
+  revalidateOnFocus: false,
   keepPreviousData: true,
   errorRetryCount: 3,
 };

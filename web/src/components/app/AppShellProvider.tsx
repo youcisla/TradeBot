@@ -1,7 +1,7 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
-import { useBotStatus, useEvents, useOpenTrades, useIntelligence } from "@/lib/swr";
+import { createContext, useContext, useEffect, useRef, useState } from "react";
+import { useBotStatus, useOpenTrades, useIntelligence } from "@/lib/swr";
 import type { AgentEvent } from "@/types/api";
 import type { BotStatus, Intelligence, Trade } from "@/lib/swr";
 
@@ -78,15 +78,26 @@ function useGlobalWebSocket() {
 // ── Provider ──────────────────────────────────────────────────────────────────
 
 export function AppShellProvider({ children }: { children: React.ReactNode }) {
-  const { data: status } = useBotStatus();
-  const { data: openTrades = [] } = useOpenTrades();
-  const { data: intelligence } = useIntelligence();
+  const botStatus = useBotStatus();
+  const openTradesHook = useOpenTrades();
+  const intelligenceHook = useIntelligence();
   const wsEvents = useGlobalWebSocket();
 
+  const status = botStatus.data;
+  const openTrades = openTradesHook.data ?? [];
+  const intelligence = intelligenceHook.data;
   const isRunning = status?.state === "RUNNING";
 
   return (
-    <AppShellContext.Provider value={{ status, isRunning, wsEvents, openTrades, intelligence }}>
+    <AppShellContext.Provider
+      value={{
+        status,
+        isRunning,
+        wsEvents,
+        openTrades,
+        intelligence,
+      }}
+    >
       {children}
     </AppShellContext.Provider>
   );

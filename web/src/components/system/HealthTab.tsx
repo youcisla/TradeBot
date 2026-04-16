@@ -1,15 +1,14 @@
 "use client";
 
 import { useAppShell } from "@/components/AppShell";
-import { useEvents } from "@/lib/swr";
 import { relTime } from "@/lib/format";
 
 export default function HealthTab() {
-  const { status, isRunning } = useAppShell();
-  const { data: events = [] } = useEvents(50);
+  const { status, isRunning, wsEvents } = useAppShell();
+  const events = wsEvents;
 
-  const errors = events.filter((e) => e.level === "error").slice(0, 5);
-  const warns  = events.filter((e) => e.level === "warn").slice(0, 5);
+  const errors = events.filter((e) => e.level === "ERROR").slice(0, 5);
+  const warns  = events.filter((e) => e.level === "WARN").slice(0, 5);
 
   return (
     <div style={styles.root}>

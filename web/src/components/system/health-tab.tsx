@@ -1,17 +1,16 @@
 "use client";
 
 import { useAppShell } from "@/components/AppShell";
-import { useEvents } from "@/lib/swr";
 import { relTime } from "@/lib/format";
 import { Panel } from "@/components/ui/panel";
-import { StatusBadge } from "@/components/ui/status-badge";
+import type { AgentEvent } from "@/lib/swr";
 
 export default function HealthTab() {
-  const { status, isRunning } = useAppShell();
-  const { data: events = [] } = useEvents(50);
+  const { status, isRunning, wsEvents } = useAppShell();
 
-  const errors = events.filter((e) => e.level === "error").slice(0, 5);
-  const warns  = events.filter((e) => e.level === "warn").slice(0, 5);
+  const events: AgentEvent[] = wsEvents;
+  const errors = events.filter((e) => e.level === "ERROR").slice(0, 5);
+  const warns  = events.filter((e) => e.level === "WARN").slice(0, 5);
 
   return (
     <div className="flex flex-col gap-3">
