@@ -21,7 +21,7 @@ export function MobileNav() {
         left: 0,
         right: 0,
         height: "var(--nav-bottom-h)",
-        background: "var(--bg-2)",
+        backgroundColor: "var(--bg-2)",
         borderTop: "1px solid var(--border)",
         zIndex: 100,
       }}

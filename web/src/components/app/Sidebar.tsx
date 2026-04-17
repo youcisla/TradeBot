@@ -21,7 +21,7 @@ export function Sidebar() {
         left: 0,
         bottom: 0,
         width: "var(--sidebar-w)",
-        background: "var(--bg-2)",
+        backgroundColor: "var(--bg-2)",
         borderRight: "1px solid var(--border)",
         zIndex: 90,
       }}
@@ -34,8 +34,8 @@ export function Sidebar() {
             href={item.href}
             className="flex items-center gap-3 rounded px-3 py-2.5 mx-1 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset"
             style={{
-              textDecoration: "none",
-              background: active ? "var(--bg-3)" : "transparent",
+              textDecorationLine: "none",
+              backgroundColor: active ? "var(--bg-3)" : "transparent",
               color: active ? "var(--accent)" : "var(--text-2)",
             }}
           >

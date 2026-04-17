@@ -90,7 +90,7 @@ export function EventFeed({
 
             return (
               <div
-                key={`${ev.id ?? ev.ts}-${ev.agent}-${ev.event_type}`}
+                key={`${ev.id ?? ev.ts}-${ev.agent}`}
                 className="flex items-start gap-3 px-3 py-1.5 cursor-pointer transition-colors group"
                 style={{
                   borderBottom: "1px solid var(--border-subtle)",

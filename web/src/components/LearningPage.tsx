@@ -153,7 +153,8 @@ const ConfBar = memo(function ConfBar({ value, max = 100 }: { value: number; max
         {value}
       </span>
     </div>
-  });
+  );
+});
 
 function DriftBanner({ driftScore, threshold }: { driftScore: number; threshold: number }) {
   const pct    = Math.min(100, (driftScore / threshold) * 100);

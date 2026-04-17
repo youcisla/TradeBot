@@ -27,7 +27,7 @@ export const SignalSchema = z.object({
   direction: z.enum(["BUY", "SELL"]).optional(),
   entry_price: z.number().optional(),
   confidence: z.number().optional(),
-  metadata: z.record(z.unknown()).optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
 });
 
 // ── Broker account schema ─────────────────────────────────────────────────

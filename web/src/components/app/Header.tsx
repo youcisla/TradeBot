@@ -60,7 +60,7 @@ export function Header() {
   return (
     <header
       className="fixed top-0 left-0 right-0 z-50 flex items-center gap-6 px-4"
-      style={{ background: "var(--bg-2)", height: "var(--header-h)", borderBottom: "1px solid var(--border)" }}
+      style={{ backgroundColor: "var(--bg-2)", height: "var(--header-h)", borderBottom: "1px solid var(--border)" }}
     >
       {/* Brand + live indicator */}
       <div className="flex items-center gap-2 flex-shrink-0">
