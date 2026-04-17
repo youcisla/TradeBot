@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { MOBILE_NAV } from "@/components/app/nav-config";
-import { cn } from "@/lib/utils";
 
 function isActive(href: string, pathname: string) {
   if (href === "/dashboard") return pathname === "/dashboard";
@@ -15,13 +14,14 @@ export function MobileNav() {
 
   return (
     <nav
-      className="flex items-center justify-around bg-[var(--bg-2)]"
+      className="flex items-center justify-around"
       style={{
         position: "fixed",
         bottom: 0,
         left: 0,
         right: 0,
         height: "var(--nav-bottom-h)",
+        background: "var(--bg-2)",
         borderTop: "1px solid var(--border)",
         zIndex: 100,
       }}
@@ -32,12 +32,8 @@ export function MobileNav() {
           <Link
             key={item.href}
             href={item.href}
-            className={cn(
-              "flex flex-col items-center justify-center gap-0.5 py-1 px-3 min-w-14",
-              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-inset",
-              active ? "text-[var(--accent)]" : "text-[var(--text-3)]"
-            )}
-            style={{ textDecoration: "none" }}
+            className="flex flex-col items-center justify-center gap-0.5 py-1 px-3 min-w-14 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset"
+            style={{ textDecoration: "none", color: active ? "var(--accent)" : "var(--text-3)" }}
             aria-label={item.label}
           >
             <span

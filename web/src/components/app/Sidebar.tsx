@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { DESKTOP_NAV } from "@/components/app/nav-config";
-import { cn } from "@/lib/utils";
 
 function isActive(href: string, pathname: string) {
   if (href === "/dashboard") return pathname === "/dashboard";
@@ -15,13 +14,14 @@ export function Sidebar() {
 
   return (
     <nav
-      className="flex flex-col gap-1 py-3 px-2 bg-[var(--bg-2)]"
+      className="flex flex-col gap-1 py-3 px-2"
       style={{
         position: "fixed",
         top: "var(--header-h)",
         left: 0,
         bottom: 0,
         width: "var(--sidebar-w)",
+        background: "var(--bg-2)",
         borderRight: "1px solid var(--border)",
         zIndex: 90,
       }}
@@ -32,14 +32,12 @@ export function Sidebar() {
           <Link
             key={item.href}
             href={item.href}
-            className={cn(
-              "flex items-center gap-3 rounded px-3 py-2.5 mx-1 transition-colors",
-              active
-                ? "bg-[var(--bg-3)] text-[var(--accent)]"
-                : "bg-transparent text-[var(--text-2)]",
-              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-inset"
-            )}
-            style={{ textDecoration: "none" }}
+            className="flex items-center gap-3 rounded px-3 py-2.5 mx-1 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset"
+            style={{
+              textDecoration: "none",
+              background: active ? "var(--bg-3)" : "transparent",
+              color: active ? "var(--accent)" : "var(--text-2)",
+            }}
           >
             <span
               className="material-symbols-outlined text-base flex-shrink-0"

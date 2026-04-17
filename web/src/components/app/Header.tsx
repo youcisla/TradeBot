@@ -2,7 +2,6 @@
 
 import { useAppShell } from "@/components/app/AppShellProvider";
 import { Clock } from "@/components/app/Clock";
-import { cn } from "@/lib/utils";
 
 const SESSION_COLORS: Record<string, string> = {
   asian:   "var(--purple)",
@@ -14,7 +13,10 @@ const SESSION_COLORS: Record<string, string> = {
 function HeaderKpi({ label, value, color }: { label: string; value: string; color?: string }) {
   return (
     <div className="flex flex-col items-center gap-0.5">
-      <span className="font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--text-3)]">
+      <span
+        className="font-mono uppercase tracking-widest"
+        style={{ color: "var(--text-3)", fontFamily: "var(--font-mono)", fontSize: 9 }}
+      >
         {label}
       </span>
       <span
@@ -57,8 +59,8 @@ export function Header() {
 
   return (
     <header
-      className="fixed top-0 left-0 right-0 z-50 flex items-center gap-6 px-4 bg-[var(--bg-2)]"
-      style={{ height: "var(--header-h)", borderBottom: "1px solid var(--border)" }}
+      className="fixed top-0 left-0 right-0 z-50 flex items-center gap-6 px-4"
+      style={{ background: "var(--bg-2)", height: "var(--header-h)", borderBottom: "1px solid var(--border)" }}
     >
       {/* Brand + live indicator */}
       <div className="flex items-center gap-2 flex-shrink-0">
