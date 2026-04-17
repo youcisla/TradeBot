@@ -94,10 +94,10 @@ export default function TradeHistory() {
     {
       id: "exit_price",
       header: "Exit",
-      accessorKey: "pnl",
+      accessorKey: "exit_price",
       cell: ({ row }) => (
         <span style={{ color: "var(--text-2)" }}>
-          {row.original.pnl != null ? formatPrice(row.original.pnl) : "—"}
+          {row.original.exit_price != null ? formatPrice(row.original.exit_price) : "—"}
         </span>
       ),
     },

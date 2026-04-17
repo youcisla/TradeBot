@@ -38,7 +38,7 @@ export default function KPIRow() {
   const { data: analytics } = useAnalytics();
   const k = analytics?.kpis;
 
-  const winRate   = k ? fmtPct(k.winRate * 100)       : "—";
+  const winRate = k ? fmtPct(k.winRate) : "—";
   const pf       = k && k.profitFactor != null ? k.profitFactor.toFixed(2) : "—";
   const total    = k && k.totalPnl  != null ? fmtUsd(k.totalPnl, false)  : "—";
   const avgWin   = k && k.avgWin     != null ? fmtUsd(k.avgWin, false)    : "—";
