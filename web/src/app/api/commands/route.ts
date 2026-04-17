@@ -47,7 +47,7 @@ export async function GET(request: Request) {
     return errorResponse("UNAUTHORIZED", "Unauthorized", 401);
   }
 
-  const { searchParams } = new URL(request.url);
+  const { searchParams } = await request.nextUrl.searchParams;
   const rawLimit = Number(searchParams.get("limit") ?? 25);
   const limit = Number.isFinite(rawLimit) ? Math.min(Math.max(rawLimit, 1), 100) : 25;
 

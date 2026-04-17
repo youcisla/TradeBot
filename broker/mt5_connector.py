@@ -546,52 +546,75 @@ class MT5Connector(BrokerConnector):
                       direction: str) -> bool:
         broker_sym = self.resolve(symbol)
         mt5.symbol_select(broker_sym, True)
+
+        close_type = mt5.ORDER_TYPE_SELL if direction == "BUY" else mt5.ORDER_TYPE_BUY
         tick = mt5.symbol_info_tick(broker_sym)
         if tick is None:
             return False
-
-        close_type = mt5.ORDER_TYPE_SELL if direction == "BUY" else mt5.ORDER_TYPE_BUY
         price = tick.bid if direction == "BUY" else tick.ask
 
-        request = {
-            "action": mt5.TRADE_ACTION_DEAL,
-            "symbol": broker_sym,
-            "volume": 0.0,
-            "type": close_type,
-            "position": ticket,
-            "price": price,
-            "deviation": 20,
-            "magic": 202603,
-            "comment": self._sanitize_comment("partial_close"),
-            "type_time": mt5.ORDER_TIME_GTC,
-            "type_filling": mt5.ORDER_FILLING_IOC,
-        }
-
         requested_volume = float(lot_size)
-        normalized_volume = self._normalize_volume(broker_sym, requested_volume)
-        if normalized_volume <= 0:
-            logger.error(
-                "close_partial rejected for %d (%s): requested %.4f invalid for broker volume rules",
-                ticket,
-                symbol,
-                requested_volume,
-            )
-            return False
-        if abs(normalized_volume - requested_volume) > 1e-9:
-            logger.info(
-                "Partial close volume normalized for %s: requested %.4f -> %.4f",
-                symbol,
-                requested_volume,
-                normalized_volume,
-            )
-        request["volume"] = normalized_volume
+        max_attempts = 3
+        backoff_ms = [250, 500, 1000]
 
-        result = mt5.order_send(request)
-        if result is None or result.retcode != mt5.TRADE_RETCODE_DONE:
-            logger.error("close_partial failed for %d: %s", ticket,
-                         result.comment if result else mt5.last_error())
-            return False
-        return True
+        for attempt in range(1, max_attempts + 1):
+            # Re-fetch position on every attempt — volume may drift if another
+            # session modified it between our first attempt and now.
+            pos = self._get_position(ticket)
+            if pos is None:
+                logger.info("close_partial %d: position gone, considering it closed", ticket)
+                return True  # Position no longer exists — treat as success
+
+            live_volume = float(pos.volume)
+            normalized_volume = self._normalize_volume(broker_sym, live_volume, for_close=True)
+            if normalized_volume <= 0:
+                logger.error(
+                    "close_partial rejected for %d (%s): live volume %.4f invalid for broker rules",
+                    ticket,
+                    symbol,
+                    live_volume,
+                )
+                return False
+
+            request = {
+                "action": mt5.TRADE_ACTION_DEAL,
+                "symbol": broker_sym,
+                "volume": normalized_volume,
+                "type": close_type,
+                "position": ticket,
+                "price": price,
+                "deviation": 20,
+                "magic": 202603,
+                "comment": self._sanitize_comment("partial_close"),
+                "type_time": mt5.ORDER_TIME_GTC,
+                "type_filling": mt5.ORDER_FILLING_IOC,
+            }
+
+            result = mt5.order_send(request)
+            if result is not None and result.retcode == mt5.TRADE_RETCODE_DONE:
+                logger.info(
+                    "close_partial %d succeeded: %.4f %s (attempt %d/%d)",
+                    ticket,
+                    normalized_volume,
+                    symbol,
+                    attempt,
+                    max_attempts,
+                )
+                return True
+
+            logger.warning(
+                "close_partial %d attempt %d/%d failed: %s (retrying…)",
+                ticket,
+                attempt,
+                max_attempts,
+                result.comment if result else mt5.last_error(),
+            )
+
+            if attempt < max_attempts:
+                time.sleep(backoff_ms[attempt - 1] / 1000.0)
+
+        logger.error("close_partial exhausted all %d attempts for %d", max_attempts, ticket)
+        return False
 
     def close_order(self, ticket: int, symbol: str, direction: str) -> bool:
         pos = self._get_position(ticket)
@@ -690,24 +713,31 @@ class MT5Connector(BrokerConnector):
         return compact[:29]
 
     @staticmethod
-    def _normalize_volume(symbol: str, requested: float) -> float:
+    def _normalize_volume(symbol: str, requested: float, for_close: bool = False) -> float:
         """Normalize volume to broker min/max/step rules.
 
         Returns 0.0 when the requested lot cannot produce a valid volume.
 
         Exact enforcement: FIXED_LOT_SIZE from settings — when set > 0,
-        ALL trades use that exact lot size, ignoring whatever the risk
-        council or position sizer calculated.
+        ALL **opening** trades use that exact lot size, ignoring whatever
+        the risk council or position sizer calculated.
+
+        `for_close=True` bypasses the FIXED_LOT_SIZE enforcement so that
+        closing operations honour the actual position volume. Otherwise
+        symbols whose broker `volume_min` exceeds FIXED_LOT_SIZE (e.g. ETFs
+        like TAN) would have every close request normalized to 0.0 and
+        rejected — producing zombie positions that never close.
         """
-        # ── Exact fixed lot enforcement ─────────────────────────────────────
-        fixed_lot = getattr(settings, "FIXED_LOT_SIZE", None)
-        if fixed_lot is not None and fixed_lot > 0:
-            if requested != fixed_lot:
-                logger.info(
-                    "FIXED_LOT_SIZE enforced for %s: computed %.4f → %.4f",
-                    symbol, requested, fixed_lot,
-                )
-            requested = fixed_lot
+        # ── Exact fixed lot enforcement (opens only) ───────────────────────
+        if not for_close:
+            fixed_lot = getattr(settings, "FIXED_LOT_SIZE", None)
+            if fixed_lot is not None and fixed_lot > 0:
+                if requested != fixed_lot:
+                    logger.info(
+                        "FIXED_LOT_SIZE enforced for %s: computed %.4f → %.4f",
+                        symbol, requested, fixed_lot,
+                    )
+                requested = fixed_lot
         # ─────────────────────────────────────────────────────────────────────
 
         if requested <= 0:

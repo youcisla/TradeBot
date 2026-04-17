@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getOpenTrades, getAllTrades } from "@/lib/db";
 import { swrCache } from "@/lib/api-cache";
+import { apiError } from "@/lib/api-errors";
 
 export const dynamic = "force-dynamic";
 
@@ -8,7 +9,7 @@ const MAX_LIMIT = 500;
 
 export async function GET(request: Request) {
   try {
-    const { searchParams } = new URL(request.url);
+    const { searchParams } = await request.nextUrl.searchParams;
     const all = searchParams.get("all") === "true";
 
     if (!all) {

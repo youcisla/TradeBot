@@ -264,9 +264,11 @@ class OrchestrationSettings(BaseModel):
     max_exec_ms: float = Field(default=3000, ge=0)
     max_iteration_ms: float = Field(default=120000, ge=0)
     exec_budget_council_margin_ms: float = Field(default=350, ge=0)
-    # symbol fault
-    symbol_max_fail_count: int = Field(default=12, ge=1)
-    symbol_disable_seconds: int = Field(default=3600, ge=0)
+    # symbol fault — raised from 12/3600 after Apr 2026 stuck-quote cascade
+    # that disabled all 43 equity symbols simultaneously. 20 failures + 30-min
+    # cooldown gives transient broker hiccups more slack before kicking in.
+    symbol_max_fail_count: int = Field(default=20, ge=1)
+    symbol_disable_seconds: int = Field(default=1800, ge=0)
     # market closed sleep (total = sleep_total / sleep_interval, e.g. 300/10 = 30 iterations × 10s = 5 min)
     market_closed_sleep_total_seconds: int = Field(default=300, ge=1)
     market_closed_sleep_interval_seconds: int = Field(default=10, ge=1)
@@ -789,8 +791,8 @@ def _build_settings() -> _Settings:
         max_exec_ms=_float("ORCHESTRATION_MAX_EXEC_MS", "3000"),
         max_iteration_ms=_float("ORCHESTRATION_MAX_ITERATION_MS", "120000"),
         exec_budget_council_margin_ms=_float("ORCHESTRATION_EXEC_BUDGET_COUNCIL_MARGIN_MS", "350"),
-        symbol_max_fail_count=_int("SYMBOL_MAX_FAIL_COUNT", "12"),
-        symbol_disable_seconds=_int("SYMBOL_DISABLE_SECONDS", "3600"),
+        symbol_max_fail_count=_int("SYMBOL_MAX_FAIL_COUNT", "20"),
+        symbol_disable_seconds=_int("SYMBOL_DISABLE_SECONDS", "1800"),
         htf_cache_ttl_m15_seconds=_float("HTF_CACHE_TTL_M15_SECONDS", "20"),
         htf_cache_ttl_m5_seconds=_float("HTF_CACHE_TTL_M5_SECONDS", "15"),
         htf_cache_ttl_m30_seconds=_float("HTF_CACHE_TTL_M30_SECONDS", "30"),

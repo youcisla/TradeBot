@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
 import { getSignals, publishSignal } from "@/lib/db";
+import { apiError } from "@/lib/api-errors";
 
 // GET /api/signals  — signal feed (mirrors AI-Trader /api/signals/feed)
 export async function GET(request: Request) {
   try {
-    const { searchParams } = new URL(request.url);
+    const { searchParams } = await request.nextUrl.searchParams;
     const signals = await getSignals({
       intent:   searchParams.get("intent")   ?? undefined,
       type:     searchParams.get("type")     ?? undefined,
@@ -18,7 +19,7 @@ export async function GET(request: Request) {
     });
   } catch (err) {
     console.error("[/api/signals GET]", (err as Error).message);
-    return NextResponse.json({ error: "DB unavailable" }, { status: 503 });
+    return apiError("DB_UNAVAILABLE", "DB unavailable", 503);
   }
 }
 
@@ -29,28 +30,19 @@ export async function POST(request: Request) {
 
     const { signal_intent, signal_type, strategy } = body;
     if (!signal_intent || !signal_type || !strategy) {
-      return NextResponse.json(
-        { error: "signal_intent, signal_type, and strategy are required" },
-        { status: 400 }
-      );
+      return apiError("VALIDATION_ERROR", "signal_intent, signal_type, and strategy are required", 400);
     }
     if (!["DISCUSSION", "STRATEGY", "OPERATION"].includes(signal_type)) {
-      return NextResponse.json(
-        { error: "signal_type must be DISCUSSION, STRATEGY, or OPERATION" },
-        { status: 400 }
-      );
+      return apiError("VALIDATION_ERROR", "signal_type must be DISCUSSION, STRATEGY, or OPERATION", 400);
     }
     if (!["DISCUSSION", "STRATEGY", "EXECUTION"].includes(signal_intent)) {
-      return NextResponse.json(
-        { error: "signal_intent must be DISCUSSION, STRATEGY, or EXECUTION" },
-        { status: 400 }
-      );
+      return apiError("VALIDATION_ERROR", "signal_intent must be DISCUSSION, STRATEGY, or EXECUTION", 400);
     }
 
     const id = await publishSignal(body);
     return NextResponse.json({ id }, { status: 201 });
   } catch (err) {
     console.error("[/api/signals POST]", (err as Error).message);
-    return NextResponse.json({ error: "Failed to publish signal" }, { status: 500 });
+    return apiError("DB_ERROR", "Failed to publish signal", 500);
   }
 }

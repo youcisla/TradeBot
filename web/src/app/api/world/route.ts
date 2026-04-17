@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { apiError } from "@/lib/api-errors";
 
 export const dynamic = "force-dynamic";
 
@@ -68,10 +69,10 @@ export async function GET() {
       signal: AbortSignal.timeout(4_000),
       cache: "no-store",
     });
-    if (!res.ok) return NextResponse.json({ available: false }, { status: 200 });
+    if (!res.ok) return apiError("CRUCIX_UNAVAILABLE", "Crucix service unavailable", 503);
     const raw = await res.json();
     return NextResponse.json({ available: true, ...normalize(raw) });
   } catch {
-    return NextResponse.json({ available: false }, { status: 200 });
+    return apiError("CRUCIX_UNAVAILABLE", "Crucix service unavailable", 503);
   }
 }

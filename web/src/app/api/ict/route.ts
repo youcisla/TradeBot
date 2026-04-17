@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
   try {
-    const { searchParams } = new URL(request.url);
+    const { searchParams } = await request.nextUrl.searchParams;
     const symbol = searchParams.get("symbol") || undefined;
 
     const [setups, modelStats, confluenceStats, sessionStats] =

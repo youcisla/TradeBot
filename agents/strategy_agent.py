@@ -304,6 +304,24 @@ class StrategyAgent:
                 )
                 signals.append(signal)
 
+        if not signals:
+            skipped = []
+            for strat in self._strategies:
+                conf = self._get_confidence(strat.name)
+                if conf < settings.CONFIDENCE_ALLOW:
+                    skipped.append(f"{strat.name}(conf={conf:.2f}<ALLOW={settings.CONFIDENCE_ALLOW})")
+                else:
+                    skipped.append(f"{strat.name}(conf={conf:.2f} passed)")
+            logger.debug(
+                "Signal famine: zero signals collected for %s [%s]. "
+                "Skipped strategies: %s | Confidence floor was %.2f | Regime: %s",
+                context.symbol,
+                context.timeframe,
+                skipped,
+                min_conf,
+                context.regime,
+            )
+
         return signals
 
     @staticmethod

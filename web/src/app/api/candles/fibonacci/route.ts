@@ -5,7 +5,7 @@ export const dynamic = "force-dynamic";
 const CANDLE_SERVER = process.env.CANDLE_SERVER_URL || "http://localhost:5555";
 
 export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
+  const { searchParams } = await request.nextUrl.searchParams;
   const rawSymbol = searchParams.get("symbol") || "EURUSD";
   // Normalise: BTC/USD → BTCUSD, remove spaces/dashes
   const symbol = rawSymbol.replace("/", "").replace(" ", "").replace("-", "").toUpperCase();

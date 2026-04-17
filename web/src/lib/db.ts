@@ -406,15 +406,22 @@ export async function getCommandAuditSummary(hours = 24): Promise<CommandAuditSu
 // ── Analytics queries ──────────────────────────────────────────────────
 
 /** All closed trades, ordered by close time, optionally filtered by date range and/or symbol */
-export async function getClosedTrades(since?: string, symbol?: string): Promise<Trade[]> {
+export async function getClosedTrades(
+  since?: string,
+  symbol?: string,
+  opts?: { limit?: number; cursor?: string },
+): Promise<Trade[]> {
   const conditions: string[] = ["status = 'CLOSED'"];
   const params: unknown[] = [];
   if (since) { params.push(since); conditions.push(`close_time >= $${params.length}`); }
   if (symbol) { params.push(symbol); conditions.push(`symbol = $${params.length}`); }
+  if (opts?.cursor) { params.push(opts.cursor); conditions.push(`close_time > $${params.length}`); }
   const where = conditions.join(" AND ");
+  const limit = opts?.limit ?? 50;
+  params.push(limit);
   const rows = await query(
-    `SELECT * FROM trades WHERE ${where} ORDER BY close_time ASC`,
-    params.length ? params : undefined
+    `SELECT * FROM trades WHERE ${where} ORDER BY close_time ASC LIMIT $${params.length}`,
+    params,
   );
   return rows as Trade[];
 }

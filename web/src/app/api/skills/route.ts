@@ -45,7 +45,7 @@ async function resolveSkillFile(slug: string): Promise<string | null> {
 // GET /api/skills        → list all skills
 // GET /api/skills?name=  → read one skill
 export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
+  const { searchParams } = await request.nextUrl.searchParams;
   const name = searchParams.get("name");
 
   if (name) {
@@ -161,7 +161,7 @@ export async function PUT(request: Request) {
 
 // DELETE /api/skills?name=  → delete a skill
 export async function DELETE(request: Request) {
-  const { searchParams } = new URL(request.url);
+  const { searchParams } = await request.nextUrl.searchParams;
   const name = searchParams.get("name");
   if (!name) {
     return NextResponse.json({ error: "name query parameter required" }, { status: 400 });

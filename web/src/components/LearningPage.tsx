@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, memo } from "react";
 import { useAppShell } from "@/components/AppShell";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -116,7 +116,7 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
   );
 }
 
-function ConfBar({ value, max = 100 }: { value: number; max?: number }) {
+const ConfBar = memo(function ConfBar({ value, max = 100 }: { value: number; max?: number }) {
   const pct  = Math.min(100, Math.max(0, (value / max) * 100));
   const color = scoreColor(value);
   return (

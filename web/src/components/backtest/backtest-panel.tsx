@@ -71,7 +71,7 @@ function ResultsTable({ stats }: { stats: StrategyStats[] }) {
             const rowColor = s.win_rate >= 0.5 ? "var(--positive)" : s.win_rate >= 0.4 ? "var(--warning)" : "var(--text-2)";
             return (
               <tr
-                key={i}
+                key={`${s.symbol}-${s.strategy}-${i}`}
                 className="border-b"
                 style={{ borderColor: "var(--border)", color: rowColor }}
               >
@@ -99,12 +99,14 @@ export function BacktestPanel() {
   const [strategy, setStrategy] = useState("ict_smc");
   const [jobId, setJobId] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
   const { data: job } = useBacktestStatus(jobId);
 
   async function runBacktest() {
     setRunning(true);
     setJobId(null);
+    setFetchError(null);
     try {
       const res = await fetch("/api/backtest/run", {
         method: "POST",
@@ -113,7 +115,10 @@ export function BacktestPanel() {
       });
       const data = await res.json();
       if (data.jobId) setJobId(data.jobId);
+      else if (!res.ok) setFetchError(data.error ?? "Request failed");
     } catch {
+      setFetchError("Network error — could not reach backtest service");
+    } finally {
       setRunning(false);
     }
   }
@@ -196,12 +201,12 @@ export function BacktestPanel() {
         </div>
 
         {/* ── Error ──────────────────────────────────────────── */}
-        {job?.status === "error" && (
+        {(job?.status === "error" || fetchError) && (
           <div
             className="px-4 py-3 rounded text-sm"
             style={{ background: "var(--negative)#18", color: "var(--negative)", border: "1px solid var(--negative)#44" }}
           >
-            {job.error ?? "Backtest failed."}
+            {fetchError ?? job?.error ?? "Backtest failed."}
           </div>
         )}
 

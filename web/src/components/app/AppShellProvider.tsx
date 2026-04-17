@@ -55,6 +55,10 @@ function useGlobalWebSocket() {
             setWsEvents((prev) => [...incoming, ...prev].slice(0, 200));
           } catch { /* ignore */ }
         };
+        ws.onerror = () => {
+          console.warn("[WS] connection error — reconnecting in 3s");
+          ws.close();
+        };
         ws.onclose = () => {
           if (!mountedRef.current) return;
           reconnectTimer = setTimeout(connect, 3_000);

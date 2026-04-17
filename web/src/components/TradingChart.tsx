@@ -208,6 +208,7 @@ export default function TradingChart({ symbol, timeframe, count = 500 }: Props) 
     const chart = chartRef.current;
     if (!candleSeries || !volumeSeries || !chart) return;
 
+    const abortCtrl = new AbortController();
     let active = true;
     lastTimeRef.current = 0;
 
@@ -369,6 +370,7 @@ export default function TradingChart({ symbol, timeframe, count = 500 }: Props) 
 
     return () => {
       active = false;
+      abortCtrl.abort();
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
         intervalRef.current = null;

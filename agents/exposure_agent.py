@@ -180,8 +180,8 @@ class ExposureCoach:
             daily_limit = max(settings.MAX_DAILY_LOSS, 0.001)
             score = max(0.0, 1.0 - (loss_pct / daily_limit))
             return round(score, 4)
-        except Exception:
-            logger.debug("ExposureCoach._score_pnl failed", exc_info=True)
+        except (AttributeError, TypeError, ValueError, ZeroDivisionError):
+            logger.warning("ExposureCoach._score_pnl failed — returning neutral 0.5", exc_info=True)
             return 0.5
 
     def _score_open_count(self, open_trades: list) -> float:
@@ -192,8 +192,8 @@ class ExposureCoach:
             if max_n <= 0:
                 return 1.0
             return max(0.0, round(1.0 - (n / max_n), 4))
-        except Exception:
-            logger.debug("ExposureCoach._score_open_count failed", exc_info=True)
+        except (AttributeError, TypeError, ZeroDivisionError):
+            logger.warning("ExposureCoach._score_open_count failed — returning neutral 0.5", exc_info=True)
             return 0.5
 
     def _score_garch_vol(self, garch_vol_ratio: float | None) -> float:
@@ -218,8 +218,8 @@ class ExposureCoach:
                 return 0.0
             score = 1.0 - (garch_vol_ratio - 1.0) / (threshold - 1.0)
             return round(max(0.0, min(1.0, score)), 4)
-        except Exception:
-            logger.debug("ExposureCoach._score_garch_vol failed", exc_info=True)
+        except (TypeError, ValueError, ZeroDivisionError):
+            logger.warning("ExposureCoach._score_garch_vol failed — returning neutral 0.5", exc_info=True)
             return 0.5
 
     def _score_crucix(self, signal: "Signal") -> float:
@@ -237,8 +237,8 @@ class ExposureCoach:
                 "blackout": 0.0,
             }
             return tier_map.get(tier, 0.5)
-        except Exception:
-            logger.debug("ExposureCoach._score_crucix failed", exc_info=True)
+        except (AttributeError, TypeError):
+            logger.warning("ExposureCoach._score_crucix failed — returning neutral 0.5", exc_info=True)
             return 0.5
 
     def _score_correlation(self, signal: "Signal", open_trades: list) -> float:
@@ -266,8 +266,8 @@ class ExposureCoach:
             )
             score = max(0.0, 1.0 - correlated * 0.35)
             return round(score, 4)
-        except Exception:
-            logger.debug("ExposureCoach._score_correlation failed", exc_info=True)
+        except (AttributeError, TypeError):
+            logger.warning("ExposureCoach._score_correlation failed — returning neutral 0.5", exc_info=True)
             return 0.5
 
     def _score_session(self, signal: "Signal") -> float:
@@ -279,8 +279,8 @@ class ExposureCoach:
                 from utils.helpers import current_session
                 sess = current_session()
             return _SESSION_SCORES.get(sess, _SESSION_SCORE_DEFAULT)
-        except Exception:
-            logger.debug("ExposureCoach._score_session failed", exc_info=True)
+        except (AttributeError, ImportError, TypeError, ValueError):
+            logger.warning("ExposureCoach._score_session failed — returning neutral 0.5", exc_info=True)
             return 0.5
 
     def _score_win_rate(self) -> float:
@@ -303,15 +303,15 @@ class ExposureCoach:
             # Linear: 30 % → 0.0, 60 % → 1.0
             score = max(0.0, min(1.0, (win_rate - 0.30) / 0.30))
             return round(score, 4)
-        except Exception:
-            logger.debug("ExposureCoach._score_win_rate failed", exc_info=True)
+        except (AttributeError, TypeError, ValueError, ZeroDivisionError):
+            logger.warning("ExposureCoach._score_win_rate failed — returning neutral 0.5", exc_info=True)
             return 0.5
 
     def _score_lgbm_confidence(self, signal: "Signal") -> float:
         """Signal confidence from the LGBM ensemble (already in [0.0, 1.0])."""
         try:
             return max(0.0, min(1.0, float(signal.confidence)))
-        except Exception:
+        except (AttributeError, TypeError, ValueError):
             return 0.5
 
     # ── directive computation ─────────────────────────────────────────────

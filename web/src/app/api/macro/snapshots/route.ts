@@ -4,7 +4,7 @@ import { getMacroSnapshots } from "@/lib/db";
 // GET /api/macro/snapshots?lookback_hours=&risk_tier=&limit=
 export async function GET(request: Request) {
   try {
-    const { searchParams } = new URL(request.url);
+    const { searchParams } = await request.nextUrl.searchParams;
     const snapshots = await getMacroSnapshots({
       lookback_hours: Number(searchParams.get("lookback_hours") ?? 24),
       risk_tier:      searchParams.get("risk_tier") ?? undefined,

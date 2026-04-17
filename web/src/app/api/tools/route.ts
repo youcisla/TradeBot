@@ -5,7 +5,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
   try {
-    const { searchParams } = new URL(request.url);
+    const { searchParams } = await request.nextUrl.searchParams;
     const cycleLimit = Math.min(Number(searchParams.get("cycleLimit") ?? 50), 500);
     const eventLimit = Math.min(Number(searchParams.get("eventLimit") ?? 200), 1000);
 

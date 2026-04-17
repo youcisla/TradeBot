@@ -4,11 +4,14 @@ import {
   addBrokerAccount,
   encryptValue,
 } from "@/lib/db";
+import { apiError } from "@/lib/api-errors";
 
 export const dynamic = "force-dynamic";
 
 /** GET /api/broker/accounts — list all broker accounts (no passwords) */
 export async function GET() {
+  // TODO(T3.2): Replace with real userId from auth session (e.g., getServerSession).
+  //              Currently hardcoded as undefined — no auth gate on this endpoint.
   const userId = undefined as number | undefined;
 
   try {
@@ -16,15 +19,13 @@ export async function GET() {
     return NextResponse.json(accounts);
   } catch (err) {
     console.error("[api/broker/accounts]", (err as Error).message);
-    return NextResponse.json(
-      { error: "DB temporarily unavailable" },
-      { status: 503 }
-    );
+    return apiError("DB_UNAVAILABLE", "DB temporarily unavailable", 503);
   }
 }
 
 /** POST /api/broker/accounts — add a new broker account */
 export async function POST(req: NextRequest) {
+  // TODO(T3.2): Replace with real userId from auth session.
   const userId = undefined as number | undefined;
 
   try {
@@ -32,10 +33,7 @@ export async function POST(req: NextRequest) {
     const { name, account_number, password, server, is_demo } = body;
 
     if (!name || !account_number || !password || !server) {
-      return NextResponse.json(
-        { error: "Missing required fields" },
-        { status: 400 }
-      );
+      return apiError("VALIDATION_ERROR", "Missing required fields", 400);
     }
 
     const encryptedPwd = encryptValue(String(password));
@@ -51,6 +49,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ id }, { status: 201 });
   } catch (err) {
     console.error("[api/broker/accounts POST]", (err as Error).message);
-    return NextResponse.json({ error: "Failed to add account" }, { status: 500 });
+    return apiError("DB_ERROR", "Failed to add account", 500);
   }
 }

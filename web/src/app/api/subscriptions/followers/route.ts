@@ -4,7 +4,7 @@ import { getFollowers } from "@/lib/db";
 // GET /api/subscriptions/followers?leader=  — get all followers of a leader
 export async function GET(request: Request) {
   try {
-    const { searchParams } = new URL(request.url);
+    const { searchParams } = await request.nextUrl.searchParams;
     const leader = searchParams.get("leader");
     if (!leader) {
       return NextResponse.json({ error: "leader query param required" }, { status: 400 });

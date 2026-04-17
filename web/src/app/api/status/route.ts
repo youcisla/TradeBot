@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getBotStatus } from "@/lib/db";
 import { swrCache } from "@/lib/api-cache";
+import { apiError } from "@/lib/api-errors";
 
 export const dynamic = "force-dynamic";
 
@@ -12,6 +13,6 @@ export async function GET() {
     });
   } catch (err) {
     console.error("[api/status]", (err as Error).message);
-    return NextResponse.json({ error: "DB temporarily unavailable" }, { status: 503 });
+    return apiError("DB_UNAVAILABLE", "DB temporarily unavailable", 503);
   }
 }

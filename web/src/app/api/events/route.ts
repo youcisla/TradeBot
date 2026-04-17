@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
 import { getAgentEvents } from "@/lib/db";
+import { apiError } from "@/lib/api-errors";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
   try {
-    const { searchParams } = new URL(request.url);
+    const { searchParams } = await request.nextUrl.searchParams;
     const limit = Math.min(Number(searchParams.get("limit") ?? 80), 500);
 
     const events = await getAgentEvents(limit);
@@ -14,6 +15,6 @@ export async function GET(request: Request) {
     });
   } catch (err) {
     console.error("[api/events]", (err as Error).message);
-    return NextResponse.json({ error: "DB temporarily unavailable" }, { status: 503 });
+    return apiError("DB_UNAVAILABLE", "DB temporarily unavailable", 503);
   }
 }

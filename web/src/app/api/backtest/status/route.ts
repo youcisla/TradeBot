@@ -7,7 +7,7 @@ const CANDLE_SERVER = process.env.CANDLE_SERVER_URL ?? "http://localhost:5555";
 
 export async function GET(request: Request) {
   try {
-    const { searchParams } = await new URL(request.url);
+    const { searchParams } = await request.nextUrl.searchParams;
     const jobId = searchParams.get("jobId");
 
     if (!jobId) {

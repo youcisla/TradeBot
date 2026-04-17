@@ -616,13 +616,24 @@ class TradingBot:
         try:
             _now_utc = datetime.now(UTC)
             _now_mono = time.monotonic()
+            _stale_cleared = 0
             for _sym, _fault in self.db.load_symbol_faults().items():
-                _symbol_fail_count[_sym] = _fault["fail_count"]
-                if _fault["disabled_until"] is not None:
-                    _remaining = (_fault["disabled_until"] - _now_utc).total_seconds()
+                _disabled_until = _fault["disabled_until"]
+                if _disabled_until is not None:
+                    _remaining = (_disabled_until - _now_utc).total_seconds()
                     if _remaining > 0:
+                        # cooldown still active — carry both fail_count and remaining time
+                        _symbol_fail_count[_sym] = _fault["fail_count"]
                         _symbol_disabled_until[_sym] = _now_mono + _remaining
                         logger.info("Restored fault state for %s — disabled for %.0fs more", _sym, _remaining)
+                    else:
+                        # cooldown expired — give symbol a clean slate, don't carry fail_count forward
+                        _stale_cleared += 1
+                else:
+                    # no disable record — preserve the historical fail_count
+                    _symbol_fail_count[_sym] = _fault["fail_count"]
+            if _stale_cleared:
+                logger.info("Cleared %d stale symbol_fault row(s) with expired cooldown — fail counters reset", _stale_cleared)
         except Exception:
             logger.warning("Could not load symbol fault state from DB — starting fresh")
 
