@@ -27,7 +27,7 @@ export function AgentBadge({ agent, active = false }: AgentBadgeProps) {
     memory:    { bg: "rgba(100,210,255,0.15)", text: "var(--agent-memory)",    border: "rgba(100,210,255,0.30)" },
   };
 
-  const c = Object.keys(COLORS).find((k) => key.includes(k)) ? COLORS[key] : COLORS.logging;
+  const c = COLORS[Object.keys(COLORS).find((k) => key.includes(k)) ?? "logging"];
 
   return (
     <span
@@ -53,7 +53,7 @@ export function AgentBadge({ agent, active = false }: AgentBadgeProps) {
             width:        6,
             height:       6,
             borderRadius: "50%",
-            background:   c.text,
+            backgroundColor: c.text,
             animation:    "pulse-dot 1.5s ease-in-out infinite",
           }}
         />

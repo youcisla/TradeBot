@@ -17,7 +17,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/dashboard/trades",  label: "Trades",          icon: "trending_up"      },
   { href: "/dashboard/risk",    label: "Risk",            icon: "shield"           },
   { href: "/dashboard/agents",   label: "Agents",          icon: "smart_toy"        },
-  { href: "/dashboard/health",   label: "Health",          icon: "heart_monitor"     },
+  { href: "/dashboard/health",   label: "Health",          icon: "monitor"     },
   { href: "/dashboard/learning", label: "Learning",         icon: "psychology"        },
   { href: "/dashboard/chart",   label: "Chart",           icon: "candlestick_chart" },
   { href: "/dashboard/settings", label: "Settings",        icon: "settings"          },
