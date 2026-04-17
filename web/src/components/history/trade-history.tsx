@@ -92,16 +92,6 @@ export default function TradeHistory() {
       ),
     },
     {
-      id: "close_time",
-      header: "Exit",
-      accessorKey: "close_time",
-      cell: ({ row }) => (
-        <span style={{ color: "var(--text-2)" }}>
-          {row.original.close_time ? fmtDateTime(row.original.close_time) : "—"}
-        </span>
-      ),
-    },
-    {
       id: "pnl",
       header: "P&L",
       accessorKey: "pnl",
