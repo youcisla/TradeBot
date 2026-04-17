@@ -2,6 +2,7 @@
 
 import { useAppShell } from "@/components/app/AppShellProvider";
 import { Clock } from "@/components/app/Clock";
+import { useTheme } from "@/components/ThemeProvider";
 
 const SESSION_COLORS: Record<string, string> = {
   asian:   "var(--purple)",
@@ -36,6 +37,7 @@ function HeaderKpi({ label, value, color }: { label: string; value: string; colo
 
 export function Header() {
   const { status, isRunning, openTrades, intelligence } = useAppShell();
+  const { theme, toggle } = useTheme();
 
   const equity     = Number(status?.equity      ?? 0);
   const balance   = Number(status?.balance    ?? 0);
@@ -75,7 +77,7 @@ export function Header() {
           style={{
             width: 7,
             height: 7,
-            background: stateColor,
+            backgroundColor: stateColor,
             boxShadow: `0 0 6px ${stateColor}`,
             animation: isRunning ? "pulse-dot 2s ease-in-out infinite" : undefined,
           }}
@@ -85,15 +87,15 @@ export function Header() {
       {/* KPI strip */}
       <div className="flex-1 flex items-center justify-center gap-4">
         <HeaderKpi label="Equity"  value={fmt(equity)}   color="var(--accent)" />
-        <span className="w-px h-5 flex-shrink-0" style={{ background: "var(--border)" }} />
+        <span className="w-px h-5 flex-shrink-0" style={{ backgroundColor: "var(--border)" }} />
         <HeaderKpi label="Balance" value={fmt(balance)} />
-        <span className="w-px h-5 flex-shrink-0" style={{ background: "var(--border)" }} />
+        <span className="w-px h-5 flex-shrink-0" style={{ backgroundColor: "var(--border)" }} />
         <HeaderKpi
           label="Today"
           value={(dailyPnl >= 0 ? "+" : "-") + fmt(Math.abs(dailyPnl))}
           color={pnlColor}
         />
-        <span className="w-px h-5 flex-shrink-0" style={{ background: "var(--border)" }} />
+        <span className="w-px h-5 flex-shrink-0" style={{ backgroundColor: "var(--border)" }} />
         <HeaderKpi label="Open" value={String(openCount)} />
       </div>
 
@@ -103,10 +105,10 @@ export function Header() {
           className="flex items-center gap-1.5 rounded px-2 py-1"
           style={{
             border: `1px solid ${sessionColor}50`,
-            background: `${sessionColor}18`,
+            backgroundColor: `${sessionColor}18`,
           }}
         >
-          <span className="rounded-full flex-shrink-0" style={{ width: 6, height: 6, background: sessionColor }} />
+          <span className="rounded-full flex-shrink-0" style={{ width: 6, height: 6, backgroundColor: sessionColor }} />
           <span
             className="font-mono font-bold uppercase tracking-widest"
             style={{ color: sessionColor, fontFamily: "var(--font-mono)", fontSize: 10 }}
@@ -115,6 +117,22 @@ export function Header() {
           </span>
         </div>
         <Clock />
+        <button
+          onClick={toggle}
+          title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+          style={{
+            backgroundColor: "var(--bg-3)",
+            border: "1px solid var(--border)",
+            borderRadius: 6,
+            padding: "4px 8px",
+            cursor: "pointer",
+            color: "var(--text-2)",
+            fontSize: 12,
+            fontFamily: "var(--font-mono)",
+          }}
+        >
+          {theme === "dark" ? "☀" : "☾"}
+        </button>
       </div>
     </header>
   );

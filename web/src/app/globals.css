@@ -156,6 +156,25 @@ body {
   overflow-x: hidden;
 }
 
+/* ── Light mode overrides ──────────────────────────────────────────────────── */
+[data-theme="light"] {
+  --bg:           #FFFFFF;
+  --bg-2:         #F4F4F6;
+  --bg-3:         #ECECEF;
+  --bg-4:         #E0E1E5;
+  --bg-5:         #D4D5DA;
+  --border:        rgba(0, 0, 0, 0.08);
+  --border-active: rgba(240, 180, 41, 0.50);
+  --border-subtle: rgba(0, 0, 0, 0.05);
+  --text-1:       #111118;
+  --text-2:       rgba(17, 17, 24, 0.55);
+  --text-3:       rgba(17, 17, 24, 0.30);
+  --text-disabled: rgba(17, 17, 24, 0.18);
+  --shadow-sm:  0 1px 2px rgba(0, 0, 0, 0.08);
+  --shadow-md:  0 4px 12px rgba(0, 0, 0, 0.10);
+  --shadow-lg:  0 8px 32px rgba(0, 0, 0, 0.12);
+}
+
 .material-symbols-outlined {
   font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24;
   user-select: none;
