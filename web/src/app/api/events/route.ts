@@ -1,12 +1,12 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getAgentEvents } from "@/lib/db";
 import { apiError } from "@/lib/api-errors";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = await request.nextUrl.searchParams;
+    const searchParams = request.nextUrl.searchParams;
     const limit = Math.min(Number(searchParams.get("limit") ?? 80), 500);
 
     const events = await getAgentEvents(limit);

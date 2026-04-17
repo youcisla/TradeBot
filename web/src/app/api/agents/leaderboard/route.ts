@@ -1,12 +1,12 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { apiError } from "@/lib/api-errors";
 import { getAgentReputation, getLeaderboard } from "@/lib/db";
 
 // GET /api/agents/reputation?name=  — single agent reputation
 // GET /api/agents/leaderboard      — top agents by points
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = await request.nextUrl.searchParams;
+    const searchParams = request.nextUrl.searchParams;
     const name = searchParams.get("name");
 
     if (name) {

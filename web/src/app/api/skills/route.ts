@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { apiError } from "@/lib/api-errors";
 import fs from "fs/promises";
 import path from "path";
@@ -45,8 +45,8 @@ async function resolveSkillFile(slug: string): Promise<string | null> {
 
 // GET /api/skills        → list all skills
 // GET /api/skills?name=  → read one skill
-export async function GET(request: Request) {
-  const { searchParams } = await request.nextUrl.searchParams;
+export async function GET(request: NextRequest) {
+  const searchParams = request.nextUrl.searchParams;
   const name = searchParams.get("name");
 
   if (name) {
@@ -103,7 +103,7 @@ export async function GET(request: Request) {
 }
 
 // POST /api/skills  → create a new skill
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   const body = await request.json();
   const { name, description, content } = body;
   if (!name || !description || !content) {
@@ -127,7 +127,7 @@ export async function POST(request: Request) {
 }
 
 // PUT /api/skills  → update an existing skill
-export async function PUT(request: Request) {
+export async function PUT(request: NextRequest) {
   const body = await request.json();
   const { name, content, description } = body;
   if (!name || !content) {
@@ -161,8 +161,8 @@ export async function PUT(request: Request) {
 }
 
 // DELETE /api/skills?name=  → delete a skill
-export async function DELETE(request: Request) {
-  const { searchParams } = await request.nextUrl.searchParams;
+export async function DELETE(request: NextRequest) {
+  const searchParams = request.nextUrl.searchParams;
   const name = searchParams.get("name");
   if (!name) {
     return apiError("VALIDATION_ERROR", "name query parameter required", 400);

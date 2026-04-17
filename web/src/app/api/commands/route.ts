@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import {
   getPendingReviewCommands,
@@ -41,13 +41,13 @@ function toObjectPayload(payload: unknown): Record<string, unknown> {
   return payload as Record<string, unknown>;
 }
 
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session?.user) {
     return errorResponse("UNAUTHORIZED", "Unauthorized", 401);
   }
 
-  const { searchParams } = await request.nextUrl.searchParams;
+  const searchParams = request.nextUrl.searchParams;
   const rawLimit = Number(searchParams.get("limit") ?? 25);
   const limit = Number.isFinite(rawLimit) ? Math.min(Math.max(rawLimit, 1), 100) : 25;
 
@@ -70,7 +70,7 @@ export async function GET(request: Request) {
   });
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session?.user) {
     return errorResponse("UNAUTHORIZED", "Unauthorized", 401);

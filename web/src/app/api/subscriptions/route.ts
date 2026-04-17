@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getSubscriptions, followLeader, unfollowLeader } from "@/lib/db";
 import { apiError } from "@/lib/api-errors";
 import { rateLimit, SubscriptionSchema } from "@/lib/api-validation";
@@ -6,9 +6,9 @@ import { rateLimit, SubscriptionSchema } from "@/lib/api-validation";
 // GET /api/subscriptions?follower=&leader=  — list subscriptions
 // POST /api/subscriptions                — follow a leader
 // DELETE /api/subscriptions?leader=&follower= — unfollow
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = await request.nextUrl.searchParams;
+    const searchParams = request.nextUrl.searchParams;
     const subs = await getSubscriptions({
       follower: searchParams.get("follower") ?? undefined,
       leader:   searchParams.get("leader")   ?? undefined,
@@ -20,7 +20,7 @@ export async function GET(request: Request) {
   }
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
   if (!rateLimit(ip)) {
     return NextResponse.json(
@@ -50,9 +50,9 @@ export async function POST(request: Request) {
   }
 }
 
-export async function DELETE(request: Request) {
+export async function DELETE(request: NextRequest) {
   try {
-    const { searchParams } = await request.nextUrl.searchParams;
+    const searchParams = request.nextUrl.searchParams;
     const follower_id = searchParams.get("follower");
     const leader_id   = searchParams.get("leader");
     if (!follower_id || !leader_id) {

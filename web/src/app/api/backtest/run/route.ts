@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { rateLimit, BacktestRunSchema } from "@/lib/api-validation";
 
 export const dynamic = "force-dynamic";
@@ -6,7 +6,7 @@ export const runtime = "nodejs";
 
 const CANDLE_SERVER = process.env.CANDLE_SERVER_URL ?? "http://localhost:5555";
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
   if (!rateLimit(ip)) {
     return NextResponse.json(

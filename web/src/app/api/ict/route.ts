@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import {
   getIctSetups,
   getIctModelStats,
@@ -8,9 +8,9 @@ import {
 
 export const dynamic = "force-dynamic";
 
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = await request.nextUrl.searchParams;
+    const searchParams = request.nextUrl.searchParams;
     const symbol = searchParams.get("symbol") || undefined;
 
     const [setups, modelStats, confluenceStats, sessionStats] =

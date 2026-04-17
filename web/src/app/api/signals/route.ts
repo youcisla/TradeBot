@@ -1,12 +1,12 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getSignals, publishSignal } from "@/lib/db";
 import { apiError } from "@/lib/api-errors";
 import { rateLimit, SignalSchema } from "@/lib/api-validation";
 
 // GET /api/signals  — signal feed (mirrors AI-Trader /api/signals/feed)
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = await request.nextUrl.searchParams;
+    const searchParams = request.nextUrl.searchParams;
     const signals = await getSignals({
       intent:   searchParams.get("intent")   ?? undefined,
       type:     searchParams.get("type")     ?? undefined,
@@ -25,7 +25,7 @@ export async function GET(request: Request) {
 }
 
 // POST /api/signals  — publish a new signal
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
   if (!rateLimit(ip)) {
     return NextResponse.json(

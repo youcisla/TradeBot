@@ -11,7 +11,7 @@ interface AppShellLayoutProps {
 
 export function AppShellLayout({ children }: AppShellLayoutProps) {
   return (
-    <div style={{ background: "var(--bg)", color: "var(--text-1)", minHeight: "100vh" }}>
+    <div className="min-h-screen" style={{ background: "var(--bg)", color: "var(--text-1)" }}>
       {/* Fixed top header */}
       <Header />
 

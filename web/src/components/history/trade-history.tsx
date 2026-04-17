@@ -92,12 +92,12 @@ export default function TradeHistory() {
       ),
     },
     {
-      id: "exit_price",
+      id: "close_time",
       header: "Exit",
-      accessorKey: "exit_price",
+      accessorKey: "close_time",
       cell: ({ row }) => (
         <span style={{ color: "var(--text-2)" }}>
-          {row.original.exit_price != null ? formatPrice(row.original.exit_price) : "—"}
+          {row.original.close_time ? fmtDateTime(row.original.close_time) : "—"}
         </span>
       ),
     },

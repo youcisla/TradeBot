@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { apiError } from "@/lib/api-errors";
 
 export const dynamic = "force-dynamic";
@@ -7,9 +7,9 @@ export const dynamic = "force-dynamic";
 // Next.js proxies /api/broker/trades → candle server /trades
 const CANDLE_SERVER = process.env.CANDLE_SERVER_URL || "http://localhost:5555";
 
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = await request.nextUrl.searchParams;
+    const searchParams = request.nextUrl.searchParams;
     const days = searchParams.get("days") || "7";
 
     const res = await fetch(

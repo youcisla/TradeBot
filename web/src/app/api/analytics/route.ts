@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import {
   getClosedTrades,
   getSymbolStats,
@@ -13,9 +13,9 @@ export const dynamic = "force-dynamic";
 // In-memory rate-limit store (60s window, 1 req/min per IP)
 const rateLimitStore = new Map<string, number>();
 
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = await request.nextUrl.searchParams;
+    const searchParams = request.nextUrl.searchParams;
 
     // ── Pagination ──────────────────────────────────────────
     const limitRaw = searchParams.get("limit") || "50";
@@ -60,7 +60,7 @@ export async function GET(request: Request) {
     let nextCursor: string | undefined;
     if (closedTrades.length === limitNum) {
       const lastTrade = closedTrades[closedTrades.length - 1];
-      nextCursor = lastTrade.close_time;
+      nextCursor = lastTrade.close_time ?? undefined;
     }
 
     return NextResponse.json(
