@@ -151,7 +151,7 @@ class ExposureCoach:
             }
             return self._compute_directive(scores)
         except Exception:
-            logger.exception("ExposureCoach.evaluate failed — skipping (fail-open)")
+            logger.warning("ExposureCoach.evaluate failed — skipping (fail-open)")
             return ExposureDecision(skipped=True, reason="exception")
 
     # ── individual signal scorers (0.0 = dangerous, 1.0 = safe) ─────────

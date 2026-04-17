@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { apiError } from "@/lib/api-errors";
 import { getFollowers } from "@/lib/db";
 
 // GET /api/subscriptions/followers?leader=  — get all followers of a leader
@@ -7,12 +8,12 @@ export async function GET(request: Request) {
     const { searchParams } = await request.nextUrl.searchParams;
     const leader = searchParams.get("leader");
     if (!leader) {
-      return NextResponse.json({ error: "leader query param required" }, { status: 400 });
+      return apiError("VALIDATION_ERROR", "leader query param required", 400);
     }
     const followers = await getFollowers(leader);
     return NextResponse.json(followers);
   } catch (err) {
     console.error("[/api/subscriptions/followers]", (err as Error).message);
-    return NextResponse.json({ error: "DB unavailable" }, { status: 503 });
+    return apiError("DB_UNAVAILABLE", "DB unavailable", 503);
   }
 }

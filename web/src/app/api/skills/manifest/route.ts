@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { apiError } from "@/lib/api-errors";
 
 /** External skill manifest — OpenClaw-compatible JSON manifest.
 
@@ -165,6 +166,6 @@ export async function GET() {
     });
   } catch (err) {
     console.error("[/api/skills/manifest]", (err as Error).message);
-    return NextResponse.json({ error: "Manifest unavailable" }, { status: 500 });
+    return apiError("MANIFEST_ERROR", "Manifest unavailable", 500);
   }
 }

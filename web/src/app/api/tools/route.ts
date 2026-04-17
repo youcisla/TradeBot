@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { apiError } from "@/lib/api-errors";
 import { getToolCycleEvents, getToolSystemEvents } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
@@ -17,6 +18,6 @@ export async function GET(request: Request) {
     return NextResponse.json({ cycles, events });
   } catch (err) {
     console.error("[api/tools]", (err as Error).message);
-    return NextResponse.json({ error: "DB temporarily unavailable" }, { status: 503 });
+    return apiError("DB_UNAVAILABLE", "DB temporarily unavailable", 503);
   }
 }

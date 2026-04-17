@@ -44,7 +44,7 @@ export async function GET(request: Request) {
     const data = await res.json();
     return NextResponse.json(data, {
       headers: {
-        "Cache-Control": "public, max-age=60, stale-while-revalidate=120",
+        "Cache-Control": "public, s-maxage=5, stale-while-revalidate=30",
       },
     });
   } catch (err) {

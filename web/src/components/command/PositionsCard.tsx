@@ -5,11 +5,13 @@ import { useAppShell } from "@/components/AppShell";
 import { DirectionBadge } from "@/components/shared/DirectionBadge";
 import { formatPrice, fmtPnl, relTime } from "@/lib/format";
 import { sendCommand } from "@/lib/ws";
-import { cn } from "@/lib/utils";
 
 export default function PositionsCard() {
   const { openTrades } = useAppShell();
   const [closingId, setClosingId] = useState<number | null>(null);
+
+  // Guard: SWR returns undefined before first fetch resolves
+  const trades = Array.isArray(openTrades) ? openTrades : [];
 
   async function handleClose(id: number) {
     setClosingId(id);
@@ -21,7 +23,8 @@ export default function PositionsCard() {
     <div className="flex flex-col" role="table" aria-label="Open positions">
       {/* Column headers */}
       <div
-        className="grid grid-cols-[2fr_56px_1fr_1fr_1fr_60px_28px] gap-2 px-4 py-2 border-b bg-[var(--bg-3)] border-[var(--border)]"
+        className="grid grid-cols-[2fr_56px_1fr_1fr_1fr_60px_28px] gap-2 px-4 py-2 border-b"
+        style={{ background: "var(--bg-3)", borderColor: "var(--border)" }}
         role="row"
       >
         {["Symbol", "Dir", "Entry", "PnL", "SL", "Age", ""].map((h, i) => (
@@ -38,7 +41,7 @@ export default function PositionsCard() {
       </div>
 
       {/* Rows */}
-      {openTrades.length === 0 ? (
+      {trades.length === 0 ? (
         <div
           className="flex items-center justify-center py-10 font-mono text-sm"
           style={{ color: "var(--text-3)", fontFamily: "var(--font-mono)", fontSize: 11 }}
@@ -46,96 +49,100 @@ export default function PositionsCard() {
           No open positions
         </div>
       ) : (
-        openTrades.map((trade) => (
-          <div
-            key={trade.id}
-            className="grid grid-cols-[2fr_56px_1fr_1fr_1fr_60px_28px] gap-2 px-4 py-2.5 border-b border-[var(--border-subtle)] transition-colors group"
-            role="row"
-          >
-            {/* Symbol */}
-            <div className="flex flex-col gap-0.5 min-w-0" role="cell">
-              <span
-                className="font-mono font-bold"
-                style={{ color: "var(--text-1)", fontSize: 12 }}
-              >
-                {trade.symbol}
-              </span>
-              {trade.strategy && (
+        trades.map((trade) => {
+          const t = trade as { id: number; symbol: string; direction: string; entry_price: number; pnl?: number; sl?: number; strategy?: string; open_time: string };
+          const isClosing = closingId === t.id;
+          return (
+            <div
+              key={t.id}
+              className="grid grid-cols-[2fr_56px_1fr_1fr_1fr_60px_28px] gap-2 px-4 py-2.5 border-b transition-colors group"
+              style={{ borderColor: "var(--border-subtle)" }}
+              role="row"
+            >
+              {/* Symbol */}
+              <div className="flex flex-col gap-0.5 min-w-0" role="cell">
                 <span
-                  className="font-mono uppercase"
-                  style={{ color: "var(--text-3)", fontSize: 9, letterSpacing: "0.04em" }}
+                  className="font-mono font-bold"
+                  style={{ color: "var(--text-1)", fontSize: 12 }}
                 >
-                  {trade.strategy}
+                  {t.symbol}
                 </span>
-              )}
-            </div>
-
-            {/* Direction */}
-            <div role="cell">
-              <DirectionBadge direction={trade.direction} />
-            </div>
-
-            {/* Entry */}
-            <span
-              className="font-mono text-right"
-              role="cell"
-              style={{ color: "var(--text-2)", fontFamily: "var(--font-mono)", fontSize: 11 }}
-            >
-              {formatPrice(trade.entry_price)}
-            </span>
-
-            {/* PnL */}
-            <span
-              className="font-mono text-right font-bold"
-              role="cell"
-              style={{
-                color: typeof trade.pnl === "number" && trade.pnl < 0
-                  ? "var(--negative)"
-                  : "var(--positive)",
-                fontFamily: "var(--font-mono)",
-                fontSize: 11,
-              }}
-            >
-              {fmtPnl(trade.pnl)}
-            </span>
-
-            {/* SL */}
-            <span
-              className="font-mono text-right"
-              role="cell"
-              style={{ color: "var(--text-3)", fontFamily: "var(--font-mono)", fontSize: 11 }}
-            >
-              {trade.sl ? formatPrice(trade.sl) : "—"}
-            </span>
-
-            {/* Age */}
-            <span
-              className="font-mono text-right"
-              role="cell"
-              style={{ color: "var(--text-3)", fontFamily: "var(--font-mono)", fontSize: 11 }}
-            >
-              {relTime(trade.open_time)}
-            </span>
-
-            {/* Close */}
-            <div className="flex items-center justify-end" role="cell">
-              <button
-                className={cn(
-                  "rounded transition-colors px-1.5 py-0.5 font-mono text-xs",
-                  "border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--accent)]",
-                  closingId === trade.id
-                    ? "border-[var(--border)] text-[var(--text-3)] cursor-not-allowed"
-                    : "border-[var(--border)] text-[var(--text-3)] hover:border-[var(--negative)] hover:text-[var(--negative)]"
+                {t.strategy && (
+                  <span
+                    className="font-mono uppercase"
+                    style={{ color: "var(--text-3)", fontSize: 9, letterSpacing: "0.04em" }}
+                  >
+                    {t.strategy}
+                  </span>
                 )}
-                onClick={() => handleClose(trade.id)}
-                disabled={closingId === trade.id}
-                aria-label={`Close ${trade.symbol} position`}
+              </div>
+
+              {/* Direction */}
+              <div role="cell">
+                <DirectionBadge direction={t.direction} />
+              </div>
+
+              {/* Entry */}
+              <span
+                className="font-mono text-right"
+                role="cell"
+                style={{ color: "var(--text-2)", fontFamily: "var(--font-mono)", fontSize: 11 }}
               >
-                {closingId === trade.id ? "…" : "✕"}
-              </button>
+                {formatPrice(t.entry_price)}
+              </span>
+
+              {/* PnL */}
+              <span
+                className="font-mono text-right font-bold"
+                role="cell"
+                style={{
+                  color: typeof t.pnl === "number" && t.pnl < 0
+                    ? "var(--negative)"
+                    : "var(--positive)",
+                  fontFamily: "var(--font-mono)",
+                  fontSize: 11,
+                }}
+              >
+                {fmtPnl(t.pnl)}
+              </span>
+
+              {/* SL */}
+              <span
+                className="font-mono text-right"
+                role="cell"
+                style={{ color: "var(--text-3)", fontFamily: "var(--font-mono)", fontSize: 11 }}
+              >
+                {t.sl ? formatPrice(t.sl) : "—"}
+              </span>
+
+              {/* Age */}
+              <span
+                className="font-mono text-right"
+                role="cell"
+                style={{ color: "var(--text-3)", fontFamily: "var(--font-mono)", fontSize: 11 }}
+              >
+                {relTime(t.open_time)}
+              </span>
+
+              {/* Close */}
+              <div className="flex items-center justify-end" role="cell">
+                <button
+                  className="rounded transition-colors px-1.5 py-0.5 font-mono text-xs border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset"
+                  style={{
+                    borderColor: "var(--border)",
+                    color: "var(--text-3)",
+                    cursor: isClosing ? "not-allowed" : "pointer",
+                  }}
+                  onClick={() => handleClose(t.id)}
+                  disabled={isClosing}
+                  aria-label={`Close ${t.symbol} position`}
+                >
+                  {isClosing ? "…" : "✕"}
+                </button>
+              </div>
             </div>
-          </div>
-        ))
+          );
+        })
       )}
     </div>
   );

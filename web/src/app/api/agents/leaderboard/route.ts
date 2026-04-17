@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { apiError } from "@/lib/api-errors";
 import { getAgentReputation, getLeaderboard } from "@/lib/db";
 
 // GET /api/agents/reputation?name=  — single agent reputation
@@ -10,7 +11,7 @@ export async function GET(request: Request) {
 
     if (name) {
       const rep = await getAgentReputation(name);
-      if (!rep) return NextResponse.json({ error: "Agent not found" }, { status: 404 });
+      if (!rep) return apiError("NOT_FOUND", "Agent not found", 404);
       return NextResponse.json(rep);
     }
 
@@ -19,6 +20,6 @@ export async function GET(request: Request) {
     return NextResponse.json(board);
   } catch (err) {
     console.error("[/api/agents/reputation]", (err as Error).message);
-    return NextResponse.json({ error: "DB unavailable" }, { status: 503 });
+    return apiError("DB_UNAVAILABLE", "DB unavailable", 503);
   }
 }

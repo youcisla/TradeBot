@@ -83,47 +83,53 @@ export default function TradingChart({ symbol, timeframe, count = 500 }: Props) 
     setStatus(s);
   };
 
-  const fetchCandles = useCallback(async () => {
+  const fetchCandles = useCallback(async (signal?: AbortSignal) => {
     try {
       const res = await fetch(
-        `/api/candles?symbol=${encodeURIComponent(symbol)}&timeframe=${encodeURIComponent(timeframe)}&count=${count}`
+        `/api/candles?symbol=${encodeURIComponent(symbol)}&timeframe=${encodeURIComponent(timeframe)}&count=${count}`,
+        { signal }
       );
       if (!res.ok) {
         if (res.status === 503) serverDownRef.current = true;
         return null;
       }
       return (await res.json()) as CandleRaw[];
-    } catch {
+    } catch (err) {
+      if ((err as Error).name === "AbortError") return null;
       serverDownRef.current = true;
       return null;
     }
   }, [symbol, timeframe, count]);
 
-  const fetchOverlays = useCallback(async () => {
+  const fetchOverlays = useCallback(async (signal?: AbortSignal) => {
     try {
       const res = await fetch(
-        `/api/candles/trades?symbol=${encodeURIComponent(symbol)}`
+        `/api/candles/trades?symbol=${encodeURIComponent(symbol)}`,
+        { signal }
       );
       if (!res.ok) return null;
       return (await res.json()) as {
         markers: TradeMarker[];
         priceLines: PriceLine[];
       };
-    } catch {
+    } catch (err) {
+      if ((err as Error).name === "AbortError") return null;
       return null;
     }
   }, [symbol]);
 
-  const fetchFibonacci = useCallback(async () => {
+  const fetchFibonacci = useCallback(async (signal?: AbortSignal) => {
     try {
       const res = await fetch(
-        `/api/candles/fibonacci?symbol=${encodeURIComponent(symbol)}`
+        `/api/candles/fibonacci?symbol=${encodeURIComponent(symbol)}`,
+        { signal }
       );
       if (!res.ok) return null;
       const data = await res.json();
       if (!data.levels || data.levels.length === 0) return null;
       return data as FibData;
-    } catch {
+    } catch (err) {
+      if ((err as Error).name === "AbortError") return null;
       return null;
     }
   }, [symbol]);
@@ -256,7 +262,7 @@ export default function TradingChart({ symbol, timeframe, count = 500 }: Props) 
 
     const loadInitial = async () => {
       setStatusSync("loading");
-      const candles = await fetchCandles();
+      const candles = await fetchCandles(abortCtrl.signal);
       if (!active) return;
       if (!candles) {
         serverDownRef.current = true;
@@ -272,7 +278,7 @@ export default function TradingChart({ symbol, timeframe, count = 500 }: Props) 
 
       await loadCandles(candles);
 
-      const overlays = await fetchOverlays();
+      const overlays = await fetchOverlays(abortCtrl.signal);
       if (overlays && active) {
         if (overlays.markers.length > 0) {
           const sorted = overlays.markers
@@ -300,7 +306,7 @@ export default function TradingChart({ symbol, timeframe, count = 500 }: Props) 
         }
       }
 
-      const fibData = await fetchFibonacci();
+      const fibData = await fetchFibonacci(abortCtrl.signal);
       if (fibData && active) {
         if (fibData.golden_zone) {
           const gzLabel =
@@ -342,7 +348,7 @@ export default function TradingChart({ symbol, timeframe, count = 500 }: Props) 
 
     intervalRef.current = setInterval(async () => {
       if (!active || serverDownRef.current) return;
-      const candles = await fetchCandles();
+      const candles = await fetchCandles(abortCtrl.signal);
       if (!candles || candles.length === 0) return;
 
       if (statusRef.current !== "ok") {

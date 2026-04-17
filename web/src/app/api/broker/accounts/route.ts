@@ -5,6 +5,7 @@ import {
   encryptValue,
 } from "@/lib/db";
 import { apiError } from "@/lib/api-errors";
+import { BrokerAccountSchema } from "@/lib/api-validation";
 
 export const dynamic = "force-dynamic";
 
@@ -30,20 +31,23 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { name, account_number, password, server, is_demo } = body;
-
-    if (!name || !account_number || !password || !server) {
-      return apiError("VALIDATION_ERROR", "Missing required fields", 400);
+    const parsed = BrokerAccountSchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: { code: "VALIDATION_ERROR", message: parsed.error.message } },
+        { status: 400 },
+      );
     }
 
-    const encryptedPwd = encryptValue(String(password));
+    const { name, account_number, password, server, is_demo } = parsed.data;
+    const encryptedPwd = encryptValue(password);
 
     const id = await addBrokerAccount(
-      String(name).slice(0, 100),
-      String(account_number).slice(0, 50),
+      name,
+      account_number,
       encryptedPwd,
-      String(server).slice(0, 100),
-      Boolean(is_demo),
+      server,
+      is_demo,
       userId
     );
     return NextResponse.json({ id }, { status: 201 });

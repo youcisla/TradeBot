@@ -35,6 +35,6 @@ export async function GET(request: Request) {
     });
   } catch (err) {
     console.error("[api/trades]", (err as Error).message);
-    return NextResponse.json({ error: "DB temporarily unavailable" }, { status: 503 });
+    return apiError("DB_UNAVAILABLE", "DB temporarily unavailable", 503);
   }
 }

@@ -341,10 +341,17 @@ class ExecutionAgent:
         return "10017" in msg or "10027" in msg or "autotrading disabled" in msg
 
     def _confirm_position_open(self, ticket: int) -> bool:
-        """Wait briefly for broker position visibility after order placement."""
+        """Wait briefly for broker position visibility after order placement.
+
+        Uses exponential backoff (250ms → 500ms → 1s) when the broker raises an
+        exception, avoiding hammer during transient errors. Normal polling uses the
+        configured poll interval.
+        """
         timeout_s = max(0.0, settings.EXEC_PENDING_CONFIRM_TIMEOUT_SECONDS)
         poll_s = max(0.05, settings.EXEC_PENDING_CONFIRM_POLL_INTERVAL_SECONDS)
+        backoff_ms = [250, 500, 1000]
         deadline = time.monotonic() + timeout_s
+        attempt = 0
 
         while True:
             try:
@@ -353,8 +360,14 @@ class ExecutionAgent:
                     return True
             except Exception:
                 logger.exception("Failed while confirming broker position visibility")
+                sleep_s = backoff_ms[min(attempt, len(backoff_ms) - 1)] / 1000.0
+                attempt += 1
 
             if time.monotonic() >= deadline:
                 return False
 
-            time.sleep(poll_s)
+            time.sleep(sleep_s if "sleep_s" in dir() else poll_s)
+            # Reset backoff on a clean (non-exception) iteration
+            if "sleep_s" in dir():
+                del sleep_s
+            attempt = 0

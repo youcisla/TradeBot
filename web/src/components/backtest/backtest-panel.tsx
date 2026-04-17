@@ -71,7 +71,7 @@ function ResultsTable({ stats }: { stats: StrategyStats[] }) {
             const rowColor = s.win_rate >= 0.5 ? "var(--positive)" : s.win_rate >= 0.4 ? "var(--warning)" : "var(--text-2)";
             return (
               <tr
-                key={`${s.symbol}-${s.strategy}-${i}`}
+                key={`${s.symbol}-${s.strategy}`}
                 className="border-b"
                 style={{ borderColor: "var(--border)", color: rowColor }}
               >

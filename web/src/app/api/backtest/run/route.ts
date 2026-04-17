@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { rateLimit, BacktestRunSchema } from "@/lib/api-validation";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -6,19 +7,25 @@ export const runtime = "nodejs";
 const CANDLE_SERVER = process.env.CANDLE_SERVER_URL ?? "http://localhost:5555";
 
 export async function POST(request: Request) {
+  const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+  if (!rateLimit(ip)) {
+    return NextResponse.json(
+      { error: { code: "RATE_LIMITED", message: "Slow down — max 1 req/min" } },
+      { status: 429 },
+    );
+  }
+
   try {
     const body = await request.json();
-    const { symbol, strategy = "ict_smc" } = body as {
-      symbol: string;
-      strategy?: string;
-    };
-
-    if (!symbol) {
+    const parsed = BacktestRunSchema.safeParse(body);
+    if (!parsed.success) {
       return NextResponse.json(
-        { error: { code: "BAD_REQUEST", message: "symbol is required" } },
+        { error: { code: "VALIDATION_ERROR", message: parsed.error.message } },
         { status: 400 },
       );
     }
+
+    const { symbol, strategy = "ict_smc" } = parsed.data;
 
     const res = await fetch(`${CANDLE_SERVER}/api/backtest/run`, {
       method: "POST",

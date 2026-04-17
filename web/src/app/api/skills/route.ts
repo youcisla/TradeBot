@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { apiError } from "@/lib/api-errors";
 import fs from "fs/promises";
 import path from "path";
 
@@ -50,13 +51,13 @@ export async function GET(request: Request) {
 
   if (name) {
     const filePath = await resolveSkillFile(name);
-    if (!filePath) return NextResponse.json({ error: `Skill '${name}' not found` }, { status: 404 });
+    if (!filePath) return apiError("NOT_FOUND", `Skill '${name}' not found`, 404);
     try {
       const content = await fs.readFile(filePath, "utf-8");
       const meta = parseFrontmatter(content);
       return NextResponse.json({ name, content, ...meta });
     } catch {
-      return NextResponse.json({ error: `Skill '${name}' not found` }, { status: 404 });
+      return apiError("NOT_FOUND", `Skill '${name}' not found`, 404);
     }
   }
 
@@ -106,15 +107,15 @@ export async function POST(request: Request) {
   const body = await request.json();
   const { name, description, content } = body;
   if (!name || !description || !content) {
-    return NextResponse.json({ error: "name, description, and content are required" }, { status: 400 });
+    return apiError("VALIDATION_ERROR", "name, description, and content are required", 400);
   }
   if (!/^[a-z][a-z0-9-]*$/.test(name)) {
-    return NextResponse.json({ error: "Name must be lowercase with hyphens only" }, { status: 400 });
+    return apiError("VALIDATION_ERROR", "Name must be lowercase with hyphens only", 400);
   }
 
   const existing = await resolveSkillFile(name);
   if (existing) {
-    return NextResponse.json({ error: `Skill '${name}' already exists` }, { status: 409 });
+    return apiError("CONFLICT", `Skill '${name}' already exists`, 409);
   }
 
   // New skills always created as flat .md files
@@ -130,16 +131,16 @@ export async function PUT(request: Request) {
   const body = await request.json();
   const { name, content, description } = body;
   if (!name || !content) {
-    return NextResponse.json({ error: "name and content are required" }, { status: 400 });
+    return apiError("VALIDATION_ERROR", "name and content are required", 400);
   }
 
   const filePath = await resolveSkillFile(name);
-  if (!filePath) return NextResponse.json({ error: `Skill '${name}' not found` }, { status: 404 });
+  if (!filePath) return apiError("NOT_FOUND", `Skill '${name}' not found`, 404);
   let existing = "";
   try {
     existing = await fs.readFile(filePath, "utf-8");
   } catch {
-    return NextResponse.json({ error: `Skill '${name}' not found` }, { status: 404 });
+    return apiError("NOT_FOUND", `Skill '${name}' not found`, 404);
   }
 
   let finalContent = content;
@@ -164,14 +165,14 @@ export async function DELETE(request: Request) {
   const { searchParams } = await request.nextUrl.searchParams;
   const name = searchParams.get("name");
   if (!name) {
-    return NextResponse.json({ error: "name query parameter required" }, { status: 400 });
+    return apiError("VALIDATION_ERROR", "name query parameter required", 400);
   }
   if (CORE_SKILLS.has(name)) {
-    return NextResponse.json({ error: `Cannot delete core skill '${name}'` }, { status: 403 });
+    return apiError("FORBIDDEN", `Cannot delete core skill '${name}'`, 403);
   }
 
   const resolved = await resolveSkillFile(name);
-  if (!resolved) return NextResponse.json({ error: `Skill '${name}' not found` }, { status: 404 });
+  if (!resolved) return apiError("NOT_FOUND", `Skill '${name}' not found`, 404);
   try {
     if (resolved.endsWith("index.md")) {
       await fs.rm(path.dirname(resolved), { recursive: true });
@@ -180,6 +181,6 @@ export async function DELETE(request: Request) {
     }
     return NextResponse.json({ ok: true, name });
   } catch {
-    return NextResponse.json({ error: `Skill '${name}' not found` }, { status: 404 });
+    return apiError("NOT_FOUND", `Skill '${name}' not found`, 404);
   }
 }

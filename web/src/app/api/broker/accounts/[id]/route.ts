@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { apiError } from "@/lib/api-errors";
 import {
   updateBrokerAccount,
   deleteBrokerAccount,
@@ -16,10 +17,10 @@ export async function PUT(
 ) {
   const { id: idStr } = await params;
   const id = Number(idStr);
-  if (!id) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
+  if (!id) return apiError("VALIDATION_ERROR", "Invalid id", 400);
 
   const account = await getBrokerAccountById(id);
-  if (!account) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (!account) return apiError("NOT_FOUND", "Account not found", 404);
 
   try {
     const body = await req.json();
@@ -27,7 +28,7 @@ export async function PUT(
 
     if (!name || !account_number || !server) {
       return NextResponse.json(
-        { error: "Missing required fields" },
+        { error: { code: "VALIDATION_ERROR", message: "Missing required fields" } },
         { status: 400 }
       );
     }
@@ -43,7 +44,7 @@ export async function PUT(
     return NextResponse.json({ ok: true });
   } catch (err) {
     console.error("[api/broker/accounts PUT]", (err as Error).message);
-    return NextResponse.json({ error: "Failed to update" }, { status: 500 });
+    return apiError("DB_ERROR", "Failed to update account", 500);
   }
 }
 
@@ -54,17 +55,17 @@ export async function DELETE(
 ) {
   const { id: idStr } = await params;
   const id = Number(idStr);
-  if (!id) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
+  if (!id) return apiError("VALIDATION_ERROR", "Invalid id", 400);
 
   const account = await getBrokerAccountById(id);
-  if (!account) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (!account) return apiError("NOT_FOUND", "Account not found", 404);
 
   try {
     await deleteBrokerAccount(id);
     return NextResponse.json({ ok: true });
   } catch (err) {
     console.error("[api/broker/accounts DELETE]", (err as Error).message);
-    return NextResponse.json({ error: "Failed to delete" }, { status: 500 });
+    return apiError("DB_ERROR", "Failed to delete account", 500);
   }
 }
 
@@ -75,16 +76,16 @@ export async function PATCH(
 ) {
   const { id: idStr } = await params;
   const id = Number(idStr);
-  if (!id) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
+  if (!id) return apiError("VALIDATION_ERROR", "Invalid id", 400);
 
   const account = await getBrokerAccountById(id);
-  if (!account) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (!account) return apiError("NOT_FOUND", "Account not found", 404);
 
   try {
     await activateBrokerAccount(id);
     return NextResponse.json({ ok: true });
   } catch (err) {
     console.error("[api/broker/accounts PATCH]", (err as Error).message);
-    return NextResponse.json({ error: "Failed to activate" }, { status: 500 });
+    return apiError("DB_ERROR", "Failed to activate account", 500);
   }
 }

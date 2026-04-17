@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSubscriptions, followLeader, unfollowLeader } from "@/lib/db";
 import { apiError } from "@/lib/api-errors";
+import { rateLimit, SubscriptionSchema } from "@/lib/api-validation";
 
 // GET /api/subscriptions?follower=&leader=  — list subscriptions
 // POST /api/subscriptions                — follow a leader
@@ -20,15 +21,27 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+  if (!rateLimit(ip)) {
+    return NextResponse.json(
+      { error: { code: "RATE_LIMITED", message: "Slow down — max 1 req/min" } },
+      { status: 429 },
+    );
+  }
+
   try {
-    const { follower_id, leader_id, leader_strategy } = await request.json();
-    if (!follower_id || !leader_id) {
-      return apiError("VALIDATION_ERROR", "follower_id and leader_id are required", 400);
+    const body = await request.json();
+    const parsed = SubscriptionSchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: { code: "VALIDATION_ERROR", message: parsed.error.message } },
+        { status: 400 },
+      );
     }
     const id = await followLeader(
-      follower_id,
-      leader_id,
-      leader_strategy ?? "all"
+      parsed.data.follower_id,
+      parsed.data.leader_id,
+      parsed.data.leader_strategy ?? "all"
     );
     return NextResponse.json({ id }, { status: 201 });
   } catch (err) {

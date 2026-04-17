@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSignals, publishSignal } from "@/lib/db";
 import { apiError } from "@/lib/api-errors";
+import { rateLimit, SignalSchema } from "@/lib/api-validation";
 
 // GET /api/signals  — signal feed (mirrors AI-Trader /api/signals/feed)
 export async function GET(request: Request) {
@@ -25,21 +26,25 @@ export async function GET(request: Request) {
 
 // POST /api/signals  — publish a new signal
 export async function POST(request: Request) {
+  const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+  if (!rateLimit(ip)) {
+    return NextResponse.json(
+      { error: { code: "RATE_LIMITED", message: "Slow down — max 1 req/min" } },
+      { status: 429 },
+    );
+  }
+
   try {
     const body = await request.json();
-
-    const { signal_intent, signal_type, strategy } = body;
-    if (!signal_intent || !signal_type || !strategy) {
-      return apiError("VALIDATION_ERROR", "signal_intent, signal_type, and strategy are required", 400);
-    }
-    if (!["DISCUSSION", "STRATEGY", "OPERATION"].includes(signal_type)) {
-      return apiError("VALIDATION_ERROR", "signal_type must be DISCUSSION, STRATEGY, or OPERATION", 400);
-    }
-    if (!["DISCUSSION", "STRATEGY", "EXECUTION"].includes(signal_intent)) {
-      return apiError("VALIDATION_ERROR", "signal_intent must be DISCUSSION, STRATEGY, or EXECUTION", 400);
+    const parsed = SignalSchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: { code: "VALIDATION_ERROR", message: parsed.error.message } },
+        { status: 400 },
+      );
     }
 
-    const id = await publishSignal(body);
+    const id = await publishSignal(parsed.data);
     return NextResponse.json({ id }, { status: 201 });
   } catch (err) {
     console.error("[/api/signals POST]", (err as Error).message);
