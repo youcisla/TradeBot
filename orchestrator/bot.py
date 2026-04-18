@@ -494,10 +494,10 @@ class TradingBot:
         logger.info("-" * 50)
 
     def _warmup_models(self, learning: LearningAgent) -> None:
-        """Eagerly load all ML/prediction models at startup."""
+        """Eagerly load all ML/prediction models at startup; auto-train in background if missing."""
         _t0 = time.monotonic()
         _loaded: list[str] = []
-        _skipped: list[str] = []
+        _training: list[str] = []
 
         if settings.LGBM_ENSEMBLE_ENABLED:
             from models.lgbm_ensemble import LGBMEnsemble
@@ -507,8 +507,8 @@ class TradingBot:
                 logger.info("LGBM ensemble ready at startup (shap features: %d)",
                             len(_ens.get_shap_importance()))
             else:
-                _skipped.append("lgbm_ensemble (not trained)")
-                logger.warning("LGBM ensemble not ready at startup — will train on demand")
+                _training.append("lgbm_ensemble")
+                logger.info("LGBM ensemble not ready — auto-training in background")
 
             from models.lgbm_price_model import LGBMPriceModel
             _price = LGBMPriceModel()
@@ -517,8 +517,8 @@ class TradingBot:
                 _loaded.append(f"lgbm_price ({len(_trained_syms)} symbols: {', '.join(_trained_syms[:8])}{'...' if len(_trained_syms) > 8 else ''})")
                 logger.info("LGBM price models ready at startup: %d symbols", len(_trained_syms))
             else:
-                _skipped.append("lgbm_price (no trained symbols)")
-                logger.info("No LGBM price models at startup — will train on demand")
+                _training.append("lgbm_price")
+                logger.info("No LGBM price models at startup — auto-training in background")
 
             # Pre-initialize the StrategyAgent lazy singleton
             _ = self.strategy_agent._lgbm   # noqa: F841 — triggers lazy init
@@ -526,7 +526,6 @@ class TradingBot:
             logger.info("StrategyAgent LGBM singleton initialized")
         else:
             logger.info("LGBM models skipped at startup (LGBM_ENSEMBLE_ENABLED=false)")
-            _skipped.append("lgbm (disabled)")
 
         if settings.KALMAN_ENABLED:
             _loaded.append("kalman (stateless)")
@@ -537,23 +536,59 @@ class TradingBot:
             logger.info("GARCH regime detection enabled (initializes on first candle)")
 
         _elapsed = time.monotonic() - _t0
-        _msg = f"Model warmup complete in {_elapsed*1000:.1f}ms — loaded: {', '.join(_loaded) if _loaded else 'none'}"
-        if _skipped:
-            _msg += f" | skipped: {', '.join(_skipped)}"
-            # Surface degraded ML readiness to operator via Telegram
+
+        # ── Background auto-training ──────────────────────────────────────────
+        def _bg_train(script: str, tag: str) -> None:
+            """Run a training script as a background subprocess; notify on completion."""
+            import subprocess
+            try:
+                proc = subprocess.run(
+                    [sys.executable, "-m", script],
+                    capture_output=True, text=True, timeout=600,
+                )
+                if proc.returncode == 0:
+                    logger.info("%s auto-train completed successfully", tag)
+                    try:
+                        telegram_bot.send_message(
+                            f"✅ {tag} auto-training complete",
+                            priority="normal",
+                        )
+                    except Exception:
+                        pass
+                else:
+                    logger.warning("%s auto-train failed: %s", tag, proc.stderr[:200])
+            except subprocess.TimeoutExpired:
+                logger.warning("%s auto-train timed out after 600s", tag)
+            except Exception as exc:
+                logger.warning("%s auto-train error: %s", tag, exc)
+
+        if _training:
+            _msg = (f"Model warmup complete in {_elapsed*1000:.1f}ms — "
+                    f"loaded: {', '.join(_loaded) or 'none'} | "
+                    f"auto-training: {', '.join(_training)}")
+            for _t in _training:
+                _script = "scripts.train_lgbm" if _t == "lgbm_ensemble" else "scripts.train_lgbm_price"
+                threading.Thread(
+                    target=_bg_train,
+                    args=(_script, _t),
+                    daemon=True,
+                    name=f"bg-train-{_t}",
+                ).start()
+            # Notify operator — not an error, just background work
             try:
                 telegram_bot.send_message(
-                    f"⚠️ Model warmup incomplete\n"
-                    f"Failed to load: {', '.join(_skipped)}\n"
-                    f"Bot continues but ML accuracy may be reduced.",
-                    priority="high",
-                    force=False,
+                    f"🔄 Auto-training models in background\n"
+                    f"Training: {', '.join(_training)}\n"
+                    f"Loaded: {', '.join(_loaded) or 'none'}\n"
+                    f"Bot is fully operational.",
+                    priority="normal",
                 )
             except Exception:
                 pass
-            self.log_agent.record("STARTUP", _msg, level="WARNING")
-            logger.warning(_msg)
+            self.log_agent.record("STARTUP", _msg)
+            logger.info(_msg)
         else:
+            _msg = f"Model warmup complete in {_elapsed*1000:.1f}ms — loaded: {', '.join(_loaded) if _loaded else 'none'}"
             logger.info(_msg)
             self.log_agent.record("STARTUP", _msg)
 
