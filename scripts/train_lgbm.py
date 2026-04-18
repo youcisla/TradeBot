@@ -52,9 +52,8 @@ logging.basicConfig(
 
 # Also log to logs/ml/train_lgbm_{date}.log
 from logging.handlers import TimedRotatingFileHandler
-from pathlib import Path
 
-_ML_LOG_DIR = Path(__file__).resolve().parents[2] / "logs" / "ml"
+_ML_LOG_DIR = ROOT / "logs" / "ml"
 _ML_LOG_DIR.mkdir(parents=True, exist_ok=True)
 _handler = TimedRotatingFileHandler(
     _ML_LOG_DIR / "train_lgbm.log",
