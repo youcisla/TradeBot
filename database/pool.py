@@ -33,8 +33,10 @@ class ConnectionPool:
         logger.info("PostgreSQL connection pool created")
 
     def _get_conn(self) -> psycopg2.extensions.connection:
-        """Get a connection from the pool, reconnecting if stale."""
-        assert self._pool is not None
+        """Get a connection from the pool, reconnecting if stale or uninitialized."""
+        if self._pool is None:
+            logger.warning("DB pool was None — reconnecting")
+            self._connect()
         conn = self._pool.getconn()
         try:
             conn.isolation_level  # triggers check
