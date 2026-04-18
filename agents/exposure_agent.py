@@ -149,7 +149,13 @@ class ExposureCoach:
                 "win_rate":    self._score_win_rate(),
                 "lgbm_conf":   self._score_lgbm_confidence(signal),
             }
-            return self._compute_directive(scores)
+            # _compute_directive is the only external call in this try block —
+            # all _score_X methods already use their own internal try/except.
+            try:
+                return self._compute_directive(scores)
+            except Exception:
+                logger.warning("ExposureCoach._compute_directive failed — skipping (fail-open)")
+                return ExposureDecision(skipped=True, reason="exception")
         except Exception:
             logger.warning("ExposureCoach.evaluate failed — skipping (fail-open)")
             return ExposureDecision(skipped=True, reason="exception")

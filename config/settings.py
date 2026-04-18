@@ -343,6 +343,7 @@ class TelegramSettings(BaseModel):
 
 class IntelligenceSettings(BaseModel):
     deepseek_api_key: str = ""
+    anthropic_api_key: str = ""
     alpha_vantage_key: str = ""
     twelve_data_key: str = ""
     fred_api_key: str = ""
@@ -857,6 +858,7 @@ def _build_settings() -> _Settings:
     # Intelligence
     intelligence = IntelligenceSettings(
         deepseek_api_key=_str("DEEPSEEK_API_KEY", ""),
+        anthropic_api_key=_str("ANTHROPIC_API_KEY", ""),
         alpha_vantage_key=_str("ALPHA_VANTAGE_KEY", ""),
         twelve_data_key=_str("TWELVE_DATA_KEY", ""),
         fred_api_key=_str("FRED_API_KEY", ""),
@@ -1301,6 +1303,7 @@ MT5_DB_SYNC_INTERVAL_SECONDS: int = settings.intelligence.mt5_db_sync_interval_s
 NEWS_CALENDAR_SOURCE: str = settings.intelligence.news_calendar_source
 FINNHUB_API_KEY: str = settings.intelligence.finnhub_api_key
 NEWS_BLACKOUT_MINUTES: int = settings.intelligence.news_blackout_minutes
+ANTHROPIC_API_KEY: str = settings.intelligence.anthropic_api_key
 DEEPSEEK_API_KEY: str = settings.intelligence.deepseek_api_key
 CRUCIX_URL: str = settings.intelligence.crucix_url
 

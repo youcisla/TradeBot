@@ -180,18 +180,15 @@ class Reflector:
         )
 
         try:
-            response = client.chat.completions.create(
-                model=settings.DEEPSEEK_MODEL,
-                messages=[
-                    {"role": "system", "content": _SYSTEM_PROMPT},
-                    {"role": "user",   "content": prompt},
-                ],
+            message = client.messages.create(
+                model="claude-sonnet-4-20250514",
                 max_tokens=500,
-                temperature=0.3,
+                system=_SYSTEM_PROMPT,
+                messages=[{"role": "user", "content": prompt}],
             )
-            lesson = response.choices[0].message.content.strip()
+            lesson = message.content[0].text.strip()
         except Exception as exc:
-            logger.warning("Reflector: DeepSeek API failed for trade %s: %s", trade.id, exc)
+            logger.warning("Reflector: Anthropic API failed for trade %s: %s", trade.id, exc)
             # Fall back to a structured rule-based lesson so memory still grows
             lesson = self._fallback_lesson(trade)
 
@@ -205,20 +202,31 @@ class Reflector:
             {r: m.size() for r, m in self.memories.items()},
         )
 
+        # Push a summary to Telegram (non-blocking — we're already in a daemon thread)
+        try:
+            from utils.telegram_bot import send_message
+            verdict_line = lesson.split("\n")[0]          # first line = VERDICT
+            pnl_sign = "✅" if (trade.pnl or 0) > 0 else "❌"
+            send_message(
+                f"{pnl_sign} *Trade closed* — {trade.direction} {trade.symbol} "
+                f"({trade.pnl:+.2f})\n\n{verdict_line}",
+                priority="normal",
+                dedupe_key=f"reflect:{trade.id}",
+            )
+        except Exception as exc:
+            logger.debug("Reflector: Telegram delivery failed: %s", exc)
+
     def _get_client(self):
         if self._client is not None:
             return self._client
-        if not settings.DEEPSEEK_API_KEY:
-            logger.debug("Reflector: DEEPSEEK_API_KEY not set — skipping LLM reflection")
+        if not settings.ANTHROPIC_API_KEY:
+            logger.debug("Reflector: ANTHROPIC_API_KEY not set — skipping LLM reflection")
             return None
         try:
-            from openai import OpenAI
-            self._client = OpenAI(
-                api_key=settings.DEEPSEEK_API_KEY,
-                base_url="https://api.deepseek.com",
-            )
+            import anthropic
+            self._client = anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY)
         except ImportError:
-            logger.error("Reflector: 'openai' package not installed")
+            logger.error("Reflector: 'anthropic' package not installed")
         return self._client
 
     @staticmethod

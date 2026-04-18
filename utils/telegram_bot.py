@@ -38,6 +38,9 @@ _last_sent_ts_by_key: dict[str, float] = {}
 _recent_sent_ts: deque[float] = deque()
 _suppressed_count: int = 0
 
+# Pending write actions awaiting /confirm — keyed by (from_user_id, action_name)
+_pending_actions: dict[tuple[int, str], str] = {}
+
 _PRIORITY_MARKER = {
     "critical": "🔴",
     "high": "🟠",
@@ -53,6 +56,7 @@ _HELP_TEXT = (
     "• /pause — block new entries\n"
     "• /resume — resume entries\n"
     "• /kill — close all + shutdown\n"
+    "• /hypothesis — run AI hypothesis test\n"
     "• /help — show this command list"
 )
 
@@ -306,6 +310,29 @@ def _maybe_emit_suppression_notice() -> None:
         logger.debug("Failed to send suppression notice", exc_info=True)
 
 
+def _execute_pending_action(from_user_id: int, send_fn: Callable[[str], None]) -> None:
+    """Execute a previously confirmed write action."""
+    # Try exact action match first (any action), then clear stale entries
+    found = False
+    for (uid, action), warning in list(_pending_actions.items()):
+        if uid == from_user_id:
+            if action == "pause_bot":
+                _pause_flag.set()
+                send_fn("⏸️ Bot PAUSED — no new trades will be opened.", priority="high", force=True)
+                logger.info("Bot paused via Claude confirm")
+            elif action == "resume_bot":
+                _pause_flag.clear()
+                send_fn("▶️ Bot RESUMED — normal operation.", priority="high", force=True)
+                logger.info("Bot resumed via Claude confirm")
+            else:
+                send_fn(f"⚠️ Unknown pending action: {action}", priority="normal", force=True)
+            del _pending_actions[(uid, action)]
+            found = True
+            break
+    if not found:
+        send_fn("⚠️ No pending action to confirm. Send a command first.", priority="normal", force=True)
+
+
 # ── Inbound polling ─────────────────────────────────────────────────────
 
 def _poll_updates() -> None:
@@ -426,8 +453,43 @@ def _handle_command(
         _pause_flag.clear()
         send_message("▶️ Bot RESUMED — normal operation.", priority="high", force=True)
         logger.info("Bot resumed via Telegram")
+    elif cmd == "/confirm":
+        _execute_pending_action(from_user_id, send_message)
+    elif cmd == "/hypothesis":
+        def _run_hypothesis():
+            try:
+                from agents.hypothesis_agent import HypothesisAgent
+                from database.db import Database
+                db = Database()
+                agent = HypothesisAgent(db)
+                result = agent.run_cycle()
+                send_message(result, priority="normal", dedupe_key="hypothesis")
+            except Exception as exc:
+                logger.warning("HypothesisAgent failed: %s", exc)
+                send_message("⚠️ Hypothesis agent failed.", priority="normal")
+        threading.Thread(target=_run_hypothesis, daemon=True).start()
+        send_message("🔬 Running hypothesis cycle... (~60s)", priority="normal")
     elif cmd in ("/help", "/start"):
         send_message(_HELP_TEXT, priority="high", force=True)
+    else:
+        # Free-text query -> Claude agent
+        try:
+            from agents.claude_agent import answer as claude_answer
+            result = claude_answer(text)
+            if isinstance(result, tuple):
+                reply, pending = result
+                if pending:
+                    action_key = (from_user_id, pending["action"])
+                    _pending_actions[action_key] = pending.get("warning", "")
+                    send_message(reply, priority="high", force=True,
+                                  dedupe_key=f"claude:{text[:40]}")
+                else:
+                    send_message(reply, priority="normal", dedupe_key=f"claude:{text[:40]}")
+            else:
+                send_message(result, priority="normal", dedupe_key=f"claude:{text[:40]}")
+        except Exception as exc:
+            logger.warning("ClaudeAgent failed: %s", exc)
+            send_message("⚠️ Claude agent unavailable.", priority="normal")
 
 
 def start_polling() -> threading.Thread:

@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import signal
 import sys
+import threading
 import time
 from datetime import UTC, datetime
 from pathlib import Path
@@ -613,6 +614,9 @@ class TradingBot:
         _symbol_fail_count: dict[str, int] = {}
         _symbol_disabled_until: dict[str, float] = {}
 
+        # ── Session brief tracking ─────────────────────────────────────────
+        _brief_sent_minutes: set[str] = set()   # "session:YYYYMMDDHHMM" deduplication
+
         try:
             _now_utc = datetime.now(UTC)
             _now_mono = time.monotonic()
@@ -637,6 +641,30 @@ class TradingBot:
         except Exception:
             logger.warning("Could not load symbol fault state from DB — starting fresh")
 
+        def _should_send_brief(now_utc: datetime, session: str) -> bool:
+            """Fire once per session open, 5 minutes before."""
+            triggers = {"london": (7, 55), "newyork": (12, 55)}
+            target = triggers.get(session.lower())
+            if not target:
+                return False
+            key = f"{session}:{now_utc.strftime('%Y%m%d%H%M')}"
+            if now_utc.hour == target[0] and now_utc.minute == target[1] and key not in _brief_sent_minutes:
+                _brief_sent_minutes.add(key)
+                return True
+            return False
+
+        def _send_session_brief(session: str) -> None:
+            try:
+                from agents.briefing_agent import generate_brief
+                brief = generate_brief(session)
+                telegram_bot.send_message(
+                    f"📊 *{session.upper()} SESSION BRIEF*\n\n{brief}",
+                    priority="high",
+                    dedupe_key=f"brief:{session}",
+                )
+            except Exception as exc:
+                logger.warning("BriefingAgent failed: %s", exc)
+
         while not self._shutdown:
             # ── KILL file sentinel — emergency stop ───────────────────────────
             _kill_file = Path(__file__).resolve().parent.parent / "KILL"
@@ -658,6 +686,13 @@ class TradingBot:
             loop_count += 1
             scanned_before = _metrics.get("scanned_symbols", 0)
             _active_session = current_session(datetime.now(UTC))
+            if _should_send_brief(datetime.now(UTC), _active_session):
+                threading.Thread(
+                    target=_send_session_brief,
+                    args=(_active_session,),
+                    daemon=True,
+                    name="session-brief",
+                ).start()
             if _active_session in {"london", "newyork", "overlap"}:
                 _base_cooldown = float(settings.SCAN_COOLDOWN_SECONDS_LONDON_NY)
             else:
