@@ -423,7 +423,7 @@ class TradingBot:
             )
 
         def _graph_callback() -> tuple[str, bytes] | None:
-            return build_pnl_curve_png(db, days=settings.TELEGRAM_CHART_DAYS)
+            return build_pnl_curve_png(self.db, days=settings.TELEGRAM_CHART_DAYS)
 
         telegram_bot.register_callbacks(None, _status_callback, _graph_callback)
         telegram_bot.start_polling()
