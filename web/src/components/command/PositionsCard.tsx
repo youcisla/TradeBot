@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useAppShell } from "@/components/AppShell";
 import { DirectionBadge } from "@/components/shared/DirectionBadge";
 import { formatPrice, fmtPnl, relTime } from "@/lib/format";
-import { sendCommand } from "@/lib/ws";
+import { sendCommand } from "@/lib/api";
 
 export default function PositionsCard() {
   const { openTrades } = useAppShell();

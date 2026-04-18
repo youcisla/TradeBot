@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useAppShell } from "@/components/AppShell";
 import Modal from "@/components/shared/Modal";
-import { sendCommand } from "@/lib/ws";
+import { sendCommand } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 type ActionType = "pause" | "resume" | "close_all" | "kill";

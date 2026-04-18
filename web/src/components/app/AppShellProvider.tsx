@@ -1,18 +1,45 @@
 "use client";
 
 import { createContext, useContext, useEffect, useRef, useState } from "react";
-import { useBotStatus, useOpenTrades, useIntelligence } from "@/lib/swr";
+import useSWR from "swr";
 import type { AgentEvent } from "@/types/api";
-import type { BotStatus, Intelligence, Trade } from "@/lib/swr";
+import { useBotStatus, type Trade } from "@/lib/swr";
+
+// ── Fetcher ───────────────────────────────────────────────────────────────────
+
+const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 // ── Context types ─────────────────────────────────────────────────────────────
 
 interface AppShellCtx {
-  status: BotStatus | undefined;
+  status: {
+    state: string;
+    equity: number;
+    balance: number;
+    daily_pnl: number;
+    open_trades: number;
+    loop_count?: number;
+    last_tick?: string | null;
+    uptime_start?: string | null;
+    guard_status?: unknown[];
+    broker_account?: string;
+    broker_server?: string;
+    broker_name?: string;
+    leverage?: number;
+    last_scan_latency_ms?: number;
+    last_reconnect_at?: string;
+  } | undefined;
   isRunning: boolean;
   wsEvents: AgentEvent[];
   openTrades: Trade[];
-  intelligence: Intelligence | undefined;
+  intelligence: {
+    session: string;
+    sessionLabel: string;
+    spreadCondition: string;
+    marketRegime: string;
+    vix?: number;
+    dailyLossPct?: number;
+  } | undefined;
 }
 
 const AppShellContext = createContext<AppShellCtx>({
@@ -84,15 +111,18 @@ function useGlobalWebSocket() {
 // ── Provider ──────────────────────────────────────────────────────────────────
 
 export function AppShellProvider({ children }: { children: React.ReactNode }) {
-  const botStatus = useBotStatus();
-  const openTradesHook = useOpenTrades();
-  const intelligenceHook = useIntelligence();
+  const { data: dashboard } = useSWR("/api/dashboard-summary", fetcher, {
+    revalidateOnFocus: false,
+    keepPreviousData: true,
+    errorRetryCount: 3,
+    refreshInterval: 5_000,
+  });
+
   const wsEvents = useGlobalWebSocket();
 
-  const status = botStatus.data;
-  const openTrades = openTradesHook.data ?? [];
-  const intelligence = intelligenceHook.data;
-  const isRunning = status?.state === "RUNNING";
+  const status     = dashboard?.status;
+  const openTrades  = dashboard?.openTrades ?? [];
+  const isRunning   = status?.state === "RUNNING";
 
   return (
     <AppShellContext.Provider
@@ -101,7 +131,7 @@ export function AppShellProvider({ children }: { children: React.ReactNode }) {
         isRunning,
         wsEvents,
         openTrades,
-        intelligence,
+        intelligence: undefined,
       }}
     >
       {children}
