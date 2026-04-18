@@ -14,12 +14,12 @@ Never skip step 1-3. Never write code based on memory alone. Always read → the
 ## Project Identity
 
 **Name:** PulseTrade TradingBot
-**Stack:** Python (bot) + Next.js 14 App Router (dashboard)
+**Stack:** Python (bot) + Next.js 16 App Router (dashboard)
 **Broker:** PU Prime via MetaTrader 5
 **DB:** PostgreSQL (Supabase) — 7 tables
 **Dashboard URL:** Next.js app in `web/`
-**Primary strategy:** LSTM Neural Network (per-symbol, auto-trained on 2yr H1 history)
-**Legacy strategies:** ICT/SMC engine, SMA Crossover (kept for reference, not active in main loop)
+**Primary strategy:** ICT/SMC Engine (10 modules) + LSTM Neural Network (per-symbol, auto-trained on 2yr H1 history)
+**NL interface:** DeepSeek-powered Telegram via `agents/claude_agent.py`, `agents/briefing_agent.py`, `agents/hypothesis_agent.py`
 
 ---
 
@@ -91,6 +91,9 @@ agents/
   guards.py                      ← GuardPipeline + 7 guards
   exposure_coach.py              ← Concentration/correlation advisor
   reflector.py                   ← Post-trade reflection utility
+  claude_agent.py               ← DeepSeek NL Telegram agent (read/write commands)
+  briefing_agent.py             ← DeepSeek pre-session market brief generator
+  hypothesis_agent.py            ← DeepSeek auto-hypothesis tester (backtest + verdict)
   hku_client.py                ← HKU marketplace API client
   hku_signal_adapter.py        ← HKU signal normalizer (0.80 discount factor)
 
@@ -162,8 +165,8 @@ config/
 
 scripts/
   backtest.py                    ← CLI backtest runner
-  train_lgbm.py                  ← Train LGBM ensemble
-  train_lgbm_price.py            ← Train LGBM price model
+  train_lgbm.py                  ← Train LGBM ensemble (auto-trains at bot startup)
+  train_lgbm_price.py            ← Train LGBM price model per symbol (MT5-only, auto-trains at bot startup)
   ops_doctor.py                  ← Ops diagnostics runner
   first_run_wizard.py            ← Guided first-run setup
   replay_session.py              ← Replay a past trading session
@@ -212,7 +215,7 @@ When you learn something new about this project (new file, new pattern, design d
 
 ---
 
-## Frontend Architecture (2026-04-13 Redesign)
+## Frontend Architecture (2026-04-13 Redesign, updated 2026-04-18)
 
 The dashboard was migrated from inline styles to **Tailwind CSS v3 + shadcn/ui + TanStack Table**.
 

@@ -7,18 +7,21 @@
 
 An autonomous algorithmic trading system for MetaTrader 5 with a layered ML model stack, 12-agent pipeline, and a Next.js real-time dashboard. Designed to trade 30 instruments across forex, commodities, crypto, and exotics on the H1 timeframe.
 
+> **2026-04-18 — DeepSeek NL layer:** The bot now runs a natural language interface via Telegram (`/brief`, `/hypothesis`, free-text commands) powered by DeepSeek. LGBM models auto-train in background on first startup if no trained model is found.
+
 ---
 
 ## Feature Highlights
 
-- **LSTM Neural Network** — per-symbol model trained on 2 years of H1 history; auto-retrained every 20 closed trades
+- **LSTM Neural Network** — per-symbol model trained on 2 years of H1 history; auto-trained at startup and retrained every 20 closed trades
 - **ICT / SMC Engine** — 10-module Inner Circle Trader analysis (structure, liquidity, FVGs, order blocks, sessions, bias, scoring, 6 setup models)
-- **Trade-History LightGBM** — classifier trained on closed-trade features to filter low-probability signals
-- **Price-History LightGBM** — per-symbol LightGBM trained on 12 OHLCV-derived features; runs as a secondary signal gate
+- **Trade-History LightGBM** — classifier trained on closed-trade features to filter low-probability signals; auto-trains in background on startup if not yet trained
+- **Price-History LightGBM** — per-symbol LightGBM trained on 12 OHLCV-derived features; auto-trains in background on startup; all data pulled from MT5
 - **GARCH(1,1) + Kalman Filter** — real-time volatility forecasting and price-velocity estimation in every `MarketContext`
 - **Crucix Macro Layer** — 27 global data sources (VIX, yield curve, geopolitics, OSINT); flash blackout and adaptive lot scaling
 - **Scan-Rank-Execute Pipeline** — evaluates all 30 symbols, ranks signals by final confidence, executes the highest-quality opportunity
-- **Real-Time Dashboard** — Next.js 14 UI on Vercel; agent feed, open trades, equity curve, command panel
+- **DeepSeek Natural Language Interface** — Telegram NL commands (`/brief`, `/hypothesis`, free-text); pre-session market briefs; auto-hypothesis testing cycle
+- **Real-Time Dashboard** — Next.js 16 UI on Vercel; agent feed, open trades, equity curve, command panel
 - **Intelligent Command Center** — Adaptive dashboard that surfaces what matters: live session chip, spread condition badge, market regime, VIX, equity drawdown gauges, severity-sorted agent feed, and AI-generated market insight
 - **Strategy Plugin System** — inject custom strategies at runtime without modifying orchestration code
 
@@ -64,9 +67,7 @@ Strategy Signal  (LSTM | ICT/SMC | SMA)
                Final Score --> CouncilAgent --> RiskAgent --> Execution
 ```
 
-Both filters fail-open (signal passes unchanged if the model file is missing) and are gated by `LGBM_ENSEMBLE_ENABLED`.
-
-### Price-History LGBM — 12 Features
+Both filters fail-open (signal passes unchanged if the model file is missing) and are gated by `LGBM_ENSEMBLE_ENABLED`. LGBM models auto-train in the background at bot startup if no trained model is found.
 
 | Feature | Description |
 |---|---|
@@ -338,12 +339,14 @@ Create a Supabase project (or any PostgreSQL 14+ instance). The bot creates all 
 
 ## Training ML Models
 
+Both LGBM models auto-train in the background when the bot starts and no trained model is found. Logs are written to `logs/ml/`.
+
 ### Price-History LightGBM (per-symbol)
 
-Downloads 1 year of H1 OHLCV data from MT5 and trains a LightGBM 3-class classifier for each symbol.
+Downloads OHLCV data from MT5 and trains a LightGBM 3-class classifier for each symbol. Data always comes from MT5 (no CSV fallback).
 
 ```bash
-# Train all 30 symbols with default settings
+# Train all symbols with default settings (H1, 2 years)
 python -m scripts.train_lgbm_price
 
 # Train specific symbols only
@@ -351,9 +354,6 @@ python -m scripts.train_lgbm_price --symbols EURUSD GBPUSD XAUUSD
 
 # Tune label sensitivity (forward bars and ATR multiplier)
 python -m scripts.train_lgbm_price --forward-bars 3 --atr-mult 1.2
-
-# Offline mode -- skip download and use existing CSV files
-python -m scripts.train_lgbm_price --no-download
 ```
 
 Saved to: `models/lgbm_price_{SYMBOL}.pkl`
@@ -459,6 +459,8 @@ Every signal passes a mandatory 6-step validation gate before a trade is opened:
 |---|---|
 | `logs/backend/backend_YYYY-MM-DD.log` | Full DEBUG-level rotating log (5 MB, 5 backups) |
 | `logs/backend/trade_journal.csv` | Every trade with all fields -- importable into Excel or pandas |
+| `logs/ml/train_lgbm.log` | LGBMEnsemble training log (daily rotating, 14-day retention) |
+| `logs/ml/train_lgbm_price.log` | Per-symbol LGBM price model training log (daily rotating, 14-day retention) |
 | `logs/frontend/dev_server.log` | Next.js (frontend) stdout/stderr |
 
 ### Telegram Alerts

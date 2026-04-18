@@ -12,7 +12,7 @@ date_updated: "2026-04-06"
 
 ## Identity
 - **Name:** PulseTrade TradingBot
-- **Stack:** Python (bot) + Next.js 14 App Router (dashboard)
+- **Stack:** Python (bot) + Next.js 16 App Router (dashboard)
 - **Broker:** PU Prime via MetaTrader 5 (Windows only)
 - **DB:** PostgreSQL (Supabase) — 7 tables
 - **Primary strategy:** LSTM Neural Network (per-symbol, auto-trained on 2yr H1 history)
@@ -175,11 +175,11 @@ All values from `.env`, never hardcoded. Key settings:
 ---
 
 ## Frontend Dashboard (`web/`)
-- **Framework:** Next.js 14 App Router
+- **Framework:** Next.js 16 App Router
 - **Auth:** NextAuth.js with JWT strategy + Edge middleware (`src/middleware.ts`)
-- **Styling:** NO Tailwind on new/modified files — use inline styles only
-- **No `className` on new JSX** (existing ones being migrated)
-- **Pages:** overview, trades, analytics, ict, learning, strategy, chart, settings, agent_theater, world
+- **Styling:** Tailwind CSS v3 + shadcn/ui (manually installed, no `npx shadcn add`)
+- **No `className` on new JSX** — use design tokens via CSS custom properties
+- **Pages:** dashboard, history, analytics, risk, chart, settings, learning, strategy, ict, system
 
 ### Dashboard API routes (`web/src/app/api/`)
 `/api/status`, `/api/world`, `/api/trades`, `/api/events`, `/api/learning`, `/api/analytics`, `/api/ict`, `/api/candles`, `/api/commands`
