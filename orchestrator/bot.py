@@ -409,10 +409,10 @@ class TradingBot:
 
         # ── Telegram ─────────────────────────────────────────────────────
         def _status_callback() -> str:
-            equity = broker.get_equity()
-            balance = broker.get_balance()
+            equity = self.broker.get_equity()
+            balance = self.broker.get_balance()
             open_count = len(trade_manager.get_open_trades())
-            mt5_restarts = getattr(broker, "connection_count", 0)
+            mt5_restarts = getattr(self.broker, "connection_count", 0)
             return (
                 "📡 Live Bot Status\n"
                 f"Balance: {balance:.2f} | Equity: {equity:.2f}\n"
