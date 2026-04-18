@@ -77,7 +77,7 @@ export async function GET() {
       label: "Intelligence",
       items: [
         { key: "CRUCIX_ENABLED",    value: env.CRUCIX_ENABLED    ?? "false" },
-        { key: "CRUCIX_URL",       value: env.CRUCIX_URL       ?? "http://localhost:3001" },
+        { key: "CRUCIX_URL",       value: env.CRUCIX_URL       ?? "https://crucix-pi.vercel.app/" },
         { key: "VIX_SOURCE",        value: env.VIX_SOURCE        ?? "yfinance" },
         { key: "NEWS_FILTER_ENABLED", value: env.NEWS_FILTER_ENABLED ?? "true" },
       ],

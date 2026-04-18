@@ -169,7 +169,7 @@ export default function SettingsPage() {
               {status.crucix_enabled ? "Connected" : "Disabled"}
             </span>
           </div>
-          <Row label="Endpoint"     value={status.crucix_url ?? "http://localhost:3001"} mono />
+          <Row label="Endpoint"     value={status.crucix_url ?? "https://crucix-pi.vercel.app/"} mono />
           <Row label="Last Signal" value={relTime(status.crucix_last_signal)} />
           <Row label="News Filter" value={status.news_filter_enabled ? "Active" : "Off"} />
         </Panel>
