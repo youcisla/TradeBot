@@ -12,14 +12,11 @@ so training and inference are guaranteed to use exactly the same representation.
 
 Usage::
 
-    # All ACTIVE_SYMBOLS, 2 years H1 (downloads from MT5 if needed)
+    # All ACTIVE_SYMBOLS, 2 years H1 (pulls from MT5)
     python -m scripts.train_lgbm_price
 
     # Specific symbols, 3 years
     python -m scripts.train_lgbm_price --symbols EURUSD GBPUSD USDJPY --years 3
-
-    # Offline mode — only use existing data/history/*.csv files
-    python -m scripts.train_lgbm_price --no-download
 
     # Custom labelling window
     python -m scripts.train_lgbm_price --forward-bars 3 --atr-mult 1.2
@@ -68,7 +65,6 @@ logging.getLogger().addHandler(_handler)
 logger = logging.getLogger(__name__)
 
 # ── Directories ──────────────────────────────────────────────────────────────
-DATA_DIR  = _ROOT / "data" / "history"
 MODEL_DIR = _ROOT / "models"
 
 # ── Feature / label constants ────────────────────────────────────────────────
@@ -113,54 +109,83 @@ def _session_from_utc_hour(hour: int) -> float:
     return 2.0                                      # asian
 
 
-# ── Data layer ───────────────────────────────────────────────────────────────
+# ── Data layer — MT5 only ───────────────────────────────────────────────────
 
-def _find_existing_csv(symbol: str, timeframe: str = "H1") -> Path | None:
-    """Return the most recently dated history CSV for symbol/timeframe, or None."""
-    if not DATA_DIR.exists():
-        return None
-    matches = sorted(DATA_DIR.glob(f"{symbol}_{timeframe}_*.csv"), reverse=True)
-    return matches[0] if matches else None
+def _fetch_ohlcv_from_mt5(
+    symbol: str,
+    timeframe: str,
+    years: int,
+) -> pd.DataFrame | None:
+    """Fetch OHLCV bars for *symbol* from MT5 and return a sorted DataFrame.
 
+    Tries ``backtesting.data_downloader.download_history`` first (batch export),
+    then falls back to the live MT5Connector for a direct candle pull.
+    """
+    end   = datetime.now(UTC)
+    start = end - timedelta(days=365 * years)
 
-def _download_history(symbol: str, years: int, timeframe: str) -> Path | None:
-    """Download from MT5 via backtesting.data_downloader.download_history()."""
+    # Try backtesting helper first (faster for large histories)
     try:
         from backtesting.data_downloader import download_history
-        end   = datetime.now(UTC)
-        start = end - timedelta(days=365 * years)
-        return download_history(symbol, timeframe, start, end)
-    except Exception as exc:
-        logger.error("MT5 download failed for %s: %s", symbol, exc)
-        return None
 
-
-def _load_csv(path: Path) -> pd.DataFrame | None:
-    """Load a history CSV → sorted DataFrame, or None on failure."""
-    try:
-        df = pd.read_csv(path)
-        # Parse the time column (handles both ISO strings and Unix timestamps)
-        if "time" not in df.columns:
-            logger.error("'time' column missing in %s", path)
-            return None
-        # Try ISO first; fall back to epoch seconds
-        try:
-            df["time"] = pd.to_datetime(df["time"], utc=True)
-        except Exception:
-            df["time"] = pd.to_datetime(df["time"].astype(float), unit="s", utc=True)
-
-        for col in ("open", "high", "low", "close", "tick_volume"):
-            if col not in df.columns:
-                logger.error("Missing column '%s' in %s", col, path)
+        path = download_history(symbol, timeframe, start, end)
+        if path and path.exists():
+            df = pd.read_csv(path)
+            if "time" not in df.columns:
+                logger.error("'time' column missing in downloaded CSV for %s", symbol)
                 return None
-        if "spread" not in df.columns:
-            df["spread"] = 0.0
+            try:
+                df["time"] = pd.to_datetime(df["time"], utc=True)
+            except Exception:
+                df["time"] = pd.to_datetime(df["time"].astype(float), unit="s", utc=True)
+            for col in ("open", "high", "low", "close", "tick_volume"):
+                if col not in df.columns:
+                    logger.error("Missing column '%s' for %s", col, symbol)
+                    return None
+            if "spread" not in df.columns:
+                df["spread"] = 0.0
+            df = df.sort_values("time").reset_index(drop=True)
+            logger.info("MT5 batch-exported %d bars for %s", len(df), symbol)
+            return df
+    except Exception as exc:
+        logger.debug("download_history unavailable (%s), trying live broker", exc)
 
+    # Fallback: live MT5Connector.get_candles()
+    try:
+        from broker.mt5_connector import MT5Connector
+
+        broker = MT5Connector()
+        broker.connect()
+        try:
+            candles = broker.get_candles(symbol, timeframe, count=5000)
+        finally:
+            broker.disconnect()
+
+        if not candles:
+            logger.error("MT5 returned no candles for %s", symbol)
+            return None
+
+        rows = []
+        for c in candles:
+            rows.append({
+                "time":        c["time"],
+                "open":        c["open"],
+                "high":        c["high"],
+                "low":         c["low"],
+                "close":       c["close"],
+                "tick_volume": c.get("tick_volume", c.get("volume", 0)),
+                "spread":      c.get("spread", 0),
+            })
+        df = pd.DataFrame(rows)
+        df["time"] = pd.to_datetime(df["time"], utc=True)
         df = df.sort_values("time").reset_index(drop=True)
-        logger.info("Loaded %d rows from %s", len(df), path.name)
+        logger.info("MT5 live fetch %d bars for %s", len(df), symbol)
         return df
     except Exception as exc:
-        logger.error("Failed to load %s: %s", path, exc)
+        logger.error(
+            "MT5 fetch failed for %s — ensure the terminal is running: %s",
+            symbol, exc,
+        )
         return None
 
 
@@ -413,10 +438,6 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="ATR multiplier for BUY/SELL threshold (default: 1.0).",
     )
     parser.add_argument(
-        "--no-download", action="store_true", dest="no_download",
-        help="Do not connect to MT5; only use existing local CSVs.",
-    )
-    parser.add_argument(
         "--min-samples", type=int, default=100, dest="min_samples",
         help="Minimum valid training samples per symbol (default: 100).",
     )
@@ -464,25 +485,9 @@ def main(argv: list[str] | None = None) -> int:
         logger.info("=" * 60)
         logger.info("Symbol: %s", sym)
 
-        # ── Locate or download history ────────────────────────────────────
-        csv_path = _find_existing_csv(sym, args.timeframe)
-        if csv_path:
-            logger.info("Using existing CSV: %s", csv_path)
-        elif not args.no_download:
-            logger.info("No local CSV — downloading from MT5…")
-            csv_path = _download_history(sym, args.years, args.timeframe)
-        else:
-            logger.warning("%s — no CSV found and --no-download set, skipping.", sym)
-            failed.append(sym)
-            continue
-
-        if not csv_path or not csv_path.exists():
-            logger.error("%s — could not obtain history data, skipping.", sym)
-            failed.append(sym)
-            continue
-
-        # ── Load ──────────────────────────────────────────────────────────
-        df = _load_csv(csv_path)
+        # ── Fetch from MT5 ───────────────────────────────────────────────
+        logger.info("Fetching %s %s from MT5 (%.1f years)…", sym, args.timeframe, args.years)
+        df = _fetch_ohlcv_from_mt5(sym, args.timeframe, args.years)
         if df is None:
             failed.append(sym)
             continue

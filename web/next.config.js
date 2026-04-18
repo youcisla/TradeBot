@@ -70,13 +70,6 @@ const nextConfig = {
           { key: "Cache-Control", value: "public, max-age=30, stale-while-revalidate=60" },
         ],
       },
-      // Static Next.js assets — immutable, long cache
-      {
-        source: "/_next/static/:path*",
-        headers: [
-          { key: "Cache-Control", value: "public, max-age=31536000, immutable" },
-        ],
-      },
       // Google Fonts — allow caching
       {
         source: "/fonts/:path*",
