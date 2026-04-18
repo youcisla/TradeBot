@@ -49,6 +49,23 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(message)s",
     datefmt="%H:%M:%S",
 )
+
+# Also log to logs/ml/train_lgbm_{date}.log
+from logging.handlers import TimedRotatingFileHandler
+from pathlib import Path
+
+_ML_LOG_DIR = Path(__file__).resolve().parents[2] / "logs" / "ml"
+_ML_LOG_DIR.mkdir(parents=True, exist_ok=True)
+_handler = TimedRotatingFileHandler(
+    _ML_LOG_DIR / "train_lgbm.log",
+    when="midnight",
+    interval=1,
+    backupCount=14,
+    encoding="utf-8",
+)
+_handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s", "%H:%M:%S"))
+logging.getLogger().addHandler(_handler)
+
 logger = logging.getLogger("train_lgbm")
 
 # ── feature engineering ───────────────────────────────────────────────────

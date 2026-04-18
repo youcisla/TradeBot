@@ -44,6 +44,27 @@ sys.path.insert(0, str(_ROOT))
 
 from config.symbols import ACTIVE_SYMBOLS  # noqa: E402
 
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    datefmt="%H:%M:%S",
+)
+
+# Also log to logs/ml/train_lgbm_price_{date}.log
+from logging.handlers import TimedRotatingFileHandler
+
+_ML_LOG_DIR = _ROOT / "logs" / "ml"
+_ML_LOG_DIR.mkdir(parents=True, exist_ok=True)
+_handler = TimedRotatingFileHandler(
+    _ML_LOG_DIR / "train_lgbm_price.log",
+    when="midnight",
+    interval=1,
+    backupCount=14,
+    encoding="utf-8",
+)
+_handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s", "%H:%M:%S"))
+logging.getLogger().addHandler(_handler)
+
 logger = logging.getLogger(__name__)
 
 # ── Directories ──────────────────────────────────────────────────────────────
