@@ -2767,6 +2767,14 @@ def pip_value(symbol: str) -> float:
     """Return pip size for symbol."""
     return PIP_VALUES.get(symbol, 0.0001)
 
+def contract_size(symbol: str) -> float:
+    """Return contract size (units per lot) from broker data."""
+    return CONTRACT_SIZES.get(symbol, 100_000.0)
+
+def asset_class(symbol: str) -> str:
+    """Return asset class tag for symbol."""
+    return SYMBOL_CLASS.get(symbol, "unknown")
+
 def commission_per_lot(symbol: str) -> float:
     """Return round-trip commission per standard lot for *symbol*.
 
@@ -2782,14 +2790,6 @@ def commission_per_lot(symbol: str) -> float:
     elif ac == "exotic":
         return settings.COMMISSION_PER_LOT_EXOTIC
     return settings.COMMISSION_PER_LOT  # forex_major, forex_cross, stock_cfd
-
-def contract_size(symbol: str) -> float:
-    """Return contract size (units per lot) from broker data."""
-    return CONTRACT_SIZES.get(symbol, 100_000.0)
-
-def asset_class(symbol: str) -> str:
-    """Return asset class tag for symbol."""
-    return SYMBOL_CLASS.get(symbol, "unknown")
 
 # ── Priority subset (fast scan ~60 symbols) ────────────────────
 # Curated high-liquidity instruments — preserved across re-generations.
