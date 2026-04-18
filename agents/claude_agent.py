@@ -1,4 +1,4 @@
-"""ClaudeAgent — answers operator queries using MCP tool data."""
+"""ClaudeAgent — answers operator queries using MCP tool data (DeepSeek)."""
 
 import json
 import logging
@@ -20,21 +20,21 @@ Be concise: 3-5 sentences max unless asked for detail.
 Always ground your answer in the live data from tools; never invent numbers.\
 """
 
-_TOOLS = [
+_FUNCTIONS = [
     {
         "name": "bot_status",
         "description": "Return bot heartbeat: uptime, last-seen agents, iteration count.",
-        "input_schema": {"type": "object", "properties": {}, "required": []},
+        "parameters": {"type": "object", "properties": {}, "required": []},
     },
     {
         "name": "open_trades",
         "description": "Return all currently open broker positions.",
-        "input_schema": {"type": "object", "properties": {}, "required": []},
+        "parameters": {"type": "object", "properties": {}, "required": []},
     },
     {
         "name": "agent_feed",
         "description": "Return the last N events from the bot event log.",
-        "input_schema": {
+        "parameters": {
             "type": "object",
             "properties": {"n": {"type": "integer", "description": "Number of events (default 20)"}},
             "required": [],
@@ -43,91 +43,93 @@ _TOOLS = [
     {
         "name": "macro_snapshot",
         "description": "Return the latest macro environment data (VIX, DXY, FRED).",
-        "input_schema": {"type": "object", "properties": {}, "required": []},
+        "parameters": {"type": "object", "properties": {}, "required": []},
     },
     {
         "name": "pause_bot",
         "description": "Pause new trade entries. Does NOT close open positions.",
-        "input_schema": {"type": "object", "properties": {}, "required": []},
+        "parameters": {"type": "object", "properties": {}, "required": []},
     },
     {
         "name": "resume_bot",
         "description": "Resume normal trade entry after a pause.",
-        "input_schema": {"type": "object", "properties": {}, "required": []},
+        "parameters": {"type": "object", "properties": {}, "required": []},
     },
 ]
 
-_TOOL_DISPATCH = {
+_FUNCTION_MAP = {
     "bot_status":     lambda _: _read_heartbeat(),
     "open_trades":    lambda _: _open_trades_summary(),
     "agent_feed":     lambda inp: _tail_event_log(int(inp.get("n", 20))),
     "macro_snapshot": lambda _: _get_macro_snapshot(),
     "pause_bot":      lambda _: {"_pending": True, "action": "pause_bot",
-                                 "_warning": "⚠️ About to PAUSE the bot. Reply /confirm to proceed."},
+                                  "_warning": "⚠️ About to PAUSE the bot. Reply /confirm to proceed."},
     "resume_bot":     lambda _: {"_pending": True, "action": "resume_bot",
-                                 "_warning": "⚠️ About to RESUME the bot. Reply /confirm to proceed."},
+                                  "_warning": "⚠️ About to RESUME the bot. Reply /confirm to proceed."},
 }
 
 
 def answer(user_message: str) -> tuple[str, dict | None] | str:
-    """Run a single-turn agentic loop: Claude -> tool calls -> final reply.
+    """Run a single-turn agentic loop: DeepSeek -> function calls -> final reply.
 
     Returns:
         str — plain reply (read query)
         tuple[str, dict] — reply text and pending action to confirm (write query)
     """
-    if not settings.ANTHROPIC_API_KEY:
-        return "Claude agent unavailable: ANTHROPIC_API_KEY not set.", None
+    if not settings.DEEPSEEK_API_KEY:
+        return "DeepSeek agent unavailable: DEEPSEEK_API_KEY not set.", None
 
     try:
-        import anthropic
+        from openai import OpenAI
     except ImportError:
-        return "Claude agent unavailable: 'anthropic' package not installed.", None
+        return "DeepSeek agent unavailable: 'openai' package not installed.", None
 
-    client = anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY)
+    client = OpenAI(
+        api_key=settings.DEEPSEEK_API_KEY,
+        base_url="https://api.deepseek.com",
+    )
     messages = [{"role": "user", "content": user_message}]
 
-    for _ in range(5):   # max 5 tool-call rounds
-        response = client.messages.create(
-            model="claude-sonnet-4-20250514",
-            max_tokens=600,
-            system=_SYSTEM,
-            tools=_TOOLS,
+    for _ in range(5):   # max 5 function-call rounds
+        response = client.chat.completions.create(
+            model=settings.DEEPSEEK_MODEL,
             messages=messages,
+            tools=[{"type": "function", "function": f} for f in _FUNCTIONS],
+            tool_choice="auto",
+            max_tokens=600,
         )
-        messages.append({"role": "assistant", "content": response.content})
+        msg = response.choices[0].message
+        messages.append(msg)
 
-        if response.stop_reason == "end_turn":
-            # Extract final text block
-            for block in response.content:
-                if block.type == "text":
-                    return block.text, None
-            return "(no text response)", None
+        if msg.function_call is None:
+            return msg.content or "(no text response)", None
 
-        # Process tool_use blocks
+        # Process function_call blocks
         tool_results = []
         pending: dict | None = None
-        for block in response.content:
-            if block.type == "tool_use":
-                fn = _TOOL_DISPATCH.get(block.name)
-                result_dict = fn(block.input) if fn else {"error": "unknown tool"}
-                if isinstance(result_dict, dict) and result_dict.get("_pending"):
-                    pending = result_dict
-                    result_text = result_dict.get("_warning", "⚠️ Confirm this action.")
-                else:
-                    result_text = json.dumps(result_dict)
-                tool_results.append({
-                    "type": "tool_result",
-                    "tool_use_id": block.id,
-                    "content": result_text,
-                })
+        fc = msg.function_call
+        fn = _FUNCTION_MAP.get(fc.name)
+        if fn:
+            args = json.loads(fc.arguments) if isinstance(fc.arguments, str) else fc.arguments
+            result_dict = fn(args)
+        else:
+            result_dict = {"error": f"unknown function: {fc.name}"}
 
-        if not tool_results:
-            break
-        messages.append({"role": "user", "content": tool_results})
+        if isinstance(result_dict, dict) and result_dict.get("_pending"):
+            pending = result_dict
+            result_text = result_dict.get("_warning", "⚠️ Confirm this action.")
+        else:
+            result_text = json.dumps(result_dict)
+
+        tool_results.append({
+            "role": "tool",
+            "tool_call_id": fc.id,
+            "name": fc.name,
+            "content": result_text,
+        })
+        messages.append(tool_results[0])
 
         if pending:
-            # Return the warning as the reply; caller queues the pending action
             warning = pending.get("_warning", "⚠️ Confirm this action.")
             return warning, pending
 

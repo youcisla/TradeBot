@@ -1,4 +1,4 @@
-"""BriefingAgent — generates a pre-session market brief via Claude."""
+"""BriefingAgent — generates a pre-session market brief via DeepSeek."""
 
 import json
 import logging
@@ -23,14 +23,14 @@ Cover: (1) current macro risk environment, (2) open position exposure,
 
 
 def generate_brief(session: str) -> str:
-    """Generate a pre-session brief for *session* using live bot data + Claude."""
-    if not settings.ANTHROPIC_API_KEY:
-        return "(Claude unavailable: ANTHROPIC_API_KEY not set.)"
+    """Generate a pre-session brief for *session* using live bot data + DeepSeek."""
+    if not settings.DEEPSEEK_API_KEY:
+        return "(DeepSeek unavailable: DEEPSEEK_API_KEY not set.)"
 
     try:
-        import anthropic
+        from openai import OpenAI
     except ImportError:
-        return "(Claude unavailable: 'anthropic' package not installed.)"
+        return "(DeepSeek unavailable: 'openai' package not installed.)"
 
     context = {
         "session": session,
@@ -45,14 +45,19 @@ def generate_brief(session: str) -> str:
     )
 
     try:
-        client = anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY)
-        response = client.messages.create(
-            model="claude-sonnet-4-20250514",
-            max_tokens=300,
-            system=_SYSTEM,
-            messages=[{"role": "user", "content": prompt}],
+        client = OpenAI(
+            api_key=settings.DEEPSEEK_API_KEY,
+            base_url="https://api.deepseek.com",
         )
-        return response.content[0].text.strip()
+        response = client.chat.completions.create(
+            model=settings.DEEPSEEK_MODEL,
+            messages=[
+                {"role": "system", "content": _SYSTEM},
+                {"role": "user",   "content": prompt},
+            ],
+            max_tokens=300,
+        )
+        return response.choices[0].message.content.strip()
     except Exception as exc:
-        logger.warning("BriefingAgent: Claude API failed: %s", exc)
+        logger.warning("BriefingAgent: DeepSeek API failed: %s", exc)
         return f"(Briefing generation failed: {exc})"

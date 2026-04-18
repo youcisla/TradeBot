@@ -1,4 +1,4 @@
-"""HypothesisAgent — proposes, tests, and validates parameter hypotheses."""
+"""HypothesisAgent — proposes, tests, and validates parameter hypotheses (DeepSeek)."""
 
 from __future__ import annotations
 
@@ -8,7 +8,6 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-import anthropic
 from config import settings
 
 logger = logging.getLogger(__name__)
@@ -35,33 +34,40 @@ class HypothesisAgent:
 
     def run_cycle(self) -> str:
         """Full cycle: propose -> backtest -> verdict. Returns plain-text result."""
-        if not settings.ANTHROPIC_API_KEY:
-            return "HypothesisAgent unavailable: ANTHROPIC_API_KEY not set."
+        if not settings.DEEPSEEK_API_KEY:
+            return "HypothesisAgent unavailable: DEEPSEEK_API_KEY not set."
 
-        # 1. Gather learning data from existing DB methods
-        regime_stats = self._db.learning.get_recent_strategy_regime_stats(lookback_hours=48, min_trades=3)
-
+        regime_stats = self._db.learning.get_recent_strategy_regime_stats(
+            lookback_hours=48, min_trades=3
+        )
         learning_data = {
             "regime_stats": regime_stats,
             "symbols": ["BTCUSD", "ETHUSD", "EURUSD"],
         }
 
-        # 2. Claude proposes hypothesis
         try:
-            import anthropic
-            client = anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY)
+            from openai import OpenAI
         except ImportError:
-            return "HypothesisAgent: 'anthropic' package not installed."
+            return "HypothesisAgent: 'openai' package not installed."
 
+        client = OpenAI(
+            api_key=settings.DEEPSEEK_API_KEY,
+            base_url="https://api.deepseek.com",
+        )
+
+        # 1. Propose hypothesis
         try:
-            proposal_raw = client.messages.create(
-                model="claude-sonnet-4-20250514",
+            response = client.chat.completions.create(
+                model=settings.DEEPSEEK_MODEL,
+                messages=[
+                    {"role": "system", "content": _PROPOSE_SYSTEM},
+                    {"role": "user",   "content": json.dumps(learning_data, default=str)},
+                ],
                 max_tokens=300,
-                system=_PROPOSE_SYSTEM,
-                messages=[{"role": "user", "content": json.dumps(learning_data, default=str)}],
-            ).content[0].text.strip()
+            )
+            proposal_raw = response.choices[0].message.content.strip()
         except Exception as exc:
-            return f"HypothesisAgent: Claude proposal failed: {exc}"
+            return f"HypothesisAgent: DeepSeek proposal failed: {exc}"
 
         try:
             proposal = json.loads(proposal_raw)
@@ -70,7 +76,7 @@ class HypothesisAgent:
 
         logger.info("Hypothesis proposed: %s", proposal.get("hypothesis"))
 
-        # 3. Build backtest config and run
+        # 2. Run backtest
         result_path = self._run_backtest(proposal)
         if result_path is None:
             return f"Hypothesis: {proposal['hypothesis']}\nBacktest failed to run."
@@ -78,24 +84,26 @@ class HypothesisAgent:
         with open(result_path) as f:
             artifact = json.load(f)
 
-        # 4. Claude reads artifact, returns verdict
+        # 3. Get verdict
         try:
-            verdict = client.messages.create(
-                model="claude-sonnet-4-20250514",
+            verdict = client.chat.completions.create(
+                model=settings.DEEPSEEK_MODEL,
+                messages=[
+                    {"role": "system", "content": _VERDICT_SYSTEM},
+                    {"role": "user",   "content": json.dumps({
+                        "hypothesis": proposal,
+                        "backtest_result": artifact,
+                    }, default=str)},
+                ],
                 max_tokens=200,
-                system=_VERDICT_SYSTEM,
-                messages=[{"role": "user", "content": json.dumps({
-                    "hypothesis": proposal,
-                    "backtest_result": artifact,
-                }, default=str)}],
-            ).content[0].text.strip()
+            )
+            verdict_text = verdict.choices[0].message.content.strip()
         except Exception as exc:
-            return f"HypothesisAgent: Claude verdict failed: {exc}"
+            return f"HypothesisAgent: DeepSeek verdict failed: {exc}"
 
-        return f"🔬 *Hypothesis*: {proposal['hypothesis']}\n\n{verdict}"
+        return f"🔬 *Hypothesis*: {proposal['hypothesis']}\n\n{verdict_text}"
 
     def _run_backtest(self, proposal: dict) -> Path | None:
-        """Invoke scripts/backtest.py with generated config, return result path."""
         symbols = proposal.get("symbols", ["EURUSD"])
         symbols_str = ",".join(symbols[:5])
 

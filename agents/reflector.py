@@ -180,15 +180,18 @@ class Reflector:
         )
 
         try:
-            message = client.messages.create(
-                model="claude-sonnet-4-20250514",
+            response = client.chat.completions.create(
+                model=settings.DEEPSEEK_MODEL,
+                messages=[
+                    {"role": "system", "content": _SYSTEM_PROMPT},
+                    {"role": "user",   "content": prompt},
+                ],
                 max_tokens=500,
-                system=_SYSTEM_PROMPT,
-                messages=[{"role": "user", "content": prompt}],
+                temperature=0.3,
             )
-            lesson = message.content[0].text.strip()
+            lesson = response.choices[0].message.content.strip()
         except Exception as exc:
-            logger.warning("Reflector: Anthropic API failed for trade %s: %s", trade.id, exc)
+            logger.warning("Reflector: DeepSeek API failed for trade %s: %s", trade.id, exc)
             # Fall back to a structured rule-based lesson so memory still grows
             lesson = self._fallback_lesson(trade)
 
@@ -219,14 +222,17 @@ class Reflector:
     def _get_client(self):
         if self._client is not None:
             return self._client
-        if not settings.ANTHROPIC_API_KEY:
-            logger.debug("Reflector: ANTHROPIC_API_KEY not set — skipping LLM reflection")
+        if not settings.DEEPSEEK_API_KEY:
+            logger.debug("Reflector: DEEPSEEK_API_KEY not set — skipping LLM reflection")
             return None
         try:
-            import anthropic
-            self._client = anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY)
+            from openai import OpenAI
+            self._client = OpenAI(
+                api_key=settings.DEEPSEEK_API_KEY,
+                base_url="https://api.deepseek.com",
+            )
         except ImportError:
-            logger.error("Reflector: 'anthropic' package not installed")
+            logger.error("Reflector: 'openai' package not installed")
         return self._client
 
     @staticmethod

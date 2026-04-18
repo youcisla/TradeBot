@@ -1305,6 +1305,7 @@ FINNHUB_API_KEY: str = settings.intelligence.finnhub_api_key
 NEWS_BLACKOUT_MINUTES: int = settings.intelligence.news_blackout_minutes
 ANTHROPIC_API_KEY: str = settings.intelligence.anthropic_api_key
 DEEPSEEK_API_KEY: str = settings.intelligence.deepseek_api_key
+DEEPSEEK_MODEL: str = "deepseek-chat"
 CRUCIX_URL: str = settings.intelligence.crucix_url
 
 # Learning
