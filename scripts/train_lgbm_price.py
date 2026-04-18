@@ -12,7 +12,7 @@ so training and inference are guaranteed to use exactly the same representation.
 
 Usage::
 
-    # All ACTIVE_SYMBOLS, 2 years H1 (pulls from MT5)
+    # All CRYPTO + top 10 non-crypto PRIORITY_SYMBOLS (pulls from MT5)
     python -m scripts.train_lgbm_price
 
     # Specific symbols, 3 years
@@ -39,7 +39,12 @@ import pandas as pd
 _ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_ROOT))
 
-from config.symbols import ACTIVE_SYMBOLS  # noqa: E402
+from config.symbols import CRYPTO, PRIORITY_SYMBOLS  # noqa: E402
+
+# ML training universe: all CRYPTO + top 10 non-crypto from PRIORITY_SYMBOLS
+_crypto_set = set(CRYPTO)
+_top_forex = [s for s in PRIORITY_SYMBOLS if s not in _crypto_set][:10]
+ML_TRAIN_SYMBOLS = CRYPTO + _top_forex
 
 logging.basicConfig(
     level=logging.INFO,
@@ -460,7 +465,7 @@ def main(argv: list[str] | None = None) -> int:
     """
     args = _parse_args(argv)
 
-    symbols = args.symbols or ACTIVE_SYMBOLS
+    symbols = args.symbols or ML_TRAIN_SYMBOLS
     logger.info(
         "Price-LGBM training — %d symbol(s)  TF=%s  years=%.1f  "
         "forward=%d  atr_mult=%.2f",
