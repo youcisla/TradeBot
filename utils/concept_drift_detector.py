@@ -111,8 +111,8 @@ class ConceptDriftDetector:
                 p_value=1.0,  # Inconclusive
                 drift_detected=False,
                 ref_mean=0, ref_std=0,
-                current_mean=np.mean(current_values),
-                current_std=np.std(current_values),
+                current_mean=float(np.mean(current_values)) if len(current_values) else 0.0,
+                current_std=float(np.std(current_values)) if len(current_values) else 0.0,
                 samples_ref=0,
                 samples_current=len(current_values),
                 timestamp=datetime.utcnow().isoformat(),
