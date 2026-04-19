@@ -269,6 +269,10 @@ class OrchestrationSettings(BaseModel):
     # cooldown gives transient broker hiccups more slack before kicking in.
     symbol_max_fail_count: int = Field(default=20, ge=1)
     symbol_disable_seconds: int = Field(default=1800, ge=0)
+    # Symbols permanently excluded from scanning (PU Prime MT5 known-bad pairs).
+    # Set via PERMANENT_FAULT_SYMBOLS env var as a comma-separated string,
+    # e.g. "EOSUSD,NOIDEA". Parsed into a set at startup.
+    permanent_fault_symbols: str = ""
     # market closed sleep (total = sleep_total / sleep_interval, e.g. 300/10 = 30 iterations × 10s = 5 min)
     market_closed_sleep_total_seconds: int = Field(default=300, ge=1)
     market_closed_sleep_interval_seconds: int = Field(default=10, ge=1)
@@ -794,6 +798,7 @@ def _build_settings() -> _Settings:
         exec_budget_council_margin_ms=_float("ORCHESTRATION_EXEC_BUDGET_COUNCIL_MARGIN_MS", "350"),
         symbol_max_fail_count=_int("SYMBOL_MAX_FAIL_COUNT", "20"),
         symbol_disable_seconds=_int("SYMBOL_DISABLE_SECONDS", "1800"),
+        permanent_fault_symbols=_str("PERMANENT_FAULT_SYMBOLS", ""),
         htf_cache_ttl_m15_seconds=_float("HTF_CACHE_TTL_M15_SECONDS", "20"),
         htf_cache_ttl_m5_seconds=_float("HTF_CACHE_TTL_M5_SECONDS", "15"),
         htf_cache_ttl_m30_seconds=_float("HTF_CACHE_TTL_M30_SECONDS", "30"),
@@ -1239,6 +1244,9 @@ ORCHESTRATION_MAX_ITERATION_MS: float = settings.orchestration.max_iteration_ms
 ORCHESTRATION_EXEC_BUDGET_COUNCIL_MARGIN_MS: float = settings.orchestration.exec_budget_council_margin_ms
 SYMBOL_MAX_FAIL_COUNT: int = settings.orchestration.symbol_max_fail_count
 SYMBOL_DISABLE_SECONDS: int = settings.orchestration.symbol_disable_seconds
+PERMANENT_FAULT_SYMBOLS: set[str] = set(
+    s.strip() for s in settings.orchestration.permanent_fault_symbols.split(",") if s.strip()
+)
 MARKET_CLOSED_SLEEP_TOTAL_SECONDS: int = settings.orchestration.market_closed_sleep_total_seconds
 MARKET_CLOSED_SLEEP_INTERVAL_SECONDS: int = settings.orchestration.market_closed_sleep_interval_seconds
 HTF_CACHE_TTL_M15_SECONDS: float = settings.orchestration.htf_cache_ttl_m15_seconds

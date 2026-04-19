@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from config import settings
+from config.settings import PERMANENT_FAULT_SYMBOLS
 from filters.data_validator import DataValidationError
 from models.market_data import MarketContext
 from models.signal import Signal
@@ -198,6 +199,8 @@ class ScanPhase:
             str | None, bool
         ]:
             """Returns (symbol, status, is_re_enabled, context, signals, err_str, is_ipc)."""
+            if symbol in PERMANENT_FAULT_SYMBOLS:
+                return (symbol, "skip", False, None, None, None, False)
             if not is_market_open(symbol):
                 return (symbol, "skip", False, None, None, None, False)
             if weekend_symbols is not None and symbol not in weekend_symbols:

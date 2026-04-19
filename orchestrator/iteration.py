@@ -213,7 +213,7 @@ def run_iteration(
 
     # ── Skip new signals if paused ─────────────────────────────────────────
     if telegram_bot.is_paused():
-        logger.warning("Bot is PAUSED — skipping signal detection (loop %d)", loop_count)
+        logger.info("Bot is PAUSED — skipping signal detection (loop %d)", loop_count)
         return m
 
     # ══════════════════════════════════════════════════════════════════════
