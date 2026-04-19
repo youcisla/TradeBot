@@ -61,7 +61,7 @@ export function Header() {
 
   return (
     <header
-      className="fixed top-0 left-0 right-0 z-50 flex items-center gap-6 px-4"
+      className="fixed top-3 left-4 right-4 z-50 flex items-center gap-6 px-4"
       style={{ backgroundColor: "var(--bg-2)", height: "var(--header-h)", borderBottom: "1px solid var(--border)" }}
     >
       {/* Brand + live indicator */}
@@ -120,18 +120,21 @@ export function Header() {
         <button
           onClick={toggle}
           title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+          className="flex items-center justify-center rounded transition-colors duration-150"
           style={{
             backgroundColor: "var(--bg-3)",
             border: "1px solid var(--border)",
             borderRadius: 6,
             padding: "4px 8px",
-            cursor: "pointer",
             color: "var(--text-2)",
-            fontSize: 12,
-            fontFamily: "var(--font-mono)",
           }}
         >
-          {theme === "dark" ? "☀" : "☾"}
+          <span
+            className="material-symbols-outlined text-sm"
+            style={{ fontVariationSettings: "'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 16" }}
+          >
+            {theme === "dark" ? "wb_sunny" : "dark_mode"}
+          </span>
         </button>
       </div>
     </header>

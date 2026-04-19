@@ -9,11 +9,11 @@ import ConfigTab from "@/components/system/ConfigTab";
 import { cn } from "@/lib/utils";
 
 const TABS = [
-  { id: "health",  label: "Health",  icon: "♥" },
-  { id: "learning",label: "Learning", icon: "◈" },
-  { id: "agents",  label: "Agents",  icon: "⬡" },
-  { id: "broker",  label: "Broker",  icon: "⬢" },
-  { id: "config",  label: "Config",  icon: "⚙" },
+  { id: "health",  label: "Health",  icon: "favorite"    },
+  { id: "learning",label: "Learning", icon: "auto_graph" },
+  { id: "agents",  label: "Agents",  icon: "hexagon"     },
+  { id: "broker",  label: "Broker",  icon: "account_tree"},
+  { id: "config",  label: "Config",  icon: "settings"    },
 ] as const;
 
 type TabId = typeof TABS[number]["id"];

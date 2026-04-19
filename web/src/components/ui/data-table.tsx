@@ -137,17 +137,11 @@ export function DataTable<T>({
               table.getRowModel().rows.map((row) => (
                 <tr
                   key={row.id}
-                  className="border-b transition-colors"
+                  className="border-b transition-colors hover:bg-[var(--bg-3)]"
                   style={{
                     borderColor: "var(--border)",
                     background: "var(--bg-2)",
                   }}
-                  onMouseEnter={(e) =>
-                    ((e.currentTarget as HTMLElement).style.background = "var(--bg-3)")
-                  }
-                  onMouseLeave={(e) =>
-                    ((e.currentTarget as HTMLElement).style.background = "var(--bg-2)")
-                  }
                 >
                   {row.getVisibleCells().map((cell) => (
                     <td
@@ -248,6 +242,7 @@ function PageBtn({
         className="material-symbols-outlined text-sm"
         style={{
           fontVariationSettings: "'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 16",
+          opacity: disabled ? 0.4 : 1,
         }}
       >
         {icon}

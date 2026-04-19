@@ -49,7 +49,7 @@ function Row({ label, value, mono }: { label: string; value: string; mono?: bool
     >
       <span className="text-sm" style={{ color: "var(--text-2)" }}>{label}</span>
       <span
-        className="text-sm font-semibold text-right break-all"
+        className="text-sm text-right break-all tracking-wide"
         style={{
           color: "var(--text-1)",
           fontFamily: mono ? "var(--font-mono)" : undefined,

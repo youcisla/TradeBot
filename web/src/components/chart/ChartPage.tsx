@@ -17,7 +17,7 @@ export default function ChartPage() {
       <div className="flex items-center gap-3 flex-shrink-0">
         <SymbolDrawer selected={symbol} onSelect={(s) => setSymbol(s)} />
         <TimeframeBar selected={timeframe} onChange={setTimeframe} />
-        <span className="flex items-center gap-1.5 ml-auto font-mono text-[10px] font-bold uppercase" style={{ fontFamily: "var(--font-mono)", color: "var(--positive)", letterSpacing: "0.08em" }}>
+        <span className="flex items-center gap-1.5 ml-auto font-mono text-[10px] font-bold uppercase tracking-[0.08em]" style={{ fontFamily: "var(--font-mono)", color: "var(--positive)" }}>
           <span className="rounded-full" style={{ width: 6, height: 6, background: "var(--positive)", boxShadow: "0 0 6px var(--positive)" }} />
           LIVE
         </span>

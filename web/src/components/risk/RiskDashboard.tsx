@@ -20,8 +20,7 @@ export default function RiskDashboard() {
       {/* Position slot utilisation */}
       <div className="bg-[var(--bg-2)] border border-[var(--border)] rounded-md px-4 py-4 flex flex-col gap-2">
         <span
-          className="font-mono text-[9px] font-bold uppercase"
-          style={{ fontFamily: "var(--font-mono)", color: "var(--text-3)", letterSpacing: "0.06em" }}
+          className="font-mono text-[9px] font-bold uppercase tracking-[0.06em]"
         >
           Open Slots
         </span>
