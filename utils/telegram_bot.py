@@ -478,7 +478,7 @@ def _cmd_trainlgbm(args: list[str], send: Callable[[str, ...], None]) -> None:
             from pathlib import Path
             root = Path(__file__).resolve().parents[2]
             result = subprocess.run(
-                [sys.executable, "-m", "scripts.train_lgbm"],
+                [sys.executable, str(root / "scripts" / "train_lgbm.py"), "--min-trades", "10"],
                 cwd=str(root),
                 capture_output=True,
                 text=True,
@@ -505,7 +505,7 @@ def _cmd_trainprice(args: list[str], send: Callable[[str, ...], None]) -> None:
             import subprocess, sys
             from pathlib import Path
             root = Path(__file__).resolve().parents[2]
-            cmd = [sys.executable, "-m", "scripts.train_lgbm_price"]
+            cmd = [sys.executable, str(root / "scripts" / "train_lgbm_price.py")]
             if symbols:
                 cmd += ["--symbols"] + symbols
             result = subprocess.run(

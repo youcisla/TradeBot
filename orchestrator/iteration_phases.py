@@ -10,7 +10,7 @@ import concurrent.futures
 import logging
 import time
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from config import settings
 from config.settings import PERMANENT_FAULT_SYMBOLS
