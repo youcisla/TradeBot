@@ -53,7 +53,7 @@ class TradeManagerAgent:
     def _record_pnl(self, pnl: float) -> None:
         """Tell the guard pipeline about closed-trade P&L. Safe to call when _guard_pipeline is None."""
         if self._guard_pipeline is not None:
-            self._record_pnl(pnl)
+            self._guard_pipeline.record_closed_trade_pnl(pnl)
 
     # ── lifecycle ────────────────────────────────────────────────────────
 
