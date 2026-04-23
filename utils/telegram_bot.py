@@ -969,7 +969,9 @@ def _poll_updates() -> None:
                 msg = update.get("message", {})
                 text = msg.get("text", "").strip()
                 from_chat = str(msg.get("chat", {}).get("id", ""))
+                logger.debug("Telegram poll: update_id=%s text=%r from_chat=%s expecting=%s", update["update_id"], text, from_chat, chat_id)
                 if from_chat != chat_id:
+                    logger.debug("Telegram: chat_id mismatch — skipping (from=%s, expected=%s)", from_chat, chat_id)
                     continue
                 from_user_id = int(msg.get("from", {}).get("id", 0) or 0)
                 from_username = str(msg.get("from", {}).get("username", "") or "")
@@ -1010,6 +1012,7 @@ def _handle_command(
     from_username: str = "",
 ) -> None:
     cmd = text.lower().split()[0] if text else ""
+    logger.debug("Telegram _handle_command: text=%r cmd=%r", text, cmd)
     if not cmd:
         return
 
@@ -1026,12 +1029,15 @@ def _handle_command(
         )
         return
 
+    logger.info("Telegram command passed auth: cmd=%s user_id=%s username=%s", cmd, from_user_id, from_username)
+
     args = text.split()[1:] if len(text.split()) > 1 else []
 
     def send(text: str, **kwargs) -> None:
         send_message(text, **kwargs)
 
     # Route through command registry
+    logger.info("Telegram: cmd=%r passed auth for user_id=%s username=%r", cmd, from_user_id, from_username)
     if cmd in _COMMANDS:
         desc, handler, needs_uid = _COMMANDS[cmd]
         try:
