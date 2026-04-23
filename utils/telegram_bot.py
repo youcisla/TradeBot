@@ -315,6 +315,7 @@ def send_photo(
     try:
         with urlopen(req, timeout=20):
             pass
+        logger.info("Telegram photo sent successfully")
         _maybe_emit_suppression_notice()
         return True
     except Exception:
@@ -402,8 +403,10 @@ def _cmd_status(args: list[str], send: Callable[[str, ...], None]) -> None:
 
 
 def _cmd_graph(args: list[str], send: Callable[[str, ...], None]) -> None:
+    logger.info("Command /graph received")
     if _graph_callback:
         result = _graph_callback()
+        logger.info("Graph callback result: %s", "None" if result is None else f"caption={len(result[0])} chars, {len(result[1])} bytes")
         if result is None:
             send("📉 No closed-trade data available for chart yet.", priority="high", force=True)
         else:
