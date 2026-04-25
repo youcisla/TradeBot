@@ -33,7 +33,7 @@ export default function DrawdownGauge() {
         </div>
         <div style={gaugeFooter}>
           <span style={{ ...gaugePct, color: pct >= 80 ? "var(--red)" : pct >= 50 ? "var(--orange)" : color }}>
-            {pct.toFixed(1)}%
+            {Math.min(Math.abs(pct), 999).toFixed(1)}%
           </span>
           <span style={gaugeLimit}>/ {max > 0 ? fmtPct(max / 100) : "—"}</span>
         </div>

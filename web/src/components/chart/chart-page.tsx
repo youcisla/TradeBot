@@ -45,10 +45,11 @@ export default function ChartPage() {
 
       {/* Chart area */}
       <div
-        className="flex-1 min-h-0 rounded overflow-hidden"
+        className="flex-1 rounded overflow-hidden"
         style={{
           background: "var(--bg-2)",
           border: "1px solid var(--border)",
+          minHeight: 400,
         }}
       >
         <TradingChart symbol={symbol} timeframe={timeframe} count={500} />

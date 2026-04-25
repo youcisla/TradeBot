@@ -180,6 +180,19 @@ $webJob = Start-Process `
 
 Write-Host "    PID: $($webJob.Id)" -ForegroundColor DarkGray
 
+# 4b. Launch WebSocket server (live dashboard feed)
+
+Write-Host "[*] Starting WebSocket server on port 3001 ..." -ForegroundColor Green
+$wsLogFile = Join-Path $frontendLogDir "ws_server.log"
+$wsJob = Start-Process `
+    -FilePath "node" `
+    -ArgumentList "--experimental-vm-modules ws-server.js" `
+    -WorkingDirectory $webDir `
+    -PassThru `
+    -NoNewWindow
+
+Write-Host "    PID: $($wsJob.Id)" -ForegroundColor DarkGray
+
 # 5. Status summary
 
 Write-Host ""
@@ -187,6 +200,7 @@ Write-Host "========================================" -ForegroundColor Cyan
 Write-Host "  Crucix      : $crucixUrl" -ForegroundColor White
 Write-Host "  Bot PID     : $($botJob.Id)" -ForegroundColor White
 Write-Host "  Web PID     : $($webJob.Id)  (http://localhost:3000)" -ForegroundColor White
+Write-Host "  WS PID      : $($wsJob.Id)  (ws://localhost:3001)" -ForegroundColor White
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "Press Ctrl+C to stop everything." -ForegroundColor Yellow
@@ -195,7 +209,7 @@ Write-Host ""
 # 6. Wait and clean up on exit
 
 try {
-    while (-not $botJob.HasExited -and -not $webJob.HasExited) {
+    while (-not $botJob.HasExited -and -not $webJob.HasExited -and -not $wsJob.HasExited) {
         Start-Sleep -Seconds 1
     }
 } finally {
@@ -213,6 +227,11 @@ try {
             Where-Object { $_.MainWindowTitle -eq "" } |
             Stop-Process -Force -ErrorAction SilentlyContinue
         Write-Host "    Stopped web     (PID $($webJob.Id))" -ForegroundColor DarkGray
+    }
+
+    if (-not $wsJob.HasExited) {
+        Stop-Process -Id $wsJob.Id -Force -ErrorAction SilentlyContinue
+        Write-Host "    Stopped ws      (PID $($wsJob.Id))" -ForegroundColor DarkGray
     }
 
     Write-Host ""

@@ -113,9 +113,6 @@ if (pgPool) {
  * Polls agent_events for new rows since last check.
  * Used when LISTEN is unavailable (cloud DBs, connection interruption).
  */
-if (!pgPool) {
-  startPolling();
-}
 
 let lastEventId = 0;
 let pollTimer;
@@ -123,6 +120,10 @@ let pollTimer;
 function startPolling() {
   console.log(`[ws-server] Polling fallback active (interval=${POLL_INTERVAL_MS}ms)`);
   pollTimer = setInterval(pollForEvents, POLL_INTERVAL_MS);
+}
+
+if (!pgPool) {
+  startPolling();
 }
 
 async function pollForEvents() {

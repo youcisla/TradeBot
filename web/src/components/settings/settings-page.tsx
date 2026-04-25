@@ -82,7 +82,7 @@ export default function SettingsPage() {
     return () => clearInterval(t);
   }, []);
 
-  const isRunning = !!status.running;
+  const isRunning = status.state === "running";
 
   return (
     <div className="flex flex-col gap-4">
