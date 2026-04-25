@@ -27,7 +27,7 @@ export default function KpiRow() {
       <StatCard
         label="Equity"
         value={fmtCurrency(equity)}
-        color="accent"
+        color="neutral"
         size="lg"
       />
       <StatCard

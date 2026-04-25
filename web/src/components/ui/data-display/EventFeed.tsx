@@ -131,16 +131,16 @@ export function EventFeed({
                 <span
                   className="flex-1 leading-snug"
                   style={{
-                    color: "var(--text-2)",
+                    color: "var(--text-1)",
                     fontFamily: "var(--font-ui)",
                     fontSize: 12,
                     transition: "color 0.1s",
                   }}
                   onMouseEnter={(e) =>
-                    ((e.currentTarget as HTMLElement).style.color = "var(--text-1)")
+                    ((e.currentTarget as HTMLElement).style.color = "var(--text-2)")
                   }
                   onMouseLeave={(e) =>
-                    ((e.currentTarget as HTMLElement).style.color = "var(--text-2)")
+                    ((e.currentTarget as HTMLElement).style.color = "var(--text-1)")
                   }
                 >
                   {msg}

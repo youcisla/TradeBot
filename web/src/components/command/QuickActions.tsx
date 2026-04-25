@@ -111,7 +111,7 @@ function ActionBtn({ label, onClick, variant = "default", disabled }: {
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--accent)]",
         "disabled:opacity-40 disabled:cursor-not-allowed",
         variant === "default" && "bg-[var(--bg-3)] border-[var(--border)] text-[var(--text-1)]",
-        variant === "accent"  && "border-[var(--accent)] text-[var(--accent)] hover:bg-[var(--accent)]/10",
+        variant === "accent"  && "border-[var(--text-1)] text-[var(--text-1)] hover:bg-[var(--text-1)]/10",
         variant === "warn"    && "border-[var(--warning)] text-[var(--warning)] hover:bg-[var(--warning)]/10",
         variant === "danger"  && "bg-[var(--negative-dim)] border-[var(--negative)] text-[var(--negative)]",
       )}

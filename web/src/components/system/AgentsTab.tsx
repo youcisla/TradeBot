@@ -52,7 +52,7 @@ export default function AgentsTab() {
       {AGENTS.map((agent) => (
         <div key={agent} className="grid grid-cols-2 gap-3 px-4 py-3 border-b border-[var(--border)] items-center">
           <AgentBadge agent={agent} />
-          <span className="font-mono text-sm font-bold" style={{ fontFamily: "var(--font-mono)", color: "var(--text-2)" }}>
+          <span className="font-mono text-sm font-bold" style={{ fontFamily: "var(--font-mono)", color: "var(--text-1)" }}>
             {counts[agent] ?? 0}
           </span>
         </div>

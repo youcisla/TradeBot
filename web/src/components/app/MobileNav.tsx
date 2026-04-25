@@ -33,7 +33,7 @@ export function MobileNav() {
             key={item.href}
             href={item.href}
             className="flex flex-col items-center justify-center gap-0.5 py-1 px-3 min-w-14 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset"
-            style={{ textDecoration: "none", color: active ? "var(--accent)" : "var(--text-3)" }}
+            style={{ textDecoration: "none", color: active ? "var(--text-1)" : "var(--text-3)" }}
             aria-label={item.label}
           >
             <span

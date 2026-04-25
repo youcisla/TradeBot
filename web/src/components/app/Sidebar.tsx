@@ -36,7 +36,7 @@ export function Sidebar() {
             style={{
               textDecorationLine: "none",
               backgroundColor: active ? "var(--bg-3)" : "transparent",
-              color: active ? "var(--accent)" : "var(--text-2)",
+              color: active ? "var(--text-1)" : "var(--text-2)",
             }}
           >
             <span

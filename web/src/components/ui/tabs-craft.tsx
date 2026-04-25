@@ -30,7 +30,7 @@ export function Tabs({ tabs, active, onChange, children }: TabsProps) {
               style={{
                 background: isActive ? "var(--bg-3)" : "var(--bg-2)",
                 border: `1px solid ${isActive ? "var(--border-active)" : "var(--border)"}`,
-                color: isActive ? "var(--accent)" : "var(--text-2)",
+                color: isActive ? "var(--text-1)" : "var(--text-2)",
                 fontFamily: "var(--font-ui)",
                 fontSize: 12,
                 letterSpacing: "0.02em",

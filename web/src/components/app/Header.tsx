@@ -86,7 +86,7 @@ export function Header() {
 
       {/* KPI strip */}
       <div className="flex-1 flex items-center justify-center gap-4">
-        <HeaderKpi label="Equity"  value={fmt(equity)}   color="var(--accent)" />
+        <HeaderKpi label="Equity"  value={fmt(equity)}   color="var(--text-1)" />
         <span className="w-px h-5 flex-shrink-0" style={{ backgroundColor: "var(--border)" }} />
         <HeaderKpi label="Balance" value={fmt(balance)} />
         <span className="w-px h-5 flex-shrink-0" style={{ backgroundColor: "var(--border)" }} />

@@ -53,7 +53,7 @@ function Tab({ href, label, icon, active }: { href: string; label: string; icon:
         "flex items-center gap-3 mx-2 py-3 px-4 rounded-md no-underline transition-colors duration-150",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--accent)]",
         active
-          ? "bg-[var(--bg-3)] text-[var(--accent)]"
+          ? "bg-[var(--bg-3)] text-[var(--text-1)]"
           : "text-[var(--text-2)] hover:text-[var(--text-1)]"
       )}
     >

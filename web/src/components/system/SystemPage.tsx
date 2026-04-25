@@ -32,14 +32,14 @@ export default function SystemPage() {
               "flex items-center gap-2 rounded-md px-3 py-1.5 cursor-pointer transition-all border text-xs font-semibold",
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--accent)]",
               active === tab.id
-                ? "bg-[var(--bg-3)] border-[var(--border-active)] text-[var(--accent)]"
+                ? "bg-[var(--bg-3)] border-[var(--border-active)] text-[var(--text-1)]"
                 : "bg-[var(--bg-2)] border-[var(--border)] text-[var(--text-2)]"
             )}
             style={{ fontFamily: "var(--font-ui)", letterSpacing: "0.03em" }}
             onClick={() => setActive(tab.id)}
           >
-            <span style={{ fontSize: 14, lineHeight: 1 }}>{tab.icon}</span>
-            <span>{tab.label}</span>
+            <span style={{ fontSize: 14, lineHeight: 1, color: "inherit" }}>{tab.icon}</span>
+            <span style={{ color: "inherit" }}>{tab.label}</span>
           </button>
         ))}
       </div>

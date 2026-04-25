@@ -194,7 +194,7 @@ export default function SignalsPage() {
               style={{
                 background: filter === f ? "var(--bg-4)" : "transparent",
                 border: `1px solid ${filter === f ? "var(--border-active)" : "var(--border)"}`,
-                color: filter === f ? "var(--accent)" : "var(--text-3)",
+                color: filter === f ? "var(--text-1)" : "var(--text-3)",
                 letterSpacing: "0.05em",
               }}
             >
@@ -217,7 +217,7 @@ export default function SignalsPage() {
             style={{
               background: strategyFilter === "all" ? "var(--bg-4)" : "transparent",
               border: `1px solid ${strategyFilter === "all" ? "var(--border-active)" : "var(--border)"}`,
-              color: strategyFilter === "all" ? "var(--accent)" : "var(--text-3)",
+              color: strategyFilter === "all" ? "var(--text-1)" : "var(--text-3)",
             }}
           >
             All
@@ -230,7 +230,7 @@ export default function SignalsPage() {
               style={{
                 background: strategyFilter === s ? "var(--bg-4)" : "transparent",
                 border: `1px solid ${strategyFilter === s ? "var(--border-active)" : "var(--border)"}`,
-                color: strategyFilter === s ? "var(--accent)" : "var(--text-3)",
+                color: strategyFilter === s ? "var(--text-1)" : "var(--text-3)",
               }}
             >
               {s}
