@@ -393,6 +393,7 @@ class MiscSettings(BaseModel):
     encryption_key: str = ""
     sma_fast_period: int = Field(default=10, ge=1)
     sma_slow_period: int = Field(default=50, ge=1)
+    sentry_dsn: str = ""
 
 
 # ── Market session settings ────────────────────────────────────────────────
@@ -906,6 +907,7 @@ def _build_settings() -> _Settings:
         encryption_key=_str("ENCRYPTION_KEY", ""),
         sma_fast_period=_int("SMA_FAST_PERIOD", "10"),
         sma_slow_period=_int("SMA_SLOW_PERIOD", "50"),
+        sentry_dsn=_str("MISC_SENTRY_DSN", ""),
     )
 
     # Session
@@ -1332,6 +1334,7 @@ BACKTEST_WALK_FORWARD_WINDOW_DAYS: int = settings.backtest.walk_forward_window_d
 
 # Misc
 LOG_LEVEL: str = settings.misc.log_level
+SENTRY_DSN: str = settings.misc.sentry_dsn
 DAILY_SUMMARY_HOUR: int = settings.misc.daily_summary_hour
 TIMEZONE: str = settings.misc.timezone
 DEFAULT_SYMBOL: str = settings.misc.default_symbol
