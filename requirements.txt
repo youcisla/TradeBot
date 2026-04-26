@@ -55,3 +55,13 @@ fastmcp>=0.1.0
 
 # ── HKU marketplace real-time notifications (agents/hku_client.py) ─────────
 websocket-client>=1.7
+
+# ── Phase 3: Kafka event-backbone nodes ───────────────────────────────────
+aiokafka>=0.10
+
+# ── Phase 4: HMM regime detection ─────────────────────────────────────────
+hmmlearn>=0.3
+joblib>=1.4
+
+# ── Phase 2: XGBoost student model training ───────────────────────────────
+xgboost>=2.1

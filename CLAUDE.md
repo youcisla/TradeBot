@@ -171,6 +171,19 @@ scripts/
   first_run_wizard.py            ← Guided first-run setup
   replay_session.py              ← Replay a past trading session
 
+# ── Knowledge Distillation (Phase 1-2) ────────────────────────────────────
+distillation/
+  phase1_enrich.py               ← DeepSeek-R1 offline enrichment pipeline
+  phase2_train.py                ← XGBoost student model trainer
+
+# ── Kafka Event-Backbone Nodes (Phase 3) ────────────────────────────────────
+nodes/
+  market_data/node.py             ← MarketDataNode / SignalGenNode / InferenceNode / ExecutionNode
+
+# ── Dynamic Regime Detection (Phase 4) ─────────────────────────────────────
+regime/
+  hmm_regime.py                  ← HMMRegimeDetector (Gaussian HMM, 3 regimes)
+
 database/db.py                   ← PostgreSQL client (psycopg2 ThreadedConnectionPool)
 tests/                           ← 422 tests; run: python -m pytest --tb=no -q
 web/                             ← Next.js 14 dashboard
