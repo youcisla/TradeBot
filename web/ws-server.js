@@ -29,6 +29,10 @@ const WS_PORT = Number(process.env.WS_PORT || "3001");
 const POLL_INTERVAL_MS = Number(process.env.POLL_INTERVAL_MS || "2000");
 const DATABASE_URL = process.env.DATABASE_URL || "";
 
+// ── State (declared before any logic so the async IIFE can call startPolling) ─
+let pollTimer;
+let lastEventId = 0;
+
 // ── DB pool ──────────────────────────────────────────────────────────────────
 let pgPool;
 if (DATABASE_URL) {
@@ -108,14 +112,7 @@ if (pgPool) {
   })();
 }
 
-// ── Method 2: Polling fallback ───────────────────────────────────────────────
-/**
- * Polls agent_events for new rows since last check.
- * Used when LISTEN is unavailable (cloud DBs, connection interruption).
- */
-
-let lastEventId = 0;
-let pollTimer;
+// ── Polling fallback ───────────────────────────────────────────────────────────
 
 function startPolling() {
   console.log(`[ws-server] Polling fallback active (interval=${POLL_INTERVAL_MS}ms)`);
