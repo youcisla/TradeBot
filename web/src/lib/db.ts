@@ -24,14 +24,13 @@ function getPool(): Pool {
   return globalForPg.__pgPool;
 }
 
-async function query(text: string, params?: unknown[]) {
+async function query(text: string, params?: unknown[]): Promise<unknown[]> {
   let client: PoolClient | undefined;
   try {
     client = await getPool().connect();
     const { rows } = await client.query(text, params);
     return rows;
   } catch (err) {
-    // If the connection was severed, destroy it so the pool replaces it
     if (client) {
       (client as unknown as { release: (destroy?: boolean) => void }).release(true);
       client = undefined;
@@ -41,6 +40,9 @@ async function query(text: string, params?: unknown[]) {
     client?.release();
   }
 }
+
+export { query };
+export const pool = { connect: () => getPool().connect() };
 
 // ── Types ──────────────────────────────────────────────────────────────
 export interface BotStatus {

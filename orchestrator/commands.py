@@ -10,6 +10,7 @@ from agents.trade_manager import TradeManagerAgent
 from state.persistence import StatePersistence
 from utils import telegram_bot
 from utils.tool_system import AutonomousToolSystem, result_to_text
+from utils.settings_overrides import set_override as _db_set_override, clear_override as _db_clear_override
 
 logger = logging.getLogger(__name__)
 
@@ -217,6 +218,33 @@ def process_commands(
                         _final_result_message("MT5→DB sync complete", trace_id=trace_id, duration_ms=duration_ms),
                     )
                     logger.info("Manual MT5→DB sync triggered from dashboard")
+
+            elif cmd_name == "set_override":
+                key = payload.get("key", "")
+                value = payload.get("value", "")
+                if key and value:
+                    _db_set_override(db, key, value)
+                    duration_ms = (time.perf_counter() - started_at) * 1000.0
+                    db.update_command(
+                        cmd["id"],
+                        "done",
+                        _final_result_message(f"Override set: {key} = {value}", trace_id=trace_id, duration_ms=duration_ms),
+                    )
+                else:
+                    db.update_command(cmd["id"], "failed", "key and value are required")
+
+            elif cmd_name == "clear_override":
+                key = payload.get("key", "")
+                if key:
+                    _db_clear_override(db, key)
+                    duration_ms = (time.perf_counter() - started_at) * 1000.0
+                    db.update_command(
+                        cmd["id"],
+                        "done",
+                        _final_result_message(f"Override cleared: {key}", trace_id=trace_id, duration_ms=duration_ms),
+                    )
+                else:
+                    db.update_command(cmd["id"], "failed", "key is required")
 
             else:
                 db.update_command(cmd["id"], "failed", f"Unknown command: {cmd_name}")

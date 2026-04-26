@@ -12,12 +12,13 @@ export interface NavItem {
 }
 
 export const NAV_ITEMS: NavItem[] = [
-  { href: "/dashboard",      label: "Mission Control", icon: "dashboard"        },
-  { href: "/dashboard/risk",  label: "Risk",            icon: "shield"           },
-  { href: "/dashboard/chart", label: "Chart",           icon: "candlestick_chart" },
-  { href: "/dashboard/system", label: "System",          icon: "monitor"           },
-  { href: "/dashboard/history", label: "History",        icon: "trending_up"       },
-  { href: "/dashboard/settings", label: "Settings",      icon: "settings"          },
+  { href: "/dashboard",       label: "Mission Control", icon: "dashboard"        },
+  { href: "/dashboard/risk",   label: "Risk",            icon: "shield"           },
+  { href: "/dashboard/chart",  label: "Chart",            icon: "candlestick_chart" },
+  { href: "/dashboard/system", label: "System",           icon: "monitor"           },
+  { href: "/dashboard/history",label: "History",          icon: "trending_up"       },
+  { href: "/dashboard/database",label:"Database",        icon: "storage"           },
+  { href: "/dashboard/settings",label: "Settings",      icon: "settings"          },
 ];
 
 /** Desktop sidebar — 8 nav items. Agent theatre hidden from mobile. */

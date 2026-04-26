@@ -451,6 +451,14 @@ CREATE TABLE IF NOT EXISTS macro_snapshots (
 );
 """
 
+_CREATE_BOT_SETTINGS_OVERRIDES = """
+CREATE TABLE IF NOT EXISTS bot_settings_overrides (
+    key         TEXT PRIMARY KEY,
+    value       TEXT NOT NULL,
+    updated_at  TIMESTAMPTZ DEFAULT NOW()
+);
+"""
+
 _ALL_TABLES = [
     _CREATE_TRADES,
     _CREATE_TRADE_SCORES,
@@ -470,6 +478,7 @@ _ALL_TABLES = [
     _CREATE_AGENT_REPUTATION,
     _CREATE_SUBSCRIPTIONS,
     _CREATE_MACRO_SNAPSHOTS,
+    _CREATE_BOT_SETTINGS_OVERRIDES,
 ]
 
 # Alias for the migrations that run after table creation

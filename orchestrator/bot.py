@@ -39,6 +39,8 @@ from agents.ssrt_agent import SSRTAgent
 from utils import telegram_bot
 from utils import candle_server
 from utils import terminal_ui as tui
+from utils.settings_overrides import apply_overrides
+
 from utils.helpers import (
     current_session,
     is_any_market_open,
@@ -102,6 +104,7 @@ class TradingBot:
         # ── Core infrastructure ──────────────────────────────────────────
         db = Database()
         self.db = db
+        apply_overrides(db, settings)
         self.symbol_event_tracker = SymbolEventTracker()
 
         # Resolve broker credentials: DB active account → .env fallback
