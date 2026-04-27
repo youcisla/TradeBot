@@ -407,7 +407,7 @@ class _CandleHandler(BaseHTTPRequestHandler):
         if not job:
             self._json_response(404, {"error": "Job not found"})
             return
-        # Return a clean dict (strip internal keys)
+        # Return a clean dict (strip internal keys) then prune completed jobs
         payload = {
             "jobId": job_id,
             "status": job["status"],
@@ -415,6 +415,9 @@ class _CandleHandler(BaseHTTPRequestHandler):
             "result": job.get("result"),
             "error": job.get("error"),
         }
+        # Clean up completed/error jobs to prevent unbounded memory growth
+        if job["status"] in ("done", "error"):
+            del _backtest_jobs[job_id]
         self._json_response(200, payload)
 
     def log_message(self, format: str, *args: object) -> None:  # noqa: A002

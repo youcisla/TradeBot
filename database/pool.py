@@ -26,7 +26,7 @@ class ConnectionPool:
                 pass
         self._pool = psycopg2.pool.ThreadedConnectionPool(
             minconn=1,
-            maxconn=20,
+            maxconn=8,
             dsn=self._dsn,
             options="-c statement_timeout=15000",
         )
@@ -72,7 +72,7 @@ class ConnectionPool:
             pass
         self._pool = psycopg2.pool.ThreadedConnectionPool(
             minconn=1,
-            maxconn=20,
+            maxconn=8,
             dsn=self._dsn,
             options="-c statement_timeout=15000",
         )

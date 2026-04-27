@@ -38,6 +38,7 @@ class MarketAgent:
         self._validators: dict[str, DataValidator] = {}
         self._candle_count = candle_count
         # Cache slow-changing higher-timeframe candles to reduce MT5 round-trips.
+        # LRU-style eviction: max 60 entries (~12MB for 1000 candles × 5 TFs)
         self._htf_cache: dict[tuple[str, str, int], tuple[float, list[Candle]]] = {}
         self._tick_history: dict[str, deque[tuple[float, float]]] = {}
         self._htf_cache_base_ttl_seconds: dict[str, float] = {
@@ -47,6 +48,7 @@ class MarketAgent:
             "H4":  settings.HTF_CACHE_TTL_H4_SECONDS,
             "D1":  settings.HTF_CACHE_TTL_D1_SECONDS,
         }
+        self._MAX_HTF_CACHE = 60
 
     def _validator(self, symbol: str) -> DataValidator:
         if symbol not in self._validators:
@@ -189,6 +191,10 @@ class MarketAgent:
 
         try:
             candles = self._broker.get_candles(symbol, timeframe, count=count) or []
+            # LRU eviction to prevent unbounded cache growth
+            if len(self._htf_cache) >= self._MAX_HTF_CACHE:
+                oldest_key = min(self._htf_cache, key=lambda k: self._htf_cache[k][0])
+                del self._htf_cache[oldest_key]
             self._htf_cache[cache_key] = (now, candles)
             return candles
         except Exception:
