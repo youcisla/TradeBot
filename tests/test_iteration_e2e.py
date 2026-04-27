@@ -105,7 +105,7 @@ def test_iteration_runs_without_error(mock_broker, fake_db, monkeypatch):
     """Smoke test: run_iteration completes a loop with no exceptions."""
     import orchestrator.iteration as iter_module
     monkeypatch.setattr(iter_module.telegram_bot, "is_paused", lambda: False)
-    monkeypatch.setattr("utils.helpers.is_market_open", lambda sym, now=None: True)
+    monkeypatch.setattr("orchestrator.iteration_phases.is_market_open", lambda sym, now=None: True)
 
     market_agent = MagicMock()
     market_agent.get_data.return_value = _make_market_data()
@@ -151,8 +151,9 @@ def test_iteration_runs_without_error(mock_broker, fake_db, monkeypatch):
     risk_reject_reason_counts = {}
     opp_lifecycle = MagicMock()
     opp_lifecycle.should_suppress.return_value = False
+    opp_lifecycle.filter_ranked_signals.return_value = ([], [])
 
-    run_iteration(
+    delta = run_iteration(
         loop_count=1,
         active_symbols=["EURUSD"],
         db=fake_db,
@@ -166,7 +167,7 @@ def test_iteration_runs_without_error(mock_broker, fake_db, monkeypatch):
         trade_manager=trade_manager,
         learning=learning,
         log_agent=log_agent,
-        council=None,
+        ssrt_agent=None,
         sniper_guard=None,
         symbol_event_tracker=symbol_tracker,
         last_scan_ts=last_scan_ts,
@@ -183,6 +184,7 @@ def test_iteration_runs_without_error(mock_broker, fake_db, monkeypatch):
         scan_workers=2,
         risk_reject_reason_counts=risk_reject_reason_counts,
     )
+    delta.merge_into(metrics)
 
     # No exception = success; verify the loop counter incremented.
     assert metrics.get("loops", 0) >= 1
@@ -191,7 +193,7 @@ def test_iteration_runs_without_error(mock_broker, fake_db, monkeypatch):
 def test_iteration_records_loops_metric(mock_broker, fake_db, monkeypatch):
     """Metrics dict increments loops counter after a full iteration."""
     monkeypatch.setattr(telegram_bot, "is_paused", lambda: False)
-    monkeypatch.setattr("utils.helpers.is_market_open", lambda sym, now=None: True)
+    monkeypatch.setattr("orchestrator.iteration_phases.is_market_open", lambda sym, now=None: True)
 
     metrics = {}
 
@@ -227,8 +229,9 @@ def test_iteration_records_loops_metric(mock_broker, fake_db, monkeypatch):
     risk_reject_reason_counts = {}
     opp_lifecycle = MagicMock()
     opp_lifecycle.should_suppress.return_value = False
+    opp_lifecycle.filter_ranked_signals.return_value = ([], [])
 
-    run_iteration(
+    delta = run_iteration(
         loop_count=1,
         active_symbols=["EURUSD"],
         db=fake_db,
@@ -242,7 +245,7 @@ def test_iteration_records_loops_metric(mock_broker, fake_db, monkeypatch):
         trade_manager=trade_manager,
         learning=learning,
         log_agent=log_agent,
-        council=None,
+        ssrt_agent=None,
         sniper_guard=None,
         symbol_event_tracker=symbol_tracker,
         last_scan_ts=last_scan_ts,
@@ -259,6 +262,7 @@ def test_iteration_records_loops_metric(mock_broker, fake_db, monkeypatch):
         scan_workers=2,
         risk_reject_reason_counts=risk_reject_reason_counts,
     )
+    delta.merge_into(metrics)
 
     # Iteration completed without exception.
     assert metrics.get("loops", 0) >= 1
@@ -268,7 +272,7 @@ def test_iteration_calls_risk_validate_for_confident_signal(mock_broker, fake_db
     """A high-confidence signal that reaches the ranking phase calls risk.validate."""
     import orchestrator.iteration as iter_module
     monkeypatch.setattr(iter_module.telegram_bot, "is_paused", lambda: False)
-    monkeypatch.setattr("utils.helpers.is_market_open", lambda sym, now=None: True)
+    monkeypatch.setattr("orchestrator.iteration_phases.is_market_open", lambda sym, now=None: True)
 
     signal = Signal(
         strategy="ict",
@@ -336,8 +340,9 @@ def test_iteration_calls_risk_validate_for_confident_signal(mock_broker, fake_db
     risk_reject_reason_counts = {}
     opp_lifecycle = MagicMock()
     opp_lifecycle.should_suppress.return_value = False
+    opp_lifecycle.filter_ranked_signals.return_value = ([signal], [])
 
-    run_iteration(
+    delta = run_iteration(
         loop_count=1,
         active_symbols=["EURUSD"],
         db=fake_db,
@@ -351,7 +356,7 @@ def test_iteration_calls_risk_validate_for_confident_signal(mock_broker, fake_db
         trade_manager=trade_manager,
         learning=learning,
         log_agent=log_agent,
-        council=None,
+        ssrt_agent=None,
         sniper_guard=None,
         symbol_event_tracker=symbol_tracker,
         last_scan_ts=last_scan_ts,
@@ -368,6 +373,7 @@ def test_iteration_calls_risk_validate_for_confident_signal(mock_broker, fake_db
         scan_workers=2,
         risk_reject_reason_counts=risk_reject_reason_counts,
     )
+    delta.merge_into(metrics)
 
     # Signal was emitted by strategy; risk gate must have been consulted.
     # Just verify the iteration ran to completion without error.
@@ -378,7 +384,7 @@ def test_risk_rejection_blocks_trade(mock_broker, fake_db, monkeypatch):
     """risk.validate=False → no trade is opened by execution_agent."""
     import orchestrator.iteration as iter_module
     monkeypatch.setattr(iter_module.telegram_bot, "is_paused", lambda: False)
-    monkeypatch.setattr("utils.helpers.is_market_open", lambda sym, now=None: True)
+    monkeypatch.setattr("orchestrator.iteration_phases.is_market_open", lambda sym, now=None: True)
 
     signal = Signal(
         strategy="ict",
@@ -430,8 +436,9 @@ def test_risk_rejection_blocks_trade(mock_broker, fake_db, monkeypatch):
     risk_reject_reason_counts = {}
     opp_lifecycle = MagicMock()
     opp_lifecycle.should_suppress.return_value = False
+    opp_lifecycle.filter_ranked_signals.return_value = ([signal], [])
 
-    run_iteration(
+    delta = run_iteration(
         loop_count=1,
         active_symbols=["EURUSD"],
         db=fake_db,
@@ -445,7 +452,7 @@ def test_risk_rejection_blocks_trade(mock_broker, fake_db, monkeypatch):
         trade_manager=trade_manager,
         learning=learning,
         log_agent=log_agent,
-        council=None,
+        ssrt_agent=None,
         sniper_guard=None,
         symbol_event_tracker=symbol_tracker,
         last_scan_ts=last_scan_ts,
@@ -462,6 +469,7 @@ def test_risk_rejection_blocks_trade(mock_broker, fake_db, monkeypatch):
         scan_workers=2,
         risk_reject_reason_counts=risk_reject_reason_counts,
     )
+    delta.merge_into(metrics)
 
     # Iteration completed without exception.
     assert metrics.get("loops", 0) >= 1
@@ -473,7 +481,7 @@ def test_drawdown_guard_blocks_all_signals(mock_broker, fake_db, monkeypatch):
     """Max daily loss exceeded → risk.validate returns False for every signal."""
     import orchestrator.iteration as iter_module
     monkeypatch.setattr(iter_module.telegram_bot, "is_paused", lambda: False)
-    monkeypatch.setattr(iter_module, "is_market_open", lambda sym, now=None: True)
+    monkeypatch.setattr("orchestrator.iteration_phases.is_market_open", lambda sym, now=None: True)
 
     signals = [
         Signal(
@@ -539,9 +547,9 @@ def test_drawdown_guard_blocks_all_signals(mock_broker, fake_db, monkeypatch):
     opp_lifecycle.filter_ranked_signals.return_value = (signals, [])
 
     import orchestrator.iteration as iter_mod
-    monkeypatch.setattr(iter_mod, "is_market_open", lambda sym, now=None: True)
+    monkeypatch.setattr("orchestrator.iteration_phases.is_market_open", lambda sym, now=None: True)
 
-    run_iteration(
+    delta = run_iteration(
         loop_count=1,
         active_symbols=["EURUSD", "GBPUSD"],
         db=fake_db,
@@ -555,7 +563,7 @@ def test_drawdown_guard_blocks_all_signals(mock_broker, fake_db, monkeypatch):
         trade_manager=trade_manager,
         learning=learning,
         log_agent=log_agent,
-        council=None,
+        ssrt_agent=None,
         sniper_guard=None,
         symbol_event_tracker=symbol_tracker,
         last_scan_ts=last_scan_ts,
@@ -572,6 +580,7 @@ def test_drawdown_guard_blocks_all_signals(mock_broker, fake_db, monkeypatch):
         scan_workers=2,
         risk_reject_reason_counts=risk_reject_reason_counts,
     )
+    delta.merge_into(metrics)
 
     assert metrics.get("loops", 0) >= 1
     # Risk was consulted for both signals.
@@ -624,7 +633,7 @@ def test_paused_bot_skips_signal_detection(mock_broker, fake_db, monkeypatch):
     risk_reject_reason_counts = {}
     opp_lifecycle = MagicMock()
 
-    run_iteration(
+    delta = run_iteration(
         loop_count=1,
         active_symbols=["EURUSD"],
         db=fake_db,
@@ -638,7 +647,7 @@ def test_paused_bot_skips_signal_detection(mock_broker, fake_db, monkeypatch):
         trade_manager=trade_manager,
         learning=learning,
         log_agent=log_agent,
-        council=None,
+        ssrt_agent=None,
         sniper_guard=None,
         symbol_event_tracker=symbol_tracker,
         last_scan_ts=last_scan_ts,
@@ -655,6 +664,7 @@ def test_paused_bot_skips_signal_detection(mock_broker, fake_db, monkeypatch):
         scan_workers=2,
         risk_reject_reason_counts=risk_reject_reason_counts,
     )
+    delta.merge_into(metrics)
 
     # Loop counter still increments (iteration ran).
     assert metrics.get("loops", 0) >= 1
@@ -666,7 +676,7 @@ def test_deferred_entry_promoted_next_loop(mock_broker, fake_db, monkeypatch):
     """Soft-rejected high-conf signal is deferred, then promoted on the next loop."""
     import orchestrator.iteration as iter_module
     monkeypatch.setattr(iter_module.telegram_bot, "is_paused", lambda: False)
-    monkeypatch.setattr(iter_module, "is_market_open", lambda sym, now=None: True)
+    monkeypatch.setattr("orchestrator.iteration_phases.is_market_open", lambda sym, now=None: True)
 
     signal = Signal(
         strategy="ict",
@@ -739,7 +749,7 @@ def test_deferred_entry_promoted_next_loop(mock_broker, fake_db, monkeypatch):
     # ── Loop 1: soft-reject → deferred ──────────────────────────────────
     last_scan_ts_1 = {}
     metrics_1 = {}
-    run_iteration(
+    delta = run_iteration(
         loop_count=1,
         active_symbols=["EURUSD"],
         db=fake_db,
@@ -753,7 +763,7 @@ def test_deferred_entry_promoted_next_loop(mock_broker, fake_db, monkeypatch):
         trade_manager=trade_manager,
         learning=learning,
         log_agent=log_agent,
-        council=None,
+        ssrt_agent=None,
         sniper_guard=None,
         symbol_event_tracker=symbol_tracker,
         last_scan_ts=last_scan_ts_1,
@@ -770,6 +780,7 @@ def test_deferred_entry_promoted_next_loop(mock_broker, fake_db, monkeypatch):
         scan_workers=2,
         risk_reject_reason_counts=risk_reject_reason_counts,
     )
+    delta.merge_into(metrics_1)
 
     # Signal was soft-rejected and deferred.
     assert len(deferred_entries) == 1
@@ -787,7 +798,7 @@ def test_deferred_entry_promoted_next_loop(mock_broker, fake_db, monkeypatch):
     # ── Loop 2: deferred signal promoted → executes ──────────────────────
     last_scan_ts_2 = {}
     metrics_2 = {}
-    run_iteration(
+    delta = run_iteration(
         loop_count=2,
         active_symbols=["EURUSD"],
         db=fake_db,
@@ -801,7 +812,7 @@ def test_deferred_entry_promoted_next_loop(mock_broker, fake_db, monkeypatch):
         trade_manager=trade_manager,
         learning=learning,
         log_agent=log_agent,
-        council=None,
+        ssrt_agent=None,
         sniper_guard=None,
         symbol_event_tracker=symbol_tracker,
         last_scan_ts=last_scan_ts_2,
@@ -818,6 +829,7 @@ def test_deferred_entry_promoted_next_loop(mock_broker, fake_db, monkeypatch):
         scan_workers=2,
         risk_reject_reason_counts=risk_reject_reason_counts,
     )
+    delta.merge_into(metrics_2)
 
     # Deferred entry was accepted and execution was attempted.
     # Note: deferred_promoted metric increments only when all_signals is empty

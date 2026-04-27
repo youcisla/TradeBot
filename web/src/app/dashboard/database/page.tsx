@@ -2,7 +2,11 @@
 
 import { useState } from "react";
 import useSWR from "swr";
+import { createColumnHelper } from "@tanstack/react-table";
 import { columnHint, relTime, formatJSON, statusColor } from "@/lib/db-admin";
+import type { CellContext } from "@tanstack/react-table";
+
+const columnHelper = createColumnHelper<Record<string, unknown>>();
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
@@ -43,41 +47,42 @@ export default function DatabasePage() {
   const totalPages = Math.ceil(total / pageSize);
 
   // Build columns from schema
-  const columns = schema.map((col) => ({
-    id: col.name,
-    accessorKey: col.name,
-    header: col.name,
-    enableSorting: true,
-    cell: ({ getValue }) => {
-      const val = getValue() as unknown;
-      const hint = columnHint(col.type, col.name);
-      if (hint === "status") {
-        return <span className={statusColor(String(val ?? ""))}>{String(val ?? "—")}</span>;
-      }
-      if (hint === "timestamp") {
-        return val ? <span title={String(val)}>{relTime(String(val))}</span> : "—";
-      }
-      if (hint === "boolean") {
-        return val ? "✓" : "✗";
-      }
-      if (hint === "number") {
-        const n = Number(val);
-        return isNaN(n) ? String(val ?? "—") : n.toLocaleString(undefined, { maximumFractionDigits: 4 });
-      }
-      if (hint === "json") {
-        if (val == null) return "—";
-        const summary = formatJSON(val);
-        const truncated = summary.length > 120 ? summary.slice(0, 120) + "…" : summary;
-        return (
-          <details className="text-xs">
-            <summary className="cursor-pointer font-mono text-neutral-400">{truncated}</summary>
-            <pre className="mt-1 text-xs text-neutral-500 whitespace-pre-wrap break-all">{formatJSON(val)}</pre>
-          </details>
-        );
-      }
-      return val == null ? <span className="text-neutral-500 italic">NULL</span> : String(val);
-    },
-  }));
+  const columns = schema.map((col) =>
+    columnHelper.accessor(col.name, {
+      id: col.name,
+      header: col.name,
+      enableSorting: true,
+      cell: (info: CellContext<Record<string, unknown>, unknown>) => {
+        const val = info.getValue() as unknown;
+        const hint = columnHint(col.type, col.name);
+        if (hint === "status") {
+          return <span className={statusColor(String(val ?? ""))}>{String(val ?? "—")}</span>;
+        }
+        if (hint === "timestamp") {
+          return val ? <span title={String(val)}>{relTime(String(val))}</span> : "—";
+        }
+        if (hint === "boolean") {
+          return val ? "✓" : "✗";
+        }
+        if (hint === "number") {
+          const n = Number(val);
+          return isNaN(n) ? String(val ?? "—") : n.toLocaleString(undefined, { maximumFractionDigits: 4 });
+        }
+        if (hint === "json") {
+          if (val == null) return "—";
+          const summary = formatJSON(val);
+          const truncated = summary.length > 120 ? summary.slice(0, 120) + "…" : summary;
+          return (
+            <details className="text-xs">
+              <summary className="cursor-pointer font-mono text-neutral-400">{truncated}</summary>
+              <pre className="mt-1 text-xs text-neutral-500 whitespace-pre-wrap break-all">{formatJSON(val)}</pre>
+            </details>
+          );
+        }
+        return val == null ? <span className="text-neutral-500 italic">NULL</span> : String(val);
+      },
+    })
+  );
 
   return (
     <div className="flex flex-col h-full gap-4">
@@ -179,7 +184,7 @@ export default function DatabasePage() {
                     </td>
                   </tr>
                 ) : (
-                  rows.map((row, i) => (
+                  rows.map((row: Record<string, unknown>, i: number) => (
                     <tr key={i} className="border-b border-white/5 hover:bg-white/3">
                       {columns.map((col) => {
                         const val = (row as Record<string, unknown>)[col.id as string];

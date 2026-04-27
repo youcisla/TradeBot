@@ -459,6 +459,8 @@ class LGBMPriceModel:
 
         with self._lock:
             model = self._models.get(key)
+
+        if model is None:
             return self._default_prediction()
 
         try:

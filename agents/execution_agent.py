@@ -73,6 +73,26 @@ class ExecutionAgent:
         return self._guards
 
     def _open_inner(self, signal: Signal) -> Trade | None:
+        # ── Duplicate guard — block same symbol + direction ───────────────────
+        try:
+            live = self._broker.get_open_positions()
+            for pos in live:
+                if pos.symbol == signal.symbol and pos.direction == signal.direction:
+                    logger.warning(
+                        "EXEC BLOCKED [DUPLICATE]: %s %s already open (ticket %d)",
+                        signal.direction, signal.symbol, pos.ticket,
+                    )
+                    self._emit(
+                        "warn",
+                        f"Duplicate trade blocked: {signal.direction} {signal.symbol} "
+                        f"already open (ticket {pos.ticket})",
+                        {"symbol": signal.symbol, "direction": signal.direction,
+                         "ticket": pos.ticket},
+                    )
+                    return None
+        except Exception:
+            logger.debug("Could not check for duplicates (non-fatal)", exc_info=True)
+
         # ── GuardPipeline gate ────────────────────────────────────────────
         if getattr(settings, "GUARD_PIPELINE_ENABLED", True):
             live = self._broker.get_open_positions()

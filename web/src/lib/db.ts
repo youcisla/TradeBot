@@ -600,7 +600,7 @@ export async function addBrokerAccount(
      VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
     [userId ?? null, name, accountNumber, encryptedPassword, server, isDemo]
   );
-  return rows[0].id;
+  return (rows[0] as { id: number }).id;
 }
 
 export async function updateBrokerAccount(
@@ -663,7 +663,7 @@ export async function createUser(
     "INSERT INTO dashboard_users (username, password_hash) VALUES ($1, $2) RETURNING id",
     [username, passwordHash]
   );
-  return rows[0].id;
+  return (rows[0] as { id: number }).id;
 }
 
 export async function updateUserPassword(
@@ -678,7 +678,7 @@ export async function updateUserPassword(
 
 export async function getUserCount(): Promise<number> {
   const rows = await query("SELECT COUNT(*)::int AS count FROM dashboard_users");
-  return rows[0].count;
+  return (rows[0] as { count: number }).count;
 }
 
 // ── Signals ─────────────────────────────────────────────────────────────
@@ -762,7 +762,7 @@ export async function publishSignal(body: {
       body.author ?? "bot", body.tags ?? [],
     ]
   );
-  return rows[0].id;
+  return (rows[0] as { id: number }).id;
 }
 
 // ── Agent Reputation ─────────────────────────────────────────────────────
@@ -832,7 +832,7 @@ export async function followLeader(
      VALUES ($1,$2,$3) ON CONFLICT DO NOTHING RETURNING id`,
     [followerId, leaderId, leaderStrategy]
   );
-  return rows[0]?.id ?? 0;
+  return (rows[0] as { id?: number })?.id ?? 0;
 }
 
 export async function unfollowLeader(followerId: string, leaderId: string): Promise<boolean> {

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
+import NextAuth from "next-auth";
+import { authOptions } from "@/lib/auth";
 import {
   getPendingReviewCommands,
   getCommandAuditSummary,
@@ -7,7 +8,8 @@ import {
   insertCommand,
   reviewCommand,
 } from "@/lib/db";
-import { authOptions } from "@/lib/auth";
+
+const { auth } = NextAuth(authOptions);
 
 type RiskLevel = "low" | "medium" | "high";
 
@@ -42,7 +44,7 @@ function toObjectPayload(payload: unknown): Record<string, unknown> {
 }
 
 export async function GET(request: NextRequest) {
-  const session = await getServerSession(authOptions);
+  const session = await auth();
   if (!session?.user) {
     return errorResponse("UNAUTHORIZED", "Unauthorized", 401);
   }
@@ -71,7 +73,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const session = await getServerSession(authOptions);
+  const session = await auth();
   if (!session?.user) {
     return errorResponse("UNAUTHORIZED", "Unauthorized", 401);
   }

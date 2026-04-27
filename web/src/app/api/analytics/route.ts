@@ -53,7 +53,11 @@ export async function GET(request: NextRequest) {
         getSymbolStats(),
         getDirectionStats(),
         getDailyPnl(since),
-        getKpis(),
+        getKpis() as Promise<{
+          total_trades: number; wins: number; total_pnl: number;
+          avg_loss: number; avg_win: number; avg_pnl: number;
+          best_trade: number; worst_trade: number;
+        }>,
       ]);
 
     // Build next-cursor from the last trade's close_time

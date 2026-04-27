@@ -1,9 +1,9 @@
-import type { NextAuthOptions } from "next-auth";
+import NextAuth from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { getUserByUsername } from "@/lib/db";
 
-export const authOptions: NextAuthOptions = {
+export const authOptions = {
   providers: [
     CredentialsProvider({
       name: "Credentials",
@@ -21,11 +21,11 @@ export const authOptions: NextAuthOptions = {
 
         if (!credentials?.username || !credentials?.password) return null;
 
-        const username = credentials.username.trim().toLowerCase();
-        const password = credentials.password;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const creds = credentials as any;
+        const username = creds.username.trim().toLowerCase();
+        const password = creds.password;
 
-        // Normal login — verify against DB
-        // To create the first user run: python scripts/reset_dashboard_user.py
         const user = await getUserByUsername(username);
         if (!user || !user.password_hash) return null;
 
@@ -37,22 +37,26 @@ export const authOptions: NextAuthOptions = {
     }),
   ],
   pages: { signIn: "/login" },
-  session: { strategy: "jwt", maxAge: 7 * 24 * 60 * 60 },
+  session: { strategy: "jwt" as const, maxAge: 7 * 24 * 60 * 60 },
   callbacks: {
-    async jwt({ token, user }) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    async jwt({ token, user }: any) {
       if (user) {
         token.userId = Number(user.id);
         token.username = user.name;
       }
       return token;
     },
-    async session({ session, token }) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    async session({ session, token }: any) {
       if (session.user) {
-        (session.user as Record<string, unknown>).id = token.userId;
-        (session.user as Record<string, unknown>).username = token.username;
+        session.user.id = token.userId;
+        session.user.username = token.username;
       }
       return session;
     },
   },
   secret: process.env.NEXTAUTH_SECRET,
 };
+
+export const auth = NextAuth(authOptions);

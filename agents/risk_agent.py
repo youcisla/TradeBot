@@ -1364,18 +1364,25 @@ class RiskAgent:
 
         # Static fallback — use the hard-coded correlated-pairs table
         static_blocked = False
-        correlated = _CORRELATED_PAIRS.get(signal.symbol, frozenset())
+        signal_correlated = _CORRELATED_PAIRS.get(signal.symbol, frozenset())
         for t in open_trades:
             if not t.is_open():
                 continue
+            # Same symbol + direction = always blocked (duplicate guard handles this,
+            # but static table catches it too for belt-and-suspenders)
             if t.symbol == signal.symbol and t.direction == signal.direction:
                 static_blocked = True
                 break
-            if t.symbol in correlated and t.direction == signal.direction:
+            # Bidirectional correlation check:
+            #  - signal's symbol's correlated set includes the existing trade's symbol
+            #  - OR existing trade's symbol's correlated set includes signal's symbol
+            existing_correlated = _CORRELATED_PAIRS.get(t.symbol, frozenset())
+            if signal.symbol in existing_correlated or t.symbol in signal_correlated:
                 static_blocked = True
                 break
 
-        if dynamic_blocked and static_blocked:
+        # Block if either the dynamic gate OR the static table detects correlation.
+        if dynamic_blocked or static_blocked:
             logger.debug(
                 "Correlation block (dynamic + static): %s %s multiplier=%.2f",
                 signal.direction, signal.symbol, dynamic_multiplier,

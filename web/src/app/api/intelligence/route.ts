@@ -159,7 +159,7 @@ export async function GET() {
       winRate,
       tradesToday: todayTrades.length,
       openTrades: (status as unknown as Record<string, unknown>)?.open_trades ?? 0,
-      totalTrades: Number(kpis.total_trades) || 0,
+      totalTrades: Number((kpis as { total_trades?: number }).total_trades) || 0,
       // Alerts
       recentAlerts: recentAlerts.map((e) => ({
         id: e.id,

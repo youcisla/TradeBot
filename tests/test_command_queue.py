@@ -58,8 +58,8 @@ def test_close_all_command_executes(monkeypatch) -> None:
     )
     trade_manager = _FakeTradeManager()
 
-    monkeypatch.setattr("main.telegram_bot.is_kill_requested", lambda: False)
-    monkeypatch.setattr("main.telegram_bot.send_message", lambda _: None)
+    monkeypatch.setattr("utils.telegram_bot.is_kill_requested", lambda: False)
+    monkeypatch.setattr("utils.telegram_bot.send_message", lambda _: None)
 
     process_commands(db, trade_manager, lambda: None, tool_system=None)
 
@@ -83,8 +83,8 @@ def test_close_trade_accepts_trade_id_or_tradeId(monkeypatch) -> None:
     )
     trade_manager = _FakeTradeManager()
 
-    monkeypatch.setattr("main.telegram_bot.is_kill_requested", lambda: False)
-    monkeypatch.setattr("main.telegram_bot.send_message", lambda _: None)
+    monkeypatch.setattr("utils.telegram_bot.is_kill_requested", lambda: False)
+    monkeypatch.setattr("utils.telegram_bot.send_message", lambda _: None)
 
     process_commands(db, trade_manager, lambda: None, tool_system=None)
 
