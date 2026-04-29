@@ -1,5 +1,2 @@
-/**
- * @deprecated Re-export only — import from AppShellProvider directly in new code.
- * Kept for backwards compatibility during migration.
- */
+export { AppShellLayout as AppShell } from "@/components/app/AppShellLayout";
 export { useAppShell } from "@/components/app/AppShellProvider";

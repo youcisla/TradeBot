@@ -29,6 +29,14 @@ export interface BotStatus {
   loop_count?: number;
   last_scan_latency_ms?: number;
   last_reconnect_at?: string;
+  guard_status?: unknown[];
+  current_session?: string;
+  market_regime?: string;
+  spread_pips?: number;
+  vix?: number;
+  equity_drawdown_pct?: number;
+  daily_loss_pct?: number;
+  spread_condition?: string;
 }
 
 export function useBotStatus() {
@@ -51,9 +59,22 @@ export interface Trade {
   status: string;
   strategy?: string;
   lots?: number;
+  lot_size?: number;
   tp1?: number;
   tp2?: number;
+  tp3?: number;
+  tp4?: number;
   sl?: number;
+  stop_loss?: number;
+  tp1_lots?: number;
+  tp2_lots?: number;
+  tp3_lots?: number;
+  tp4_lots?: number;
+  tp1_hit?: boolean;
+  tp2_hit?: boolean;
+  current_price?: number;
+  broker_ticket?: number;
+  close_reason?: string;
 }
 
 export function useOpenTrades() {
@@ -89,6 +110,18 @@ export function useEvents(limit = 100) {
   return useSWR<AgentEvent[]>(`/api/events?limit=${limit}`, fetcher, {
     ...BASE_CONF,
     refreshInterval: 3_000,
+  });
+}
+
+// ── Signals ─────────────────────────────────────────────────────────────────────
+
+export function useSignals(intent?: string, limit = 50) {
+  const params = new URLSearchParams();
+  if (intent) params.set("intent", intent);
+  params.set("limit", String(limit));
+  return useSWR<import("@/lib/db").Signal[]>(`/api/signals?${params}`, fetcher, {
+    ...BASE_CONF,
+    refreshInterval: 5_000,
   });
 }
 
@@ -171,10 +204,28 @@ export function useRisk() {
 export interface Intelligence {
   session: string;
   sessionLabel: string;
+  nextSession?: string;
+  nextSessionIn?: number;
   vix?: number;
   spreadCondition: string;
   spreadPips?: number;
   marketRegime: string;
+  dailyLossPct?: number;
+  equityDrawdownPct?: number;
+  todayPnl?: number;
+  winRate?: number;
+  tradesToday?: number;
+  openTrades?: number;
+  totalTrades?: number;
+  recentAlerts?: Array<{
+    id: number;
+    agent: string;
+    level: string;
+    message: string;
+    created_at: string;
+  }>;
+  alertCount?: number;
+  intelligence?: string;
 }
 
 export function useIntelligence() {

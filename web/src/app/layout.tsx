@@ -20,7 +20,7 @@ const ibPlexSans = IBM_Plex_Sans_Condensed({
 });
 
 export const metadata: Metadata = {
-  title: "NeuralFX — Precision Trading",
+  title: "PulseTrade — Operations Console",
   description: "AI-powered algorithmic trading command center",
 };
 

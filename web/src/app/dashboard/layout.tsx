@@ -1,5 +1,5 @@
 import { AppShellProvider } from "@/components/app/AppShellProvider";
-import { AppShellLayout } from "@/components/app/AppShellLayout";
+import { AppShell } from "@/components/AppShell";
 import { ErrorBoundary } from "@/components/ui/error-boundary";
 
 export default function DashboardLayout({
@@ -10,7 +10,7 @@ export default function DashboardLayout({
   return (
     <ErrorBoundary>
       <AppShellProvider>
-        <AppShellLayout>{children}</AppShellLayout>
+        <AppShell>{children}</AppShell>
       </AppShellProvider>
     </ErrorBoundary>
   );
