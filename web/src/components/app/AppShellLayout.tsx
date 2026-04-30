@@ -50,10 +50,9 @@ export function AppShellLayout({ children }: AppShellLayoutProps) {
         style={{
           paddingTop: "148px",
           paddingLeft: "var(--sidebar-w)",
-          minHeight: "100vh",
         }}
       >
-        <div className="p-6">{children}</div>
+        {children}
       </main>
 
       {/* Main content — mobile */}
@@ -62,10 +61,9 @@ export function AppShellLayout({ children }: AppShellLayoutProps) {
         style={{
           paddingTop: "148px",
           paddingBottom: "var(--nav-bottom-h)",
-          minHeight: "100vh",
         }}
       >
-        <div className="p-4">{children}</div>
+        {children}
       </main>
 
       {/* Mobile bottom nav */}

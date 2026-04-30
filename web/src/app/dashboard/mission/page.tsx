@@ -12,36 +12,27 @@ function fmtRel(ts: string) {
 }
 
 function EquityMini({ data }: { data: number[] }) {
-  const h = 130;
   const w = 800;
   const max = Math.max(...data);
   const min = Math.min(...data);
   const r = max - min || 1;
   const pts = data.map((v, i) => [
     (i / (data.length - 1)) * w,
-    h - ((v - min) / r) * (h - 10) - 5,
+    ((v - min) / r),
   ]);
   const path = "M " + pts.map((p) => p.join(",")).join(" L ");
-  const area = path + ` L ${w},${h} L 0,${h} Z`;
   return (
     <svg
       className="eq-svg"
-      viewBox={`0 0 ${w} ${h}`}
+      viewBox={`0 0 ${w} 1`}
       preserveAspectRatio="none"
-      style={{ height: h }}
+      style={{ width: "100%", display: "block" }}
     >
-      <defs>
-        <linearGradient id="eqg" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="var(--accent-warm)" stopOpacity="0.20" />
-          <stop offset="100%" stopColor="var(--accent-warm)" stopOpacity="0" />
-        </linearGradient>
-      </defs>
-      <path d={area} fill="url(#eqg)" />
       <path
         d={path}
         fill="none"
         stroke="var(--accent-warm)"
-        strokeWidth="1.4"
+        strokeWidth="0.005"
       />
     </svg>
   );
@@ -49,34 +40,25 @@ function EquityMini({ data }: { data: number[] }) {
 
 // Fallback flat equity line when no history is available
 function EquityPlaceholder({ equity }: { equity: number }) {
-  const h = 130;
   const w = 800;
-  const mid = h / 2;
+  const mid = 0.5;
   const pts = [0, 0.25, 0.5, 0.75, 1].map((t, i) => [
-    (i / 4) * w,
-    mid + (i % 2 === 0 ? -1 : 1) * (10 + i * 5),
+    t * w,
+    mid + (i % 2 === 0 ? -0.02 : 0.02),
   ]);
   const path = "M " + pts.map((p) => p.join(",")).join(" L ");
-  const area = path + ` L ${w},${h} L 0,${h} Z`;
   return (
     <svg
       className="eq-svg"
-      viewBox={`0 0 ${w} ${h}`}
+      viewBox={`0 0 ${w} 1`}
       preserveAspectRatio="none"
-      style={{ height: h }}
+      style={{ width: "100%", display: "block" }}
     >
-      <defs>
-        <linearGradient id="eqg" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="var(--accent-warm)" stopOpacity="0.20" />
-          <stop offset="100%" stopColor="var(--accent-warm)" stopOpacity="0" />
-        </linearGradient>
-      </defs>
-      <path d={area} fill="url(#eqg)" />
       <path
         d={path}
         fill="none"
         stroke="var(--accent-warm)"
-        strokeWidth="1.4"
+        strokeWidth="0.005"
       />
     </svg>
   );
@@ -445,7 +427,7 @@ export default function MissionPage() {
                 ${equity.toLocaleString("en-US", { minimumFractionDigits: 0 })}
               </span>
             </div>
-            <div className="card-body" style={{ paddingBottom: 8 }}>
+            <div className="card-body">
               <EquityPlaceholder equity={equity} />
             </div>
           </div>
@@ -464,10 +446,7 @@ export default function MissionPage() {
                 Open ›
               </a>
             </div>
-            <div
-              className="card-body flush"
-              style={{ maxHeight: 380, overflowY: "auto" }}
-            >
+            <div className="card-body flush" style={{ overflowY: "auto" }}>
               {recentEvents.length === 0 ? (
                 <div style={{ padding: "24px 16px", textAlign: "center", color: "var(--fg-3)", fontSize: 13 }}>
                   No recent events

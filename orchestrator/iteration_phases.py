@@ -21,6 +21,7 @@ from utils import terminal_ui as tui
 from utils.helpers import is_market_open
 
 from agents.hku_signal_adapter import adapt_hku_signal
+from agents.sniper_entry_guard import SniperEntryGuard, SniperVerdict
 
 if TYPE_CHECKING:
     from agents.analysis_agent import AnalysisAgent
@@ -30,7 +31,6 @@ if TYPE_CHECKING:
     from agents.logging_agent import LoggingAgent
     from agents.market_agent import MarketAgent
     from agents.risk_agent import RiskAgent
-    from agents.sniper_entry_guard import SniperEntryGuard, SniperVerdict
     from agents.strategy_agent import StrategyAgent
     from agents.trade_manager import TradeManagerAgent
     from broker.connector import BrokerConnector
