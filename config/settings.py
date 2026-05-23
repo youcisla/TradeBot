@@ -1,6 +1,6 @@
 """All configurable parameters for the trading bot.
 
-Validated at startup via Pydantic.  All values are also re-exported as
+Validated at startup via Pydantic Settings.  All values are also re-exported as
 flat module-level variables so existing code (`from config.settings import
 BROKER_ACCOUNT`) continues to work without any changes.
 
@@ -15,15 +15,17 @@ Environment variables are loaded from ``.env`` in the project root.
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Any
 
 from dotenv import load_dotenv
-from pydantic import BaseModel, Field, field_validator, model_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import Field, field_validator, model_validator
+from pydantic_settings import (
+    BaseSettings,
+    SettingsConfigDict,
+)
 
-# ── Load .env ────────────────────────────────────────────────────────────
+# ── Load .env ──────────────────────────────────────────────────────────────
 _env_path = Path(__file__).resolve().parent.parent / ".env"
 load_dotenv(_env_path)
 
@@ -45,41 +47,50 @@ def _parse_tuple_int(value: str) -> tuple[int, ...]:
     return tuple(result)
 
 
+def _parse_list_str(value: str) -> list[str]:
+    """Parse a comma-separated env var into a list of stripped strings."""
+    return [s.strip() for s in value.split(",") if s.strip()]
+
+
 # ── Broker settings ───────────────────────────────────────────────────────
 
-class BrokerSettings(BaseModel):
-    account: str = ""
-    password: str = ""
-    server: str = ""
+class BrokerSettings(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="BROKER_", extra="ignore")
+
+    account: str = Field(default="", validation_alias="BROKER_ACCOUNT")
+    password: str = Field(default="", validation_alias="BROKER_PASSWORD")
+    server: str = Field(default="", validation_alias="BROKER_SERVER")
 
 
 # ── Risk settings ─────────────────────────────────────────────────────────
 
-class RiskSettings(BaseModel):
-    max_risk_per_trade: float = Field(default=0.02, ge=0.0001, le=0.50)
-    max_open_trades: int = Field(default=5, ge=1, le=50)
-    max_daily_loss: float = Field(default=0.05, ge=0.001, le=0.50)
-    max_monthly_loss: float = Field(default=0.10, ge=0.001, le=0.99)
-    max_spread_pips: float = Field(default=8.0, ge=0.0)
-    max_spread_pips_commodity: float = Field(default=10.0, ge=0.0)
-    max_spread_pips_exotic: float = Field(default=15.0, ge=0.0)
-    max_spread_pct_crypto: float = Field(default=2.5, ge=0.0)
-    max_spread_points_index: float = Field(default=5.0, ge=0.0)
-    drawdown_cooldown_hours: int = Field(default=24, ge=0)
-    min_lot_size: float = Field(default=0.01, ge=0.0)
-    max_lot_size: float = Field(default=50.0, ge=0.0)
-    fixed_lot_size: float = Field(default=0.0, ge=0.0)
-    position_size_mode: str = "equity_pct"
-    position_size_fixed_lot: float = Field(default=0.10, ge=0.0)
-    position_size_fixed_risk_amount: float = Field(default=100.0, ge=0.0)
-    kelly_min_trades: int = Field(default=20, ge=2)
-    kelly_lookback_days: int = Field(default=90, ge=7)
-    kelly_half: bool = True
-    risk_validation_profile: str = "agile"
-    risk_agile_high_conf_threshold: float = Field(default=0.74, ge=0.0, le=1.0)
-    risk_agile_spread_multiplier: float = Field(default=1.35, ge=0.0)
+class RiskSettings(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="", extra="ignore")
 
-    @field_validator("position_size_mode", mode="before")
+    max_risk_per_trade: float = Field(default=0.02, ge=0.0001, le=0.50, validation_alias="MAX_RISK_PER_TRADE")
+    max_open_trades: int = Field(default=5, ge=1, le=50, validation_alias="MAX_OPEN_TRADES")
+    max_daily_loss: float = Field(default=0.05, ge=0.001, le=0.50, validation_alias="MAX_DAILY_LOSS")
+    max_monthly_loss: float = Field(default=0.10, ge=0.001, le=0.99, validation_alias="MAX_MONTHLY_LOSS")
+    max_spread_pips: float = Field(default=8.0, ge=0.0, validation_alias="MAX_SPREAD_PIPS")
+    max_spread_pips_commodity: float = Field(default=10.0, ge=0.0, validation_alias="MAX_SPREAD_PIPS_COMMODITY")
+    max_spread_pips_exotic: float = Field(default=15.0, ge=0.0, validation_alias="MAX_SPREAD_PIPS_EXOTIC")
+    max_spread_pct_crypto: float = Field(default=2.5, ge=0.0, validation_alias="MAX_SPREAD_PCT_CRYPTO")
+    max_spread_points_index: float = Field(default=5.0, ge=0.0, validation_alias="MAX_SPREAD_POINTS_INDEX")
+    drawdown_cooldown_hours: int = Field(default=24, ge=0, validation_alias="DRAWDOWN_COOLDOWN_HOURS")
+    min_lot_size: float = Field(default=0.01, ge=0.0, validation_alias="MIN_LOT_SIZE")
+    max_lot_size: float = Field(default=50.0, ge=0.0, validation_alias="MAX_LOT_SIZE")
+    fixed_lot_size: float = Field(default=0.0, ge=0.0, validation_alias="FIXED_LOT_SIZE")
+    position_size_mode: str = Field(default="equity_pct", validation_alias="POSITION_SIZE_MODE")
+    position_size_fixed_lot: float = Field(default=0.10, ge=0.0, validation_alias="POSITION_SIZE_FIXED_LOT")
+    position_size_fixed_risk_amount: float = Field(default=100.0, ge=0.0, validation_alias="POSITION_SIZE_FIXED_RISK_AMOUNT")
+    kelly_min_trades: int = Field(default=20, ge=2, validation_alias="KELLY_MIN_TRADES")
+    kelly_lookback_days: int = Field(default=90, ge=7, validation_alias="KELLY_LOOKBACK_DAYS")
+    kelly_half: bool = Field(default=True, validation_alias="KELLY_HALF")
+    risk_validation_profile: str = Field(default="agile", validation_alias="RISK_VALIDATION_PROFILE")
+    risk_agile_high_conf_threshold: float = Field(default=0.74, ge=0.0, le=1.0, validation_alias="RISK_AGILE_HIGH_CONF_THRESHOLD")
+    risk_agile_spread_multiplier: float = Field(default=1.35, ge=0.0, validation_alias="RISK_AGILE_SPREAD_MULTIPLIER")
+
+    @field_validator("position_size_mode", "risk_validation_profile", mode="before")
     @classmethod
     def _lowercase_str(cls, v: str) -> str:
         return str(v).lower()
@@ -87,29 +98,33 @@ class RiskSettings(BaseModel):
 
 # ── Guard pipeline settings ───────────────────────────────────────────────
 
-class GuardSettings(BaseModel):
-    enabled: bool = True
-    cooldown_seconds: int = Field(default=300, ge=0)
-    max_daily_loss_pct: float = Field(default=0.05, ge=0.0, le=1.0)
-    max_vix: float = Field(default=40.0, ge=0.0)
-    feed_staleness_seconds: float = Field(default=120.0, ge=0.0)
+class GuardSettings(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="", extra="ignore")
+
+    enabled: bool = Field(default=True, validation_alias="GUARD_PIPELINE_ENABLED")
+    cooldown_seconds: int = Field(default=300, ge=0, validation_alias="GUARD_COOLDOWN_SECONDS")
+    max_daily_loss_pct: float = Field(default=0.05, ge=0.0, le=1.0, validation_alias="GUARD_MAX_DAILY_LOSS_PCT")
+    max_vix: float = Field(default=40.0, ge=0.0, validation_alias="GUARD_MAX_VIX")
+    feed_staleness_seconds: float = Field(default=120.0, ge=0.0, validation_alias="GUARD_FEED_STALENESS_SECONDS")
 
 
-# ── Execution / TP settings ───────────────────────────────────────────────
+# ── Execution / TP settings ─────────────────────────────────────────────────
 
-class ExecutionSettings(BaseModel):
-    tp1_close_percent: float = Field(default=0.40, ge=0.0, le=1.0)
-    tp2_close_percent: float = Field(default=0.30, ge=0.0, le=1.0)
-    tp3_close_percent: float = Field(default=0.20, ge=0.0, le=1.0)
-    tp4_close_percent: float = Field(default=0.10, ge=0.0, le=1.0)
-    trailing_stop_distance_pips: float = Field(default=20.0, ge=0.0)
-    commission_per_lot: float = Field(default=7.0, ge=0.0)
-    commission_per_lot_crypto: float = Field(default=7.0, ge=0.0)
-    commission_per_lot_commodity: float = Field(default=7.0, ge=0.0)
-    commission_per_lot_exotic: float = Field(default=7.0, ge=0.0)
-    breakeven_spread_offset: bool = True
-    limit_entry_max_distance_atr: float = Field(default=0.5, ge=0.0)
-    limit_entry_max_distance_atr_crypto: float = Field(default=2.0, ge=0.0)
+class ExecutionSettings(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="", extra="ignore")
+
+    tp1_close_percent: float = Field(default=0.40, ge=0.0, le=1.0, validation_alias="TP1_CLOSE_PERCENT")
+    tp2_close_percent: float = Field(default=0.30, ge=0.0, le=1.0, validation_alias="TP2_CLOSE_PERCENT")
+    tp3_close_percent: float = Field(default=0.20, ge=0.0, le=1.0, validation_alias="TP3_CLOSE_PERCENT")
+    tp4_close_percent: float = Field(default=0.10, ge=0.0, le=1.0, validation_alias="TP4_CLOSE_PERCENT")
+    trailing_stop_distance_pips: float = Field(default=20.0, ge=0.0, validation_alias="TRAILING_STOP_DISTANCE_PIPS")
+    commission_per_lot: float = Field(default=7.0, ge=0.0, validation_alias="COMMISSION_PER_LOT")
+    commission_per_lot_crypto: float = Field(default=7.0, ge=0.0, validation_alias="COMMISSION_PER_LOT_CRYPTO")
+    commission_per_lot_commodity: float = Field(default=7.0, ge=0.0, validation_alias="COMMISSION_PER_LOT_COMMODITY")
+    commission_per_lot_exotic: float = Field(default=7.0, ge=0.0, validation_alias="COMMISSION_PER_LOT_EXOTIC")
+    breakeven_spread_offset: bool = Field(default=True, validation_alias="BREAKEVEN_SPREAD_OFFSET")
+    limit_entry_max_distance_atr: float = Field(default=0.5, ge=0.0, validation_alias="LIMIT_ENTRY_MAX_DISTANCE_ATR")
+    limit_entry_max_distance_atr_crypto: float = Field(default=2.0, ge=0.0, validation_alias="LIMIT_ENTRY_MAX_DISTANCE_ATR_CRYPTO")
 
     @model_validator(mode="after")
     def _tp_sum_check(self) -> "ExecutionSettings":
@@ -132,13 +147,15 @@ class ExecutionSettings(BaseModel):
 
 # ── Sniper / deferred entry settings ─────────────────────────────────────
 
-class SniperSettings(BaseModel):
-    enabled: bool = True
-    conf_threshold: float = Field(default=0.55, ge=0.0, le=1.0)
-    timeout_minutes: float = Field(default=30.0, ge=0.0)
-    max_entry_atr_distance: float = Field(default=0.55, ge=0.0)
-    fib_min_depth: str = "acceptable"
-    fib_max_depth: str = "deep"
+class SniperSettings(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="", extra="ignore")
+
+    enabled: bool = Field(default=True, validation_alias="SNIPER_ENTRY_ENABLED")
+    conf_threshold: float = Field(default=0.55, ge=0.0, le=1.0, validation_alias="SNIPER_CONF_THRESHOLD")
+    timeout_minutes: float = Field(default=30.0, ge=0.0, validation_alias="SNIPER_TIMEOUT_MINUTES")
+    max_entry_atr_distance: float = Field(default=0.55, ge=0.0, validation_alias="SNIPER_MAX_ENTRY_ATR_DISTANCE")
+    fib_min_depth: str = Field(default="acceptable", validation_alias="SNIPER_FIB_MIN_DEPTH")
+    fib_max_depth: str = Field(default="deep", validation_alias="SNIPER_FIB_MAX_DEPTH")
 
     @field_validator("fib_min_depth", "fib_max_depth", mode="before")
     @classmethod
@@ -146,301 +163,379 @@ class SniperSettings(BaseModel):
         return str(v).lower()
 
 
-class DeferredSettings(BaseModel):
-    enabled: bool = True
-    max_age_seconds: int = Field(default=900, ge=0)
-    max_atr_distance: float = Field(default=0.35, ge=0.0)
-    min_conf: float = Field(default=0.60, ge=0.0, le=1.0)
-    ttl_seconds: int = Field(default=900, ge=0)
+class DeferredSettings(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="", extra="ignore")
+
+    enabled: bool = Field(default=True, validation_alias="DEFERRED_ENTRY_ENABLED")
+    max_age_seconds: int = Field(default=900, ge=0, validation_alias="DEFERRED_ENTRY_MAX_AGE_SECONDS")
+    max_atr_distance: float = Field(default=0.35, ge=0.0, validation_alias="DEFERRED_ENTRY_MAX_ATR_DISTANCE")
+    min_conf: float = Field(default=0.60, ge=0.0, le=1.0, validation_alias="DEFERRED_ENTRY_MIN_CONF")
+    ttl_seconds: int = Field(default=900, ge=0, validation_alias="DEFERRED_ENTRY_TTL_SECONDS")
 
 
 # ── Fast lane / instant entry settings ─────────────────────────────────────
 
-class FastLaneSettings(BaseModel):
-    enabled: bool = True
-    max_signals: int = Field(default=1, ge=0)
-    close_on_full_reject: bool = True
+class FastLaneSettings(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="", extra="ignore")
+
+    enabled: bool = Field(default=True, validation_alias="FAST_LANE_ENABLED")
+    max_signals: int = Field(default=1, ge=0, validation_alias="FAST_LANE_MAX_SIGNALS")
+    close_on_full_reject: bool = Field(default=True, validation_alias="FAST_LANE_CLOSE_ON_FULL_REJECT")
 
 
-class InstantEntrySettings(BaseModel):
-    enabled: bool = True
-    min_confidence: float = Field(default=0.78, ge=0.0, le=1.0)
+class InstantEntrySettings(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="", extra="ignore")
+
+    enabled: bool = Field(default=True, validation_alias="INSTANT_ENTRY_ENABLED")
+    min_confidence: float = Field(default=0.78, ge=0.0, le=1.0, validation_alias="INSTANT_ENTRY_MIN_CONFIDENCE")
 
 
-class ExposureSettings(BaseModel):
-    enabled: bool = False
-    reduce_threshold: float = Field(default=0.40, ge=0.0, le=1.0)
-    cash_threshold: float = Field(default=0.20, ge=0.0, le=1.0)
-    win_rate_lookback: int = Field(default=10, ge=1)
+class ExposureSettings(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="", extra="ignore")
+
+    enabled: bool = Field(default=False, validation_alias="EXPOSURE_ENABLED")
+    reduce_threshold: float = Field(default=0.40, ge=0.0, le=1.0, validation_alias="EXPOSURE_REDUCE_THRESHOLD")
+    cash_threshold: float = Field(default=0.20, ge=0.0, le=1.0, validation_alias="EXPOSURE_CASH_THRESHOLD")
+    win_rate_lookback: int = Field(default=10, ge=1, validation_alias="EXPOSURE_WIN_RATE_LOOKBACK")
 
 
 # ── ML / neural settings ─────────────────────────────────────────────────
 
-class NeuralSettings(BaseModel):
-    min_candles: int = Field(default=65, ge=1)
-    seq_len: int = Field(default=50, ge=1)
-    hidden_size: int = Field(default=128, ge=1)
-    num_layers: int = Field(default=2, ge=1)
-    train_epochs: int = Field(default=100, ge=1)
-    retrain_every: int = Field(default=20, ge=1)
-    min_confidence: float = Field(default=0.55, ge=0.0, le=1.0)
-    lgbm_ensemble_enabled: bool = True
-    kalman_enabled: bool = Field(default=False)
+class NeuralSettings(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="", extra="ignore")
+
+    min_candles: int = Field(default=65, ge=1, validation_alias="NEURAL_MIN_CANDLES")
+    seq_len: int = Field(default=50, ge=1, validation_alias="NEURAL_SEQ_LEN")
+    hidden_size: int = Field(default=128, ge=1, validation_alias="NEURAL_HIDDEN_SIZE")
+    num_layers: int = Field(default=2, ge=1, validation_alias="NEURAL_NUM_LAYERS")
+    train_epochs: int = Field(default=100, ge=1, validation_alias="NEURAL_TRAIN_EPOCHS")
+    retrain_every: int = Field(default=20, ge=1, validation_alias="NEURAL_RETRAIN_EVERY")
+    min_confidence: float = Field(default=0.55, ge=0.0, le=1.0, validation_alias="NEURAL_MIN_CONFIDENCE")
+    lgbm_ensemble_enabled: bool = Field(default=True, validation_alias="LGBM_ENSEMBLE_ENABLED")
+    kalman_enabled: bool = Field(default=False, validation_alias="KALMAN_ENABLED")
 
 
-class GarchSettings(BaseModel):
-    enabled: bool = True
-    high_vol_threshold: float = Field(default=2.0, ge=0.0)
+class GarchSettings(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="", extra="ignore")
+
+    enabled: bool = Field(default=True, validation_alias="GARCH_ENABLED")
+    high_vol_threshold: float = Field(default=2.0, ge=0.0, validation_alias="GARCH_HIGH_VOL_THRESHOLD")
 
 
 # ── ICT strategy settings ─────────────────────────────────────────────────
 
-class ICTSettings(BaseModel):
-    min_confidence: int = Field(default=30, ge=0, le=100)
-    h4_candle_count: int = Field(default=200, ge=1)
-    d1_candle_count: int = Field(default=20, ge=1)
-    m30_candle_count: int = Field(default=100, ge=1)
-    m15_candle_count: int = Field(default=250, ge=1)
-    m5_candle_count: int = Field(default=100, ge=1)
-    mtf_alignment_boost: float = Field(default=0.05, ge=0.0, le=1.0)
-    mtf_d1_veto: bool = True
-    regime_adx_trending: float = Field(default=25.0, ge=0.0)
-    regime_adx_ranging: float = Field(default=20.0, ge=0.0)
-    regime_confidence_penalty: float = Field(default=0.10, ge=0.0, le=1.0)
-    tp_trending_tp1_mult: float = Field(default=1.5, ge=0.0)
-    tp_trending_tp2_mult: float = Field(default=2.5, ge=0.0)
-    tp_trending_tp3_mult: float = Field(default=4.0, ge=0.0)
-    tp_trending_tp4_mult: float = Field(default=6.0, ge=0.0)
-    tp_ranging_tp1_mult: float = Field(default=0.8, ge=0.0)
-    tp_ranging_tp2_mult: float = Field(default=1.5, ge=0.0)
-    tp_ranging_tp3_mult: float = Field(default=2.5, ge=0.0)
-    max_hours_in_trade: int = Field(default=48, ge=0)
-    min_ict_score_crypto: float = Field(default=35.0, ge=0.0)
-    # confidence floors by regime
-    min_conf_trending: float = Field(default=0.40, ge=0.0, le=1.0)
-    min_conf_ranging: float = Field(default=0.40, ge=0.0, le=1.0)
-    min_conf_volatile: float = Field(default=0.40, ge=0.0, le=1.0)
-    min_conf_unknown: float = Field(default=0.40, ge=0.0, le=1.0)
-    min_conf_crypto_bonus: float = Field(default=0.03, ge=0.0, le=1.0)
-    min_conf_exotic_bonus: float = Field(default=0.04, ge=0.0, le=1.0)
-    # size-scale thresholds
-    size_scale_very_low_threshold: float = Field(default=0.45, ge=0.0, le=1.0)
-    size_scale_low_threshold: float = Field(default=0.60, ge=0.0, le=1.0)
-    size_scale_medium_threshold: float = Field(default=0.75, ge=0.0, le=1.0)
-    size_scale_very_low: float = Field(default=0.35, ge=0.0, le=1.0)
-    size_scale_low: float = Field(default=0.55, ge=0.0, le=1.0)
-    size_scale_medium: float = Field(default=0.75, ge=0.0, le=1.0)
-    size_scale_full: float = Field(default=1.00, ge=0.0, le=1.0)
+class ICTSettings(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="", extra="ignore")
+
+    min_confidence: int = Field(default=30, ge=0, le=100, validation_alias="ICT_MIN_CONFIDENCE")
+    h4_candle_count: int = Field(default=200, ge=1, validation_alias="H4_CANDLE_COUNT")
+    d1_candle_count: int = Field(default=20, ge=1, validation_alias="D1_CANDLE_COUNT")
+    m30_candle_count: int = Field(default=100, ge=1, validation_alias="M30_CANDLE_COUNT")
+    m15_candle_count: int = Field(default=250, ge=1, validation_alias="M15_CANDLE_COUNT")
+    m5_candle_count: int = Field(default=100, ge=1, validation_alias="M5_CANDLE_COUNT")
+    mtf_alignment_boost: float = Field(default=0.05, ge=0.0, le=1.0, validation_alias="MTF_ALIGNMENT_BOOST")
+    mtf_d1_veto: bool = Field(default=True, validation_alias="MTF_D1_VETO")
+    regime_adx_trending: float = Field(default=25.0, ge=0.0, validation_alias="REGIME_ADX_TRENDING")
+    regime_adx_ranging: float = Field(default=20.0, ge=0.0, validation_alias="REGIME_ADX_RANGING")
+    regime_confidence_penalty: float = Field(default=0.10, ge=0.0, le=1.0, validation_alias="REGIME_CONFIDENCE_PENALTY")
+    tp_trending_tp1_mult: float = Field(default=1.5, ge=0.0, validation_alias="TP_TRENDING_TP1_MULT")
+    tp_trending_tp2_mult: float = Field(default=2.5, ge=0.0, validation_alias="TP_TRENDING_TP2_MULT")
+    tp_trending_tp3_mult: float = Field(default=4.0, ge=0.0, validation_alias="TP_TRENDING_TP3_MULT")
+    tp_trending_tp4_mult: float = Field(default=6.0, ge=0.0, validation_alias="TP_TRENDING_TP4_MULT")
+    tp_ranging_tp1_mult: float = Field(default=0.8, ge=0.0, validation_alias="TP_RANGING_TP1_MULT")
+    tp_ranging_tp2_mult: float = Field(default=1.5, ge=0.0, validation_alias="TP_RANGING_TP2_MULT")
+    tp_ranging_tp3_mult: float = Field(default=2.5, ge=0.0, validation_alias="TP_RANGING_TP3_MULT")
+    max_hours_in_trade: int = Field(default=48, ge=0, validation_alias="MAX_HOURS_IN_TRADE")
+    min_ict_score_crypto: float = Field(default=35.0, ge=0.0, validation_alias="MIN_ICT_SCORE_CRYPTO")
+    min_conf_trending: float = Field(default=0.40, ge=0.0, le=1.0, validation_alias="MIN_CONF_TRENDING")
+    min_conf_ranging: float = Field(default=0.40, ge=0.0, le=1.0, validation_alias="MIN_CONF_RANGING")
+    min_conf_volatile: float = Field(default=0.40, ge=0.0, le=1.0, validation_alias="MIN_CONF_VOLATILE")
+    min_conf_unknown: float = Field(default=0.40, ge=0.0, le=1.0, validation_alias="MIN_CONF_UNKNOWN")
+    min_conf_crypto_bonus: float = Field(default=0.03, ge=0.0, le=1.0, validation_alias="MIN_CONF_CRYPTO_BONUS")
+    min_conf_exotic_bonus: float = Field(default=0.04, ge=0.0, le=1.0, validation_alias="MIN_CONF_EXOTIC_BONUS")
+    size_scale_very_low_threshold: float = Field(default=0.45, ge=0.0, le=1.0, validation_alias="SIZE_SCALE_VERY_LOW_THRESHOLD")
+    size_scale_low_threshold: float = Field(default=0.60, ge=0.0, le=1.0, validation_alias="SIZE_SCALE_LOW_THRESHOLD")
+    size_scale_medium_threshold: float = Field(default=0.75, ge=0.0, le=1.0, validation_alias="SIZE_SCALE_MEDIUM_THRESHOLD")
+    size_scale_very_low: float = Field(default=0.35, ge=0.0, le=1.0, validation_alias="SIZE_SCALE_VERY_LOW")
+    size_scale_low: float = Field(default=0.55, ge=0.0, le=1.0, validation_alias="SIZE_SCALE_LOW")
+    size_scale_medium: float = Field(default=0.75, ge=0.0, le=1.0, validation_alias="SIZE_SCALE_MEDIUM")
+    size_scale_full: float = Field(default=1.00, ge=0.0, le=1.0, validation_alias="SIZE_SCALE_FULL")
 
 
 # ── Orchestration / loop settings ───────────────────────────────────────────
 
-class OrchestrationSettings(BaseModel):
-    loop_interval_seconds: int = Field(default=5, ge=1, le=600)
-    reconcile_every_n_loops: int = Field(default=60, ge=1)
-    candle_server_port: int = Field(default=5555, ge=1, le=65535)
-    scan_cooldown_seconds: int = Field(default=300, ge=0)
-    scan_cooldown_seconds_london_ny: int = Field(default=60, ge=0)
-    scan_cooldown_seconds_asia: int = Field(default=120, ge=0)
-    btc_priority_symbol: str = "BTCUSD"
-    btc_priority_scan_cooldown_seconds: int = Field(default=8, ge=0)
-    event_driven_rescan_on_new_candle: bool = True
-    # orchestration perf
-    scan_workers_min: int = Field(default=2, ge=1)
-    scan_workers_max: int = Field(default=10, ge=1)
-    scan_workers_default: int = Field(default=6, ge=1)
-    adaptive_workers_enabled: bool = True
-    target_scan_ms: float = Field(default=15000, ge=0)
-    target_rank_ms: float = Field(default=200, ge=0)
-    target_exec_ms: float = Field(default=800, ge=0)
-    target_total_ms: float = Field(default=60000, ge=0)
-    max_signals_per_iteration: int = Field(default=20, ge=1)
-    enable_iteration_trace: bool = True
-    scan_error_rate_abort: float = Field(default=0.70, ge=0.0, le=1.0)
-    scan_error_min_samples: int = Field(default=5, ge=1)
-    hard_budget_enabled: bool = True
-    max_scan_ms: float = Field(default=90000, ge=0)
-    max_rank_ms: float = Field(default=1000, ge=0)
-    max_exec_ms: float = Field(default=3000, ge=0)
-    max_iteration_ms: float = Field(default=120000, ge=0)
-    exec_budget_council_margin_ms: float = Field(default=350, ge=0)
-    # symbol fault — raised from 12/3600 after Apr 2026 stuck-quote cascade
-    # that disabled all 43 equity symbols simultaneously. 20 failures + 30-min
-    # cooldown gives transient broker hiccups more slack before kicking in.
-    symbol_max_fail_count: int = Field(default=20, ge=1)
-    symbol_disable_seconds: int = Field(default=1800, ge=0)
-    # Symbols permanently excluded from scanning (PU Prime MT5 known-bad pairs).
-    # Set via PERMANENT_FAULT_SYMBOLS env var as a comma-separated string,
-    # e.g. "EOSUSD,NOIDEA". Parsed into a set at startup.
-    permanent_fault_symbols: str = ""
-    # market closed sleep (total = sleep_total / sleep_interval, e.g. 300/10 = 30 iterations × 10s = 5 min)
-    market_closed_sleep_total_seconds: int = Field(default=300, ge=1)
-    market_closed_sleep_interval_seconds: int = Field(default=10, ge=1)
-    # HTF cache TTLs
-    htf_cache_ttl_m15_seconds: float = Field(default=20, ge=0)
-    htf_cache_ttl_m5_seconds: float = Field(default=15, ge=0)
-    htf_cache_ttl_m30_seconds: float = Field(default=30, ge=0)
-    htf_cache_ttl_h4_seconds: float = Field(default=120, ge=0)
-    htf_cache_ttl_d1_seconds: float = Field(default=300, ge=0)
-    htf_cache_ttl_multiplier_london_ny: float = Field(default=0.75, ge=0.0)
-    htf_cache_ttl_multiplier_asia: float = Field(default=1.35, ge=0.0)
+class OrchestrationSettings(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="", extra="ignore")
+
+    loop_interval_seconds: int = Field(default=5, ge=1, le=600, validation_alias="LOOP_INTERVAL_SECONDS")
+    reconcile_every_n_loops: int = Field(default=60, ge=1, validation_alias="RECONCILE_EVERY_N_LOOPS")
+    candle_server_port: int = Field(default=5555, ge=1, le=65535, validation_alias="CANDLE_SERVER_PORT")
+    scan_cooldown_seconds: int = Field(default=300, ge=0, validation_alias="SCAN_COOLDOWN_SECONDS")
+    scan_cooldown_seconds_london_ny: int = Field(default=60, ge=0, validation_alias="SCAN_COOLDOWN_SECONDS_LONDON_NY")
+    scan_cooldown_seconds_asia: int = Field(default=120, ge=0, validation_alias="SCAN_COOLDOWN_SECONDS_ASIA")
+    btc_priority_symbol: str = Field(default="BTCUSD", validation_alias="BTC_PRIORITY_SYMBOL")
+    btc_priority_scan_cooldown_seconds: int = Field(default=8, ge=0, validation_alias="BTC_PRIORITY_SCAN_COOLDOWN_SECONDS")
+    event_driven_rescan_on_new_candle: bool = Field(default=True, validation_alias="EVENT_DRIVEN_RESCAN_ON_NEW_CANDLE")
+    scan_workers_min: int = Field(default=2, ge=1, validation_alias="ORCHESTRATION_SCAN_WORKERS_MIN")
+    scan_workers_max: int = Field(default=10, ge=1, validation_alias="ORCHESTRATION_SCAN_WORKERS_MAX")
+    scan_workers_default: int = Field(default=6, ge=1, validation_alias="ORCHESTRATION_SCAN_WORKERS_DEFAULT")
+    adaptive_workers_enabled: bool = Field(default=True, validation_alias="ORCHESTRATION_ADAPTIVE_WORKERS_ENABLED")
+    target_scan_ms: float = Field(default=15000, ge=0, validation_alias="ORCHESTRATION_TARGET_SCAN_MS")
+    target_rank_ms: float = Field(default=200, ge=0, validation_alias="ORCHESTRATION_TARGET_RANK_MS")
+    target_exec_ms: float = Field(default=800, ge=0, validation_alias="ORCHESTRATION_TARGET_EXEC_MS")
+    target_total_ms: float = Field(default=60000, ge=0, validation_alias="ORCHESTRATION_TARGET_TOTAL_MS")
+    max_signals_per_iteration: int = Field(default=20, ge=1, validation_alias="ORCHESTRATION_MAX_SIGNALS_PER_ITERATION")
+    enable_iteration_trace: bool = Field(default=True, validation_alias="ORCHESTRATION_ENABLE_ITERATION_TRACE")
+    scan_error_rate_abort: float = Field(default=0.70, ge=0.0, le=1.0, validation_alias="ORCHESTRATION_SCAN_ERROR_RATE_ABORT")
+    scan_error_min_samples: int = Field(default=5, ge=1, validation_alias="ORCHESTRATION_SCAN_ERROR_MIN_SAMPLES")
+    hard_budget_enabled: bool = Field(default=True, validation_alias="ORCHESTRATION_HARD_BUDGET_ENABLED")
+    max_scan_ms: float = Field(default=90000, ge=0, validation_alias="ORCHESTRATION_MAX_SCAN_MS")
+    max_rank_ms: float = Field(default=1000, ge=0, validation_alias="ORCHESTRATION_MAX_RANK_MS")
+    max_exec_ms: float = Field(default=3000, ge=0, validation_alias="ORCHESTRATION_MAX_EXEC_MS")
+    max_iteration_ms: float = Field(default=120000, ge=0, validation_alias="ORCHESTRATION_MAX_ITERATION_MS")
+    exec_budget_council_margin_ms: float = Field(default=350, ge=0, validation_alias="ORCHESTRATION_EXEC_BUDGET_COUNCIL_MARGIN_MS")
+    symbol_max_fail_count: int = Field(default=20, ge=1, validation_alias="SYMBOL_MAX_FAIL_COUNT")
+    symbol_disable_seconds: int = Field(default=1800, ge=0, validation_alias="SYMBOL_DISABLE_SECONDS")
+    permanent_fault_symbols: str = Field(default="", validation_alias="PERMANENT_FAULT_SYMBOLS")
+    market_closed_sleep_total_seconds: int = Field(default=300, ge=1, validation_alias="MARKET_CLOSED_SLEEP_TOTAL_SECONDS")
+    market_closed_sleep_interval_seconds: int = Field(default=10, ge=1, validation_alias="MARKET_CLOSED_SLEEP_INTERVAL_SECONDS")
+    htf_cache_ttl_m15_seconds: float = Field(default=20, ge=0, validation_alias="HTF_CACHE_TTL_M15_SECONDS")
+    htf_cache_ttl_m5_seconds: float = Field(default=15, ge=0, validation_alias="HTF_CACHE_TTL_M5_SECONDS")
+    htf_cache_ttl_m30_seconds: float = Field(default=30, ge=0, validation_alias="HTF_CACHE_TTL_M30_SECONDS")
+    htf_cache_ttl_h4_seconds: float = Field(default=120, ge=0, validation_alias="HTF_CACHE_TTL_H4_SECONDS")
+    htf_cache_ttl_d1_seconds: float = Field(default=300, ge=0, validation_alias="HTF_CACHE_TTL_D1_SECONDS")
+    htf_cache_ttl_multiplier_london_ny: float = Field(default=0.75, ge=0.0, validation_alias="HTF_CACHE_TTL_MULTIPLIER_LONDON_NY")
+    htf_cache_ttl_multiplier_asia: float = Field(default=1.35, ge=0.0, validation_alias="HTF_CACHE_TTL_MULTIPLIER_ASIA")
 
 
 # ── Opportunity lifecycle settings ─────────────────────────────────────────
 
-class OpportunitySettings(BaseModel):
-    enabled: bool = True
-    rollover_seconds: int = Field(default=900, ge=0)
-    watch_window_seconds: int = Field(default=180, ge=0)
-    hedge_timeout_seconds: int = Field(default=300, ge=0)
-    min_recovery_confidence: float = Field(default=0.62, ge=0.0, le=1.0)
-    fallback_max_spread_pct: float = Field(default=0.003, ge=0.0)
-    shock_lookback_seconds: int = Field(default=5, ge=0)
-    shock_drop_threshold: float = Field(default=0.0015, ge=0.0)
-    require_shock_for_fast_lane: bool = True
-    live_enabled: bool = False
+class OpportunitySettings(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="", extra="ignore")
+
+    enabled: bool = Field(default=True, validation_alias="OPPORTUNITY_PHASE_ENABLED")
+    rollover_seconds: int = Field(default=900, ge=0, validation_alias="OPPORTUNITY_ROLLOVER_SECONDS")
+    watch_window_seconds: int = Field(default=180, ge=0, validation_alias="OPPORTUNITY_WATCH_WINDOW_SECONDS")
+    hedge_timeout_seconds: int = Field(default=300, ge=0, validation_alias="OPPORTUNITY_HEDGE_TIMEOUT_SECONDS")
+    min_recovery_confidence: float = Field(default=0.62, ge=0.0, le=1.0, validation_alias="OPPORTUNITY_MIN_RECOVERY_CONFIDENCE")
+    fallback_max_spread_pct: float = Field(default=0.003, ge=0.0, validation_alias="OPPORTUNITY_FALLBACK_MAX_SPREAD_PCT")
+    shock_lookback_seconds: int = Field(default=5, ge=0, validation_alias="OPPORTUNITY_SHOCK_LOOKBACK_SECONDS")
+    shock_drop_threshold: float = Field(default=0.0015, ge=0.0, validation_alias="OPPORTUNITY_SHOCK_DROP_THRESHOLD")
+    require_shock_for_fast_lane: bool = Field(default=True, validation_alias="OPPORTUNITY_REQUIRE_SHOCK_FOR_FAST_LANE")
+    live_enabled: bool = Field(default=False, validation_alias="OPPORTUNITY_LIVE_ENABLED")
 
 
-# ── Protection layer settings ──────────────────────────────────────────────
+# ── Protection layer settings ─────────────────────────────────────────────
 
-class ProtectionSettings(BaseModel):
-    enabled: bool = True
-    cooldown_minutes: int = Field(default=10, ge=0)
-    stoploss_guard_lookback_minutes: int = Field(default=180, ge=0)
-    stoploss_guard_trade_limit: int = Field(default=3, ge=0)
-    stoploss_guard_lock_minutes: int = Field(default=60, ge=0)
-    global_loss_guard_lookback_minutes: int = Field(default=120, ge=0)
-    global_loss_guard_max_losses: int = Field(default=4, ge=0)
-    global_loss_guard_lock_minutes: int = Field(default=45, ge=0)
-    # Consecutive-reject circuit breaker (gabagool pattern)
-    consecutive_reject_limit: int = Field(default=5, ge=2)
-    consecutive_reject_cooldown_minutes: int = Field(default=15, ge=1)
+class ProtectionSettings(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="", extra="ignore")
+
+    enabled: bool = Field(default=True, validation_alias="PROTECTIONS_ENABLED")
+    cooldown_minutes: int = Field(default=10, ge=0, validation_alias="PROTECTION_COOLDOWN_MINUTES")
+    stoploss_guard_lookback_minutes: int = Field(default=180, ge=0, validation_alias="PROTECTION_STOPLOSS_GUARD_LOOKBACK_MINUTES")
+    stoploss_guard_trade_limit: int = Field(default=3, ge=0, validation_alias="PROTECTION_STOPLOSS_GUARD_TRADE_LIMIT")
+    stoploss_guard_lock_minutes: int = Field(default=60, ge=0, validation_alias="PROTECTION_STOPLOSS_GUARD_LOCK_MINUTES")
+    global_loss_guard_lookback_minutes: int = Field(default=120, ge=0, validation_alias="PROTECTION_GLOBAL_LOSS_GUARD_LOOKBACK_MINUTES")
+    global_loss_guard_max_losses: int = Field(default=4, ge=0, validation_alias="PROTECTION_GLOBAL_LOSS_GUARD_MAX_LOSSES")
+    global_loss_guard_lock_minutes: int = Field(default=45, ge=0, validation_alias="PROTECTION_GLOBAL_LOSS_GUARD_LOCK_MINUTES")
+    consecutive_reject_limit: int = Field(default=5, ge=2, validation_alias="CONSECUTIVE_REJECT_LIMIT")
+    consecutive_reject_cooldown_minutes: int = Field(default=15, ge=1, validation_alias="CONSECUTIVE_REJECT_COOLDOWN_MINUTES")
 
 
 # ── Time-phase confidence gate settings ───────────────────────────────────
 
-class TimePhaseSettings(BaseModel):
-    enabled: bool = False
-    bucket_minutes: int = Field(default=15, ge=1)
-    early_max_minute: int = Field(default=3, ge=0)
-    mid_max_minute: int = Field(default=11, ge=0)
-    min_conf_early: float = Field(default=0.55, ge=0.0, le=1.0)
-    min_conf_mid: float = Field(default=0.50, ge=0.0, le=1.0)
-    min_conf_late: float = Field(default=0.48, ge=0.0, le=1.0)
+class TimePhaseSettings(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="", extra="ignore")
+
+    enabled: bool = Field(default=False, validation_alias="TIME_PHASE_CONFIDENCE_ENABLED")
+    bucket_minutes: int = Field(default=15, ge=1, validation_alias="TIME_PHASE_BUCKET_MINUTES")
+    early_max_minute: int = Field(default=3, ge=0, validation_alias="TIME_PHASE_EARLY_MAX_MINUTE")
+    mid_max_minute: int = Field(default=11, ge=0, validation_alias="TIME_PHASE_MID_MAX_MINUTE")
+    min_conf_early: float = Field(default=0.55, ge=0.0, le=1.0, validation_alias="TIME_PHASE_MIN_CONF_EARLY")
+    min_conf_mid: float = Field(default=0.50, ge=0.0, le=1.0, validation_alias="TIME_PHASE_MIN_CONF_MID")
+    min_conf_late: float = Field(default=0.48, ge=0.0, le=1.0, validation_alias="TIME_PHASE_MIN_CONF_LATE")
 
 
-# ── Telegram settings ──────────────────────────────────────────────────────
+# ── Telegram settings ─────────────────────────────────────────────────────
 
-class TelegramSettings(BaseModel):
-    bot_token: str = ""
-    chat_id: str = ""
-    noise_filter_enabled: bool = True
-    dedupe_window_seconds: int = Field(default=180, ge=0)
-    rate_limit_per_minute: int = Field(default=20, ge=0)
-    suppression_report_every: int = Field(default=10, ge=0)
-    chart_days: int = Field(default=30, ge=1)
+class TelegramSettings(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="TELEGRAM__", extra="ignore")
+
+    bot_token: str = Field(default="", validation_alias="BOT_TOKEN")
+    chat_id: str = Field(default="", validation_alias="CHAT_ID")
+    noise_filter_enabled: bool = Field(default=True, validation_alias="NOISE_FILTER_ENABLED")
+    dedupe_window_seconds: int = Field(default=180, ge=0, validation_alias="DEDUPE_WINDOW_SECONDS")
+    rate_limit_per_minute: int = Field(default=20, ge=0, validation_alias="RATE_LIMIT_PER_MINUTE")
+    suppression_report_every: int = Field(default=10, ge=0, validation_alias="SUPPRESSION_REPORT_EVERY")
+    chart_days: int = Field(default=30, ge=1, validation_alias="CHART_DAYS")
     allowed_usernames: tuple[str, ...] = Field(default_factory=tuple)
     allowed_user_ids: tuple[int, ...] = Field(default_factory=tuple)
+
+    @field_validator("allowed_usernames", mode="before")
+    @classmethod
+    def _parse_usernames(cls, v: Any) -> tuple[str, ...]:
+        if isinstance(v, list):
+            return tuple(str(x).strip().lstrip("@").lower() for x in v if x)
+        if isinstance(v, str):
+            return tuple(
+                u.strip().lstrip("@").lower()
+                for u in v.replace(";", ",").split(",")
+                if u.strip()
+            )
+        return v or ()
+
+    @field_validator("allowed_user_ids", mode="before")
+    @classmethod
+    def _parse_user_ids(cls, v: Any) -> tuple[int, ...]:
+        if isinstance(v, list):
+            return tuple(int(x) for x in v if str(x).strip().isdigit())
+        if isinstance(v, str):
+            return tuple(
+                int(v.strip())
+                for v in v.replace(";", ",").split(",")
+                if v.strip().isdigit()
+            )
+        return v or ()
 
 
 # ── Intelligence / data feed settings ─────────────────────────────────────
 
-class IntelligenceSettings(BaseModel):
-    deepseek_api_key: str = ""
-    anthropic_api_key: str = ""
-    alpha_vantage_key: str = ""
-    twelve_data_key: str = ""
-    fred_api_key: str = ""
-    yfinance_enabled: bool = True
-    sweep_interval_minutes: int = Field(default=15, ge=1)
-    mt5_db_sync_interval_seconds: int = Field(default=300, ge=0)
-    news_calendar_source: str = "static"
-    finnhub_api_key: str = ""
-    news_blackout_minutes: int = Field(default=15, ge=0)
-    crucix_url: str = "https://crucix-pi.vercel.app"
+class IntelligenceSettings(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="", extra="ignore")
+
+    deepseek_api_key: str = Field(default="", validation_alias="DEEPSEEK_API_KEY")
+    anthropic_api_key: str = Field(default="", validation_alias="ANTHROPIC_API_KEY")
+    alpha_vantage_key: str = Field(default="", validation_alias="ALPHA_VANTAGE_KEY")
+    twelve_data_key: str = Field(default="", validation_alias="TWELVE_DATA_KEY")
+    fred_api_key: str = Field(default="", validation_alias="FRED_API_KEY")
+    yfinance_enabled: bool = Field(default=True, validation_alias="YFINANCE_ENABLED")
+    sweep_interval_minutes: int = Field(default=15, ge=1, validation_alias="INTELLIGENCE_SWEEP_INTERVAL_MINUTES")
+    mt5_db_sync_interval_seconds: int = Field(default=300, ge=0, validation_alias="MT5_DB_SYNC_INTERVAL_SECONDS")
+    news_calendar_source: str = Field(default="static", validation_alias="NEWS_CALENDAR_SOURCE")
+    finnhub_api_key: str = Field(default="", validation_alias="FINNHUB_API_KEY")
+    news_blackout_minutes: int = Field(default=15, ge=0, validation_alias="NEWS_BLACKOUT_MINUTES")
+    crucix_url: str = Field(default="https://crucix-pi.vercel.app", validation_alias="CRUCIX_URL")
 
 
 # ── ML / learning system settings ─────────────────────────────────────────
 
-class LearningSettings(BaseModel):
-    default_confidence: float = 0.5
-    initial_confidence: float = 0.5
-    confidence_allow: float = 0.3
-    confidence_reduced: float = 0.5
-    confidence_full: float = 0.7
-    confidence_disable_threshold: float = 0.2
-    metrics_log_every_n_loops: int = Field(default=5, ge=1)
+class LearningSettings(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="", extra="ignore")
+
+    default_confidence: float = Field(default=0.5, validation_alias="DEFAULT_CONFIDENCE")
+    initial_confidence: float = Field(default=0.5, validation_alias="INITIAL_CONFIDENCE")
+    confidence_allow: float = Field(default=0.3, validation_alias="CONFIDENCE_ALLOW")
+    confidence_reduced: float = Field(default=0.5, validation_alias="CONFIDENCE_REDUCED")
+    confidence_full: float = Field(default=0.7, validation_alias="CONFIDENCE_FULL")
+    confidence_disable_threshold: float = Field(default=0.2, validation_alias="CONFIDENCE_DISABLE_THRESHOLD")
+    metrics_log_every_n_loops: int = Field(default=5, ge=1, validation_alias="METRICS_LOG_EVERY_N_LOOPS")
 
 
-# ── Backtest settings ──────────────────────────────────────────────────────
+# ── Backtest settings ─────────────────────────────────────────────────────
 
-class BacktestSettings(BaseModel):
-    commission_per_lot_per_side: float = Field(default=0.0001, ge=0.0)
-    walk_forward_enabled: bool = False
-    walk_forward_window_days: int = Field(default=90, ge=1)
+class BacktestSettings(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="", extra="ignore")
+
+    commission_per_lot_per_side: float = Field(default=0.0001, ge=0.0, validation_alias="BACKTEST_COMMISSION_PER_LOT_PER_SIDE")
+    walk_forward_enabled: bool = Field(default=False, validation_alias="BACKTEST_WALK_FORWARD_ENABLED")
+    walk_forward_window_days: int = Field(default=90, ge=1, validation_alias="BACKTEST_WALK_FORWARD_WINDOW_DAYS")
 
 
 # ── Logging / misc settings ────────────────────────────────────────────────
 
-class MiscSettings(BaseModel):
-    log_level: str = "INFO"
-    daily_summary_hour: int = Field(default=17, ge=0, le=23)
-    timezone: str = "Europe/Paris"
-    default_symbol: str = "BTCUSD"
-    default_timeframe: str = "H1"
-    database_url: str = ""
-    db_path: str = ""
-    encryption_key: str = ""
-    sma_fast_period: int = Field(default=10, ge=1)
-    sma_slow_period: int = Field(default=50, ge=1)
-    sentry_dsn: str = ""
+class MiscSettings(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="", extra="ignore")
+
+    log_level: str = Field(default="INFO", validation_alias="LOG_LEVEL")
+    daily_summary_hour: int = Field(default=17, ge=0, le=23, validation_alias="DAILY_SUMMARY_HOUR")
+    timezone: str = Field(default="Europe/Paris", validation_alias="TIMEZONE")
+    default_symbol: str = Field(default="BTCUSD", validation_alias="DEFAULT_SYMBOL")
+    default_timeframe: str = Field(default="H1", validation_alias="DEFAULT_TIMEFRAME")
+    database_url: str = Field(default="", validation_alias="DATABASE_URL")
+    db_path: str = Field(
+        default="",
+        validation_alias="DB_PATH",
+    )
+    encryption_key: str = Field(default="", validation_alias="ENCRYPTION_KEY")
+    sma_fast_period: int = Field(default=10, ge=1, validation_alias="SMA_FAST_PERIOD")
+    sma_slow_period: int = Field(default=50, ge=1, validation_alias="SMA_SLOW_PERIOD")
+    sentry_dsn: str = Field(default="", validation_alias="MISC_SENTRY_DSN")
 
 
-# ── Market session settings ────────────────────────────────────────────────
+# ── Market session settings ───────────────────────────────────────────────
 
-class SessionSettings(BaseModel):
-    allowed_sessions: list[str] = ["asian", "london", "overlap"]
-    blocked_days: list[str] = ["Saturday", "Sunday"]
+class SessionSettings(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="SESSION__", extra="ignore")
+
+    allowed_sessions: list[str] = Field(default=["asian", "london", "overlap"])
+    blocked_days: list[str] = Field(default=["Saturday", "Sunday"])
     mtf_min_alignment: float = Field(default=0.0, ge=0.0, le=1.0)
-    weekend_symbols: str = "BTCUSD,ETHUSD,BNBUSD,SOLUSD,XRPUSD,ADAUSD,DOTUSD,LTCUSD,EOSUSD,XLMUSD,TRXUSD"
+    weekend_symbols: str = Field(
+        default="BTCUSD,ETHUSD,BNBUSD,SOLUSD,XRPUSD,ADAUSD,DOTUSD,LTCUSD,EOSUSD,XLMUSD,TRXUSD",
+    )
+
+    @field_validator("allowed_sessions", "blocked_days", mode="before")
+    @classmethod
+    def _parse_list_str(cls, v: Any) -> list[str]:
+        if isinstance(v, list):
+            return [str(x).strip() for x in v if x]
+        if isinstance(v, str):
+            return _parse_list_str(v)
+        return v or []
 
 
 # ── Strategy plugin settings ─────────────────────────────────────────────────
 
-class StrategyPluginSettings(BaseModel):
+class StrategyPluginSettings(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="STRATEGY_PLUGIN__", extra="ignore")
+
     plugins: tuple[str, ...] = Field(default_factory=tuple)
-    fail_fast: bool = False
+    fail_fast: bool = Field(default=False)
+
+    @field_validator("plugins", mode="before")
+    @classmethod
+    def _parse_plugins(cls, v: Any) -> tuple[str, ...]:
+        if isinstance(v, list):
+            return tuple(str(x).strip() for x in v if x)
+        if isinstance(v, str):
+            return _parse_tuple_str(v)
+        return v or ()
 
 
-# ── OpenRouter / LLM settings (disabled code) ─────────────────────────────
+# ── OpenRouter / LLM settings ─────────────────────────────────────────────
 
-class OpenRouterSettings(BaseModel):
-    api_key: str = ""
-    base_url: str = "https://openrouter.ai/api/v1"
-    model: str = "anthropic/claude-3-haiku"
-    fallback_enabled: bool = False
+class OpenRouterSettings(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="", extra="ignore")
+
+    api_key: str = Field(default="", validation_alias="OPENROUTER_API_KEY")
+    base_url: str = Field(default="https://openrouter.ai/api/v1", validation_alias="OPENROUTER_BASE_URL")
+    model: str = Field(default="anthropic/claude-3-haiku", validation_alias="OPENROUTER_MODEL")
+    fallback_enabled: bool = Field(default=False, validation_alias="OPENROUTER_FALLBACK_ENABLED")
 
 
 # ── MCP server settings ─────────────────────────────────────────────────────
 
-class MCPSettings(BaseModel):
-    enabled: bool = False
-    port: int = Field(default=8080, ge=1, le=65535)
+class MCPSettings(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="", extra="ignore")
+
+    enabled: bool = Field(default=False, validation_alias="MCP_SERVER_ENABLED")
+    port: int = Field(default=8080, ge=1, le=65535, validation_alias="MCP_SERVER_PORT")
 
 
-# ── HKU Marketplace settings ──────────────────────────────────────────────
+# ── HKU Marketplace settings ─────────────────────────────────────────────
 
-class HKUSettings(BaseModel):
-    enabled: bool = False
-    api_url: str = ""
-    api_key: str = ""
+class HKUSettings(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="HKU_", extra="ignore")
+
+    enabled: bool = Field(default=False)
+    api_url: str = Field(default="")
+    api_key: str = Field(default="")
     signal_discount: float = Field(default=0.80, ge=0.0, le=1.0)
-    publish_on_strategy: bool = True
-    publish_on_discussion: bool = True
+    publish_on_strategy: bool = Field(default=True)
+    publish_on_discussion: bool = Field(default=True)
     feed_limit: int = Field(default=10, ge=1, le=50)
     circuit_breaker_timeout_secs: int = Field(default=300, ge=60)
-    # Copy trading
-    copy_trading_enabled: bool = False
+    copy_trading_enabled: bool = Field(default=False)
     copy_leader_ids: list[str] = Field(default_factory=list)
     copy_margin_fraction: float = Field(default=0.05, ge=0.01, le=0.25)
     copy_max_trades: int = Field(default=3, ge=1, le=10)
@@ -448,82 +543,73 @@ class HKUSettings(BaseModel):
     copy_sl_atr: float = Field(default=1.5, ge=0.5, le=5.0)
     copy_tp_atr: float = Field(default=2.5, ge=0.5, le=10.0)
 
+    @field_validator("copy_leader_ids", mode="before")
+    @classmethod
+    def _parse_copy_leader_ids(cls, v: Any) -> list[str]:
+        if isinstance(v, list):
+            return [str(x).strip() for x in v if x]
+        if isinstance(v, str):
+            return _parse_list_str(v)
+        return v or []
+
 
 # ── Tool system settings ───────────────────────────────────────────────────
 
-class ToolSystemSettings(BaseModel):
-    enabled: bool = True
-    autorun_every_n_loops: int = Field(default=5, ge=1)
-    strict_critical: bool = True
-    max_actions_per_cycle: int = Field(default=8, ge=0)
-    warning_spike_threshold: int = Field(default=2, ge=0)
-    emergency_recovery_cycles: int = Field(default=2, ge=0)
-    emergency_symbols: str = "BTCUSD,ETHUSD,XAUUSD,EURUSD"
-    emergency_max_risk_per_trade: float = Field(default=0.005, ge=0.0, le=1.0)
-    emergency_max_open_trades: int = Field(default=1, ge=0)
-    reweight_lookback_hours: int = Field(default=48, ge=0)
-    reweight_min_trades: int = Field(default=4, ge=0)
+class ToolSystemSettings(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="", extra="ignore")
+
+    enabled: bool = Field(default=True, validation_alias="TOOL_SYSTEM_ENABLED")
+    autorun_every_n_loops: int = Field(default=5, ge=1, validation_alias="TOOL_SYSTEM_AUTORUN_EVERY_N_LOOPS")
+    strict_critical: bool = Field(default=True, validation_alias="TOOL_SYSTEM_STRICT_CRITICAL")
+    max_actions_per_cycle: int = Field(default=8, ge=0, validation_alias="TOOL_SYSTEM_MAX_ACTIONS_PER_CYCLE")
+    warning_spike_threshold: int = Field(default=2, ge=0, validation_alias="TOOL_SYSTEM_WARNING_SPIKE_THRESHOLD")
+    emergency_recovery_cycles: int = Field(default=2, ge=0, validation_alias="TOOL_SYSTEM_EMERGENCY_RECOVERY_CYCLES")
+    emergency_symbols: str = Field(
+        default="BTCUSD,ETHUSD,XAUUSD,EURUSD",
+        validation_alias="TOOL_SYSTEM_EMERGENCY_SYMBOLS",
+    )
+    emergency_max_risk_per_trade: float = Field(default=0.005, ge=0.0, le=1.0, validation_alias="TOOL_SYSTEM_EMERGENCY_MAX_RISK_PER_TRADE")
+    emergency_max_open_trades: int = Field(default=1, ge=0, validation_alias="TOOL_SYSTEM_EMERGENCY_MAX_OPEN_TRADES")
+    reweight_lookback_hours: int = Field(default=48, ge=0, validation_alias="TOOL_SYSTEM_REWEIGHT_LOOKBACK_HOURS")
+    reweight_min_trades: int = Field(default=4, ge=0, validation_alias="TOOL_SYSTEM_REWEIGHT_MIN_TRADES")
 
 
-# ── Execution failure backoff settings ──────────────────────────────────────
+# ── Execution failure backoff settings ─────────────────────────────────────
 
-class ExecutionFailureSettings(BaseModel):
-    autotrading_error_cooldown_seconds: int = Field(default=300, ge=0)
-    pending_confirm_timeout_seconds: float = Field(default=4.0, ge=0.0)
-    pending_confirm_poll_interval_seconds: float = Field(default=0.25, ge=0.0)
-    spread_reject_cooldown_hits: int = Field(default=3, ge=0)
-    spread_reject_cooldown_seconds: int = Field(default=300, ge=0)
+class ExecutionFailureSettings(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="", extra="ignore")
 
-
-# ── Data validation settings ────────────────────────────────────────────────
-
-class DataValidationSettings(BaseModel):
-    stuck_quote_threshold: int = Field(default=10, ge=0)
-    stuck_quote_threshold_crypto: int = Field(default=14, ge=0)
-    spike_percent_threshold: float = Field(default=2.0, ge=0.0)
+    autotrading_error_cooldown_seconds: int = Field(default=300, ge=0, validation_alias="EXEC_AUTOTRADING_ERROR_COOLDOWN_SECONDS")
+    pending_confirm_timeout_seconds: float = Field(default=4.0, ge=0.0, validation_alias="EXEC_PENDING_CONFIRM_TIMEOUT_SECONDS")
+    pending_confirm_poll_interval_seconds: float = Field(default=0.25, ge=0.0, validation_alias="EXEC_PENDING_CONFIRM_POLL_INTERVAL_SECONDS")
+    spread_reject_cooldown_hits: int = Field(default=3, ge=0, validation_alias="SPREAD_REJECT_COOLDOWN_HITS")
+    spread_reject_cooldown_seconds: int = Field(default=300, ge=0, validation_alias="SPREAD_REJECT_COOLDOWN_SECONDS")
 
 
-# ── DeepSeek settings (disabled code — kept for reference) ─────────────────
+# ── Data validation settings ───────────────────────────────────────────────
 
-class DeepSeekSettings(BaseModel):
-    api_key: str = ""
-    model: str = "deepseek-chat"
-    quick_model: str = "deepseek-chat"
-    deep_model: str = "deepseek-reasoner"
-    min_confidence: float = Field(default=0.65, ge=0.0, le=1.0)
-    schema_version: str = "v1"
-    cache_minutes: int = Field(default=30, ge=0)
-    r_mult_tolerance: float = Field(default=0.25, ge=0.0)
-    quick_timeout_seconds: float = Field(default=10, ge=0.0)
-    deep_timeout_seconds: float = Field(default=8, ge=0.0)
-    enable_deep_verify: bool = True
-    deep_verify_min_confidence: float = Field(default=0.78, ge=0.0, le=1.0)
-    agent_swarm_enabled: bool = False
-    agent_swarm_max_agents: int = Field(default=3, ge=1)
-    agent_swarm_profiles: str = ""
-    mesh_enabled: bool = True
-    mesh_min_active_agents: int = Field(default=2, ge=0)
-    mesh_latency_penalty: float = Field(default=0.25, ge=0.0, le=1.0)
-    mesh_trust_alpha: float = Field(default=0.18, ge=0.0, le=1.0)
-    mesh_min_trust: float = Field(default=0.15, ge=0.0, le=1.0)
-    mesh_max_trust: float = Field(default=0.95, ge=0.0, le=1.0)
-    metrics_log_every: int = Field(default=25, ge=1)
+class DataValidationSettings(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="", extra="ignore")
+
+    stuck_quote_threshold: int = Field(default=10, ge=0, validation_alias="STUCK_QUOTE_THRESHOLD")
+    stuck_quote_threshold_crypto: int = Field(default=14, ge=0, validation_alias="STUCK_QUOTE_THRESHOLD_CRYPTO")
+    spike_percent_threshold: float = Field(default=2.0, ge=0.0, validation_alias="SPIKE_PERCENT_THRESHOLD")
 
 
-# ── Root settings model ─────────────────────────────────────────────────────
+# ── Root settings model ───────────────────────────────────────────────────
 
 class _Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=str(_env_path),
         env_file_encoding="utf-8",
+        env_nested_delimiter="__",
+        env_ignore_empty=True,
         extra="ignore",
     )
 
-    # Mode
-    demo_mode: bool = False
-    bot_profile: str = "custom"
+    demo_mode: bool = Field(default=False, validation_alias="DEMO_MODE")
+    bot_profile: str = Field(default="custom", validation_alias="BOT_PROFILE")
 
-    # Sub-models
     broker: BrokerSettings = Field(default_factory=BrokerSettings)
     risk: RiskSettings = Field(default_factory=RiskSettings)
     guard: GuardSettings = Field(default_factory=GuardSettings)
@@ -553,467 +639,6 @@ class _Settings(BaseSettings):
     hku: HKUSettings = Field(default_factory=HKUSettings)
     execution_failure: ExecutionFailureSettings = Field(default_factory=ExecutionFailureSettings)
     data_validation: DataValidationSettings = Field(default_factory=DataValidationSettings)
-
-
-def _get_env(name: str, default: str) -> str:
-    return os.getenv(name, default)
-
-
-def _build_settings() -> _Settings:
-    """Build the settings object manually from env vars.
-
-    We parse env vars ourselves and construct sub-models so that:
-    1. Pydantic validation runs on all values
-    2. Existing code that reads env vars directly (os.getenv in this module)
-       keeps working
-    """
-    # Parse tuple fields that need custom handling
-    telegram_usernames_raw = _get_env("TELEGRAM_ALLOWED_USERNAMES", "")
-    telegram_usernames = tuple(
-        u.strip().lstrip("@").lower()
-        for u in telegram_usernames_raw.replace(";", ",").split(",")
-        if u.strip()
-    )
-    telegram_user_ids = tuple(
-        int(v.strip())
-        for v in _get_env("TELEGRAM_ALLOWED_USER_IDS", "").replace(";", ",").split(",")
-        if v.strip().isdigit()
-    )
-    entry_allowed_sessions = [
-        s.strip() for s in _get_env("ENTRY_ALLOWED_SESSIONS", "asian,london,overlap").split(",")
-        if s.strip()
-    ]
-    entry_blocked_days = [
-        d.strip() for d in _get_env("ENTRY_BLOCKED_DAYS", "Saturday,Sunday").split(",")
-        if d.strip()
-    ]
-    strategy_plugins = tuple(
-        s.strip() for s in _get_env("STRATEGY_PLUGINS", "").split(",") if s.strip()
-    )
-    weekend_symbols = _get_env(
-        "WEEKEND_SYMBOLS",
-        "BTCUSD,ETHUSD,BNBUSD,SOLUSD,XRPUSD,ADAUSD,DOTUSD,LTCUSD,EOSUSD,XLMUSD,TRXUSD",
-    )
-    misc_db_path = _get_env(
-        "DB_PATH",
-        str(Path(__file__).resolve().parent.parent / "data" / "trading_bot.db"),
-    )
-
-    def _bool(name: str, default: str) -> bool:
-        return _get_env(name, default).lower() == "true"
-
-    def _int(name: str, default: str) -> int:
-        return int(_get_env(name, default))
-
-    def _float(name: str, default: str) -> float:
-        return float(_get_env(name, default))
-
-    def _str(name: str, default: str) -> str:
-        return _get_env(name, default)
-
-    demo_mode = _bool("DEMO_MODE", "false")
-    bot_profile = _str("BOT_PROFILE", "custom").strip().lower()
-
-    # Broker
-    broker = BrokerSettings(
-        account=_str("BROKER_ACCOUNT", ""),
-        password=_str("BROKER_PASSWORD", ""),
-        server=_str("BROKER_SERVER", ""),
-    )
-
-    # Risk
-    risk = RiskSettings(
-        max_risk_per_trade=_float("MAX_RISK_PER_TRADE", "0.02"),
-        max_open_trades=_int("MAX_OPEN_TRADES", "12"),
-        max_daily_loss=_float("MAX_DAILY_LOSS", "0.05"),
-        max_monthly_loss=_float("MAX_MONTHLY_LOSS", "0.10"),
-        max_spread_pips=_float("MAX_SPREAD_PIPS", "8.0"),
-        max_spread_pips_commodity=_float("MAX_SPREAD_PIPS_COMMODITY", "10.0"),
-        max_spread_pips_exotic=_float("MAX_SPREAD_PIPS_EXOTIC", "15.0"),
-        max_spread_pct_crypto=_float("MAX_SPREAD_PCT_CRYPTO", "2.5"),
-        max_spread_points_index=_float("MAX_SPREAD_POINTS_INDEX", "5.0"),
-        drawdown_cooldown_hours=_int("DRAWDOWN_COOLDOWN_HOURS", "24"),
-        min_lot_size=_float("MIN_LOT_SIZE", "0.01"),
-        max_lot_size=_float("MAX_LOT_SIZE", "50.0"),
-        fixed_lot_size=_float("FIXED_LOT_SIZE", "0.0"),
-        position_size_mode=_str("POSITION_SIZE_MODE", "equity_pct").lower(),
-        position_size_fixed_lot=_float("POSITION_SIZE_FIXED_LOT", "0.10"),
-        position_size_fixed_risk_amount=_float("POSITION_SIZE_FIXED_RISK_AMOUNT", "100.0"),
-        kelly_min_trades=_int("KELLY_MIN_TRADES", "20"),
-        kelly_lookback_days=_int("KELLY_LOOKBACK_DAYS", "90"),
-        kelly_half=_bool("KELLY_HALF", "true"),
-        risk_validation_profile=_str("RISK_VALIDATION_PROFILE", "agile").lower(),
-        risk_agile_high_conf_threshold=_float("RISK_AGILE_HIGH_CONF_THRESHOLD", "0.74"),
-        risk_agile_spread_multiplier=_float("RISK_AGILE_SPREAD_MULTIPLIER", "1.35"),
-    )
-
-    # Guard
-    guard = GuardSettings(
-        enabled=_bool("GUARD_PIPELINE_ENABLED", "true"),
-        cooldown_seconds=_int("GUARD_COOLDOWN_SECONDS", "300"),
-        max_daily_loss_pct=_float("GUARD_MAX_DAILY_LOSS_PCT", "0.05"),
-        max_vix=_float("GUARD_MAX_VIX", "40.0"),
-        feed_staleness_seconds=_float("GUARD_FEED_STALENESS_SECONDS", "120"),
-    )
-
-    # Execution
-    execution = ExecutionSettings(
-        tp1_close_percent=_float("TP1_CLOSE_PERCENT", "0.40"),
-        tp2_close_percent=_float("TP2_CLOSE_PERCENT", "0.30"),
-        tp3_close_percent=_float("TP3_CLOSE_PERCENT", "0.20"),
-        tp4_close_percent=_float("TP4_CLOSE_PERCENT", "0.10"),
-        trailing_stop_distance_pips=_float("TRAILING_STOP_DISTANCE_PIPS", "20"),
-        commission_per_lot=_float("COMMISSION_PER_LOT", "7.0"),
-        commission_per_lot_crypto=_float("COMMISSION_PER_LOT_CRYPTO", "7.0"),
-        commission_per_lot_commodity=_float("COMMISSION_PER_LOT_COMMODITY", "7.0"),
-        commission_per_lot_exotic=_float("COMMISSION_PER_LOT_EXOTIC", "7.0"),
-        breakeven_spread_offset=_bool("BREAKEVEN_SPREAD_OFFSET", "true"),
-        limit_entry_max_distance_atr=_float("LIMIT_ENTRY_MAX_DISTANCE_ATR", "0.5"),
-        limit_entry_max_distance_atr_crypto=_float("LIMIT_ENTRY_MAX_DISTANCE_ATR_CRYPTO", "2.0"),
-    )
-
-    # Sniper
-    sniper = SniperSettings(
-        enabled=_bool("SNIPER_ENTRY_ENABLED", "true"),
-        conf_threshold=_float("SNIPER_CONF_THRESHOLD", "0.55"),
-        timeout_minutes=_float("SNIPER_TIMEOUT_MINUTES", "30.0"),
-        max_entry_atr_distance=_float("SNIPER_MAX_ENTRY_ATR_DISTANCE", "0.55"),
-        fib_min_depth=_str("SNIPER_FIB_MIN_DEPTH", "acceptable").lower(),
-        fib_max_depth=_str("SNIPER_FIB_MAX_DEPTH", "deep").lower(),
-    )
-
-    # Deferred
-    deferred = DeferredSettings(
-        enabled=_bool("DEFERRED_ENTRY_ENABLED", "true"),
-        max_age_seconds=_int("DEFERRED_ENTRY_MAX_AGE_SECONDS", "900"),
-        max_atr_distance=_float("DEFERRED_ENTRY_MAX_ATR_DISTANCE", "0.35"),
-        min_conf=_float("DEFERRED_ENTRY_MIN_CONF", "0.60"),
-        ttl_seconds=_int("DEFERRED_ENTRY_TTL_SECONDS", "900"),
-    )
-
-    # Fast lane
-    fast_lane = FastLaneSettings(
-        enabled=_bool("FAST_LANE_ENABLED", "true"),
-        max_signals=_int("FAST_LANE_MAX_SIGNALS", "1"),
-        close_on_full_reject=_bool("FAST_LANE_CLOSE_ON_FULL_REJECT", "true"),
-    )
-
-    # Instant entry
-    instant_entry = InstantEntrySettings(
-        enabled=_bool("INSTANT_ENTRY_ENABLED", "true"),
-        min_confidence=_float("INSTANT_ENTRY_MIN_CONFIDENCE", "0.78"),
-    )
-
-    # Exposure
-    exposure = ExposureSettings(
-        enabled=_bool("EXPOSURE_ENABLED", "false"),
-        reduce_threshold=_float("EXPOSURE_REDUCE_THRESHOLD", "0.40"),
-        cash_threshold=_float("EXPOSURE_CASH_THRESHOLD", "0.20"),
-        win_rate_lookback=_int("EXPOSURE_WIN_RATE_LOOKBACK", "10"),
-    )
-
-    # Neural
-    neural = NeuralSettings(
-        min_candles=_int("NEURAL_MIN_CANDLES", "65"),
-        seq_len=_int("NEURAL_SEQ_LEN", "50"),
-        hidden_size=_int("NEURAL_HIDDEN_SIZE", "128"),
-        num_layers=_int("NEURAL_NUM_LAYERS", "2"),
-        train_epochs=_int("NEURAL_TRAIN_EPOCHS", "100"),
-        retrain_every=_int("NEURAL_RETRAIN_EVERY", "20"),
-        min_confidence=_float("NEURAL_MIN_CONFIDENCE", "0.55"),
-        lgbm_ensemble_enabled=_bool("LGBM_ENSEMBLE_ENABLED", "true"),
-        kalman_enabled=_bool("KALMAN_ENABLED", "false"),
-    )
-
-    # GARCH
-    garch = GarchSettings(
-        enabled=_bool("GARCH_ENABLED", "true"),
-        high_vol_threshold=_float("GARCH_HIGH_VOL_THRESHOLD", "2.0"),
-    )
-
-    # ICT
-    ict = ICTSettings(
-        min_confidence=_int("ICT_MIN_CONFIDENCE", "30"),
-        h4_candle_count=_int("H4_CANDLE_COUNT", "200"),
-        d1_candle_count=_int("D1_CANDLE_COUNT", "20"),
-        m30_candle_count=_int("M30_CANDLE_COUNT", "100"),
-        m15_candle_count=_int("M15_CANDLE_COUNT", "250"),
-        m5_candle_count=_int("M5_CANDLE_COUNT", "100"),
-        mtf_alignment_boost=_float("MTF_ALIGNMENT_BOOST", "0.05"),
-        mtf_d1_veto=_bool("MTF_D1_VETO", "true"),
-        regime_adx_trending=_float("REGIME_ADX_TRENDING", "25.0"),
-        regime_adx_ranging=_float("REGIME_ADX_RANGING", "20.0"),
-        regime_confidence_penalty=_float("REGIME_CONFIDENCE_PENALTY", "0.10"),
-        tp_trending_tp1_mult=_float("TP_TRENDING_TP1_MULT", "1.5"),
-        tp_trending_tp2_mult=_float("TP_TRENDING_TP2_MULT", "2.5"),
-        tp_trending_tp3_mult=_float("TP_TRENDING_TP3_MULT", "4.0"),
-        tp_trending_tp4_mult=_float("TP_TRENDING_TP4_MULT", "6.0"),
-        tp_ranging_tp1_mult=_float("TP_RANGING_TP1_MULT", "0.8"),
-        tp_ranging_tp2_mult=_float("TP_RANGING_TP2_MULT", "1.5"),
-        tp_ranging_tp3_mult=_float("TP_RANGING_TP3_MULT", "2.5"),
-        max_hours_in_trade=_int("MAX_HOURS_IN_TRADE", "48"),
-        min_ict_score_crypto=_float("MIN_ICT_SCORE_CRYPTO", "35.0"),
-        min_conf_trending=_float("MIN_CONF_TRENDING", "0.40"),
-        min_conf_ranging=_float("MIN_CONF_RANGING", "0.40"),
-        min_conf_volatile=_float("MIN_CONF_VOLATILE", "0.40"),
-        min_conf_unknown=_float("MIN_CONF_UNKNOWN", "0.40"),
-        min_conf_crypto_bonus=_float("MIN_CONF_CRYPTO_BONUS", "0.03"),
-        min_conf_exotic_bonus=_float("MIN_CONF_EXOTIC_BONUS", "0.04"),
-        size_scale_very_low_threshold=_float("SIZE_SCALE_VERY_LOW_THRESHOLD", "0.45"),
-        size_scale_low_threshold=_float("SIZE_SCALE_LOW_THRESHOLD", "0.60"),
-        size_scale_medium_threshold=_float("SIZE_SCALE_MEDIUM_THRESHOLD", "0.75"),
-        size_scale_very_low=_float("SIZE_SCALE_VERY_LOW", "0.35"),
-        size_scale_low=_float("SIZE_SCALE_LOW", "0.55"),
-        size_scale_medium=_float("SIZE_SCALE_MEDIUM", "0.75"),
-        size_scale_full=_float("SIZE_SCALE_FULL", "1.00"),
-    )
-
-    # Orchestration
-    orchestration = OrchestrationSettings(
-        loop_interval_seconds=_int("LOOP_INTERVAL_SECONDS", "5"),
-        reconcile_every_n_loops=_int("RECONCILE_EVERY_N_LOOPS", "60"),
-        candle_server_port=_int("CANDLE_SERVER_PORT", "5555"),
-        scan_cooldown_seconds=_int("SCAN_COOLDOWN_SECONDS", "300"),
-        scan_cooldown_seconds_london_ny=_int("SCAN_COOLDOWN_SECONDS_LONDON_NY", "60"),
-        scan_cooldown_seconds_asia=_int("SCAN_COOLDOWN_SECONDS_ASIA", "120"),
-        btc_priority_symbol=_str("BTC_PRIORITY_SYMBOL", "BTCUSD"),
-        btc_priority_scan_cooldown_seconds=_int("BTC_PRIORITY_SCAN_COOLDOWN_SECONDS", "8"),
-        event_driven_rescan_on_new_candle=_bool("EVENT_DRIVEN_RESCAN_ON_NEW_CANDLE", "true"),
-        scan_workers_min=_int("ORCHESTRATION_SCAN_WORKERS_MIN", "2"),
-        scan_workers_max=_int("ORCHESTRATION_SCAN_WORKERS_MAX", "10"),
-        scan_workers_default=_int("ORCHESTRATION_SCAN_WORKERS_DEFAULT", "6"),
-        adaptive_workers_enabled=_bool("ORCHESTRATION_ADAPTIVE_WORKERS_ENABLED", "true"),
-        target_scan_ms=_float("ORCHESTRATION_TARGET_SCAN_MS", "15000"),
-        target_rank_ms=_float("ORCHESTRATION_TARGET_RANK_MS", "200"),
-        target_exec_ms=_float("ORCHESTRATION_TARGET_EXEC_MS", "800"),
-        target_total_ms=_float("ORCHESTRATION_TARGET_TOTAL_MS", "60000"),
-        max_signals_per_iteration=_int("ORCHESTRATION_MAX_SIGNALS_PER_ITERATION", "20"),
-        enable_iteration_trace=_bool("ORCHESTRATION_ENABLE_ITERATION_TRACE", "true"),
-        scan_error_rate_abort=_float("ORCHESTRATION_SCAN_ERROR_RATE_ABORT", "0.70"),
-        scan_error_min_samples=_int("ORCHESTRATION_SCAN_ERROR_MIN_SAMPLES", "5"),
-        hard_budget_enabled=_bool("ORCHESTRATION_HARD_BUDGET_ENABLED", "true"),
-        max_scan_ms=_float("ORCHESTRATION_MAX_SCAN_MS", "90000"),
-        max_rank_ms=_float("ORCHESTRATION_MAX_RANK_MS", "1000"),
-        max_exec_ms=_float("ORCHESTRATION_MAX_EXEC_MS", "3000"),
-        max_iteration_ms=_float("ORCHESTRATION_MAX_ITERATION_MS", "120000"),
-        exec_budget_council_margin_ms=_float("ORCHESTRATION_EXEC_BUDGET_COUNCIL_MARGIN_MS", "350"),
-        symbol_max_fail_count=_int("SYMBOL_MAX_FAIL_COUNT", "20"),
-        symbol_disable_seconds=_int("SYMBOL_DISABLE_SECONDS", "1800"),
-        permanent_fault_symbols=_str("PERMANENT_FAULT_SYMBOLS", ""),
-        htf_cache_ttl_m15_seconds=_float("HTF_CACHE_TTL_M15_SECONDS", "20"),
-        htf_cache_ttl_m5_seconds=_float("HTF_CACHE_TTL_M5_SECONDS", "15"),
-        htf_cache_ttl_m30_seconds=_float("HTF_CACHE_TTL_M30_SECONDS", "30"),
-        htf_cache_ttl_h4_seconds=_float("HTF_CACHE_TTL_H4_SECONDS", "120"),
-        htf_cache_ttl_d1_seconds=_float("HTF_CACHE_TTL_D1_SECONDS", "300"),
-        htf_cache_ttl_multiplier_london_ny=_float("HTF_CACHE_TTL_MULTIPLIER_LONDON_NY", "0.75"),
-        htf_cache_ttl_multiplier_asia=_float("HTF_CACHE_TTL_MULTIPLIER_ASIA", "1.35"),
-    )
-
-    # Opportunity
-    opportunity = OpportunitySettings(
-        enabled=_bool("OPPORTUNITY_PHASE_ENABLED", "true"),
-        rollover_seconds=_int("OPPORTUNITY_ROLLOVER_SECONDS", "900"),
-        watch_window_seconds=_int("OPPORTUNITY_WATCH_WINDOW_SECONDS", "180"),
-        hedge_timeout_seconds=_int("OPPORTUNITY_HEDGE_TIMEOUT_SECONDS", "300"),
-        min_recovery_confidence=_float("OPPORTUNITY_MIN_RECOVERY_CONFIDENCE", "0.62"),
-        fallback_max_spread_pct=_float("OPPORTUNITY_FALLBACK_MAX_SPREAD_PCT", "0.003"),
-        shock_lookback_seconds=_int("OPPORTUNITY_SHOCK_LOOKBACK_SECONDS", "5"),
-        shock_drop_threshold=_float("OPPORTUNITY_SHOCK_DROP_THRESHOLD", "0.0015"),
-        require_shock_for_fast_lane=_bool("OPPORTUNITY_REQUIRE_SHOCK_FOR_FAST_LANE", "true"),
-        live_enabled=_bool("OPPORTUNITY_LIVE_ENABLED", "false"),
-    )
-
-    # Protection
-    protection = ProtectionSettings(
-        enabled=_bool("PROTECTIONS_ENABLED", "true"),
-        cooldown_minutes=_int("PROTECTION_COOLDOWN_MINUTES", "10"),
-        stoploss_guard_lookback_minutes=_int("PROTECTION_STOPLOSS_GUARD_LOOKBACK_MINUTES", "180"),
-        stoploss_guard_trade_limit=_int("PROTECTION_STOPLOSS_GUARD_TRADE_LIMIT", "3"),
-        stoploss_guard_lock_minutes=_int("PROTECTION_STOPLOSS_GUARD_LOCK_MINUTES", "60"),
-        global_loss_guard_lookback_minutes=_int("PROTECTION_GLOBAL_LOSS_GUARD_LOOKBACK_MINUTES", "120"),
-        global_loss_guard_max_losses=_int("PROTECTION_GLOBAL_LOSS_GUARD_MAX_LOSSES", "4"),
-        global_loss_guard_lock_minutes=_int("PROTECTION_GLOBAL_LOSS_GUARD_LOCK_MINUTES", "45"),
-        consecutive_reject_limit=_int("CONSECUTIVE_REJECT_LIMIT", "5"),
-        consecutive_reject_cooldown_minutes=_int("CONSECUTIVE_REJECT_COOLDOWN_MINUTES", "15"),
-    )
-
-    # Time phase
-    time_phase = TimePhaseSettings(
-        enabled=_bool("TIME_PHASE_CONFIDENCE_ENABLED", "false"),
-        bucket_minutes=_int("TIME_PHASE_BUCKET_MINUTES", "15"),
-        early_max_minute=_int("TIME_PHASE_EARLY_MAX_MINUTE", "3"),
-        mid_max_minute=_int("TIME_PHASE_MID_MAX_MINUTE", "11"),
-        min_conf_early=_float("TIME_PHASE_MIN_CONF_EARLY", "0.55"),
-        min_conf_mid=_float("TIME_PHASE_MIN_CONF_MID", "0.50"),
-        min_conf_late=_float("TIME_PHASE_MIN_CONF_LATE", "0.48"),
-    )
-
-    # Telegram
-    telegram = TelegramSettings(
-        bot_token=_str("TELEGRAM_BOT_TOKEN", ""),
-        chat_id=_str("TELEGRAM_CHAT_ID", ""),
-        noise_filter_enabled=_bool("TELEGRAM_NOISE_FILTER_ENABLED", "true"),
-        dedupe_window_seconds=_int("TELEGRAM_DEDUPE_WINDOW_SECONDS", "180"),
-        rate_limit_per_minute=_int("TELEGRAM_RATE_LIMIT_PER_MINUTE", "20"),
-        suppression_report_every=_int("TELEGRAM_SUPPRESSION_REPORT_EVERY", "10"),
-        chart_days=_int("TELEGRAM_CHART_DAYS", "30"),
-        allowed_usernames=telegram_usernames,
-        allowed_user_ids=telegram_user_ids,
-    )
-
-    # Intelligence
-    intelligence = IntelligenceSettings(
-        deepseek_api_key=_str("DEEPSEEK_API_KEY", ""),
-        anthropic_api_key=_str("ANTHROPIC_API_KEY", ""),
-        alpha_vantage_key=_str("ALPHA_VANTAGE_KEY", ""),
-        twelve_data_key=_str("TWELVE_DATA_KEY", ""),
-        fred_api_key=_str("FRED_API_KEY", ""),
-        yfinance_enabled=_bool("YFINANCE_ENABLED", "true"),
-        sweep_interval_minutes=_int("INTELLIGENCE_SWEEP_INTERVAL_MINUTES", "15"),
-        mt5_db_sync_interval_seconds=_int("MT5_DB_SYNC_INTERVAL_SECONDS", "300"),
-        news_calendar_source=_str("NEWS_CALENDAR_SOURCE", "static"),
-        finnhub_api_key=_str("FINNHUB_API_KEY", ""),
-        news_blackout_minutes=_int("NEWS_BLACKOUT_MINUTES", "15"),
-        crucix_url=_str("CRUCIX_URL", "https://crucix-pi.vercel.app"),
-    )
-
-    # Learning
-    learning = LearningSettings(
-        default_confidence=0.5,
-        initial_confidence=0.5,
-        confidence_allow=0.3,
-        confidence_reduced=0.5,
-        confidence_full=0.7,
-        confidence_disable_threshold=0.2,
-        metrics_log_every_n_loops=_int("METRICS_LOG_EVERY_N_LOOPS", "5"),
-    )
-
-    # Backtest
-    backtest = BacktestSettings(
-        commission_per_lot_per_side=_float("BACKTEST_COMMISSION_PER_LOT_PER_SIDE", "0.0001"),
-        walk_forward_enabled=_bool("BACKTEST_WALK_FORWARD_ENABLED", "false"),
-        walk_forward_window_days=_int("BACKTEST_WALK_FORWARD_WINDOW_DAYS", "90"),
-    )
-
-    # Misc
-    misc = MiscSettings(
-        log_level=_str("LOG_LEVEL", "INFO"),
-        daily_summary_hour=_int("DAILY_SUMMARY_HOUR", "17"),
-        timezone=_str("TIMEZONE", "Europe/Paris"),
-        default_symbol=_str("DEFAULT_SYMBOL", "BTCUSD"),
-        default_timeframe=_str("DEFAULT_TIMEFRAME", "H1"),
-        database_url=_str("DATABASE_URL", ""),
-        db_path=misc_db_path,
-        encryption_key=_str("ENCRYPTION_KEY", ""),
-        sma_fast_period=_int("SMA_FAST_PERIOD", "10"),
-        sma_slow_period=_int("SMA_SLOW_PERIOD", "50"),
-        sentry_dsn=_str("MISC_SENTRY_DSN", ""),
-    )
-
-    # Session
-    session = SessionSettings(
-        allowed_sessions=entry_allowed_sessions,
-        blocked_days=entry_blocked_days,
-        mtf_min_alignment=_float("MTF_MIN_ALIGNMENT", "0.0"),
-        weekend_symbols=weekend_symbols,
-    )
-
-    # Strategy plugins
-    strategy_plugin = StrategyPluginSettings(
-        plugins=strategy_plugins,
-        fail_fast=_bool("STRATEGY_PLUGIN_FAIL_FAST", "false"),
-    )
-
-    # OpenRouter
-    openrouter = OpenRouterSettings(
-        api_key=_str("OPENROUTER_API_KEY", ""),
-        base_url=_str("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"),
-        model=_str("OPENROUTER_MODEL", "anthropic/claude-3-haiku"),
-        fallback_enabled=_bool("OPENROUTER_FALLBACK_ENABLED", "false"),
-    )
-
-    # MCP
-    mcp = MCPSettings(
-        enabled=_bool("MCP_SERVER_ENABLED", "false"),
-        port=_int("MCP_SERVER_PORT", "8080"),
-    )
-
-    # Tool system
-    tool_system = ToolSystemSettings(
-        enabled=_bool("TOOL_SYSTEM_ENABLED", "true"),
-        autorun_every_n_loops=_int("TOOL_SYSTEM_AUTORUN_EVERY_N_LOOPS", "5"),
-        strict_critical=_bool("TOOL_SYSTEM_STRICT_CRITICAL", "true"),
-        max_actions_per_cycle=_int("TOOL_SYSTEM_MAX_ACTIONS_PER_CYCLE", "8"),
-        warning_spike_threshold=_int("TOOL_SYSTEM_WARNING_SPIKE_THRESHOLD", "2"),
-        emergency_recovery_cycles=_int("TOOL_SYSTEM_EMERGENCY_RECOVERY_CYCLES", "2"),
-        emergency_symbols=_str("TOOL_SYSTEM_EMERGENCY_SYMBOLS", "BTCUSD,ETHUSD,XAUUSD,EURUSD"),
-        emergency_max_risk_per_trade=_float("TOOL_SYSTEM_EMERGENCY_MAX_RISK_PER_TRADE", "0.005"),
-        emergency_max_open_trades=_int("TOOL_SYSTEM_EMERGENCY_MAX_OPEN_TRADES", "1"),
-        reweight_lookback_hours=_int("TOOL_SYSTEM_REWEIGHT_LOOKBACK_HOURS", "48"),
-        reweight_min_trades=_int("TOOL_SYSTEM_REWEIGHT_MIN_TRADES", "4"),
-    )
-
-    # Execution failure
-    execution_failure = ExecutionFailureSettings(
-        autotrading_error_cooldown_seconds=_int("EXEC_AUTOTRADING_ERROR_COOLDOWN_SECONDS", "300"),
-        pending_confirm_timeout_seconds=_float("EXEC_PENDING_CONFIRM_TIMEOUT_SECONDS", "4.0"),
-        pending_confirm_poll_interval_seconds=_float("EXEC_PENDING_CONFIRM_POLL_INTERVAL_SECONDS", "0.25"),
-        spread_reject_cooldown_hits=_int("SPREAD_REJECT_COOLDOWN_HITS", "3"),
-        spread_reject_cooldown_seconds=_int("SPREAD_REJECT_COOLDOWN_SECONDS", "300"),
-    )
-
-    # Data validation
-    data_validation = DataValidationSettings(
-        stuck_quote_threshold=_int("STUCK_QUOTE_THRESHOLD", "10"),
-        stuck_quote_threshold_crypto=_int("STUCK_QUOTE_THRESHOLD_CRYPTO", "14"),
-        spike_percent_threshold=_float("SPIKE_PERCENT_THRESHOLD", "2.0"),
-    )
-
-    # HKU
-    hku = HKUSettings(
-        enabled=_bool("HKU_ENABLED", "false"),
-        api_url=_str("HKU_API_URL", ""),
-        api_key=_str("HKU_API_KEY", ""),
-        signal_discount=_float("HKU_SIGNAL_DISCOUNT", "0.80"),
-        publish_on_strategy=_bool("HKU_PUBLISH_ON_STRATEGY", "true"),
-        publish_on_discussion=_bool("HKU_PUBLISH_ON_DISCUSSION", "true"),
-        feed_limit=_int("HKU_FEED_LIMIT", "10"),
-        circuit_breaker_timeout_secs=_int("HKU_CIRCUIT_BREAKER_TIMEOUT_SECS", "300"),
-    )
-
-    return _Settings(
-        demo_mode=demo_mode,
-        bot_profile=bot_profile,
-        broker=broker,
-        risk=risk,
-        guard=guard,
-        execution=execution,
-        sniper=sniper,
-        deferred=deferred,
-        fast_lane=fast_lane,
-        instant_entry=instant_entry,
-        exposure=exposure,
-        neural=neural,
-        garch=garch,
-        ict=ict,
-        orchestration=orchestration,
-        opportunity=opportunity,
-        protection=protection,
-        time_phase=time_phase,
-        telegram=telegram,
-        intelligence=intelligence,
-        learning=learning,
-        backtest=backtest,
-        misc=misc,
-        session=session,
-        strategy_plugin=strategy_plugin,
-        openrouter=openrouter,
-        mcp=mcp,
-        tool_system=tool_system,
-        execution_failure=execution_failure,
-        data_validation=data_validation,
-        hku=hku,
-    )
 
 
 # ── Apply profile overrides ────────────────────────────────────────────────
@@ -1074,10 +699,10 @@ def _apply_profile_overrides(s: _Settings) -> _Settings:
 
 # ── Build and validate settings ──────────────────────────────────────────
 
-settings = _apply_profile_overrides(_build_settings())
+settings = _apply_profile_overrides(_Settings())
 
 
-# ── Backward-compatible flat exports ──────────────────────────────────────
+# ── Backward-compatible flat exports ─────────────────────────────────────
 # All existing code uses `from config.settings import BROKER_ACCOUNT` etc.
 # These re-export every setting as a module-level variable so no existing
 # imports break.  New code should prefer the structured `settings` object.

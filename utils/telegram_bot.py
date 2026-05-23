@@ -562,8 +562,8 @@ def _cmd_backtest(args: list[str], send: Callable[[str, ...], None]) -> None:
 def _cmd_stats(args: list[str], send: Callable[[str, ...], None]) -> None:
     def _run():
         try:
-            from database.db import Database
-            from database.learning_repo import LearningRepo
+            from adapters.db.db import Database
+            from adapters.db.learning_repo import LearningRepo
 
             db = Database()
             repo = LearningRepo(db._pool)
@@ -608,8 +608,8 @@ def _cmd_confidence(args: list[str], send: Callable[[str, ...], None]) -> None:
     if len(args) >= 2:
         try:
             value = float(args[1])
-            from database.db import Database
-            from database.learning_repo import LearningRepo
+            from adapters.db.db import Database
+            from adapters.db.learning_repo import LearningRepo
             db = Database()
             repo = LearningRepo(db._pool)
             repo.upsert_confidence(strategy, value, 0, 0)
@@ -619,8 +619,8 @@ def _cmd_confidence(args: list[str], send: Callable[[str, ...], None]) -> None:
             send(f"⚠️ Failed to set confidence: {exc}", priority="normal")
     else:
         try:
-            from database.db import Database
-            from database.learning_repo import LearningRepo
+            from adapters.db.db import Database
+            from adapters.db.learning_repo import LearningRepo
             db = Database()
             repo = LearningRepo(db._pool)
             conf = repo.get_confidence(strategy)
@@ -649,8 +649,8 @@ def _cmd_reset_learning(args: list[str], send: Callable[[str, ...], None], from_
 
 def _do_reset_learning(send: Callable[[str, ...], None]) -> None:
     try:
-        from database.db import Database
-        from database.learning_repo import LearningRepo
+        from adapters.db.db import Database
+        from adapters.db.learning_repo import LearningRepo
         db = Database()
         repo = LearningRepo(db._pool)
         result = repo.reset_learning_state()
@@ -709,8 +709,8 @@ def _cmd_perf(args: list[str], send: Callable[[str, ...], None]) -> None:
 
     def _run():
         try:
-            from database.db import Database
-            from database.learning_repo import LearningRepo
+            from adapters.db.db import Database
+            from adapters.db.learning_repo import LearningRepo
             from datetime import timedelta as td
 
             db = Database()
@@ -744,7 +744,7 @@ def _cmd_perf(args: list[str], send: Callable[[str, ...], None]) -> None:
 def _cmd_signals(args: list[str], send: Callable[[str, ...], None]) -> None:
     def _run():
         try:
-            from database.db import Database
+            from adapters.db.db import Database
 
             db = Database()
             conn = db._pool.get_conn()
@@ -809,7 +809,7 @@ def _cmd_agents(args: list[str], send: Callable[[str, ...], None]) -> None:
 
     def _run():
         try:
-            from database.db import Database
+            from adapters.db.db import Database
             db = Database()
             conn = db._pool.get_conn()
             try:
@@ -889,7 +889,7 @@ def _cmd_hypothesis(args: list[str], send: Callable[[str, ...], None]) -> None:
     def _run():
         try:
             from agents.hypothesis_agent import HypothesisAgent
-            from database.db import Database
+            from adapters.db.db import Database
             db = Database()
             agent = HypothesisAgent(db)
             result = agent.run_cycle()

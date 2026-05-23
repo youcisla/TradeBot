@@ -24,7 +24,7 @@ from state.persistence import StatePersistence
 from utils import telegram_bot
 
 if TYPE_CHECKING:
-    from database.db import Database
+    from adapters.db.db import Database
 
 logger = logging.getLogger(__name__)
 
@@ -170,6 +170,37 @@ class ExecutionAgent:
             tp=broker_tp,
             comment=signal.strategy,
         )
+
+        # ── Slippage guard ───────────────────────────────────────────────
+        # If fill price deviates too far from the signal's expected entry, the
+        # trade's risk profile is invalid (SL/TP were calculated for entry_price,
+        # not fill_price).  Close immediately and reject rather than let the bot
+        # run with wrong risk parameters.
+        MAX_SLIPPAGE_TICKS = getattr(settings, "MAX_EXEC_SLIPPAGE_TICKS", 20)
+        if result.success and result.fill_price > 0 and signal.entry_price > 0:
+            slippage_ticks = abs(result.fill_price - signal.entry_price) / max(
+                self._broker.get_tick_size(signal.symbol), 1e-10
+            )
+            if slippage_ticks > MAX_SLIPPAGE_TICKS:
+                logger.warning(
+                    "EXEC REJECT [SLIPPAGE]: %s %s fill=%.5f vs entry=%.5f (%.1f ticks > %d limit) — closing",
+                    signal.direction, signal.symbol, result.fill_price,
+                    signal.entry_price, slippage_ticks, MAX_SLIPPAGE_TICKS,
+                )
+                self._broker.close_order(result.broker_ticket, signal.symbol, signal.direction)
+                self._emit(
+                    "warn",
+                    f"Trade rejected — slippage {slippage_ticks:.0f} ticks exceeds limit",
+                    {
+                        "symbol": signal.symbol,
+                        "fill_price": result.fill_price,
+                        "entry_price": signal.entry_price,
+                        "slippage_ticks": slippage_ticks,
+                        "limit": MAX_SLIPPAGE_TICKS,
+                    },
+                )
+                return None
+
         if not result.success:
             msg = result.message or ""
             # Stale-signal rejection: market moved between detection and execution.

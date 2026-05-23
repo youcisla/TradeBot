@@ -1,8 +1,10 @@
 "use client";
 
+import { useState } from "react";
 import { useAppShell } from "@/components/app/AppShellProvider";
 import { Clock } from "@/components/app/Clock";
 import { useTheme } from "@/components/ThemeProvider";
+import { activateProfile } from "@/lib/swr";
 
 const SESSION_COLORS: Record<string, string> = {
   asian:   "var(--purple)",
@@ -35,8 +37,112 @@ function HeaderKpi({ label, value, color }: { label: string; value: string; colo
   );
 }
 
+function ProfileSwitcher() {
+  const { auth } = useAppShell();
+  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  const activeProfile = auth.profiles.find((p) => p.is_active);
+  const locked = auth.botLocked;
+
+  async function handleSelect(profileId: number) {
+    if (!auth.sessionToken || loading) return;
+    setLoading(true);
+    try {
+      await activateProfile(profileId, auth.sessionToken);
+      window.location.reload();
+    } catch { /* ignore */ }
+    finally { setLoading(false); setOpen(false); }
+  }
+
+  return (
+    <div style={{ position: "relative" }}>
+      <button
+        onClick={() => setOpen((v) => !v)}
+        title="Switch broker profile"
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 6,
+          padding: "4px 10px",
+          background: "var(--bg-3)",
+          border: "1px solid var(--border)",
+          borderRadius: 8,
+          fontSize: 12,
+          fontFamily: "var(--font-ui)",
+          color: locked ? "var(--warning)" : "var(--text-1)",
+          cursor: "pointer",
+        }}
+      >
+        <span
+          style={{
+            width: 6, height: 6, borderRadius: "50%",
+            background: activeProfile
+              ? (activeProfile.is_demo ? "#0A84FF" : "#30D158")
+              : "var(--warning)",
+          }}
+        />
+        {activeProfile?.profile_label ?? (locked ? "Locked" : "No profile")}
+      </button>
+      {open && (
+        <div
+          style={{
+            position: "absolute", top: "100%", right: 0, marginTop: 4,
+            background: "var(--bg-2)", border: "1px solid var(--border)",
+            borderRadius: 10, minWidth: 180, zIndex: 999,
+            boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
+            overflow: "hidden",
+          }}
+        >
+          {auth.profiles.map((p) => (
+            <button
+              key={p.id}
+              onClick={() => handleSelect(p.id)}
+              disabled={loading}
+              style={{
+                display: "flex", alignItems: "center", gap: 8,
+                width: "100%", padding: "10px 14px",
+                background: p.is_active ? "rgba(10,132,255,0.1)" : "transparent",
+                border: "none",
+                fontSize: 13, fontFamily: "var(--font-ui)",
+                color: "var(--text-1)",
+                cursor: loading ? "not-allowed" : "pointer",
+                textAlign: "left",
+              }}
+            >
+              <span
+                style={{
+                  width: 8, height: 8, borderRadius: "50%", flexShrink: 0,
+                  background: p.is_demo ? "#0A84FF" : "#30D158",
+                }}
+              />
+              <span style={{ flex: 1 }}>{p.profile_label}</span>
+              {p.is_active && <span style={{ fontSize: 10, color: "#0A84FF" }}>ACTIVE</span>}
+            </button>
+          ))}
+          <button
+            onClick={() => { setOpen(false); window.location.href = "/dashboard/profiles"; }}
+            style={{
+              display: "flex", alignItems: "center", gap: 8,
+              width: "100%", padding: "10px 14px",
+              background: "transparent",
+              border: "none",
+              borderTop: "1px solid var(--border)",
+              fontSize: 12, fontFamily: "var(--font-ui)",
+              color: "var(--text-3)",
+              cursor: "pointer",
+            }}
+          >
+            Manage profiles →
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function Header() {
-  const { status, isRunning, openTrades, intelligence } = useAppShell();
+  const { status, isRunning, openTrades, intelligence, auth } = useAppShell();
   const { theme, toggle } = useTheme();
 
   const equity     = Number(status?.equity      ?? 0);
@@ -99,8 +205,9 @@ export function Header() {
         <HeaderKpi label="Open" value={String(openCount)} />
       </div>
 
-      {/* Session badge + clock */}
+      {/* Session badge + clock + profile switcher */}
       <div className="flex items-center gap-3 flex-shrink-0">
+        <ProfileSwitcher />
         <div
           className="flex items-center gap-1.5 rounded px-2 py-1"
           style={{

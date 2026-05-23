@@ -1,11 +1,12 @@
 "use client";
 
-import { signIn } from "next-auth/react";
 import { FormEvent, useState } from "react";
 
 const SF: React.CSSProperties = {
   fontFamily: `-apple-system, BlinkMacSystemFont, "SF Pro Display", system-ui, sans-serif`,
 };
+
+const API = "http://127.0.0.1:8001";
 
 function IOSInput({
   type = "text",
@@ -63,11 +64,25 @@ export default function LoginPage() {
     e.preventDefault();
     setLoading(true);
     setError(false);
-    const res = await signIn("credentials", { username, password, redirect: false });
-    if (res?.ok) {
+
+    try {
+      const res = await fetch(`${API}/api/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, password }),
+      });
+
+      if (!res.ok) {
+        setError(true);
+        return;
+      }
+
+      const data = await res.json();
+      sessionStorage.setItem("session_token", data.session_token);
       window.location.href = "/dashboard";
-    } else {
+    } catch {
       setError(true);
+    } finally {
       setLoading(false);
     }
   }
@@ -75,11 +90,25 @@ export default function LoginPage() {
   async function handleDemo() {
     setLoading(true);
     setError(false);
-    const res = await signIn("credentials", { username: "demo", password: "demo", redirect: false });
-    if (res?.ok) {
+
+    try {
+      const res = await fetch(`${API}/api/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username: "demo", password: "demo" }),
+      });
+
+      if (!res.ok) {
+        setError(true);
+        return;
+      }
+
+      const data = await res.json();
+      sessionStorage.setItem("session_token", data.session_token);
       window.location.href = "/dashboard";
-    } else {
+    } catch {
       setError(true);
+    } finally {
       setLoading(false);
     }
   }
@@ -107,7 +136,6 @@ export default function LoginPage() {
           boxShadow: "0 0 60px rgba(10,132,255,0.12), 0 24px 60px rgba(0,0,0,0.5)",
         }}
       >
-        {/* Logo / brand */}
         <div style={{ textAlign: "center", marginBottom: 32 }}>
           <div style={{
             ...SF,
@@ -129,7 +157,6 @@ export default function LoginPage() {
           </div>
         </div>
 
-        {/* Inputs */}
         <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 12 }}>
           <IOSInput
             type="text"
@@ -148,7 +175,6 @@ export default function LoginPage() {
           />
         </div>
 
-        {/* Error message */}
         {error && (
           <div style={{
             ...SF,
@@ -165,7 +191,6 @@ export default function LoginPage() {
           </div>
         )}
 
-        {/* Sign In button */}
         <button
           type="submit"
           disabled={submitDisabled}
@@ -191,10 +216,9 @@ export default function LoginPage() {
             if (!submitDisabled) (e.currentTarget as HTMLButtonElement).style.background = "#0A84FF";
           }}
         >
-          {loading ? "Signing in…" : "Sign In"}
+          {loading ? "Signing in..." : "Sign In"}
         </button>
 
-        {/* Demo mode button */}
         <button
           type="button"
           onClick={handleDemo}

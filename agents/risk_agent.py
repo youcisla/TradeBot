@@ -14,6 +14,7 @@ Implements (in order):
 
 from __future__ import annotations
 
+import json
 import logging
 import math
 import time
@@ -33,7 +34,7 @@ from utils.correlation_gate import CorrelationGate
 if TYPE_CHECKING:
     from agents.crucix_agent import CrucixAgent
     from agents.exposure_agent import ExposureCoach
-    from database.db import Database
+    from adapters.db.db import Database
 
 logger = logging.getLogger(__name__)
 
@@ -117,13 +118,13 @@ class RiskAgent:
         # Drawdown tracking
         self._day_start_equity: float = 0.0
         self._day_date: str = ""
+        self._DAY_EQUITY_BLOCK = "risk_day_start_equity"
         self._circuit_breaker_active = False
         self._circuit_breaker_until: datetime | None = None
 
         # Short-lived caches to avoid redundant broker IPC calls inside the
         # hot path (risk validation is called once per ranked signal per loop).
-        # TTL = 10s — stale enough to survive a multi-signal loop, fresh enough
-        # to catch real equity changes between loops.
+        # TTL = 60s — matches the daily-loss cache window; equity changes slowly.
         self._equity_cache: tuple[float, float] = (0.0, 0.0)  # (monotonic_ts, value)
         self._tick_cache: dict[str, tuple[float, dict]] = {}  # symbol → (monotonic_ts, tick)
         self._spread_reject_counts: dict[str, int] = {}
@@ -150,6 +151,43 @@ class RiskAgent:
 
         # Correlation gate — dynamic correlation check with static fallback.
         self._corr_gate = CorrelationGate(lookback_bars=100, threshold=0.75)
+
+        # Restore day-start equity from bot_memory so drawdown tracking survives restarts.
+        self._restore_day_equity()
+
+    def _restore_day_equity(self) -> None:
+        """Restore _day_start_equity from bot_memory if today's date matches stored date."""
+        if self._db is None:
+            return
+        try:
+            raw = self._db.read_memory_block(self._DAY_EQUITY_BLOCK)
+            if not raw:
+                return
+            data = json.loads(raw)
+            stored_date = data.get("date", "")
+            today = datetime.now(UTC).strftime("%Y-%m-%d")
+            if stored_date == today:
+                self._day_start_equity = float(data.get("equity", 0.0))
+                self._day_date = stored_date
+                logger.info(
+                    "RiskAgent: restored day_start_equity=%.2f for %s from persistent storage",
+                    self._day_start_equity, stored_date,
+                )
+        except Exception:
+            pass  # non-fatal — start fresh if restore fails
+
+    def _persist_day_equity(self) -> None:
+        """Persist _day_start_equity + date to bot_memory."""
+        if self._db is None:
+            return
+        try:
+            data = json.dumps({
+                "date": self._day_date,
+                "equity": self._day_start_equity,
+            })
+            self._db.write_memory_block(self._DAY_EQUITY_BLOCK, data)
+        except Exception:
+            pass  # non-fatal
 
     # ── lazy singletons ──────────────────────────────────────────────────
 
@@ -265,12 +303,15 @@ class RiskAgent:
             return settings.MIN_LOT_SIZE
         lot_size = risk_amount / risk_per_lot
         raw_lot = round(lot_size, 2)
-        lot_size = max(settings.MIN_LOT_SIZE, min(settings.MAX_LOT_SIZE, raw_lot))
+        # Reject immediately if the floored raw lot still exceeds MAX_LOT_SIZE
+        # (rounding can push a near-maximum lot over the cap).
         if raw_lot > settings.MAX_LOT_SIZE:
             logger.warning(
                 "LOT CAP applied for %s: calculated %.2f → capped at %.2f (SL distance=%.5f)",
-                signal.symbol, raw_lot, lot_size, sl_distance,
+                signal.symbol, raw_lot, settings.MAX_LOT_SIZE, sl_distance,
             )
+            raw_lot = settings.MAX_LOT_SIZE
+        lot_size = max(settings.MIN_LOT_SIZE, raw_lot)
 
         # Apply confidence scaling bands (borderline setups are sized down,
         # not blindly rejected).
@@ -1154,16 +1195,17 @@ class RiskAgent:
         if today != self._day_date:
             self._day_date = today
             self._day_start_equity = self._broker.get_equity()
+            self._persist_day_equity()
             logger.info("Drawdown tracker reset: start_equity=%.2f", self._day_start_equity)
 
         if self._day_start_equity <= 0:
             return False
 
         # Use cached equity to avoid a redundant MT5 IPC call for every signal
-        # in the ranked list.  10s TTL is safe — drawdown changes slowly.
+        # in the ranked list.  60s TTL — matches the daily-loss cache window.
         _now_mono = time.monotonic()
         _cache_ts, _cached_eq = self._equity_cache
-        if _now_mono - _cache_ts < 10.0 and _cached_eq > 0:
+        if _now_mono - _cache_ts < 60.0 and _cached_eq > 0:
             current_equity = _cached_eq
         else:
             current_equity = self._broker.get_equity()
@@ -1232,13 +1274,15 @@ class RiskAgent:
 
         daily_pnl = sum(t.pnl for t in trades if t.pnl is not None)
 
-        equity = self._broker.get_equity()
-        if equity <= 0:
+        # Use day-start equity as denominator (consistent with drawdown tracker).
+        # Fall back to broker equity only on first run before midnight is set.
+        denom = self._day_start_equity if self._day_start_equity > 0 else self._broker.get_equity()
+        if denom <= 0:
             self._daily_cache_ts = now_mono
             self._daily_loss_blocked = False
             return False
 
-        daily_loss_pct = -daily_pnl / equity  # positive when losing
+        daily_loss_pct = -daily_pnl / denom  # positive when losing
         self._daily_cache_ts = now_mono
         self._daily_loss_blocked = daily_loss_pct >= settings.MAX_DAILY_LOSS
 

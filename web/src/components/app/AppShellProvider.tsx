@@ -40,6 +40,21 @@ interface AppShellCtx {
     vix?: number;
     dailyLossPct?: number;
   } | undefined;
+  auth: {
+    sessionToken: string | null;
+    derivedKey: string | null;
+    isAuthenticated: boolean;
+    botLocked: boolean;
+    activeProfileId: number | null;
+    profiles: Array<{
+      id: number;
+      profile_label: string;
+      account_number: string;
+      server: string;
+      is_demo: boolean;
+      is_active: boolean;
+    }>;
+  };
 }
 
 const AppShellContext = createContext<AppShellCtx>({
@@ -48,17 +63,66 @@ const AppShellContext = createContext<AppShellCtx>({
   wsEvents: [],
   openTrades: [],
   intelligence: undefined,
+  auth: {
+    sessionToken: null,
+    derivedKey: null,
+    isAuthenticated: false,
+    botLocked: true,
+    activeProfileId: null,
+    profiles: [],
+  },
 });
 
 export function useAppShell(): AppShellCtx {
   return useContext(AppShellContext);
 }
 
+// ── Auth helpers ───────────────────────────────────────────────────────────────
+
+function useAuthState() {
+  const [sessionToken, setSessionToken] = useState<string | null>(null);
+  const [derivedKey, setDerivedKey] = useState<string | null>(null);
+
+  useEffect(() => {
+    setSessionToken(sessionStorage.getItem("session_token"));
+    setDerivedKey(sessionStorage.getItem("derived_key"));
+  }, []);
+
+  const { data: authStatus } = useSWR(
+    sessionToken ? "http://127.0.0.1:8001/api/auth/status" : null,
+    (url) =>
+      fetch(url, {
+        headers: { Authorization: `Bearer ${sessionToken}` },
+      }).then((r) => r.json()),
+    { revalidateOnFocus: false, refreshInterval: 10_000 }
+  ) as { data?: { authenticated: boolean; user_id: number | null; username: string | null; bot_locked: boolean; active_profile_id: number | null } };
+
+  const { data: profiles = [] } = useSWR(
+    sessionToken ? "http://127.0.0.1:8001/api/auth/profiles" : null,
+    (url) =>
+      fetch(url, {
+        headers: { Authorization: `Bearer ${sessionToken}` },
+      }).then((r) => r.json()),
+    { revalidateOnFocus: false, refreshInterval: 30_000 }
+  ) as { data?: Array<{ id: number; profile_label: string; account_number: string; server: string; is_demo: boolean; is_active: boolean }> };
+
+  return {
+    sessionToken,
+    derivedKey,
+    isAuthenticated: !!authStatus?.authenticated,
+    botLocked: authStatus?.bot_locked ?? true,
+    activeProfileId: authStatus?.active_profile_id ?? null,
+    profiles,
+    setSessionToken,
+    setDerivedKey,
+  };
+}
+
 // ── WebSocket bridge ──────────────────────────────────────────────────────────
 
 const WS_URL =
   typeof window !== "undefined"
-    ? (window as unknown as { NEXT_PUBLIC_WS_URL?: string }).NEXT_PUBLIC_WS_URL ?? null
+    ? (process.env.NEXT_PUBLIC_WS_URL as string | undefined) ?? null
     : null;
 
 function useGlobalWebSocket() {
@@ -119,10 +183,11 @@ export function AppShellProvider({ children }: { children: React.ReactNode }) {
   });
 
   const wsEvents = useGlobalWebSocket();
+  const authState = useAuthState();
 
-  const status     = dashboard?.status;
-  const openTrades  = dashboard?.openTrades ?? [];
-  const isRunning   = status?.state === "RUNNING";
+  const status    = dashboard?.status;
+  const openTrades = dashboard?.openTrades ?? [];
+  const isRunning  = status?.state === "RUNNING";
 
   return (
     <AppShellContext.Provider
@@ -132,6 +197,7 @@ export function AppShellProvider({ children }: { children: React.ReactNode }) {
         wsEvents,
         openTrades,
         intelligence: undefined,
+        auth: authState,
       }}
     >
       {children}

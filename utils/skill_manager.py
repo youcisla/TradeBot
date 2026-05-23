@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from database.db import Database
+    from adapters.db.db import Database
 
 logger = logging.getLogger(__name__)
 

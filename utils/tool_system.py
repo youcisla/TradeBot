@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from config import settings
-from database.db import Database
+from adapters.db.db import Database
 from utils import telegram_bot
 from utils.ops_doctor import run_doctor
 

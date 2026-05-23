@@ -306,6 +306,163 @@ export function useLearning() {
   });
 }
 
+// ── Auth (FastAPI session) ───────────────────────────────────────────────────────
+
+export interface LoginRequest {
+  username: string;
+  password: string;
+}
+
+export interface LoginResponse {
+  user_id: number;
+  username: string;
+  session_token: string;
+  expires_at: number;
+}
+
+export interface AuthStatus {
+  authenticated: boolean;
+  user_id: number | null;
+  username: string | null;
+  bot_locked: boolean;
+  active_profile_id: number | null;
+}
+
+export interface BrokerProfile {
+  id: number;
+  profile_label: string;
+  account_number: string;
+  server: string;
+  is_demo: boolean;
+  is_active: boolean;
+}
+
+export interface UnlockRequest {
+  session_token: string;
+  profile_id: number;
+  derived_key: string;
+}
+
+export interface UnlockResponse {
+  ok: boolean;
+  account: string;
+  server: string;
+}
+
+export function useLogin() {
+  return async (body: LoginRequest): Promise<LoginResponse> => {
+    const res = await fetch("http://127.0.0.1:8001/api/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.detail ?? "Login failed");
+    }
+    return res.json();
+  };
+}
+
+export function useAuthStatus(sessionToken: string | null) {
+  return useSWR<AuthStatus>(
+    sessionToken ? ["http://127.0.0.1:8001/api/auth/status", sessionToken] : null,
+    () => {
+      if (!sessionToken) throw new Error("No session");
+      return fetch("http://127.0.0.1:8001/api/auth/status", {
+        headers: { Authorization: `Bearer ${sessionToken}` },
+      }).then((r) => r.json());
+    },
+    { ...BASE_CONF, refreshInterval: 10_000 }
+  );
+}
+
+export function useProfiles(sessionToken: string | null) {
+  return useSWR<BrokerProfile[]>(
+    sessionToken ? ["http://127.0.0.1:8001/api/auth/profiles", sessionToken] : null,
+    () => {
+      if (!sessionToken) throw new Error("No session");
+      return fetch("http://127.0.0.1:8001/api/auth/profiles", {
+        headers: { Authorization: `Bearer ${sessionToken}` },
+      }).then((r) => r.json());
+    },
+    { ...BASE_CONF, refreshInterval: 30_000 }
+  );
+}
+
+export async function unlockBot(body: UnlockRequest): Promise<UnlockResponse> {
+  const res = await fetch("http://127.0.0.1:8001/api/auth/unlock", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.detail ?? "Unlock failed");
+  }
+  return res.json();
+}
+
+export async function activateProfile(
+  profileId: number,
+  sessionToken: string
+): Promise<{ ok: boolean }> {
+  const res = await fetch(
+    `http://127.0.0.1:8001/api/auth/profiles/${profileId}/activate`,
+    {
+      method: "POST",
+      headers: { Authorization: `Bearer ${sessionToken}` },
+    }
+  );
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.detail ?? "Activate failed");
+  }
+  return res.json();
+}
+
+export async function deleteProfile(
+  profileId: number,
+  sessionToken: string
+): Promise<{ ok: boolean }> {
+  const res = await fetch(
+    `http://127.0.0.1:8001/api/auth/profiles/${profileId}/delete`,
+    {
+      method: "POST",
+      headers: { Authorization: `Bearer ${sessionToken}` },
+    }
+  );
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.detail ?? "Delete failed");
+  }
+  return res.json();
+}
+
+export async function createProfile(
+  body: {
+    profile_label: string;
+    account_number: string;
+    server: string;
+    password: string;
+  },
+  sessionToken: string
+): Promise<BrokerProfile> {
+  const res = await fetch("http://127.0.0.1:8001/api/auth/profiles", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${sessionToken}`,
+    },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.detail ?? "Create profile failed");
+  }
+  return res.json();
+}
+
 // ── Backtest ───────────────────────────────────────────────────────────────────────
 
 export interface StrategyStats {

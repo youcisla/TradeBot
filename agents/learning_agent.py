@@ -31,7 +31,7 @@ from typing import TYPE_CHECKING
 from config import settings
 from utils.mesh_bus import record_call
 from config.symbols import contract_size
-from database.db import Database
+from adapters.db.db import Database
 from models.trade import Trade
 
 if TYPE_CHECKING:

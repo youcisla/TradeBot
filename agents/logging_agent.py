@@ -20,7 +20,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from config import settings
-from database.db import Database
+from adapters.db.db import Database
 from models.trade import Trade
 from utils import telegram_bot
 

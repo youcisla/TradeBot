@@ -15,7 +15,7 @@ from strategies.base_strategy import BaseStrategy
 
 if TYPE_CHECKING:
     from broker.connector import BrokerConnector
-    from database.db import Database
+    from adapters.db.db import Database
 
 logger = logging.getLogger(__name__)
 

@@ -727,7 +727,7 @@ def _seed_db(stats: list[StrategyStats]) -> None:
     new confidence — the live system can still adjust per-symbol via the
     learning agent.
     """
-    from database.db import Database
+    from adapters.db.db import Database
     db = Database()
 
     # Aggregate best score per strategy name (across all symbols)

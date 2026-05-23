@@ -15,7 +15,7 @@ from config.symbols import asset_class
 from models.market_data import Candle
 
 if TYPE_CHECKING:
-    from database.db import Database
+    from adapters.db.db import Database
 
 logger = logging.getLogger(__name__)
 

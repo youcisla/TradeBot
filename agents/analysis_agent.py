@@ -17,7 +17,7 @@ from utils.mesh_bus import mesh_span
 
 if TYPE_CHECKING:
     from agents.crucix_agent import CrucixAgent
-    from database.db import Database
+    from adapters.db.db import Database
 
 logger = logging.getLogger(__name__)
 

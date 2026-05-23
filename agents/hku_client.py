@@ -25,7 +25,7 @@ import requests
 import websocket
 
 from config import settings
-from database.db import Database
+from adapters.db.db import Database
 
 if TYPE_CHECKING:
     from models.signal import Signal

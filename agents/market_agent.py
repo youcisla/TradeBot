@@ -19,7 +19,7 @@ from utils.helpers import current_session
 from utils.mesh_bus import record_call
 
 if TYPE_CHECKING:
-    from database.db import Database
+    from adapters.db.db import Database
 
 logger = logging.getLogger(__name__)
 

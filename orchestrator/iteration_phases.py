@@ -34,7 +34,7 @@ if TYPE_CHECKING:
     from agents.strategy_agent import StrategyAgent
     from agents.trade_manager import TradeManagerAgent
     from broker.connector import BrokerConnector
-    from database.db import Database
+    from adapters.db.db import Database
     from utils.opportunity_lifecycle import OpportunityLifecycleManager
     from utils.symbol_event_tracker import SymbolEventTracker
 

@@ -28,7 +28,7 @@ from typing import Any, Optional
 
 import MetaTrader5 as mt5
 import psycopg2.extras
-from database.db import Database
+from adapters.db.db import Database
 
 from broker.connector import BrokerConnector
 from config import settings

@@ -7,7 +7,6 @@ import logging
 import time as _time
 
 import psycopg2
-import psycopg2.pool
 
 logger = logging.getLogger(__name__)
 

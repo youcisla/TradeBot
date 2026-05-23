@@ -1,0 +1,152 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "pulsetrade"
+version = "0.1.0"
+description = "PulseTrade TradingBot — ICT/SMC + LSTM trading system"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [
+  { name = "Youcef", email = "youcef@example.com" },
+]
+
+dependencies = [
+  # Error monitoring
+  "sentry-sdk>=1.40",
+
+  # Database
+  "psycopg2-binary>=2.9",
+
+  # Encryption (broker password AES-256-CBC + HMAC)
+  "cryptography>=42.0",
+
+  # Broker — Windows + Python <= 3.13 only (conditional; install on Windows only)
+  "MetaTrader5>=5.0.45; platform_system=='Windows'",
+
+  # Configuration
+  "python-dotenv>=1.0",
+
+  # Timezone database (required on Windows — Linux/macOS have it built in)
+  "tzdata>=2024.1",
+
+  # Terminal UI
+  "rich>=13.0",
+
+  # Dashboard user reset script
+  "bcrypt>=4.0",
+
+  # DeepSeek / OpenAI-compatible API client
+  "openai>=1.0",
+
+  # BM25 episodic memory (Reflector / LearningAgent)
+  "rank_bm25>=0.2.2",
+
+  # Testing
+  "pytest>=7.0",
+
+  # Reporting / Charts (Telegram graph snapshots)
+  "matplotlib>=3.8",
+
+  # Walk-Forward Optimizer (LearningAgent.run_wfo_assessment)
+  "numpy>=1.26",
+  "pandas>=2.1",
+
+  # Macro intelligence (filters/intelligence_sweep.py)
+  "fredapi>=0.5.0",
+  "yfinance>=0.2.36",
+  "aiohttp>=3.9.0",
+
+  # GARCH regime detection (models/garch_regime.py)
+  "arch>=6.3.0",
+
+  # LightGBM ensemble (models/lgbm_ensemble.py)
+  "lightgbm>=4.3.0",
+  "shap>=0.44.0",
+
+  # MCP server (tools/mcp_server.py)
+  "fastmcp>=0.1.0",
+
+  # HKU marketplace real-time notifications (agents/hku_client.py)
+  "websocket-client>=1.7",
+
+  # Phase 3: Kafka event-backbone nodes
+  "aiokafka>=0.10",
+
+  # Phase 4: HMM regime detection
+  "hmmlearn>=0.3",
+  "joblib>=1.4",
+
+  # Phase 2: XGBoost student model training
+  "xgboost>=2.1",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=7.0",
+  "pytest-cov>=4.0",
+  "pytest-asyncio>=0.23",
+  "pytest-mock>=3.12",
+  "ruff>=0.1",
+  "mypy>=1.8",
+  "import-linter>=1.12",
+]
+server = [
+  "fastapi>=0.109",
+  "uvicorn[standard]>=0.27",
+  "httpx>=0.26",
+  "websockets>=12.0",
+  "argon2-cffi>=23.1",
+]
+
+[project.scripts]
+pulsetrade = "main:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["."]
+
+[tool.pytest.ini_options]
+filterwarnings = [
+  "ignore::UserWarning:sklearn.*",
+  "ignore::UserWarning:lightgbm.*",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "C4"]
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_ignores = true
+ignore_missing_imports = true
+
+[tool.import-linter]
+layers = [
+  { name = "core",    include = "core/.*" },
+  { name = "adapters",    include = "adapters/.*" },
+  { name = "orchestration", include = "orchestration/.*" },
+  { name = "api",    include = "api/.*" },
+  { name = "learning",    include = "learning/.*" },
+]
+
+[[tool.import-linter.layer-rules]]
+name = "no-core-to-orchestration"
+containers = ["core"]
+blocked-imports = ["orchestration", "adapters", "api", "learning"]
+
+[[tool.import-linter.layer-rules]]
+name = "no-adapters-to-orchestration"
+containers = ["adapters"]
+blocked-imports = ["orchestration"]
+
+[[tool.import-linter.layer-rules]]
+name = "orchestration-imports-only-core"
+containers = ["orchestration"]
+blocked-imports = ["api", "learning"]

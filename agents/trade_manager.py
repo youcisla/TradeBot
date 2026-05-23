@@ -21,7 +21,7 @@ from broker.connector import BrokerConnector
 from utils.mesh_bus import mesh_span
 from config import settings
 from config.symbols import pip_value, contract_size, commission_per_lot
-from database.db import Database
+from adapters.db.db import Database
 from models.trade import Trade
 from state.persistence import StatePersistence
 from utils import telegram_bot

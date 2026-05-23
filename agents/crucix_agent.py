@@ -16,11 +16,11 @@ import logging
 import time
 from typing import TYPE_CHECKING
 
-from filters.crucix_client import CrucixClient, MacroContext, get_client
+from adapters.crucix.client import CrucixClient, MacroContext, get_client
 from utils.mesh_bus import record_call
 
 if TYPE_CHECKING:
-    from database.db import Database
+    from adapters.db.db import Database
 
 logger = logging.getLogger(__name__)
 

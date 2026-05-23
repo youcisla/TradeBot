@@ -15,7 +15,7 @@ import argparse
 import json
 import sys
 
-from database.db import Database
+from adapters.db.db import Database
 
 
 def parse_args() -> argparse.Namespace:

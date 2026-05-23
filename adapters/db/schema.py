@@ -1,4 +1,4 @@
-"""Schema DDL — extracted from database/db.py."""
+"""Schema DDL — migrated from database/db.py."""
 
 from __future__ import annotations
 
@@ -91,7 +91,7 @@ CREATE TABLE IF NOT EXISTS bot_commands (
     status      TEXT DEFAULT 'pending',
     result      TEXT,
     created_at  TIMESTAMP DEFAULT NOW(),
-    executed_at TIMESTAMP
+    executed_at  TIMESTAMP
 );
 """
 
@@ -481,7 +481,6 @@ _ALL_TABLES = [
     _CREATE_BOT_SETTINGS_OVERRIDES,
 ]
 
-# Alias for the migrations that run after table creation
 _SCHEMA_MIGRATIONS = [
     _ALTER_BOT_STATUS_BROKER,
     _ALTER_BOT_STATUS_INTELLIGENCE,

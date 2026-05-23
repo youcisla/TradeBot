@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from config import settings
-from database.db import Database
+from adapters.db.db import Database
 from models.market_data import MarketContext
 from models.signal import Signal
 from agents.analysis_agent import AnalysisAgent

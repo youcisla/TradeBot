@@ -15,7 +15,7 @@ from broker.connector import BrokerConnector
 from config import settings
 from config.symbols import SYMBOLS
 
-from database.db import Database
+from adapters.db.db import Database
 from state.persistence import StatePersistence
 from strategies.ict_strategy import ICTStrategy
 from strategies.unified_strategy import UnifiedStrategy
@@ -64,6 +64,12 @@ logger = logging.getLogger(__name__)
 class TradingBot:
     """Wires all agents and runs the time-corrected main loop."""
 
+    class BotState:
+        """Bot operational states."""
+        WAITING_FOR_AUTH = "waiting_for_auth"
+        RUNNING = "running"
+        SHUTDOWN = "shutdown"
+
     def __init__(self) -> None:
         self._shutdown = False
         self._session_id: int = 0
@@ -94,8 +100,134 @@ class TradingBot:
         self._active_symbols: list[str] = []
         self._weekend_symbols: list[str] = []
 
+        # ── Credential store state ──────────────────────────────────────────
+        self._bot_state: str = self.BotState.WAITING_FOR_AUTH
+        self._locked_account_id: int | None = None   # broker_accounts.id if locked
+        self._decrypted_password: str | None = None   # held in-memory after unlock
+
     def _request_shutdown(self) -> None:
         self._shutdown = True
+
+    # ── Credential unlock ─────────────────────────────────────────────────
+
+    @property
+    def bot_state(self) -> str:
+        return self._bot_state
+
+    def unlock_with_credentials(
+        self,
+        *,
+        account_id: int,
+        account_number: str,
+        password: str,
+        server: str,
+    ) -> None:
+        """Unlock the bot with decrypted broker credentials.
+
+        Called by the FastAPI /api/auth/unlock endpoint once the dashboard
+        has pushed the derived encryption key.  Establishes the MT5
+        connection and transitions the bot to RUNNING state.
+        """
+        if self._bot_state == self.BotState.RUNNING:
+            logger.warning("Bot is already unlocked")
+            return
+
+        if not account_number or not password or not server:
+            raise ValueError("account_number, password, and server are required")
+
+        try:
+            from broker.mt5_connector import MT5Connector
+            broker = MT5Connector(
+                account=account_number,
+                password=password,
+                server=server,
+            )
+            if not broker.connect():
+                raise RuntimeError("MT5 connection failed")
+        except ImportError as exc:
+            raise RuntimeError(
+                f"MetaTrader5 package not available: {exc}"
+            ) from exc
+
+        self.broker = broker
+        self._locked_account_id = account_id
+        self._decrypted_password = password  # held in-memory for MT5 session
+        self._bot_state = self.BotState.RUNNING
+
+        logger.info("Bot unlocked — account %s @ %s", account_number, server)
+
+        # ── Now do the rest of startup that depends on broker ──────────
+        self._post_broker_init()
+        if self.db and account_id:
+            self.db.mark_broker_connected(account_id)
+
+    def _post_broker_init(self) -> None:
+        """Complete initialization after broker is connected (unlock path)."""
+        assert self.broker is not None, "broker must be set before _post_broker_init"
+        assert self.db is not None, "db must be set before _post_broker_init"
+
+        self.state = StatePersistence(self.db, self.broker)
+        self.crucix_agent = CrucixAgent(db=self.db)
+
+        self._spread_monitor = SpreadMonitor(
+            threshold_low=1.0,
+            threshold_normal=2.0,
+            threshold_high=5.0,
+            pip_size=0.0001,
+        )
+
+        # ── Filter symbols to those available on the broker ─────────────
+        if hasattr(self.broker, "get_available_symbols"):
+            self._active_symbols = self.broker.get_available_symbols(SYMBOLS)
+            removed = set(SYMBOLS) - set(self._active_symbols)
+            if removed:
+                logger.warning("Symbols not available (removed): %s",
+                                ", ".join(sorted(removed)))
+        else:
+            self._active_symbols = SYMBOLS[:]
+        logger.info("Active symbols: %s", ", ".join(self._active_symbols))
+        self._init_agents()
+
+    def switch_profile(
+        self,
+        *,
+        account_id: int,
+        account_number: str,
+        password: str,
+        server: str,
+    ) -> None:
+        """Switch to a different broker profile (called on profile switch)."""
+        if self.broker is not None:
+            try:
+                self.broker.disconnect()
+            except Exception as exc:
+                logger.warning("Error disconnecting old broker: %s", exc)
+
+        # Zero out old password
+        if self._decrypted_password:
+            self._decrypted_password = None
+
+        # Re-create broker connection with new credentials
+        try:
+            from broker.mt5_connector import MT5Connector
+            broker = MT5Connector(
+                account=account_number,
+                password=password,
+                server=server,
+            )
+            if not broker.connect():
+                raise RuntimeError("MT5 reconnection failed")
+        except ImportError as exc:
+            raise RuntimeError(f"MetaTrader5 not available: {exc}") from exc
+
+        self.broker = broker
+        self._locked_account_id = account_id
+        self._decrypted_password = password
+        logger.info("Profile switched — now using account %s @ %s",
+                     account_number, server)
+
+        if self.db and account_id:
+            self.db.mark_broker_connected(account_id)
 
     # ── Lifecycle ───────────────────────────────────────────────────────
 
@@ -107,68 +239,79 @@ class TradingBot:
         apply_overrides(db, settings)
         self.symbol_event_tracker = SymbolEventTracker()
 
-        # Resolve broker credentials: DB active account → .env fallback
+        # ── Resolve broker credentials ───────────────────────────────────
+        # Option 1: use env vars (fallback / legacy)
         acct_id: int | None = None
+        acct_num: str | None = settings.BROKER_ACCOUNT or None
+        acct_pwd: str | None = settings.BROKER_PASSWORD or None
+        acct_srv: str | None = settings.BROKER_SERVER or None
+
+        # Option 2: use encrypted DB credentials (requires dashboard unlock)
         db_account = db.get_active_broker_account()
-        if db_account:
+        if db_account and db_account.get("encrypted_password"):
+            # There's an encrypted profile — enter locked state
+            # The unlock endpoint will call unlock_with_credentials()
+            acct_id = db_account["id"]
+            logger.info(
+                "Encrypted broker account %d found — entering WAITING_FOR_AUTH state. "
+                "Dashboard must POST /api/auth/unlock to activate.",
+                acct_id,
+            )
+            self._locked_account_id = acct_id
+            self._bot_state = self.BotState.WAITING_FOR_AUTH
+            # Initialize just the DB and symbol tracker in locked state
+            self._init_agents()
+            return
+
+        if db_account and not db_account.get("encrypted_password"):
+            # Legacy DB account (plaintext password) — use it directly
             acct_num = db_account["account_number"]
             acct_pwd = db_account["password"]
             acct_srv = db_account["server"]
             acct_id = db_account["id"]
-            logger.info("Using DB broker account: %s @ %s (id=%d)",
+            logger.info("Using DB broker account: %s @ %s (id=%d, legacy plaintext)",
                         acct_num, acct_srv, acct_id)
-        else:
-            acct_num = settings.BROKER_ACCOUNT
-            acct_pwd = settings.BROKER_PASSWORD
-            acct_srv = settings.BROKER_SERVER
 
-        broker: BrokerConnector
+        # ── Connect with available credentials ────────────────────────────
         if acct_num and acct_pwd and acct_srv:
-            try:
-                from broker.mt5_connector import MT5Connector
-                broker = MT5Connector(
-                    account=acct_num, password=acct_pwd, server=acct_srv,
-                )
-                if not broker.connect():
-                    logger.critical("MT5 connection failed — aborting")
-                    sys.exit(1)
-                if acct_id:
-                    db.mark_broker_connected(acct_id)
-            except ImportError as exc:
-                logger.critical(
-                    "MetaTrader5 package not available — cannot run with real data. "
-                    "Install it or ensure your Python environment supports MT5. Error: %s",
-                    exc,
-                )
-                sys.exit(1)
+            self._connect_broker(acct_num, acct_pwd, acct_srv, acct_id)
+            self._bot_state = self.BotState.RUNNING
+            self._post_broker_init()
+            if self.db and acct_id:
+                self.db.mark_broker_connected(acct_id)
         else:
+            # No credentials at all — enter locked state until dashboard provides them
+            logger.info("No broker credentials configured — entering WAITING_FOR_AUTH state")
+            self._locked_account_id = None
+            self._bot_state = self.BotState.WAITING_FOR_AUTH
+            self._init_agents()
+
+    def _connect_broker(
+        self,
+        account: str,
+        password: str,
+        server: str,
+        account_id: int | None,
+    ) -> None:
+        """Establish MT5 connection."""
+        try:
+            from broker.mt5_connector import MT5Connector
+            broker = MT5Connector(
+                account=account,
+                password=password,
+                server=server,
+            )
+            if not broker.connect():
+                logger.critical("MT5 connection failed — aborting")
+                sys.exit(1)
+        except ImportError as exc:
             logger.critical(
-                "Missing broker credentials — set BROKER_ACCOUNT, BROKER_PASSWORD, "
-                "and BROKER_SERVER (or configure an active account in the database). "
-                "Cannot run with real data."
+                "MetaTrader5 package not available — cannot run with real data. "
+                "Install it or ensure your Python environment supports MT5. Error: %s",
+                exc,
             )
             sys.exit(1)
-
         self.broker = broker
-        self.state = StatePersistence(db, broker)
-        self.crucix_agent = CrucixAgent(db=db)
-
-        self._spread_monitor = SpreadMonitor(
-            threshold_low=1.0,
-            threshold_normal=2.0,
-            threshold_high=5.0,
-            pip_size=0.0001,
-        )
-
-        # ── Filter symbols to those available on the broker ─────────────────
-        if hasattr(broker, "get_available_symbols"):
-            self._active_symbols = broker.get_available_symbols(SYMBOLS)
-            removed = set(SYMBOLS) - set(self._active_symbols)
-            if removed:
-                logger.warning("Symbols not available on broker (removed): %s", ", ".join(sorted(removed)))
-        else:
-            self._active_symbols = SYMBOLS[:]
-        logger.info("Active symbols: %s", ", ".join(self._active_symbols))
 
     def _write_symbols_manifest(self) -> None:
         """Export active symbols + categories to data/symbols.json.
@@ -204,6 +347,11 @@ class TradingBot:
         except Exception as exc:
             logger.warning("Failed to write symbols.json: %s", exc)
 
+    def _init_agents(self) -> None:
+        """Initialize all trading agents. Called once during startup() after
+        broker and symbols are available. Must NOT be called again — it would
+        re-initialize agents (telegram polling threads, candle server port
+        binding, etc.) causing resource leaks."""
         # ── Logging agent first (sets up Python logging) ─────────────────
         log_agent = LoggingAgent(self.db)
         self.log_agent = log_agent

@@ -33,34 +33,30 @@ class ConnectionPool:
         logger.info("PostgreSQL connection pool created")
 
     def _get_conn(self) -> psycopg2.extensions.connection:
-        """Get a connection from the pool, reconnecting if stale or uninitialized."""
+        """Get a connection from the pool, reconnecting if uninitialized."""
         if self._pool is None:
             logger.warning("DB pool was None — reconnecting")
             self._connect()
         conn = self._pool.getconn()
-        try:
-            conn.isolation_level  # triggers check
-            with conn.cursor() as cur:
-                cur.execute("SELECT 1")
-        except (psycopg2.OperationalError, psycopg2.InterfaceError):
-            logger.warning("Stale DB connection detected — reconnecting pool")
-            try:
-                self._pool.putconn(conn, close=True)
-            except Exception:
-                pass
-            self._reconnect()
-            conn = self._pool.getconn()  # type: ignore[union-attr]
         return conn
 
     def _put_conn(self, conn: psycopg2.extensions.connection) -> None:
-        if self._pool:
+        """Return connection to the pool, validating with SELECT 1 on the way back."""
+        if self._pool is None:
+            return
+        try:
+            if conn.closed or conn.status != psycopg2.extensions.STATUS_READY:
+                self._pool.putconn(conn, close=True)
+                return
             try:
-                if conn.closed or conn.status != psycopg2.extensions.STATUS_READY:
-                    self._pool.putconn(conn, close=True)
-                else:
-                    self._pool.putconn(conn)
-            except Exception:
-                pass
+                with conn.cursor() as cur:
+                    cur.execute("SELECT 1")
+            except (psycopg2.OperationalError, psycopg2.InterfaceError):
+                self._pool.putconn(conn, close=True)
+                return
+        except Exception:
+            pass
+        self._pool.putconn(conn)
 
     def _reconnect(self) -> None:
         """Tear down the pool and create a fresh one."""

@@ -23,7 +23,7 @@ from config import settings
 
 if TYPE_CHECKING:
     from agents.crucix_agent import CrucixAgent
-    from database.db import Database
+    from adapters.db.db import Database
     from models.signal import Signal
     from models.trade import Trade
 

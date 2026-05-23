@@ -31,7 +31,7 @@ _ROOT = pathlib.Path(__file__).resolve().parent.parent
 
 if TYPE_CHECKING:
     from broker.connector import BrokerConnector
-    from database.db import Database
+    from adapters.db.db import Database
     from models.signal import Signal
     from models.trade import Trade
 

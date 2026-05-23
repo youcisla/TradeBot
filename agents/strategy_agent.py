@@ -16,7 +16,7 @@ from strategies.base_strategy import BaseStrategy
 from utils.mesh_bus import mesh_span
 
 if TYPE_CHECKING:
-    from database.db import Database
+    from adapters.db.db import Database
     from models.lgbm_ensemble import LGBMEnsemble
     from models.lgbm_price_model import LGBMPriceModel
 

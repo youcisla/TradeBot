@@ -5,7 +5,7 @@ import logging
 import time
 from typing import Callable
 
-from database.db import Database
+from adapters.db.db import Database
 from agents.trade_manager import TradeManagerAgent
 from state.persistence import StatePersistence
 from utils import telegram_bot

@@ -9,7 +9,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 from config import settings
-from database.db import Database
+from adapters.db.db import Database
 
 
 def build_pnl_curve_png(db: Database, days: int | None = None) -> tuple[str, bytes] | None:

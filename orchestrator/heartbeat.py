@@ -7,7 +7,7 @@ import time
 from pathlib import Path
 
 from broker.connector import BrokerConnector
-from database.db import Database
+from adapters.db.db import Database
 from agents.crucix_agent import CrucixAgent
 from agents.trade_manager import TradeManagerAgent
 from utils.helpers import current_session

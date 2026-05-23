@@ -18,7 +18,7 @@ from pathlib import Path
 
 from backtesting.mock_broker import MockBroker
 from backtesting.report import generate_report, generate_run_artifact, inject_report_to_db
-from database.db import Database
+from adapters.db.db import Database
 from utils.mesh_bus import record_call
 
 logger = logging.getLogger(__name__)
