@@ -201,8 +201,19 @@ class MT5Connector(BrokerConnector):
                 len(rates), count, symbol, timeframe,
             )
 
+        # MT5 reports spread in points; convert to price units so a backtest can
+        # charge the real historical cost on every fill.
+        point = 0.0
+        si = mt5.symbol_info(broker_sym)
+        if si is not None:
+            point = float(getattr(si, "point", 0.0) or 0.0)
+        has_spread = bool(getattr(getattr(rates, "dtype", None), "names", None)) and (
+            "spread" in rates.dtype.names
+        )
+
         candles: list[Candle] = []
         for r in rates:
+            raw_spread = float(r["spread"]) if has_spread else 0.0
             candles.append(
                 Candle(
                     timestamp=datetime.fromtimestamp(r["time"], tz=UTC),
@@ -211,6 +222,7 @@ class MT5Connector(BrokerConnector):
                     low=float(r["low"]),
                     close=float(r["close"]),
                     volume=float(r["tick_volume"]),
+                    spread=round(raw_spread * point, 8) if point else 0.0,
                 )
             )
         return candles

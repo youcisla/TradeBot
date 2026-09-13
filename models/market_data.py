@@ -18,6 +18,11 @@ class Candle:
     low: float = 0.0
     close: float = 0.0
     volume: float = 0.0
+    # Broker spread for this bar, in price units (0.0 when the source has none,
+    # e.g. a synthetic or mock feed).  Backtests need it: a forex result
+    # computed at zero spread is fiction, and the spread is often a large
+    # fraction of a 1xATR target.
+    spread: float = 0.0
 
 
 @dataclass

@@ -97,7 +97,7 @@ class SymbolWhitelistGuard(Guard):
     # Broker-specific suffixes, most specific first.  PU Prime (this broker)
     # appends ".p" (EURUSD.p) and ".crp" (XAUUSD.crp) — verified against the
     # account; other feeds use ".s", "m", ".r" or "_r" for renamed contracts.
-    _SUFFIXES: tuple[str, ...] = (".crp", ".p", ".s", ".r", "_r", "m")
+    _SUFFIXES: tuple[str, ...] = (".crp", ".24H", ".p", ".s", ".r", "_r", "m")
 
     def __init__(self, allowed: set[str] | None = None) -> None:
         self._allowed = allowed or self._DEFAULT_WHITELIST
