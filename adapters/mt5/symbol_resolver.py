@@ -18,8 +18,12 @@ logger = logging.getLogger(__name__)
 # ── Symbol resolution ───────────────────────────────────────────────────
 
 # Common suffixes / variants brokers use for symbol name resolution
+# Broker symbol suffixes, most specific first.  PU Prime (the live broker here)
+# uses ".p" for forex/CFDs and ".crp" for crypto-index variants — verified
+# against the account: EURUSD.p, XAUUSD.p, XAUUSD.crp.  Without these the
+# resolver silently failed to map gold and every suffixed symbol.
 _SUFFIXES = [
-    "", ".r", ".ecn", "m", "+", ".a", ".b", ".i",
+    ".crp", ".p", "", ".r", ".ecn", "m", "+", ".a", ".b", ".i",
     ".pro", ".raw", ".std", ".", "#", "-ECN",
 ]
 

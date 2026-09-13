@@ -24,7 +24,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Sequence
 
 from config import settings
-from utils.helpers import current_session
+from utils.helpers import current_session, is_weekend
 
 # Project root — one level up from the agents/ directory
 _ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -94,13 +94,32 @@ class SymbolWhitelistGuard(Guard):
         "GAUUSD", "XAGUSD",
     }
 
+    # Broker-specific suffixes, most specific first.  PU Prime (this broker)
+    # appends ".p" (EURUSD.p) and ".crp" (XAUUSD.crp) — verified against the
+    # account; other feeds use ".s", "m", ".r" or "_r" for renamed contracts.
+    _SUFFIXES: tuple[str, ...] = (".crp", ".p", ".s", ".r", "_r", "m")
+
     def __init__(self, allowed: set[str] | None = None) -> None:
         self._allowed = allowed or self._DEFAULT_WHITELIST
 
+    @classmethod
+    def _strip_suffix(cls, sym: str) -> str:
+        """Return *sym* without its broker suffix, or unchanged if none match.
+
+        ``str.rstrip`` cannot be used here: it takes a *character set*, so it
+        strips any trailing run of those characters and silently fails on
+        suffixes whose letters are outside the set — which is why suffixed
+        symbols were never recognised and got blocked by the whitelist.
+        """
+        s = sym.upper()
+        for suffix in cls._SUFFIXES:
+            if s.endswith(suffix.upper()) and len(s) > len(suffix):
+                return s[: -len(suffix)]
+        return s
+
     def check(self, signal, open_trades, broker):
         sym = signal.symbol.upper()
-        # Also accept a trailing suffix like XAUUSD.r / EURUSDm
-        base = sym.rstrip("m.r_").upper()
+        base = self._strip_suffix(sym)
         if sym not in self._allowed and base not in self._allowed:
             return False, f"SymbolWhitelistGuard: '{sym}' not in whitelist"
         return True, ""
@@ -227,9 +246,15 @@ class DailyDrawdownGuard(Guard):
             starting_balance, realised_pnl = self._ensure_today_state(broker)
             if starting_balance <= 0:
                 return True, ""
-            # Net floating loss = starting_balance + realised_pnl - equity
-            # (realised_pnl is negative when losing, positive when winning)
-            net_loss = starting_balance + realised_pnl - equity
+            # Equity already reflects realised P&L: the balance moves when a
+            # trade closes, and equity = balance + floating.  So the day's loss
+            # is simply the drop from the day's starting balance.  Adding
+            # realised_pnl back (as this used to) cancelled the term and left
+            # only floating loss, so a day of closed losses reported ~0.
+            equity_loss = starting_balance - equity
+            # Tracked realised P&L is an independent floor in case the broker
+            # balance is stale; take whichever measure is worse.
+            net_loss = max(equity_loss, -realised_pnl)
             loss_pct = net_loss / starting_balance
             if loss_pct >= self._max_pct:
                 return False, (
@@ -358,8 +383,11 @@ class MarketHoursGuard(Guard):
         is_crypto = sym in self._CRYPTO
 
         # Crypto is 24/7 — only hourly quiet-hours filter applies
-        if not is_crypto and now.weekday() >= 5:
-            return False, f"MarketHoursGuard: market closed (weekend)"
+        # One shared definition of the forex weekend (Fri 22:00 -> Sun 22:00
+        # UTC).  The previous weekday()>=5 test blocked the whole of Sunday,
+        # including the two hours after the FX week reopens.
+        if not is_crypto and is_weekend(now):
+            return False, "MarketHoursGuard: market closed (weekend)"
         if now.hour in self._avoid:
             return False, (
                 f"MarketHoursGuard: low-liquidity hour UTC {now.hour:02d}:xx blocked"
@@ -469,7 +497,9 @@ class GuardPipeline:
         MaxPositionSizeGuard(max_lots=2.0),
         SymbolWhitelistGuard(),
         CooldownGuard(min_seconds_between_trades=300),
-        DailyDrawdownGuard(max_daily_loss_pct=0.05),
+        DailyDrawdownGuard(
+            max_daily_loss_pct=float(getattr(settings, "MAX_DAILY_LOSS", 0.05) or 0.05)
+        ),
         EquityDrawdownGuard(reduce_threshold=0.10, block_threshold=0.20),
         MarketHoursGuard(),
         VolatilityGuard(max_vix=40.0),
@@ -498,22 +528,25 @@ class GuardPipeline:
         """
         trades = open_trades or []
         for guard in self._guards:
+            guard_name = type(guard).__name__
             try:
                 passed, reason = guard.check(signal, trades, self._broker)
             except Exception as exc:
-                # Guard crash → log and skip (fail-open so trading continues)
-                guard_name = type(guard).__name__
-                logger.warning(
-                    "GuardPipeline: %s raised unexpectedly (%s) — skipping guard",
+                # Fail CLOSED.  A guard that crashed is a gate that can no
+                # longer be trusted; continuing would trade with that protection
+                # silently absent, which is worse than not trading at all.
+                reason = f"{guard_name} crashed: {exc}"
+                logger.error(
+                    "GuardPipeline: %s raised (%s) — BLOCKING (fail-closed)",
                     guard_name,
                     exc,
                 )
                 self._emit(
-                    "warn",
-                    f"Guard {guard_name} crashed — skipped (fail-open)",
+                    "error",
+                    f"Guard {guard_name} crashed — trade blocked (fail-closed)",
                     {"guard": guard_name, "error": str(exc)},
                 )
-                continue
+                return False, reason
             if not passed:
                 logger.info("GuardPipeline BLOCKED: %s", reason)
                 self._emit("info", f"Trade blocked: {reason}", {"reason": reason})

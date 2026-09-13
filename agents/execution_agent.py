@@ -29,6 +29,29 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def _allocate_tp_lots(
+    lot_size: float, has_tp4: bool
+) -> tuple[float, float, float, float]:
+    """Split a position across TP1-TP4 on the broker's 0.01 volume grid.
+
+    Returns ``(tp1, tp2, tp3, tp4)`` summing to *lot_size*.  Falls back to a
+    single exit at TP1 when the position is too small to divide into slices the
+    broker would accept: at 0.01 lots a 40/30/30 split rounds to
+    0.00/0.00/0.01, and a partial close of 0.00 lots is rejected outright, so
+    the trade would never scale out and its first target would silently fail.
+    """
+    min_lot = float(getattr(settings, "MIN_LOT_SIZE", 0.01) or 0.01)
+
+    tp1 = round(lot_size * settings.TP1_CLOSE_PERCENT, 2)
+    tp2 = round(lot_size * settings.TP2_CLOSE_PERCENT, 2)
+    tp4 = round(lot_size * settings.TP4_CLOSE_PERCENT, 2) if has_tp4 else 0.0
+    tp3 = round(lot_size - tp1 - tp2 - tp4, 2)
+
+    if tp1 < min_lot or tp3 < 0:
+        return lot_size, 0.0, 0.0, 0.0
+    return tp1, tp2, tp3, tp4
+
+
 class ExecutionAgent:
     """Opens trades and persists them immediately to DB."""
 
@@ -147,11 +170,8 @@ class ExecutionAgent:
         # Calculate per-TP lot allocations.
         # When TP4 is set (runner target at HTF liquidity), carve it from
         # the position; otherwise the runner slice stays in TP3.
-        tp1_lots = round(lot_size * settings.TP1_CLOSE_PERCENT, 2)
-        tp2_lots = round(lot_size * settings.TP2_CLOSE_PERCENT, 2)
         has_tp4 = signal.take_profit_4 > 0
-        tp4_lots = round(lot_size * settings.TP4_CLOSE_PERCENT, 2) if has_tp4 else 0.0
-        tp3_lots = round(lot_size - tp1_lots - tp2_lots - tp4_lots, 2)
+        tp1_lots, tp2_lots, tp3_lots, tp4_lots = _allocate_tp_lots(lot_size, has_tp4)
 
         # Place ONE order for the full position.
         # Set broker-side TP at the furthest active target as a crash-safety net
@@ -282,6 +302,22 @@ class ExecutionAgent:
                 f"Emergency close attempt: {outcome}."
             )
             return None
+
+        # Book at the volume the broker actually opened, not the one we asked
+        # for.  normalize_volume can rewrite the request (FIXED_LOT_SIZE, step
+        # rounding) and an IOC fill can return partial, so every downstream
+        # number — TP splits, commission, expected P&L, remaining lots — must be
+        # recomputed from the broker-confirmed size.
+        filled_lots = float(result.filled_lots or 0.0)
+        if filled_lots > 0 and abs(filled_lots - lot_size) > 1e-9:
+            logger.warning(
+                "EXEC SIZE ADJUST: %s requested %.4f, broker filled %.4f — booking filled size",
+                signal.symbol,
+                lot_size,
+                filled_lots,
+            )
+            lot_size = filled_lots
+            tp1_lots, tp2_lots, tp3_lots, tp4_lots = _allocate_tp_lots(lot_size, has_tp4)
 
         # Estimate round-trip commission for display/PnL tracking.
         # Rate varies by asset class (crypto/commodity/exotic may differ from forex).

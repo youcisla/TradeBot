@@ -17,7 +17,7 @@ import logging
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Callable
 
-from broker.connector import BrokerConnector
+from broker.connector import MAGIC, BrokerConnector
 from utils.mesh_bus import mesh_span
 from config import settings
 from config.symbols import pip_value, contract_size, commission_per_lot
@@ -89,65 +89,68 @@ class TradeManagerAgent:
         self.sync_existing_position_targets(alert_fn)
 
     def sync_existing_position_targets(self, send_alert: Callable[[str], None] = lambda msg: None) -> None:
-        """Scan all open broker positions, ensure bot-owned TPs are correct."""
+        """Ensure every bot-owned position carries the targets its DB trade expects.
+
+        The bot opens ONE position per trade and sets the broker TP to the
+        furthest active target, doing scale-out itself via partial closes.
+        This previously keyed on a ``_TP1``/``_TP2``/``_TP3`` comment convention
+        that ``order_executor`` never writes — comments carry the strategy name
+        — so the safety net matched nothing and never repaired a single stop.
+        Ownership is now decided by magic number plus a DB lookup, and the
+        broker is treated as authoritative for the stop.
+        """
         broker_positions = self._broker.get_open_positions()
         db_trades = {t.broker_ticket: t for t in self._open_trades if t.broker_ticket}
-        mismatches = []
+        problems: list[str] = []
+
         for pos in broker_positions:
-            # Ownership check: magic number and comment pattern
-            if getattr(pos, 'magic', 0) != 202603:
+            if getattr(pos, "magic", 0) != MAGIC:
                 continue
-            if not pos.comment or not any(tp in pos.comment for tp in ("_TP1", "_TP2", "_TP3")):
-                continue
-            # Determine intended TP
-            intended_tp = None
-            tp_level = None
+
             trade = db_trades.get(pos.ticket)
-            if trade:
-                # Use DB if available
-                if "_TP1" in pos.comment:
-                    intended_tp = trade.take_profit_1
-                    tp_level = "TP1"
-                elif "_TP2" in pos.comment:
-                    intended_tp = trade.take_profit_2
-                    tp_level = "TP2"
-                elif "_TP3" in pos.comment:
-                    intended_tp = trade.take_profit_3
-                    tp_level = "TP3"
-            else:
-                # Try to parse TP from comment pattern
-                if "_TP1" in pos.comment:
-                    tp_level = "TP1"
-                elif "_TP2" in pos.comment:
-                    tp_level = "TP2"
-                elif "_TP3" in pos.comment:
-                    tp_level = "TP3"
-                # Fallback: try to parse from comment (not robust)
-                # Could extend to parse symbol/strategy if needed
-            # If no intended TP, skip
-            if intended_tp is None and tp_level:
-                # Try to recover from position itself if possible
-                # (not robust, but better than nothing)
-                intended_tp = getattr(pos, 'take_profit', None)
-            if intended_tp is None:
+            if trade is None:
+                problems.append(
+                    f"ORPHAN: ticket {pos.ticket} {pos.symbol} {pos.lot_size:.2f} lots "
+                    "carries our magic but has no DB trade"
+                )
                 continue
-            # Compare broker TP to intended TP
-            broker_tp = getattr(pos, 'take_profit', None)
-            if broker_tp is None or abs(broker_tp - intended_tp) > 1e-5:
-                # Attempt to fix
+
+            targets = [
+                tp
+                for tp in (
+                    trade.take_profit_1,
+                    trade.take_profit_2,
+                    trade.take_profit_3,
+                    trade.take_profit_4,
+                )
+                if tp and tp > 0
+            ]
+            intended_tp = max(targets) if targets else None
+            broker_tp = getattr(pos, "take_profit", None)
+            if intended_tp and (broker_tp is None or abs(broker_tp - intended_tp) > 1e-5):
                 ok = self._broker.modify_order(pos.ticket, tp=intended_tp)
-                msg = (f"TP RECONCILE: ticket {pos.ticket} {pos.symbol} {tp_level} "
-                       f"broker TP={broker_tp} intended TP={intended_tp} — "
-                       f"{'FIXED' if ok else 'FAILED'}")
-                if not ok:
-                    msg += " (broker rejected modification)"
-                mismatches.append(msg)
-                logger.warning(msg)
-            else:
-                logger.info(f"TP OK: ticket {pos.ticket} {pos.symbol} {tp_level} TP={broker_tp}")
-        if mismatches:
-            alert_text = "⚠️ TP RECONCILIATION:\n" + "\n".join(mismatches)
-            send_alert(alert_text)
+                problems.append(
+                    f"TP RECONCILE: ticket {pos.ticket} {pos.symbol} "
+                    f"broker={broker_tp} intended={intended_tp} "
+                    f"{'FIXED' if ok else 'FAILED (broker rejected)'}"
+                )
+
+            # The broker's stop is what the account actually carries.  If it
+            # differs from ours, adopt theirs rather than pushing ours — a
+            # rejectable modify would otherwise leave the DB claiming a
+            # protection the position does not have.
+            if trade.stop_loss and abs(pos.stop_loss - trade.stop_loss) > 1e-5:
+                problems.append(
+                    f"SL DIVERGENCE: ticket {pos.ticket} {pos.symbol} "
+                    f"broker SL={pos.stop_loss:.5f} DB SL={trade.stop_loss:.5f} "
+                    "— adopting broker value"
+                )
+                trade.stop_loss = pos.stop_loss
+                self._state.save_trade(trade)
+
+        if problems:
+            logger.warning("Position target reconciliation:\n%s", "\n".join(problems))
+            send_alert("⚠️ POSITION RECONCILIATION:\n" + "\n".join(problems))
 
     def get_open_trades(self) -> list[Trade]:
         return [t for t in self._open_trades if t.is_open()]
@@ -344,8 +347,24 @@ class TradeManagerAgent:
         else:
             be_sl = self._breakeven_price(trade)
             be_type = "entry+spread"
-        self._broker.modify_order(trade.broker_ticket, sl=be_sl)
-        trade.stop_loss = be_sl
+        # Only record the move once the broker confirms it.  Committing a
+        # rejected stop locally makes the DB claim a protection the account
+        # does not actually hold — the wider broker stop is what is exposed.
+        if self._broker.modify_order(trade.broker_ticket, sl=be_sl):
+            trade.stop_loss = be_sl
+        else:
+            logger.error(
+                "Broker rejected breakeven SL for trade %s (ticket=%s, sl=%.5f) "
+                "— local SL left unchanged",
+                trade.id,
+                trade.broker_ticket,
+                be_sl,
+            )
+            self._emit(
+                "error",
+                f"Broker rejected breakeven SL for {trade.symbol} — stop unchanged",
+                {"trade_id": trade.id, "ticket": trade.broker_ticket, "sl": be_sl},
+            )
 
         self._state.save_trade(trade)
         self._emit("info",
@@ -679,16 +698,26 @@ class TradeManagerAgent:
         distance = settings.TRAILING_STOP_DISTANCE_PIPS * pv
         if trade.direction == "BUY":
             new_sl = round(current - distance, 5)
-            if new_sl > trade.stop_loss:
-                self._broker.modify_order(trade.broker_ticket, sl=new_sl)
-                trade.stop_loss = new_sl
-                self._state.save_trade(trade)
+            improves = new_sl > trade.stop_loss
         else:
             new_sl = round(current + distance, 5)
-            if new_sl < trade.stop_loss:
-                self._broker.modify_order(trade.broker_ticket, sl=new_sl)
-                trade.stop_loss = new_sl
-                self._state.save_trade(trade)
+            improves = new_sl < trade.stop_loss
+        if not improves:
+            return
+
+        # Only commit once the broker confirms.  A rejected trailing move that
+        # is recorded locally leaves the DB and the account disagreeing about
+        # where the stop actually sits.
+        if self._broker.modify_order(trade.broker_ticket, sl=new_sl):
+            trade.stop_loss = new_sl
+            self._state.save_trade(trade)
+        else:
+            logger.error(
+                "Broker rejected trailing SL for trade %s (ticket=%s, sl=%.5f)",
+                trade.id,
+                trade.broker_ticket,
+                new_sl,
+            )
 
     def add_trade(self, trade: Trade) -> None:
         """Register a newly opened trade for monitoring."""

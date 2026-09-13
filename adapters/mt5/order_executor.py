@@ -14,7 +14,7 @@ import MetaTrader5 as _mt5
 
 mt5 = cast(Any, _mt5)
 
-from broker.connector import BrokerConnector, OrderResult, PositionInfo
+from broker.connector import MAGIC, BrokerConnector, OrderResult, PositionInfo
 from config import settings
 
 logger = logging.getLogger(__name__)
@@ -128,7 +128,37 @@ def place_order(
 
     result = mt5.order_send(request)
     if result is None:
+        # IPC timeout.  The request may still have reached the broker, so a
+        # position can exist with no OrderResult to prove it.  Reconcile before
+        # declaring failure — otherwise the position is orphaned: live at the
+        # broker, invisible to the bot, with no SL/TP management.
+        recovered = _recover_ambiguous_order(broker_sym, direction)
+        if recovered is not None:
+            logger.error(
+                "order_send returned None for %s but position %d exists — adopting it",
+                symbol,
+                recovered.broker_ticket,
+            )
+            return recovered
         return OrderResult(success=False, message=f"order_send returned None: {mt5.last_error()}")
+
+    if result.retcode == mt5.TRADE_RETCODE_DONE_PARTIAL:
+        # IOC filled only part of the request.  A real position exists and must
+        # be tracked at its actual size rather than discarded as a failure.
+        logger.warning(
+            "Partial fill for %s: requested %.4f, filled %.4f",
+            symbol,
+            normalized_volume,
+            result.volume,
+        )
+        return OrderResult(
+            success=True,
+            order_id=str(result.order),
+            broker_ticket=result.order,
+            filled_lots=result.volume,
+            fill_price=result.price,
+            message=f"partial fill {result.volume}/{normalized_volume}",
+        )
 
     if result.retcode != mt5.TRADE_RETCODE_DONE:
         return OrderResult(
@@ -144,6 +174,32 @@ def place_order(
         fill_price=result.price,
         message="OK",
     )
+
+
+def _recover_ambiguous_order(broker_sym: str, direction: str) -> OrderResult | None:
+    """Find a position this bot may have opened despite an ambiguous result.
+
+    Only positions carrying this bot's magic number are considered, so a trade
+    placed by hand or by another EA is never silently adopted.
+    """
+    positions = mt5.positions_get(symbol=broker_sym)
+    if not positions:
+        return None
+    for pos in positions:
+        if getattr(pos, "magic", 0) != MAGIC:
+            continue
+        pos_dir = "BUY" if pos.type == mt5.ORDER_TYPE_BUY else "SELL"
+        if pos_dir != direction:
+            continue
+        return OrderResult(
+            success=True,
+            order_id=str(pos.ticket),
+            broker_ticket=pos.ticket,
+            filled_lots=float(pos.volume),
+            fill_price=float(pos.price_open),
+            message="recovered after ambiguous order_send",
+        )
+    return None
 
 
 def modify_order(
@@ -205,8 +261,8 @@ def close_partial(
             return True
 
         live_volume = float(pos.volume)
-        normalized_volume = normalize_volume(
-            broker_sym, live_volume, for_close=True
+        normalized_volume = _partial_close_volume(
+            broker_sym, requested_volume, live_volume
         )
         if normalized_volume <= 0:
             logger.error(
@@ -225,7 +281,7 @@ def close_partial(
             "position": ticket,
             "price": price,
             "deviation": 20,
-            "magic": 202603,
+            "magic": MAGIC,
             "comment": sanitize_comment("partial_close"),
             "type_time": mt5.ORDER_TIME_GTC,
             "type_filling": mt5.ORDER_FILLING_IOC,
@@ -260,6 +316,42 @@ def close_partial(
         ticket,
     )
     return False
+
+
+def _volume_min(symbol: str) -> float:
+    """Broker minimum tradable volume for *symbol*, or 0.0 if unknown."""
+    info = mt5.symbol_info(symbol)
+    if info is None:
+        return 0.0
+    return float(getattr(info, "volume_min", 0.0) or 0.0)
+
+
+def _partial_close_volume(symbol: str, requested: float, live: float) -> float:
+    """Volume to actually send for a partial close.
+
+    Never exceeds what is open.  If the requested slice rounds below the
+    broker's minimum, or closing it would strand a remainder smaller than that
+    minimum, the whole position is closed instead — a dust remainder can never
+    be closed later by any subsequent partial, so leaving one behind would
+    permanently strand lots.
+    """
+    if requested <= 0 or live <= 0:
+        return 0.0
+
+    normalized = normalize_volume(symbol, min(requested, live), for_close=True)
+    if normalized <= 0:
+        return normalize_volume(symbol, live, for_close=True)
+
+    remainder = live - normalized
+    min_vol = _volume_min(symbol)
+    if remainder > 1e-9 and 0.0 < remainder < min_vol:
+        logger.info(
+            "close_partial %s: closing full %.4f instead of %.4f "
+            "(remainder %.4f below broker min %.4f)",
+            symbol, live, normalized, remainder, min_vol,
+        )
+        return normalize_volume(symbol, live, for_close=True)
+    return normalized
 
 
 def close_order(connector, ticket: int, symbol: str, direction: str) -> bool:

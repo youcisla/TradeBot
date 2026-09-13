@@ -13,6 +13,11 @@ from typing import Any
 
 from models.market_data import Candle
 
+# Magic number stamped on every order this bot places.  Single source of truth
+# for telling bot-owned positions apart from manual trades or another EA's —
+# order placement, reconciliation and orphan adoption all depend on it agreeing.
+MAGIC = 202603
+
 
 @dataclass
 class OrderResult:
