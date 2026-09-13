@@ -98,6 +98,38 @@ class MetricsDelta:
         cumulative["last_signal_to_order_ms"] = self.last_signal_to_order_ms
 
 
+def _drain_external_signals() -> list["Signal"]:
+    """Convert queued external alerts (TradingView, webhooks) into Signals.
+
+    Marked **STRATEGY** intent, not EXECUTION.  An alert from outside the system
+    is an idea to be evaluated, not an instruction to be obeyed — nothing here
+    grants an external source the authority to bypass review.  They are handed
+    to the same scan → rank → guard → execute path as internal signals, so
+    GuardPipeline, the risk caps and the daily-loss limit all still apply.
+    """
+    from autonomy.intake import INBOX
+    from models.signal import Signal, SignalIntent
+
+    signals: list[Signal] = []
+    for ext in INBOX.drain():
+        signals.append(
+            Signal(
+                strategy=f"ext:{ext.source}"[:29],
+                symbol=ext.symbol,
+                direction=ext.direction,
+                entry_price=ext.entry_price,
+                stop_loss=ext.stop_loss,
+                take_profit_1=ext.take_profit_1,
+                take_profit_2=ext.take_profit_2,
+                take_profit_3=ext.take_profit_3,
+                confidence=0.5,
+                reason=f"{ext.source} alert: {ext.comment}".strip(),
+                signal_intent=SignalIntent.STRATEGY,
+            )
+        )
+    return signals
+
+
 def run_iteration(
     *,
     loop_count: int,
@@ -247,6 +279,19 @@ def run_iteration(
     )
     m.scanned_symbols = len(scan_result.scanned)
     m.raw_signals = len(scan_result.all_signals)
+
+    # ── Merge externally supplied signals (TradingView alerts, webhooks) ─────
+    # They join here — after the scan, before ranking and guards — so they face
+    # the same ranking, GuardPipeline, risk caps and duplicate checks as any
+    # internally generated signal.  An alert is a candidate, never a command.
+    external_signals = _drain_external_signals()
+    if external_signals:
+        scan_result.all_signals.extend(external_signals)
+        m.raw_signals = len(scan_result.all_signals)
+        logger.info(
+            "Merged %d external signal(s) into the candidate pool",
+            len(external_signals),
+        )
     m.last_scan_latency_ms = scan_result.latency_ms
 
     if hard_budget_enabled and scan_result.latency_ms > max_scan_ms:

@@ -19,8 +19,11 @@ time so it can stay untouched while parameters are explored elsewhere.
 from __future__ import annotations
 
 import argparse
+import json
 import logging
+import subprocess
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
 
 _REPO = Path(__file__).resolve().parent.parent
@@ -63,6 +66,64 @@ def fetch_series(conn, symbol: str, h1_bars: int) -> dict[str, list[Candle]]:
     }
 
 
+def _block(m) -> dict:
+    """Serialise a Metrics into the shape the edge gate reads."""
+    return {
+        "positions": m.positions,
+        "win_rate": round(m.win_rate, 4),
+        "avg_r": round(m.avg_r, 4),
+        "profit_factor": round(m.profit_factor, 4),
+        "max_drawdown_pct": round(m.max_drawdown_pct, 4),
+        "annualised_sharpe": round(m.annualised_sharpe, 4),
+        "total_return_pct": round(m.total_return_pct, 4),
+        "buy_hold_pct": round(m.buy_hold_pct, 4),
+    }
+
+
+def _revision() -> str:
+    try:
+        out = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            capture_output=True, text=True, timeout=5,
+        )
+        return out.stdout.strip() if out.returncode == 0 else "unknown"
+    except Exception:                                      # noqa: BLE001
+        return "unknown"
+
+
+def write_artifact(
+    path: Path,
+    *,
+    pooled,
+    holdout,
+    symbols: list[str],
+    candles: int,
+    pessimistic: bool,
+    inverted: bool,
+) -> None:
+    """Persist the measurement so ``autonomy/edge_gate.py`` can judge it.
+
+    ``costs_modelled`` is recorded explicitly: the gate refuses to promote a
+    strategy on a measurement that did not charge spread and commission, so
+    this flag is what stops an uncosted result being mistaken for a real one.
+    """
+    artifact = {
+        "generated_at": datetime.now(UTC).isoformat(),
+        "code_revision": _revision(),
+        "strategy": "ict",
+        "symbols": symbols,
+        "candles": candles,
+        "pessimistic": pessimistic,
+        "inverted": inverted,
+        "costs_modelled": True,
+        "pooled": _block(pooled),
+        "holdout": _block(holdout) if holdout is not None else {},
+    }
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(artifact, indent=2), encoding="utf-8")
+    logger.info("Measurement artifact written -> %s", path)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Walk-forward measurement")
     parser.add_argument("--symbols", default="", help="Comma-separated (default: 8 majors)")
@@ -83,6 +144,14 @@ def main() -> None:
         help=(
             "Trade the exact opposite of every signal (same entry, mirrored "
             "stop and targets).  If losses are a sign error, this profits."
+        ),
+    )
+    parser.add_argument(
+        "--save-json",
+        default="state/measurement.json",
+        help=(
+            "Where to write the machine-readable result that autonomy/edge_gate.py "
+            "reads.  Pass an empty string to skip writing."
         ),
     )
     args = parser.parse_args()
@@ -134,7 +203,8 @@ def main() -> None:
     print()
     print("POOLED — every position, all symbols (B&H n/a: no single price series)")
     print(RULE)
-    print(measure.compute_metrics(all_positions, label="ALL pooled").render())
+    pooled_metrics = measure.compute_metrics(all_positions, label="ALL pooled")
+    print(pooled_metrics.render())
 
     print()
     print(f"SEQUENTIAL FOLDS (n={args.folds}) — is the result stable, or one lucky stretch?")
@@ -148,11 +218,23 @@ def main() -> None:
     print()
     print(f"FROZEN HOLDOUT — last {args.holdout_pct:.0f}% by time, never tuned against")
     print(RULE)
-    if holdout:
-        print(measure.compute_metrics(holdout, label="holdout").render())
+    holdout_metrics = measure.compute_metrics(holdout, label="holdout") if holdout else None
+    if holdout_metrics is not None:
+        print(holdout_metrics.render())
     else:
         print("  (no positions in the holdout window)")
     print()
+
+    if args.save_json:
+        write_artifact(
+            Path(args.save_json),
+            pooled=pooled_metrics,
+            holdout=holdout_metrics,
+            symbols=symbols,
+            candles=args.candles,
+            pessimistic=not args.optimistic,
+            inverted=args.invert,
+        )
 
 
 if __name__ == "__main__":

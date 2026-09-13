@@ -45,6 +45,12 @@ def create_app() -> FastAPI:
     from api.routes import auth as auth_module
     app.include_router(auth_module.router, prefix="/api/auth", tags=["auth"])
 
+    # Mount external signal intake — TradingView alerts arrive here and are
+    # queued for the normal guard/risk/ranking path.  This endpoint is exposed
+    # to the public internet; see api/routes/webhooks.py for its auth model.
+    from api.routes import webhooks as webhooks_module
+    app.include_router(webhooks_module.router, prefix="/api/webhooks", tags=["webhooks"])
+
     return app
 
 

@@ -1,0 +1,33 @@
+{
+  "generated_at": "2026-09-13T14:17:03.508620+00:00",
+  "code_revision": "ee6cefb",
+  "strategy": "ict",
+  "symbols": [
+    "EURUSD",
+    "GBPUSD"
+  ],
+  "candles": 20000,
+  "pessimistic": true,
+  "inverted": false,
+  "costs_modelled": true,
+  "pooled": {
+    "positions": 1074,
+    "win_rate": 0.3864,
+    "avg_r": -0.4868,
+    "profit_factor": 0.4183,
+    "max_drawdown_pct": 0.9957,
+    "annualised_sharpe": -4.7407,
+    "total_return_pct": -99.5651,
+    "buy_hold_pct": 0.0
+  },
+  "holdout": {
+    "positions": 217,
+    "win_rate": 0.4286,
+    "avg_r": -0.3336,
+    "profit_factor": 0.5428,
+    "max_drawdown_pct": 0.5298,
+    "annualised_sharpe": -3.7889,
+    "total_return_pct": -52.9813,
+    "buy_hold_pct": 0.0
+  }
+}
