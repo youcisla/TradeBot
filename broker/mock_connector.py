@@ -34,10 +34,15 @@ class MockConnector(BrokerConnector):
     """
 
     def __init__(self, starting_balance: float = 10_000.0,
-                 base_price: float = 1.1050) -> None:
+                 base_price: float = 1.1050,
+                 seed: int | None = None) -> None:
         self._balance = starting_balance
         self._equity = starting_balance
         self._base_price = base_price
+        # Per-instance RNG.  Pass ``seed`` from tests so a run is reproducible —
+        # an unseeded mock fills at a random offset, which can legitimately trip
+        # the execution slippage guard and make assertions flaky.
+        self._rng = random.Random(seed)
         self._positions: dict[int, PositionInfo] = {}
         self._fills: dict[str, float] = {}          # order_id -> filled lots
         self._connected = False
@@ -64,14 +69,14 @@ class MockConnector(BrokerConnector):
 
     def _wobble(self) -> float:
         """Return the base price with a small random offset."""
-        return round(self._base_price + random.uniform(-0.0020, 0.0020), 5)
+        return round(self._base_price + self._rng.uniform(-0.0020, 0.0020), 5)
 
     def get_tick(self, symbol: str) -> dict[str, float]:
         price = self._wobble()
-        spread = round(random.uniform(0.5, 2.5) * 0.0001, 5)
+        spread = round(self._rng.uniform(0.5, 2.5) * 0.0001, 5)
         bid = price
         ask = round(price + spread, 5)
-        return {"bid": bid, "ask": ask, "spread": spread, "volume": random.uniform(100, 5000)}
+        return {"bid": bid, "ask": ask, "spread": spread, "volume": self._rng.uniform(100, 5000)}
 
     def get_candles(self, symbol: str, timeframe: str, count: int) -> list[Candle]:
         candles: list[Candle] = []
@@ -79,15 +84,15 @@ class MockConnector(BrokerConnector):
         for i in range(count, 0, -1):
             o = self._wobble()
             c = self._wobble()
-            h = max(o, c) + random.uniform(0, 0.0010)
-            l = min(o, c) - random.uniform(0, 0.0010)
+            h = max(o, c) + self._rng.uniform(0, 0.0010)
+            l = min(o, c) - self._rng.uniform(0, 0.0010)
             candles.append(Candle(
                 timestamp=now - timedelta(hours=i),
                 open=round(o, 5),
                 high=round(h, 5),
                 low=round(l, 5),
                 close=round(c, 5),
-                volume=random.uniform(100, 5000),
+                volume=self._rng.uniform(100, 5000),
             ))
         return candles
 
@@ -99,8 +104,13 @@ class MockConnector(BrokerConnector):
                     comment: str = "") -> OrderResult:
         _t0 = time.monotonic()
         ticket = _ticket()
-        tick = self.get_tick(symbol)
-        fill_price = tick["ask"] if direction == "BUY" else tick["bid"]
+        # A fill happens at market, so use the base price plus half-spread — and
+        # deliberately NOT the random wobble that get_tick()/get_candles() apply.
+        # The wobble spans +/-0.0020, which is exactly MAX_EXEC_SLIPPAGE_TICKS
+        # (20 ticks), so a wobbled fill straddled the execution slippage guard
+        # and rejected orders nondeterministically.
+        spread = self._rng.uniform(0.5, 2.5) * 0.0001
+        fill_price = round(self._base_price + (spread if direction == "BUY" else 0.0), 5)
         order_id = f"MOCK-{ticket}"
         self._fills[order_id] = lot_size
 
@@ -181,7 +191,7 @@ class MockConnector(BrokerConnector):
 
     def get_spread(self, symbol: str) -> float:
         """Return a simulated spread in points (points, not pips)."""
-        return round(random.uniform(8, 25), 1)  # 0.8–2.5 pips simulated
+        return round(self._rng.uniform(8, 25), 1)  # 0.8–2.5 pips simulated
 
     def get_available_symbols(self, symbols=None) -> list[str]:
         # Return a list of mock symbols for testing, or filter if a list is provided

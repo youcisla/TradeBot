@@ -3,9 +3,15 @@
 from datetime import UTC, datetime, timedelta
 from unittest.mock import patch
 
+import pytest
+
 from agents.execution_agent import ExecutionAgent
 from broker.connector import OrderResult
 from tests.conftest import make_signal, make_trade
+
+# Order placement is gated by MarketHoursGuard, which reads the wall clock.
+# Pin it to a weekday session so these tests don't fail at weekends.
+pytestmark = pytest.mark.usefixtures("market_clock_open")
 
 
 class TestExecutionAgent:

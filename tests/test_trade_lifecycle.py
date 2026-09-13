@@ -16,6 +16,10 @@ from agents.execution_agent import ExecutionAgent
 from agents.trade_manager import TradeManagerAgent
 from tests.conftest import _MockDatabase, make_signal
 
+# Order placement is gated by MarketHoursGuard, which reads the wall clock.
+# Pin it to a weekday session so these tests don't fail at weekends.
+pytestmark = pytest.mark.usefixtures("market_clock_open")
+
 
 # ── Deterministic broker helper ───────────────────────────────────────────────
 
@@ -222,8 +226,10 @@ class TestEmergencyClose:
     def test_close_all_closes_every_trade(self, _tg, controlled_broker, state, db):
         exec_agent = _make_exec(controlled_broker, state)
         exec_agent.open_trade(make_signal(symbol="EURUSD"))
-        exec_agent.open_trade(make_signal(symbol="GBPUSD", entry=1.2500, sl=1.2450,
-                                          tp1=1.2550, tp2=1.2600, tp3=1.2650))
+        # MockConnector serves one base_price (1.1050) for every symbol, so the
+        # second entry must sit near it — a distant price trips the slippage
+        # guard, which correctly rejects a fill that invalidates SL/TP.
+        exec_agent.open_trade(make_signal(symbol="GBPUSD"))
 
         mgr = _make_mgr(controlled_broker, state, db)
         mgr.load_open_trades()

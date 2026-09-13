@@ -15,7 +15,6 @@ import MetaTrader5 as _mt5
 
 mt5 = cast(Any, _mt5)
 
-from broker.connector import BrokerConnector
 from config import settings
 
 logger = logging.getLogger(__name__)
@@ -35,8 +34,16 @@ _TF_MAP: dict[str, int] = {
 }
 
 
-class MT5Connector(BrokerConnector):
-    """Real MetaTrader 5 broker connection."""
+class MT5Connector:
+    """MetaTrader 5 connection lifecycle.
+
+    Deliberately NOT a ``BrokerConnector`` subclass: the order-entry, position
+    and symbol methods live as module-level functions in ``order_executor`` and
+    ``symbol_resolver``, and the public ``BrokerConnector`` is the facade in
+    ``broker/mt5_connector.py``.  Inheriting the ABC made this class abstract
+    and therefore impossible to instantiate, which broke every live MT5 code
+    path (the bot could not construct its broker at all).
+    """
 
     def __init__(
         self,

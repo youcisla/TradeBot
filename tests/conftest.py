@@ -10,6 +10,7 @@ import sqlite3
 from typing import Any
 
 import pytest
+from freezegun import freeze_time
 
 from broker.mock_connector import MockConnector
 from models.market_data import Candle, MarketContext, MarketData
@@ -172,7 +173,9 @@ class _MockDatabase:
 
 @pytest.fixture
 def broker() -> MockConnector:
-    b = MockConnector(starting_balance=10_000.0, base_price=1.1050)
+    # Seeded so fills are reproducible; an unseeded wobble can randomly exceed
+    # the execution slippage guard and flip order-acceptance assertions.
+    b = MockConnector(starting_balance=10_000.0, base_price=1.1050, seed=20260913)
     b.connect()
     return b
 
@@ -191,6 +194,22 @@ def state(db, broker) -> StatePersistence:
 def crucix_agent():
     from agents.crucix_agent import CrucixAgent
     return CrucixAgent()
+
+
+@pytest.fixture
+def market_clock_open():
+    """Pin wall-clock time to a midweek, mid-session UTC moment.
+
+    ``MarketHoursGuard`` reads ``datetime.now(UTC)`` directly, so tests that
+    exercise order placement pass Monday-Friday but fail at weekends and
+    during the 21:00-23:00 UTC quiet hours.  Wednesday 14:00 UTC sits in the
+    London/New York overlap, clear of both filters.
+
+    Opt-in rather than autouse: a process-wide freeze breaks the lazy
+    pandas/sklearn imports elsewhere in the suite (stack overflow during GC).
+    """
+    with freeze_time("2026-01-07 14:00:00"):
+        yield
 
 
 def make_candles(count: int = 60, base: float = 1.1050,

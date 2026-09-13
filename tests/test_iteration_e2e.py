@@ -25,7 +25,8 @@ from utils import telegram_bot
 
 @pytest.fixture
 def mock_broker():
-    b = MockConnector(starting_balance=10_000.0, base_price=1.1050)
+    # Seeded for reproducibility — see MockConnector's seed parameter.
+    b = MockConnector(starting_balance=10_000.0, base_price=1.1050, seed=20260913)
     b.connect()
     return b
 
