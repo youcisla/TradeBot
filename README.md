@@ -1,5 +1,18 @@
 # PulseTrade TradingBot
 
+> **Archived — this research continued elsewhere.**
+>
+> This is **stage 1 of 3**, written March–September 2026 and kept unchanged so
+> the design history stays auditable, including what did not work. It grew to
+> roughly 48,000 lines across a multi-agent pipeline, an LSTM, a LightGBM
+> ensemble, GARCH/HMM regime detection and an LLM debate layer; once it was
+> finally wired to a broker, the strategy measured **no edge**: 3,271 positions,
+> 37.9% win rate, −0.431R average, profit factor 0.46, negative in every symbol
+> and every fold.
+>
+> → Stage 2: [TradeBotV2](https://github.com/youcisla/TradeBotV2) — the measurement-first rebuild
+> → Stage 3, current: [Zero-Trust-Trader](https://github.com/youcisla/Zero-Trust-Trader) — statistical gates, fail-closed, stands down
+
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![Next.js 14](https://img.shields.io/badge/next.js-14-black.svg)](https://nextjs.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
