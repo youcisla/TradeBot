@@ -4,7 +4,7 @@
 >
 > This is **stage 1 of 3**, written March–September 2026 and kept unchanged so
 > the design history stays auditable, including what did not work. It grew to
-> roughly 48,000 lines across a multi-agent pipeline, an LSTM, a LightGBM
+> roughly 50,000 lines across a multi-agent pipeline, an LSTM, a LightGBM
 > ensemble, GARCH/HMM regime detection and an LLM debate layer; once it was
 > finally wired to a broker, the strategy measured **no edge**: 3,271 positions,
 > 37.9% win rate, −0.431R average, profit factor 0.46, negative in every symbol
